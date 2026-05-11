@@ -182,3 +182,9 @@ Commit format: `feat(auth): implement JWT refresh token rotation (T010)`
 | `docs/04-api-design.md` | Endpoint specs, request/response shapes, RBAC matrix |
 | `docs/05-implementation-plan.md` | Task list, critical path, full folder structure, coding standards |
 | `docs/REVIEW-REPORT.md` | Known gaps and 3 open design decisions (W-001, W-002, W-003) |
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+at `specs/001-freshflow-platform/plan.md`.
+<!-- SPECKIT END -->

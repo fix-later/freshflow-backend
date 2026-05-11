@@ -1,0 +1,391 @@
+# Implementation Plan: FreshFlow Platform
+
+**Branch**: `001-freshflow-platform` | **Date**: 2026-05-11 | **Spec**: [spec.md](spec.md)
+**Input**: Feature specification from `specs/001-freshflow-platform/spec.md`
+
+---
+
+## Summary
+
+FreshFlow is a wholesale food market intermediary platform that lets Kiosk Staff update
+market prices in real time from mobile devices and restaurant purchasing managers see live
+prices, place orders, and track delivery status — all without going to the market physically.
+The backend is a Modular Monolith (7 modules) built on ASP.NET Core 8, PostgreSQL 16, Redis 7,
+and SignalR. Angular serves the web UI; React Native serves the Kiosk mobile interface.
+
+**Primary goal for this plan**: Produce a realistic implementation roadmap for a team of 4
+over 3 months, consistent with the pre-approved design documents in `docs/`.
+
+---
+
+## Technical Context
+
+**Language/Version**: C# 12 / .NET 8
+
+**Primary Dependencies**:
+- Backend: ASP.NET Core 8, EF Core 8 + Npgsql, MediatR 12, FluentValidation 11,
+  SignalR (ASP.NET Core built-in), StackExchange.Redis 2.x, Serilog, BCrypt.Net-Next,
+  Testcontainers-dotnet (integration tests)
+- Frontend Web: Angular 17 (standalone components, OnPush, signals-aware)
+- Mobile: React Native (TypeScript, Expo, Zustand/Redux Toolkit for auth state)
+
+**Storage**: PostgreSQL 16 (primary) + hot-standby read replica for Analytics queries;
+Redis 7 (price cache, soft-reservation counters, route cache, analytics cache, SignalR backplane)
+
+**Testing**: xUnit + FluentAssertions + Moq (unit); xUnit + WebApplicationFactory +
+Testcontainers-dotnet (integration against real PostgreSQL + Redis — no mocks)
+
+**Target Platform**: Linux Docker containers (Nginx + api + postgres + redis via Docker Compose)
+
+**Performance Goals**:
+- Price broadcast latency: ≤ 2 seconds end-to-end (kiosk submit → restaurant screen)
+- Route calculation: ≤ 3 seconds for ≤ 20 stops
+- Analytics dashboard: ≤ 800 ms per query (from cache or pre-aggregated table)
+- Concurrent sessions: ≥ 500 during 2–9 AM peak window
+
+**Constraints**:
+- 4 developers, 3-month timeline → realistic scope, no over-engineering
+- Sprint 1 must deliver: auth API + Angular login + React Native login (end-to-end)
+- Technology stack is fixed by the constitution — no new dependencies without amendment
+- Simple first, upgrade later: heuristic VRP before OR-Tools, Redis backplane before
+  separate SignalR service, moving average before ML model
+
+**Scale/Scope**: 3 wholesale markets, ~100 products, ~50 restaurants, ~10 kiosk staff,
+500 concurrent peak sessions (2–9 AM)
+
+---
+
+## Constitution Check
+
+*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+
+| Principle | Status | Notes |
+|-----------|--------|-------|
+| I. Strict Module Boundary Enforcement | ✅ PASS | Solution structure enforces no cross-module .csproj refs. Cross-module communication via FreshFlow.Contracts integration events + injected interfaces only. |
+| II. Clean Architecture Layer Rules | ✅ PASS | Dependency direction Domain→Application→Infrastructure→API enforced via .csproj. No lateral refs between modules. |
+| III. Test-First with Mandatory CI Gates | ✅ PASS | Unit tests per module + integration tests (Testcontainers, real DB/Redis). CI pipeline: restore→build→unit→integration→format→Docker. |
+| IV. Result Pattern and Defensive API Surface | ✅ PASS | All services return Result<T>. FluentValidation on all DTOs. RBAC declared on every endpoint. Raw SQL only in Analytics.Infrastructure with parameterized FromSqlRaw. |
+| V. Microservice-Readiness by Default | ✅ PASS | AddXModule() entry points, UUID PKs, soft delete on all mutable tables, no in-process shared state, all broadcast interfaces injected via DI. |
+
+**No constitution violations.** Complexity Tracking section not applicable.
+
+---
+
+## ⚠ Conflict: httpOnly Cookies vs Bearer Tokens
+
+**User requirement**: "httpOnly cookie setup in ASP.NET Core"
+**Existing docs (source of truth)**: `docs/04-api-design.md` specifies tokens in the JSON
+response body with `Authorization: Bearer` header. React Native cannot use httpOnly cookies
+(browser-only).
+
+**Resolution**: Follow the existing docs. Tokens are returned in the JSON response body.
+Storage: Angular uses `localStorage`; React Native uses `expo-secure-store`. The httpOnly
+cookie approach is NOT implemented. If a future web-only variant is needed, it can be added
+as an additional auth strategy without breaking the mobile path.
+
+---
+
+## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/001-freshflow-platform/
+├── plan.md          ← this file
+├── research.md      ← Phase 0: decisions and risk resolutions
+├── data-model.md    ← Phase 1: entity definitions and Redis key patterns
+├── quickstart.md    ← Phase 1: new developer setup guide
+├── contracts/
+│   └── api-contracts.md   ← Phase 1: all endpoints and SignalR events
+└── tasks.md         ← Phase 2 output (generated by /speckit-tasks)
+```
+
+### Source Code (repository root)
+
+```text
+src/
+├── Shared/
+│   ├── FreshFlow.SharedKernel/          # BaseEntity, AggregateRoot, Result<T>, ICommand/IQuery
+│   └── FreshFlow.Contracts/             # Integration event records (cross-module DTOs)
+│
+├── Modules/
+│   ├── Auth/
+│   │   ├── FreshFlow.Auth.Domain/
+│   │   ├── FreshFlow.Auth.Application/
+│   │   └── FreshFlow.Auth.Infrastructure/
+│   ├── Pricing/
+│   │   ├── FreshFlow.Pricing.Domain/
+│   │   ├── FreshFlow.Pricing.Application/
+│   │   └── FreshFlow.Pricing.Infrastructure/
+│   ├── Orders/
+│   │   ├── FreshFlow.Orders.Domain/
+│   │   ├── FreshFlow.Orders.Application/
+│   │   └── FreshFlow.Orders.Infrastructure/
+│   ├── Logistics/
+│   │   ├── FreshFlow.Logistics.Domain/
+│   │   ├── FreshFlow.Logistics.Application/
+│   │   └── FreshFlow.Logistics.Infrastructure/
+│   ├── Hub/
+│   │   ├── FreshFlow.Hub.Domain/
+│   │   ├── FreshFlow.Hub.Application/
+│   │   └── FreshFlow.Hub.Infrastructure/
+│   ├── Analytics/
+│   │   ├── FreshFlow.Analytics.Domain/
+│   │   ├── FreshFlow.Analytics.Application/
+│   │   └── FreshFlow.Analytics.Infrastructure/
+│   └── Notifications/           # Owns all 3 SignalR hubs + broadcast service impls
+│       ├── FreshFlow.Notifications.Domain/
+│       ├── FreshFlow.Notifications.Application/
+│       └── FreshFlow.Notifications.Infrastructure/
+│
+├── FreshFlow.Infrastructure.Persistence/  # Shared AppDbContext + all EF migrations
+└── FreshFlow.API/                          # Host: controllers, SignalR hubs, Program.cs
+
+tests/
+├── Unit/
+│   ├── FreshFlow.Auth.UnitTests/
+│   ├── FreshFlow.Pricing.UnitTests/
+│   ├── FreshFlow.Orders.UnitTests/
+│   ├── FreshFlow.Logistics.UnitTests/    # Includes VrpSolver unit tests
+│   ├── FreshFlow.Hub.UnitTests/
+│   ├── FreshFlow.Analytics.UnitTests/
+│   └── FreshFlow.Notifications.UnitTests/
+└── Integration/
+    └── FreshFlow.IntegrationTests/       # WebApplicationFactory + Testcontainers
+
+freshflow-web/                            # Angular 17 SPA
+freshflow-mobile/                         # React Native (Expo/TypeScript)
+```
+
+**Structure Decision**: Multi-part project (backend + web + mobile). Backend follows the
+modular-monolith structure defined in `docs/02-system-architecture.md`. Frontend and mobile
+are sibling directories at the repository root.
+
+---
+
+## Architecture Reference
+
+### Module Dependency Graph
+
+```
+domain          → SharedKernel only
+application     → domain + SharedKernel + Contracts
+infrastructure  → application + domain + packages
+API host        → all infrastructure projects (DI wiring only)
+```
+
+No module's domain or application project may reference another module's projects. All
+cross-module dependencies go through:
+1. Integration events in `FreshFlow.Contracts` (consumed via MediatR INotificationHandler<T>)
+2. Application-layer interfaces injected at the host (e.g., IProductCatalogReader)
+
+### SignalR Architecture
+
+```
+Kiosk Staff PATCH /price
+  → PricingService writes PG + Redis cache
+  → calls IPricingBroadcastService.BroadcastAsync() (fire-and-forget)
+    → PricingBroadcastService (Notifications.Infrastructure)
+    → IHubContext<PricingHub>.Clients.Group("market:{marketId}").SendAsync("PriceUpdated", payload)
+      → Redis Pub/Sub backplane (AddStackExchangeRedis)
+        → all API instances → all subscribed Restaurant clients within 2s
+```
+
+**Hub group names**:
+- `market:{marketId}` — Restaurant users subscribed to a market price board
+- `kiosk:{marketId}` — Kiosk Staff at their assigned market
+- `restaurant:{restaurantId}` — Personal feed for order/delivery events
+- `admin:all` — Admin users for cross-restaurant order monitoring
+
+**JWT auth on SignalR**: Token passed via `?access_token=` query param during negotiate
+(browser WebSocket headers are not accessible; query string is the standard SignalR approach).
+
+### Authentication Flow
+
+```
+1. Client: POST /api/v1/auth/login { email, password }
+2. Server: validates credentials, issues:
+   - accessToken: HMAC-SHA256 JWT (exp: NOW + 900s, claims: sub, email, role, iat, exp)
+   - refreshToken: cryptographically random string, stored as bcrypt hash in refresh_tokens,
+     grouped under family_id for reuse-invalidation
+3. Client stores both tokens (Angular: localStorage; React Native: expo-secure-store)
+
+4. Client attaches Bearer token to all requests:
+   Authorization: Bearer <accessToken>
+
+5. Token refresh (proactive, 60s before expiry):
+   - Angular AuthInterceptor / React Native axios interceptor
+   - POST /api/v1/auth/refresh { refreshToken }
+   - Server: validates token, revokes old token, creates new token in same family,
+     returns new {accessToken, refreshToken}
+   - Reuse detection: if old token already revoked → invalidate entire family → 401 REFRESH_TOKEN_REUSE
+
+6. Logout:
+   - POST /api/v1/auth/logout { refreshToken } + Bearer header
+   - Server: revokes refresh token → 204
+```
+
+### Database Access Pattern (price_snapshots)
+
+High-frequency writes during 2–6 AM from kiosk staff:
+
+```
+Kiosk PATCH /price
+  → BEGIN TRANSACTION
+  → INSERT price_snapshots (market_product_id, price, quantity, recorded_by, recorded_at)
+       → lands in price_snapshots_y2026m05 partition (monthly RANGE partition)
+  → UPDATE market_products SET current_price = X, updated_at = NOW()
+  → COMMIT
+  → HSET price:{marketId}:{productId} price X quantity Y (Redis, no-await)
+  → Broadcast SignalR (fire-and-forget)
+```
+
+EF Core 8 + Npgsql handle partitioned tables transparently. The `IEntityTypeConfiguration<PriceSnapshot>` maps to `price_snapshots` (parent table). Child partition DDL is in a raw SQL migration.
+
+`PartitionMaintenanceJob` (`IHostedService`) runs on the 25th of each month and creates
+the next month's partition table. Missed runs are recovered by checking if the partition
+already exists before creating.
+
+### Docker Compose Services
+
+| Service | Image | Port (host) | Purpose |
+|---------|-------|-------------|---------|
+| `nginx` | nginx:1.27-alpine | 80, 443 | TLS termination, static Angular files, WebSocket upgrade |
+| `api` | freshflow-api:{sha} | 8080 (internal) | ASP.NET Core modular monolith |
+| `postgres` | postgres:16-alpine | 5432 (dev only) | Primary database |
+| `redis` | redis:7-alpine | 6379 (dev only) | Cache + SignalR backplane; AOF persistence |
+
+One team member can have the full stack running in < 10 minutes using `quickstart.md`.
+
+---
+
+## Risk Mitigation Decisions
+
+### R-001: VRP Algorithm
+**Decision**: Nearest-neighbor heuristic + 2-opt improvement, ≤ 20 stops.
+**Rationale**: Acceptable solution quality (5–15% from optimal) for a capstone. Runs in < 100 ms
+in memory. VrpSolver is a pure in-memory class, independently unit-testable.
+**Upgrade path**: Google OR-Tools (documented in docs/02-system-architecture.md TDL).
+**Trigger for upgrade**: Route quality becomes a business concern in production.
+
+### R-002: SignalR Scale-Out
+**Decision**: Redis backplane from day one (AddStackExchangeRedis).
+**Rationale**: Redis is already required for caching — cost is zero. Enables horizontal scaling
+with no code changes. `SignalR__UseRedis=false` available for local development without Redis.
+**Upgrade path**: Azure SignalR Service if managed backplane is preferred.
+
+### R-003: AI Price Prediction
+**Decision**: Out of scope for v1.
+**Rationale**: Spec explicitly marks it as nice-to-have and out of scope.
+**Simple v2 path**: 7-day or 30-day rolling average over `price_snapshots`, pre-computed in
+`AnalyticsAggregationJob` nightly run. No ML model or external dependency required.
+
+### R-004: Optimistic Concurrency on price_snapshots
+**Decision**: Use `market_products.updated_at` as optimistic concurrency token.
+**Rationale**: Two kiosk staff updating the same product simultaneously is theoretically
+possible (a staff member moved to a different stall). The last-write-wins strategy is acceptable
+for a price update — no data is lost (both price values are recorded in price_snapshots).
+The `updated_at` field ensures the `market_products` row is always consistent.
+
+---
+
+## Sprint Plan (3 Months, Team of 4)
+
+### Sprint 1 (Weeks 1–2): Foundation + Auth — DELIVERABLE
+**Goal**: Full auth flow end-to-end: API + Angular login + React Native login.
+**Tasks**: T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 → T010 → T011 → T012
+         + T045 (Angular scaffold + auth) + T048 (React Native scaffold + auth)
+**Demo**: User logs in from Angular, token refreshes automatically, user logs out.
+          Same from React Native. Health check returns Healthy.
+
+### Sprint 2 (Weeks 3–5): Real-Time Price Feed — CORE VALUE PROP
+**Goal**: Kiosk staff updates a price → restaurant sees it within 2 seconds.
+**Tasks**: T013 → T014 → T015 → T016 → T017 → T046 (Angular pricing dashboard) → T049 (kiosk mobile)
+**Demo**: Live price board. Kiosk staff types a new price → Angular dashboard highlights the update.
+
+### Sprint 3 (Weeks 6–8): Orders + Status Tracking
+**Goal**: Restaurant places an order; Admin transitions status; restaurant sees update live.
+**Tasks**: T018 → T019 → T020 → T021 → T022 → T023 → T024 → T025 → T026 → T047 → T050
+**Demo**: Restaurant places an order; Admin marks it IN_TRANSIT; restaurant's order detail updates.
+
+### Sprint 4 (Weeks 9–10): Logistics + Hub
+**Goal**: Admin calculates a route, assigns a vehicle, creates a schedule; delivery broadcasts.
+**Tasks**: T027 → T028 → T029 → T030 → T031 → T032 → T033 → T034 → T035 → T036 → T037 → T038
+**Demo**: Admin groups 2 orders, calculates a route, assigns vehicle, marks delivered.
+
+### Sprint 5 (Weeks 11–12): Analytics + Notifications + Polish
+**Goal**: Price trend dashboard, delivery KPIs, notification persistence and read endpoints.
+**Tasks**: T039 → T040 → T041 → T042 → T043 → T044
+**Demo**: Price trend chart for last 30 days. Admin views delivery performance KPIs.
+
+---
+
+## Critical Path
+
+```
+T001 → T002 → T003 → T004 → T009 → T010 → T013 → T015 → T016 → T017
+     → T022 → T025 → T030 → T031 → T032
+```
+
+Absolute blockers (delay cascades to everything):
+- **T001** — No code without a solution
+- **T002** — No persistence without EF Core + PostgreSQL
+- **T004** — No authentication without JWT middleware
+- **T009** — No end-to-end user flow without login
+
+MVP scope: **T001–T017 + T020–T025** (fully working price feed + order placement + status tracking)
+
+---
+
+## Key Coding Decisions
+
+### Module Registration Pattern
+
+Each module's Infrastructure exposes exactly one DI entry point:
+
+```csharp
+// src/Modules/Auth/FreshFlow.Auth.Infrastructure/DependencyInjection.cs
+public static IServiceCollection AddAuthModule(
+    this IServiceCollection services, IConfiguration config) { ... }
+
+// Program.cs chains all modules:
+services
+  .AddAuthModule(config)
+  .AddPricingModule(config)
+  .AddOrdersModule(config)
+  ...
+```
+
+### Result<T> Pattern
+
+```csharp
+// Service — never throws for business rules
+public async Task<Result<OrderResponseDto>> CreateOrderAsync(
+    CreateOrderCommand command, CancellationToken ct = default)
+
+// Controller maps result to HTTP
+var result = await _sender.Send(command, ct);
+return result.IsSuccess
+    ? CreatedAtAction(..., ApiResponse.Ok(result.Value))
+    : result.Error.ToActionResult();
+```
+
+### Broadcast Pattern (fire-and-forget)
+
+```csharp
+// In PricingService — after database commit
+_ = _broadcastService.BroadcastPriceUpdateAsync(marketId, payload);
+// Not awaited — broadcast failure must never block the write response
+```
+
+### EF Core Configuration
+
+```csharp
+// AppDbContext.cs — no DbSet<T> properties listed directly
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    modelBuilder.ApplyConfigurationsFromAssembly(
+        typeof(AuthModuleEntityConfigurations).Assembly);
+    // Called once per module assembly to scan IEntityTypeConfiguration<T>
+}
+```
