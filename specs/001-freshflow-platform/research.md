@@ -116,7 +116,7 @@ archived without touching the main table.
   partition (failsafe only).
 - Index `idx_price_snapshots_market_product_recorded_at` on the parent table propagates to
   all child partitions automatically.
-- EF Core 8 + Npgsql support partitioned tables without special configuration. The
+- EF Core 10 + Npgsql support partitioned tables without special configuration. The
   `IEntityTypeConfiguration<PriceSnapshot>` uses `ToTable("price_snapshots")` and the
   migration generates the `PARTITION BY RANGE` DDL via a raw SQL migration.
 

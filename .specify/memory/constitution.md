@@ -134,7 +134,7 @@ version bump to this constitution.
 
 | Layer | Technology |
 |-------|-----------|
-| Backend runtime | ASP.NET Core 8 (C#), EF Core 8, MediatR, FluentValidation |
+| Backend runtime | ASP.NET Core 10 (C# 14), EF Core 10, MediatR, FluentValidation |
 | Primary database | PostgreSQL 16 (partitioned `price_snapshots`, UUID PKs) |
 | Cache + backplane | Redis 7 (StackExchange.Redis; AOF persistence enabled) |
 | Real-time | SignalR (ASP.NET Core) + Redis backplane; JWT via `access_token` query param |

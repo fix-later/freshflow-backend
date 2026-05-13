@@ -10,7 +10,7 @@
 FreshFlow is a wholesale food market intermediary platform that lets Kiosk Staff update
 market prices in real time from mobile devices and restaurant purchasing managers see live
 prices, place orders, and track delivery status — all without going to the market physically.
-The backend is a Modular Monolith (7 modules) built on ASP.NET Core 8, PostgreSQL 16, Redis 7,
+The backend is a Modular Monolith (7 modules) built on ASP.NET Core 10, PostgreSQL 16, Redis 7,
 and SignalR. Angular serves the web UI; React Native serves the Kiosk mobile interface.
 
 **Primary goal for this plan**: Produce a realistic implementation roadmap for a team of 4
@@ -20,10 +20,10 @@ over 3 months, consistent with the pre-approved design documents in `docs/`.
 
 ## Technical Context
 
-**Language/Version**: C# 12 / .NET 8
+**Language/Version**: C# 14 / .NET 10
 
 **Primary Dependencies**:
-- Backend: ASP.NET Core 8, EF Core 8 + Npgsql, MediatR 12, FluentValidation 11,
+- Backend: ASP.NET Core 10, EF Core 10 + Npgsql, MediatR 12, FluentValidation 11,
   SignalR (ASP.NET Core built-in), StackExchange.Redis 2.x, Serilog, BCrypt.Net-Next,
   Testcontainers-dotnet (integration tests)
 - Frontend Web: Angular 17 (standalone components, OnPush, signals-aware)
@@ -240,7 +240,7 @@ Kiosk PATCH /price
   → Broadcast SignalR (fire-and-forget)
 ```
 
-EF Core 8 + Npgsql handle partitioned tables transparently. The `IEntityTypeConfiguration<PriceSnapshot>` maps to `price_snapshots` (parent table). Child partition DDL is in a raw SQL migration.
+EF Core 10 + Npgsql handle partitioned tables transparently. The `IEntityTypeConfiguration<PriceSnapshot>` maps to `price_snapshots` (parent table). Child partition DDL is in a raw SQL migration.
 
 `PartitionMaintenanceJob` (`IHostedService`) runs on the 25th of each month and creates
 the next month's partition table. Missed runs are recovered by checking if the partition

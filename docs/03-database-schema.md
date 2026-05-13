@@ -1177,7 +1177,7 @@ No PostgreSQL triggers are used in this schema. All business logic resides in th
 
 ### 5.1 Tool and Configuration
 
-- **ORM:** EF Core 8 with Npgsql provider for PostgreSQL
+- **ORM:** EF Core 10 with Npgsql provider for PostgreSQL
 - **Migration runner:** `dbContext.Database.MigrateAsync()` called at application startup in `Program.cs` before `app.Run()` — migrations run automatically on deploy, no manual SQL scripts in production
 - **Migration location:** `src/FreshFlow.Api/Migrations/`
 - **EF Core model configuration:** Each module defines its entity configurations in `IEntityTypeConfiguration<T>` classes within its own folder (e.g., `Modules/Pricing/Data/PriceSnapshotConfiguration.cs`)

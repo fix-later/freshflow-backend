@@ -23,7 +23,7 @@ included. The CI pipeline enforces these gates — omitting them will block the 
 
 **Purpose**: Create the solution skeleton. Nothing else can start until T001 is done.
 
-- [ ] T001 Scaffold .NET 8 solution with Clean Architecture (see detail below)
+- [ ] T001 Scaffold .NET 10 solution with Clean Architecture (see detail below)
 - [ ] T002 [P] Set up PostgreSQL + EF Core + Auth module schema migration
 - [ ] T003 [P] Set up Redis connection and RedisCacheService
 - [ ] T004 Set up Docker Compose (nginx + api + postgres + redis)
@@ -31,7 +31,7 @@ included. The CI pipeline enforces these gates — omitting them will block the 
 
 ---
 
-### T001 — Scaffold .NET 8 solution with Clean Architecture
+### T001 — Scaffold .NET 10 solution with Clean Architecture
 **Assignee**: BE/DevOps | **Estimated**: L (2 days) | **Story points**: 8
 
 **Files to create**:
@@ -1426,7 +1426,7 @@ Copy the following into Jira. Story points: S=2, M=3–5, L=8.
 
 | # | Title | Assignee | Points |
 |---|-------|----------|--------|
-| T001 | Scaffold .NET 8 solution with Clean Architecture | BE/DevOps | 8 |
+| T001 | Scaffold .NET 10 solution with Clean Architecture | BE/DevOps | 8 |
 | T002 | Set up PostgreSQL + EF Core + Auth schema migration | BE/DevOps | 5 |
 | T003 | Set up Redis connection and RedisCacheService | BE/DevOps | 5 |
 | T004 | Set up Docker Compose (nginx, api, postgres, redis) | BE/DevOps | 5 |

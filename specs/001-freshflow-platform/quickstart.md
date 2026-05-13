@@ -9,7 +9,7 @@
 
 | Tool | Version | Install |
 |------|---------|---------|
-| .NET SDK | 8.x | https://dotnet.microsoft.com/download |
+| .NET SDK | 10.x | https://dotnet.microsoft.com/download |
 | Docker Desktop | 4.x | https://www.docker.com/products/docker-desktop |
 | Node.js | 20 LTS | https://nodejs.org |
 | Git | any | |
