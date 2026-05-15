@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MediatR" Version="*" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="*" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="*" />
+    <PackageReference Include="Scalar.AspNetCore" Version="*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FreshFlow.Infrastructure.Persistence\FreshFlow.Infrastructure.Persistence.csproj" />
+    <ProjectReference Include="..\Modules\Auth\FreshFlow.Auth.Infrastructure\FreshFlow.Auth.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Pricing\FreshFlow.Pricing.Infrastructure\FreshFlow.Pricing.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Orders\FreshFlow.Orders.Infrastructure\FreshFlow.Orders.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Logistics\FreshFlow.Logistics.Infrastructure\FreshFlow.Logistics.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Hub\FreshFlow.Hub.Infrastructure\FreshFlow.Hub.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Analytics\FreshFlow.Analytics.Infrastructure\FreshFlow.Analytics.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Notifications\FreshFlow.Notifications.Infrastructure\FreshFlow.Notifications.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
