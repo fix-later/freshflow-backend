@@ -186,5 +186,5 @@ Commit format: `feat(auth): implement JWT refresh token rotation (T010)`
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at `specs/001-freshflow-platform/plan.md`.
+at `specs/003-auth-module/plan.md`.
 <!-- SPECKIT END -->
