@@ -29,13 +29,12 @@
 | FR-PRI-002 | Kiosk updates quantity | `market_products` | `PATCH /markets/{id}/products/{id}/price` (same endpoint) | T016 |
 | FR-PRI-003 | Real-time broadcast | SignalR + Redis backplane | PricingHub `PriceUpdated` event | T017 |
 | FR-PRI-004 | Price history | `price_snapshots` (append-only) | `GET /markets/{id}/products/{id}/price-history` | T018 |
-| FR-PRI-005 | Significant price change alert | — (computed in service) | PricingHub `SignificantPriceChange` event | T019 |
 | FR-PRI-006 | Product catalog management | `products` | `GET /products`, `POST /products` | T014 |
 | FR-ORD-001 | Create bulk order | `orders`, `order_items` | `POST /orders` | T022 |
 | FR-ORD-002 | Scheduled recurring orders | `scheduled_orders` | `POST /orders/scheduled` | T027 |
 | FR-ORD-003 | Real-time order status | `orders.status` | OrderHub `OrderStatusChanged` event | T025 |
 | FR-ORD-004 | Order cancellation | `orders.cancelled_at` | `PATCH /orders/{id}/cancel` | T024 |
-| FR-ORD-005 | Order grouping | `order_groups` | `POST /order-groups` | T026 |
+| FR-ORD-005 | Auto-batching and order grouping | `order_groups` | `POST /api/v1/admin/order-groups/auto-batch`, `POST /api/v1/admin/order-groups` | T026 |
 | FR-ORD-006 | Order history | `orders` | `GET /orders` (paginated) | T023 |
 | FR-ORD-007 | Stock validation + soft-reservation | Redis `order:reservation:{id}` | `POST /orders` (validation logic) | T022 |
 | FR-LOG-001 | Market→Hub→Restaurant route | `delivery_routes` | `POST /routes/calculate` | T030, T031 |
@@ -53,11 +52,11 @@
 | FR-ANA-002 | Demand heatmap | `orders`, `restaurants` (read-only) | `GET /analytics/demand-heatmap` | T040 |
 | FR-ANA-003 | Delivery performance KPIs | `delivery_routes`, `deliveries` | `GET /analytics/delivery-performance` | T041 |
 | FR-ANA-004 | Async CSV export | `export_jobs` | `POST /analytics/export`, `GET /analytics/export/{id}/status` | T042 |
-| FR-NOT-001 | Price-change push notification | `notifications` | PricingHub `PriceUpdated` + `SignificantPriceAlert` | T043 |
+| FR-NOT-001 | Price-change push notification | `notifications` | PricingHub `PriceUpdated` | T043 |
 | FR-NOT-002 | Order status push notification | `notifications` | OrderHub `OrderStatusChanged` | T043 |
 | FR-NOT-003 | Delivery update push notification | `notifications` | DeliveryHub `DeliveryStarted`, `DeliveryCompleted` | T043 |
 
-**Result: 36/36 functional requirements have full chain coverage. No orphaned requirements.**
+**Result: 35/35 functional requirements have full chain coverage. No orphaned requirements.**
 
 ---
 
@@ -77,7 +76,7 @@ Tables in `03-database-schema.md` verified against endpoints in `04-api-design.m
 | `restaurants` | `PATCH /admin/restaurants/{id}/approve`, orders | ✓ |
 | `orders` | All orders endpoints | ✓ |
 | `order_items` | `POST /orders`, `GET /orders/{id}` | ✓ |
-| `order_groups` | `POST /order-groups`, `GET /order-groups` | ✓ |
+| `order_groups` | `POST /api/v1/admin/order-groups`, `GET /api/v1/admin/order-groups`, `POST /api/v1/admin/order-groups/auto-batch` | ✓ |
 | `scheduled_orders` | `POST /orders/scheduled`, `GET /orders/scheduled` | ✓ |
 | `hubs` | All hub endpoints | ✓ |
 | `hub_inventory` | `GET /hubs/{id}/inventory` | ✓ |
@@ -150,14 +149,14 @@ All endpoints in `04-api-design.md` are traceable to a functional requirement. N
 - [x] UUID strategy consistent (all PKs are UUID)
 
 ### Phase 4 (API Design) — PASS
-- [x] Every functional requirement has at least one API endpoint (36/36 coverage)
-- [x] SignalR events cover all real-time scenarios (price update, order status, delivery update, significant price alert)
+- [x] Every functional requirement has at least one API endpoint (35/35 coverage)
+- [x] SignalR events cover all real-time scenarios (price update, order status, delivery update)
 - [x] Role-based access is consistent with Phase 1 requirements (RBAC matrix complete)
 - [x] All endpoints have error cases documented
 - [x] Pagination applied to all list endpoints
 
 ### Phase 5 (Implementation Plan) — PASS
-- [x] Every requirement from Phase 1 maps to at least one task (36/36)
+- [x] Every requirement from Phase 1 maps to at least one task (35/35)
 - [x] Critical path has no circular dependencies
 - [x] Folder structure supports the module design from Phase 2
 - [x] MVP scope is minimal but functional (Auth + Pricing real-time + Basic orders, T001–T025)

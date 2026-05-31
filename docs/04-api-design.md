@@ -543,8 +543,6 @@ Returns the immutable price snapshot history for a specific product at a specifi
 
 Updates the current price and/or available quantity of a product at a market. The kiosk staff member must be assigned to this specific market in `user_market_assignments`. On success, a new `price_snapshot` record is created, the `market_products` row is updated, the Redis cache is refreshed, and a `PriceUpdated` SignalR event is broadcast to all clients subscribed to `market:{marketId}`.
 
-If the price change meets or exceeds the configured significant-price threshold (default 5%), an additional `SignificantPriceChange` SignalR event is also broadcast.
-
 **Path parameters:**
 
 | Parameter | Type | Description |
@@ -581,16 +579,12 @@ If the price change meets or exceeds the configured significant-price threshold 
     "currentPrice": 135000.00,
     "currentQuantity": 420,
     "changePercent": 8.00,
-    "isSignificantChange": true,
-    "severity": "warning",
     "updatedAt": "2026-05-09T04:10:00+07:00",
     "updatedBy": "f6a7b8c9-d0e1-2345-fabc-345678901234",
     "snapshotId": "b9c0d1e2-f3a4-5678-cdef-678901234567"
   }
 }
 ```
-
-`severity` is returned only when `isSignificantChange = true`. Values: `"warning"` (5%–15% change), `"critical"` (> 15% change).
 
 **Error responses:**
 
@@ -721,6 +715,7 @@ Creates a new product in the system-wide catalog. The product is then available 
 | PATCH | `/api/v1/orders/{orderId}/status` | Admin | Update order status |
 | GET | `/api/v1/order-groups` | Admin | List order groups |
 | POST | `/api/v1/order-groups` | Admin | Create/lock an order group |
+| POST | `/api/v1/admin/order-groups/auto-batch` | Admin | Trigger the same auto-batching service used by the 22:00 cutoff job |
 | GET | `/api/v1/orders/scheduled` | Restaurant | List scheduled orders |
 
 ---
@@ -1129,6 +1124,74 @@ Creates a new order group and associates the specified orders with it. All order
 | 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
 | 409 Conflict | `ORDER_ALREADY_GROUPED` | One or more orders are already in an active order group. Response `details` lists the conflicting order IDs. |
 | 422 Unprocessable Entity | `ORDER_NOT_CONFIRMED` | One or more orders are not in `confirmed` status. Response `details` lists the offending order IDs and their current statuses. |
+
+---
+
+#### POST /api/v1/admin/order-groups/auto-batch
+
+**Role:** Admin only
+
+Triggers the same batching service that normally runs at the 22:00 cutoff. The service finds eligible `CONFIRMED` orders that are not already assigned to an active batch, groups them by delivery zone and source market, creates `OrderGroup`/Procurement Batch records, transitions included orders to `BATCHED`, and emits `OrderGrouped` events. The operation is idempotent.
+
+**Request body:**
+
+```json
+{
+  "targetDate": "2026-05-31",
+  "dryRun": false,
+  "force": false
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `targetDate` | date (`YYYY-MM-DD`) | No | Defaults to current date in `Asia/Ho_Chi_Minh` |
+| `dryRun` | boolean | No | Defaults to `false`; when `true`, returns a preview and does not write to PostgreSQL |
+| `force` | boolean | No | Defaults to `false`; reserved for Admin recovery workflows and must not create duplicate active batches |
+
+**Success response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "targetDate": "2026-05-31",
+    "dryRun": false,
+    "createdBatchCount": 2,
+    "batchedOrderCount": 12,
+    "skippedOrderCount": 3,
+    "batches": [
+      {
+        "orderGroupId": "l2m3n4o5-p6q7-8901-rstu-234567890123",
+        "deliveryZone": "district-1",
+        "sourceMarketId": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+        "orderIds": [
+          "i9j0k1l2-m3n4-5678-opqr-901234567890"
+        ]
+      }
+    ],
+    "skippedOrders": [
+      {
+        "orderId": "m3n4o5p6-q7r8-9012-stuv-345678901234",
+        "reason": "ALREADY_BATCHED"
+      }
+    ],
+    "triggeredBy": "admin-user-uuid",
+    "triggeredAt": "2026-05-31T21:45:00+07:00"
+  }
+}
+```
+
+When `dryRun=true`, `createdBatchCount` and `batchedOrderCount` describe what would be created, while all `orderGroupId` values are `null`.
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `VALIDATION_ERROR` | `targetDate` is not a valid date |
+| 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid JWT |
+| 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
+| 409 Conflict | `AUTO_BATCH_ALREADY_RUNNING` | Another scheduled or manual auto-batch run is currently processing |
 
 ---
 
@@ -2220,7 +2283,8 @@ Returns all system-wide configurable parameters.
 {
   "success": true,
   "data": {
-    "significantPriceThresholdPercent": 5.00,
+    "dailyOrderCutoffTime": "22:00",
+    "priceBandTolerancePercent": 10.00,
     "autoApproveRestaurants": false,
     "softReservationWindowMinutes": 30,
     "updatedAt": "2026-05-09T07:00:00+07:00",
@@ -2248,14 +2312,16 @@ Updates one or more system configuration values. Only the provided fields are up
 
 ```json
 {
-  "significantPriceThresholdPercent": 7.50,
+  "dailyOrderCutoffTime": "22:00",
+  "priceBandTolerancePercent": 10.00,
   "autoApproveRestaurants": false
 }
 ```
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| `significantPriceThresholdPercent` | number | No | Must be between 1.00 and 50.00 (inclusive) |
+| `dailyOrderCutoffTime` | string (`HH:mm`) | No | Local time in `Asia/Ho_Chi_Minh`; default `22:00` |
+| `priceBandTolerancePercent` | number | No | Must be between 0.00 and 50.00 (inclusive); default `10.00` |
 | `autoApproveRestaurants` | boolean | No | `true` or `false` |
 | `softReservationWindowMinutes` | integer | No | Must be between 5 and 120 (inclusive) |
 
@@ -2265,7 +2331,8 @@ Updates one or more system configuration values. Only the provided fields are up
 {
   "success": true,
   "data": {
-    "significantPriceThresholdPercent": 7.50,
+    "dailyOrderCutoffTime": "22:00",
+    "priceBandTolerancePercent": 10.00,
     "autoApproveRestaurants": false,
     "softReservationWindowMinutes": 30,
     "updatedAt": "2026-05-09T15:00:00+07:00",
@@ -2339,35 +2406,11 @@ Broadcast to the `market:{marketId}` group after any price or quantity update by
   "newQuantity": 420,
   "previousPrice": 125000.00,
   "changePercent": 8.00,
-  "severity": "info",
   "updatedAt": "2026-05-09T04:10:00+07:00"
 }
 ```
 
-`severity` values:
-- `"info"` — price change below the configured threshold (non-significant)
-- `"warning"` — significant change of 5%–15%
-- `"critical"` — significant change exceeding 15%
-
-**`SignificantPriceChange`**
-
-Broadcast additionally to the `market:{marketId}` group when the price change meets or exceeds the configured significance threshold (default ≥ 5%). Payload is identical to `PriceUpdated`.
-
-```json
-{
-  "marketId": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
-  "productId": "e5f6a7b8-c9d0-1234-efab-234567890123",
-  "marketProductId": "d4e5f6a7-b8c9-0123-defa-123456789012",
-  "newPrice": 135000.00,
-  "newQuantity": 420,
-  "previousPrice": 125000.00,
-  "changePercent": 8.00,
-  "severity": "warning",
-  "updatedAt": "2026-05-09T04:10:00+07:00"
-}
-```
-
-Both `PriceUpdated` and `SignificantPriceChange` are sent within 500 ms of the database write completing.
+`PriceUpdated` is sent within 500 ms of the database write completing.
 
 #### Connection Lifecycle
 
@@ -2522,9 +2565,9 @@ The following table defines all validation rules enforced by the API. Validation
 | Order cancellation | Order status must be `pending` or `confirmed` | 409 | `BUSINESS_RULE_ERROR` | "Order cannot be cancelled in its current status" |
 | Kiosk market assignment | Staff member must be assigned to the target market | 403 | `AUTHORIZATION_ERROR` | "You are not authorized to update prices at this market" |
 | Restaurant approval | Unapproved restaurant attempting to place an order | 422 | `BUSINESS_RULE_ERROR` | "Your restaurant account is pending Admin approval" |
-| `significantPriceThresholdPercent` | Must be between 1.00 and 50.00 | 400 | `VALIDATION_ERROR` | "Threshold must be between 1% and 50%" |
 | `orderIds` (order group) | All orders must have status `confirmed` | 422 | `BUSINESS_RULE_ERROR` | "All orders must be confirmed before grouping" |
 | `orderIds` (order group) | Orders must not already belong to an active group | 409 | `BUSINESS_RULE_ERROR` | "One or more orders are already in an active order group" |
+| Auto-batch trigger | Another auto-batch run must not be active for the same target date | 409 | `BUSINESS_RULE_ERROR` | "Auto-batch is already running" |
 | `items[].quantityKg` (hub outbound) | Must not exceed available hub stock | 422 | `BUSINESS_RULE_ERROR` | "Requested quantity exceeds available hub stock" |
 | Export `to` date | Must not be before `from` date | 400 | `VALIDATION_ERROR` | "End date must be on or after start date" |
 | `capacityKg` (vehicle/hub) | Must be > 0 | 400 | `VALIDATION_ERROR` | "Capacity must be greater than 0" |
@@ -2558,6 +2601,7 @@ The following table shows which roles can access each endpoint group. A checkmar
 | `PATCH /orders/{id}/status` | ✓ | ✗ | ✗ | ✗ |
 | `GET /order-groups` | ✓ | ✗ | ✗ | ✗ |
 | `POST /order-groups` | ✓ | ✗ | ✗ | ✗ |
+| `POST /api/v1/admin/order-groups/auto-batch` | ✓ | ✗ | ✗ | ✗ |
 | `GET /orders/scheduled` | ✗ | ✗ | ✓ | ✗ |
 | `POST /routes/calculate` | ✓ | ✗ | ✗ | ✗ |
 | `GET /routes` | ✓ | ✗ | ✗ | ✗ |

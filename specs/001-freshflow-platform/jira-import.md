@@ -1,7 +1,7 @@
 # FreshFlow — Jira Import
 
 **Project**: FreshFlow Platform  
-**Total**: 60 stories | 6 sprints | 4 assignees  
+**Total**: 59 stories | 6 sprints | 4 assignees  
 **Story points**: S = 2 · M = 3–5 · L = 8  
 **Assignees**: BE/DevOps · FE1-Web · FE2-Web · FE3-Mobile
 
@@ -509,7 +509,7 @@ Tạo migration cho `markets`, `products`, `market_products`, `price_snapshots` 
 1. Migration tạo đúng 5 tables với FK constraints, indexes khớp `docs/03-database-schema.md`.
 2. `INSERT INTO price_snapshots` với `recorded_at = NOW()` nằm trong current month partition, không phải default partition.
 3. `idx_price_snapshots_market_product_recorded_at` index tồn tại trên parent table.
-4. Seeded: 3 markets với coordinates; `significant_price_threshold_percent = 5.00` trong `system_config`.
+4. Seeded: 3 markets với coordinates; `daily_order_cutoff_time = 22:00` và `price_band_tolerance_percent = 10.00` trong `system_config`.
 
 **Depends on**: FFX-002
 
@@ -623,27 +623,6 @@ Implement `GET /markets/{id}/products/{id}/price-history` với cursor paginatio
 
 ---
 
-### FFX-025
-**Summary**: Implement significant price change detection + SignalR alert  
-**Epic**: EPIC-PRICING  
-**Assignee**: BE/DevOps  
-**Story Points**: 5  
-**Sprint**: Sprint 2  
-**Labels**: api, pricing, signalr  
-
-**Description**:
-Implement `SignificantChangeDetector`. Severity rules: ≥ 5% và < 15% → `MEDIUM`; ≥ 15% → `HIGH`. Admin endpoint `PATCH /admin/config/significant-price-threshold`.
-
-**Acceptance Criteria**:
-1. Price change ≥ 5% trigger `SignificantPriceAlert` SignalR event tới `market:{marketId}` trong 500ms; payload có `changePercent`, `previousPrice`, `newPrice`, `severity`.
-2. Đúng 5% được tính là significant (inclusive boundary).
-3. Quantity-only update (price không đổi) KHÔNG trigger alert.
-4. `PATCH /admin/config/significant-price-threshold` bởi Admin cập nhật threshold; non-Admin → 403.
-
-**Depends on**: FFX-023
-
----
-
 ### FFX-026
 **Summary**: Implement Angular pricing dashboard với live SignalR feed  
 **Epic**: EPIC-FRONTEND-WEB  
@@ -653,13 +632,12 @@ Implement `SignificantChangeDetector`. Severity rules: ≥ 5% và < 15% → `MED
 **Labels**: angular, frontend, signalr  
 
 **Description**:
-Implement `PricingDashboardComponent` dùng `WritableSignal<MarketProductDto[]>`, connect `/hubs/pricing`, join `market:{marketId}` on market select, listen `PriceUpdated` + `SignificantPriceAlert`.
+Implement `PricingDashboardComponent` dùng `WritableSignal<MarketProductDto[]>`, connect `/hubs/pricing`, join `market:{marketId}` on market select, listen only for `PriceUpdated`.
 
 **Acceptance Criteria**:
 1. Market select → price table load qua `GET /markets/{id}/products`.
 2. Kiosk staff update price → table row update trong 2 giây — không cần refresh.
-3. `SignificantPriceAlert` event highlight row với badge màu vàng/đỏ và change percent.
-4. Tất cả components dùng `OnPush`; không `.subscribe()` trong component; `async` pipe trong templates.
+3. Tất cả components dùng `OnPush`; không `.subscribe()` trong component; `async` pipe trong templates.
 
 **Depends on**: FFX-021, FFX-023, FFX-013
 
@@ -816,17 +794,24 @@ Flesh out `OrderHub.OnConnectedAsync()`: Restaurant auto-join `restaurant:{resta
 ---
 
 ### FFX-035
-**Summary**: Implement order grouping endpoints  
+**Summary**: Implement order grouping + Admin auto-batch trigger  
 **Epic**: EPIC-ORDERS  
 **Assignee**: BE/DevOps  
-**Story Points**: 5  
+**Story Points**: 8  
 **Sprint**: Sprint 3  
 **Labels**: api, orders, logistics  
 
+**Description**:
+Implement manual order grouping plus shared auto-batching service. `POST /api/v1/admin/order-groups/auto-batch` uses the same `OrderBatchingService` as the daily 22:00 job, groups `confirmed` unbatched orders by `deliveryZone + sourceMarket`, supports optional `targetDate`, `dryRun`, and `force`, and is idempotent.
+
 **Acceptance Criteria**:
-1. `POST /admin/order-groups` với `confirmed` order IDs → 201 với `orderGroupId`.
+1. `POST /api/v1/admin/order-groups` với `confirmed` order IDs → 201 với `orderGroupId`.
 2. Include non-`confirmed` order → 422.
 3. Order đã trong active group → 409.
+4. `POST /api/v1/admin/order-groups/auto-batch` returns created batch count, batched order count, and skipped/conflict list.
+5. `dryRun=true` previews groups and writes no DB changes.
+6. Re-running the endpoint does not create duplicate groups for already batched orders.
+7. Manual trigger and scheduled 22:00 job both move eligible orders to `batched` and emit `OrderGrouped`.
 
 **Depends on**: FFX-034
 
@@ -1241,7 +1226,7 @@ Tạo `IntegrationTestBase` spin up PostgreSQL + Redis containers qua Testcontai
 ---
 
 ### FFX-058
-**Summary**: Unit tests cho VRP solver, pricing service, token service  
+**Summary**: Unit tests cho VRP solver, order batching service, token service  
 **Epic**: EPIC-DEPLOY  
 **Assignee**: BE/DevOps  
 **Story Points**: 5  
@@ -1250,15 +1235,15 @@ Tạo `IntegrationTestBase` spin up PostgreSQL + Redis containers qua Testcontai
 
 **Coverage**:
 - `VrpSolverTests`: 3-stop optimal, 20-stop boundary, 21-stop exception, DISTANCE vs TIME vs COST
-- `SignificantChangeDetectorTests`: 5% threshold, exactly 5%, < 5%, HIGH severity at 15%
+- `OrderBatchingServiceTests`: groups by deliveryZone + sourceMarket, dry-run writes nothing, idempotent skip, emits OrderGrouped
 - `JwtTokenServiceTests`: claim presence, TTL, signature validation
 
 **Acceptance Criteria**:
 1. 100% branch coverage trên `VrpSolver`.
-2. Significant change detector tests cover exact boundary values.
+2. Order batching tests cover grouping, dry-run, idempotency, and event emission.
 3. `dotnet test --filter Category=Unit` exits 0.
 
-**Depends on**: FFX-041, FFX-025, FFX-006
+**Depends on**: FFX-041, FFX-035, FFX-006
 
 ---
 
@@ -1306,12 +1291,12 @@ Update `.github/workflows/ci.yml`: coverage gate ≥ 70%, Docker push to registr
 | Sprint | Stories | Total Points |
 |--------|---------|-------------|
 | Sprint 1 — Foundation & Auth | FFX-001 → FFX-018 (18 stories) | 91 pts |
-| Sprint 2 — Real-time Pricing | FFX-019 → FFX-028 (10 stories) | 47 pts |
-| Sprint 3 — Order Management | FFX-029 → FFX-038 (10 stories) | 52 pts |
+| Sprint 2 — Real-time Pricing | FFX-019 → FFX-024, FFX-026 → FFX-028 (9 stories) | 42 pts |
+| Sprint 3 — Order Management | FFX-029 → FFX-038 (10 stories) | 55 pts |
 | Sprint 4 — Logistics + Hub | FFX-039 → FFX-048 (10 stories) | 44 pts |
 | Sprint 5 — Analytics + Notifications | FFX-049 → FFX-056 (8 stories, FFX-052 deferred) | 43 pts |
 | Sprint 6 — Deployment + Testing | FFX-057 → FFX-060 (4 stories) | 23 pts |
-| **Total** | **60 stories** | **300 pts** |
+| **Total** | **59 stories** | **298 pts** |
 
 ## HIGH-RISK Stories
 

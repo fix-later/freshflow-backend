@@ -118,9 +118,6 @@ https://api.freshflow.vn/api/v1
 **Query**: `?cursor=<base64>&pageSize=20`
 **Response (cursor-paginated)**: `{ data: [{ price, quantity, recordedBy, recordedAt }], meta: { nextCursor } }`
 
-### PATCH /api/v1/admin/config/significant-price-threshold
-**Role**: Admin only | **Body**: `{ thresholdPercent: decimal }` — range 1–50
-
 ---
 
 ## Order Endpoints
@@ -165,9 +162,43 @@ https://api.freshflow.vn/api/v1
 **Body**: `{ orderIds: ["<uuid>", ...], name?: "string" }`
 **Response 201**: `{ orderGroupId }` | **Errors**: 422 (non-confirmed order), 409 (order already in group)
 
+### POST /api/v1/admin/order-groups/auto-batch
+**Role**: Admin only
+**Body (optional)**:
+```json
+{
+  "targetDate": "2026-05-31",
+  "dryRun": false,
+  "force": false
+}
+```
+**Behavior**: Runs the same service as the daily 22:00 auto-batching job. Eligible orders are `CONFIRMED`, not already in an active batch, and grouped by `deliveryZone + sourceMarket`.
+**Response 200**:
+```json
+{
+  "targetDate": "2026-05-31",
+  "dryRun": false,
+  "createdBatchCount": 2,
+  "batchedOrderCount": 18,
+  "skippedOrderCount": 1,
+  "batches": [
+    {
+      "orderGroupId": "3f4c3c2e-9a8b-4e2d-83e5-0d56e6b9a111",
+      "deliveryZone": "District 1",
+      "sourceMarketId": "0c6f8b5c-7d2f-4ac1-b4e2-b8aa5f2f1111",
+      "orderIds": ["<uuid>"]
+    }
+  ],
+  "skippedOrders": [
+    { "orderId": "<uuid>", "reason": "already_batched" }
+  ]
+}
+```
+**Errors**: 400 invalid `targetDate`, 403 non-Admin, 409 `AUTO_BATCH_ALREADY_RUNNING`
+
 ### PATCH /api/v1/admin/orders/{orderId}/status
 **Role**: Admin only
-**Body**: `{ status: "confirmed" | "processing" | "ready_for_pickup" | "in_transit" | "delivered" }`
+**Body**: `{ status: "confirmed" | "batched" | "processing" | "ready_for_pickup" | "in_transit" | "delivered" }`
 **Errors**: 422 invalid transition
 
 ---
@@ -286,7 +317,6 @@ https://api.freshflow.vn/api/v1
 | Client → Server | `JoinMarketGroup(marketId)` | Joins `market:{marketId}` | |
 | Client → Server | `LeaveMarketGroup(marketId)` | Leaves group | |
 | Server → Client | `PriceUpdated` | `market:{marketId}` | `{ productId, marketId, newPrice, newQuantity, updatedAt }` |
-| Server → Client | `SignificantPriceAlert` | `market:{marketId}` | `{ productId, marketId, changePercent, previousPrice, newPrice, severity }` |
 
 Kiosk Staff join `kiosk:{marketId}` automatically on connect (market validated against JWT claims).
 

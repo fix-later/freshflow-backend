@@ -73,7 +73,7 @@ Merging these roles would create a bloated, confusing UX and complicate RBAC. Th
 
 ### DEC-006: Order Auto-Batching at 22:00 Cutoff
 
-**Decision:** The system automatically batches all `CONFIRMED` orders at the 22:00 daily cutoff time. Admin does not manually create order groups for procurement.
+**Decision:** The system automatically batches all `CONFIRMED` orders at the 22:00 daily cutoff time. Admin can also trigger the same auto-batching service manually through `POST /api/v1/admin/order-groups/auto-batch`.
 
 **Old behavior:** Admin manually creates `order_groups` by selecting orders.
 
@@ -81,7 +81,7 @@ Merging these roles would create a bloated, confusing UX and complicate RBAC. Th
 
 **Rationale:** Manual batching doesn't scale, introduces human error, and creates an operational bottleneck at a fixed time each night. System auto-batching is deterministic and auditable.
 
-**Configuration:** Cutoff time is configurable via `system_config` key `daily_order_cutoff_time` (default `22:00`, timezone `Asia/Ho_Chi_Minh`). Admin can still manually adjust batches after auto-generation.
+**Configuration:** Cutoff time is configurable via `system_config` key `daily_order_cutoff_time` (default `22:00`, timezone `Asia/Ho_Chi_Minh`). Admin can still manually adjust batches after auto-generation. Manual trigger supports `targetDate`, `dryRun`, and `force` and must be idempotent so repeated runs do not create duplicate active batches.
 
 ---
 

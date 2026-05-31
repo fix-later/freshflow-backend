@@ -32,7 +32,7 @@
 | `products` | Yes | Pricing | System-wide product catalog. Many-to-many with `markets` via `market_products`. |
 | `market_products` | No | Pricing | Join entity between `markets` and `products` carrying current price/quantity state. One-to-many with `price_snapshots`, `order_items`, `hub_inventory`. |
 | `price_snapshots` | No | Pricing | Append-only audit log. Many-to-one with `market_products`. Partitioned by month. |
-| `system_config` | No | Pricing | Key-value store for Admin-configurable parameters (e.g., significant price threshold). |
+| `system_config` | No | Pricing | Key-value store for Admin-configurable parameters (e.g., cutoff time, price band tolerance, restaurant auto-approval). |
 | `restaurants` | Yes | Orders | One-to-one with `users`. One-to-many with `orders`. |
 | `orders` | Yes | Orders | Aggregate root of the order lifecycle. One-to-many with `order_items`. Many-to-one with `restaurants`, `order_groups`. |
 | `order_items` | No | Orders | Line items. Many-to-one with `orders` and `market_products`. |
@@ -286,7 +286,7 @@ CREATE TABLE price_snapshots (
 
 -- system_config
 -- Key-value store for Admin-configurable runtime parameters.
--- Example key: 'significant_price_threshold_percent', value: '5.00'
+-- Example keys: 'daily_order_cutoff_time' = '22:00', 'price_band_tolerance_percent' = '10.00'
 -- No soft delete — config rows are overwritten in place; audit is covered by updated_at + updated_by.
 CREATE TABLE system_config (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1192,9 +1192,8 @@ Stores event-specific data alongside the human-readable `title` and `body`. Stru
   "market_product_id": "uuid",
   "previous_price": "125000.00",
   "new_price": "135000.00",
-  "change_percent": "8.00",
-  "is_significant": true,
-  "severity": "MEDIUM"
+  "new_quantity": "420",
+  "updated_at": "2026-05-10T04:10:00+07:00"
 }
 
 // type: 'order_status'
@@ -1310,7 +1309,7 @@ The following seed data is applied by a dedicated idempotent seeder run after mi
 | `market_products` | 10–15 | Associates sample products with markets, with initial price/quantity values |
 | `hubs` | 2 | Hub Tân Bình (central HCM), Hub Bình Thạnh (northeast HCM) |
 | `vehicles` | 3 | 1 truck (5,000 kg), 1 van (2,000 kg), 1 motorbike (50 kg) |
-| `system_config` | 1 | `significant_price_threshold_percent` = `5.00` |
+| `system_config` | 2 | `daily_order_cutoff_time` = `22:00`; `price_band_tolerance_percent` = `10.00` |
 
 ### 5.4 Production Migration Policy
 
