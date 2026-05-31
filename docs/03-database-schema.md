@@ -25,9 +25,9 @@
 
 | Entity | Aggregate Root | Owned By Module | Relationship Summary |
 |--------|---------------|-----------------|----------------------|
-| `users` | Yes | Auth | Root of all user accounts. One-to-one with `restaurants` (restaurant role). One-to-many with `refresh_tokens`, `notifications`. Referenced by nearly every table as actor/author FK. |
+| `users` | Yes | Auth | Root of all user accounts. Roles: `admin`, `market_agent` (alias: `kiosk_staff`), `hub_staff`, `driver`, `restaurant`. One-to-one with `restaurants` (restaurant role) and `driver_profiles` (driver role). One-to-many with `refresh_tokens`, `notifications`. Referenced by nearly every table as actor/author FK. |
 | `refresh_tokens` | No | Auth | Many-to-one with `users`. Append-only; each row is an issued token. |
-| `user_market_assignments` | No | Auth | Many-to-many join between `users` (kiosk_staff) and `markets`. Enforces market-level access control for kiosk staff. |
+| `user_market_assignments` | No | Auth | Many-to-many join between `users` (market_agent) and `markets`. Enforces market-level access control for Market Agents. |
 | `markets` | Yes | Pricing | Root of all market-level data. One-to-many with `market_products`. |
 | `products` | Yes | Pricing | System-wide product catalog. Many-to-many with `markets` via `market_products`. |
 | `market_products` | No | Pricing | Join entity between `markets` and `products` carrying current price/quantity state. One-to-many with `price_snapshots`, `order_items`, `hub_inventory`. |
@@ -46,6 +46,9 @@
 | `vehicles` | Yes | Logistics | Vehicle fleet registry. One-to-many with `delivery_routes`. |
 | `delivery_routes` | Yes | Logistics | Calculated route with ordered stop list in JSONB. One-to-many with `deliveries`. Many-to-one with `vehicles`. |
 | `deliveries` | No | Logistics | One delivery stop per order within a route. One-to-one with `orders`. Many-to-one with `delivery_routes`. |
+| `payments` | No | Payment | Per-order payment records. Many-to-one with `orders` (by ID, no FK). |
+| `refunds` | No | Payment | Partial/full refund records. Many-to-one with `payments`. |
+| `driver_profiles` | No | Auth/Logistics | Extended profile for `driver` role users. One-to-one with `users`. |
 | `notifications` | No | Notifications | Append-only notification log. Many-to-one with `users`. |
 | `analytics_aggregations` | No | Analytics | Pre-computed analytics rows. Read by Analytics module only. |
 | `export_jobs` | No | Analytics | Async CSV export job tracking. |
@@ -95,17 +98,23 @@ All tables use:
 -- ENUM TYPE DEFINITIONS
 -- ============================================================
 
-CREATE TYPE user_role AS ENUM ('admin', 'kiosk_staff', 'restaurant');
+-- user_role: 'market_agent' is the canonical new name; 'kiosk_staff' retained as a backward-compatible alias.
+-- Use 'market_agent' in all new code. 'kiosk_staff' will be removed in a future migration.
+CREATE TYPE user_role AS ENUM ('admin', 'kiosk_staff', 'market_agent', 'hub_staff', 'driver', 'restaurant');
 
 CREATE TYPE order_status AS ENUM (
-    'pending',
-    'confirmed',
-    'processing',
-    'ready_for_pickup',
-    'in_transit',
-    'delivered',
+    'draft',             -- order created, not yet confirmed
+    'payment_pending',   -- payment initiated, awaiting gateway response
+    'confirmed',         -- payment succeeded, price locked
+    'batched',           -- included in a procurement batch after cutoff
+    'picked_up',         -- Market Agent has purchased and departed market
+    'at_hub',            -- goods arrived at distribution hub
+    'delivering',        -- driver dispatched, en route to restaurant
+    'delivered',         -- restaurant confirmed receipt
     'cancelled'
 );
+
+CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'refunded', 'failed');
 
 CREATE TYPE order_group_status AS ENUM ('open', 'locked', 'dispatched', 'completed');
 
@@ -172,9 +181,9 @@ CREATE TABLE refresh_tokens (
 );
 
 -- user_market_assignments
--- Maps kiosk_staff users to their assigned markets.
--- Enforces server-side that a kiosk staff can only update prices for their market.
--- Design decision: a staff member may be assigned to multiple markets (e.g., floater).
+-- Maps market_agent users to their assigned markets.
+-- Enforces server-side that a Market Agent can only update prices for their assigned market(s).
+-- Design decision: an Agent may be assigned to multiple markets (e.g., covers both Hoc Mon and Binh Dien).
 CREATE TABLE user_market_assignments (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id     UUID        NOT NULL,
@@ -229,10 +238,10 @@ CREATE TABLE products (
 
 -- market_products
 -- Join entity: tracks which products are available at which market, with current price and quantity.
--- current_price / current_quantity: live state managed by kiosk staff.
+-- current_price / current_quantity: live state managed by Market Agent.
 -- reserved_quantity: tracks soft-reserved quantity (decremented from available for pending orders).
 --   The application layer computes available = current_quantity - reserved_quantity.
--- updated_by: last kiosk staff user who touched this row.
+-- updated_by: last Market Agent user who touched this row.
 -- Design decision: no deleted_at here — deactivation is handled by soft-deleting the product
 --   or deactivating the market. A market_products row is effectively deactivated when either
 --   parent is soft-deleted/deactivated.
@@ -335,19 +344,21 @@ CREATE TABLE order_groups (
 
 -- orders
 -- Aggregate root of the order lifecycle.
--- order_group_id: nullable — NULL means not yet grouped.
+-- order_group_id: nullable — NULL means not yet batched.
 -- scheduled_order_id: nullable — NULL means one-off order; set if generated from a scheduled_orders record.
+-- payment_status: tracks payment lifecycle separately from order status.
 -- cancelled_at: set when status transitions to 'cancelled'.
 -- total_amount: maintained by application on order_item creation/update. Denormalized for fast reads.
 -- Design decision: ON DELETE RESTRICT on restaurant_id to prevent accidental deletion of a restaurant
 --   with active orders. Use soft delete on restaurant instead.
--- Design decision: order_group_id uses ON DELETE SET NULL — an order ungrouped if its group is deleted.
+-- Design decision: order_group_id uses ON DELETE SET NULL — an order is ungrouped if its group is deleted.
 CREATE TABLE orders (
     id                  UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
     restaurant_id       UUID            NOT NULL,
     order_group_id      UUID,
     scheduled_order_id  UUID,
-    status              order_status    NOT NULL DEFAULT 'pending',
+    status              order_status    NOT NULL DEFAULT 'draft',
+    payment_status      payment_status  NOT NULL DEFAULT 'pending',
     scheduled_for       TIMESTAMPTZ,
     total_amount        NUMERIC(14, 2)  NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
     notes               TEXT,
@@ -365,21 +376,30 @@ CREATE TABLE orders (
 );
 
 -- order_items
--- Line items for an order. Immutable after creation in normal flow.
--- unit_price: snapshotted at order creation time (price at time of order).
--- subtotal: GENERATED ALWAYS AS computed column — no need to store separately.
+-- Line items for an order.
+-- unit_price: price at order creation (DRAFT) time — may differ from locked_unit_price.
+-- product_name_snapshot: product name at order creation time, preserved for history even if product is renamed.
+-- locked_unit_price: set when order transitions to CONFIRMED (after payment). Immune to subsequent
+--   market price changes. NULL until confirmed. This is what the restaurant actually pays.
+-- locked_total: quantity × locked_unit_price. Set at CONFIRMED time.
+-- actual_quantity: actual quantity delivered; may be less than quantity if Hub Staff flags shortage.
+-- subtotal: GENERATED ALWAYS AS computed column based on quantity × unit_price (draft estimate).
 -- Design decision: no deleted_at. If an item must be removed, the order itself is cancelled.
 --   Individual item cancellation is not a v1 feature.
 -- Design decision: ON DELETE RESTRICT on market_product_id to preserve order integrity.
 CREATE TABLE order_items (
-    id                  UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id            UUID            NOT NULL,
-    market_product_id   UUID            NOT NULL,
-    quantity            INTEGER         NOT NULL CHECK (quantity > 0),
-    unit_price          NUMERIC(12, 2)  NOT NULL CHECK (unit_price >= 0),
-    subtotal            NUMERIC(14, 2)  GENERATED ALWAYS AS (quantity * unit_price) STORED,
-    created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    id                      UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id                UUID            NOT NULL,
+    market_product_id       UUID            NOT NULL,
+    product_name_snapshot   VARCHAR(200)    NOT NULL,
+    quantity                INTEGER         NOT NULL CHECK (quantity > 0),
+    unit_price              NUMERIC(12, 2)  NOT NULL CHECK (unit_price >= 0),
+    subtotal                NUMERIC(14, 2)  GENERATED ALWAYS AS (quantity * unit_price) STORED,
+    locked_unit_price       NUMERIC(12, 2),
+    locked_total            NUMERIC(14, 2),
+    actual_quantity         NUMERIC(10, 2),
+    created_at              TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_order_items_order
         FOREIGN KEY (order_id) REFERENCES orders (id) ON DELETE CASCADE,
     CONSTRAINT fk_order_items_market_product
@@ -462,6 +482,9 @@ CREATE TABLE hub_inventory (
 -- Append-heavy inbound tracking records (FR-HUB-003).
 -- Items (product/quantity pairs) stored in JSONB for flexibility.
 -- delivery_route_id: links to the delivery route that brought the goods in.
+-- hub_staff_user_id: the Hub Staff employee who received and scanned the goods.
+-- condition_status: overall condition of the inbound batch. OK means no discrepancies.
+-- discrepancy_notes: free-text notes when condition_status != OK.
 CREATE TABLE hub_inbound_events (
     id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     hub_id              UUID        NOT NULL,
@@ -471,6 +494,10 @@ CREATE TABLE hub_inbound_events (
     total_quantity_kg   NUMERIC(10, 2),
     arrived_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     recorded_by         UUID,
+    hub_staff_user_id   UUID,
+    condition_status    VARCHAR(20) NOT NULL DEFAULT 'OK'
+                            CHECK (condition_status IN ('OK', 'DAMAGED', 'MISSING', 'PARTIAL')),
+    discrepancy_notes   TEXT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_hub_inbound_hub
@@ -480,7 +507,9 @@ CREATE TABLE hub_inbound_events (
     CONSTRAINT fk_hub_inbound_route
         FOREIGN KEY (delivery_route_id) REFERENCES delivery_routes (id) ON DELETE SET NULL,
     CONSTRAINT fk_hub_inbound_recorded_by
-        FOREIGN KEY (recorded_by) REFERENCES users (id) ON DELETE SET NULL
+        FOREIGN KEY (recorded_by) REFERENCES users (id) ON DELETE SET NULL,
+    CONSTRAINT fk_hub_inbound_hub_staff
+        FOREIGN KEY (hub_staff_user_id) REFERENCES users (id) ON DELETE SET NULL
 );
 
 -- hub_outbound_events
@@ -524,6 +553,77 @@ CREATE TABLE cross_dock_transfers (
         FOREIGN KEY (inbound_event_id) REFERENCES hub_inbound_events (id) ON DELETE RESTRICT,
     CONSTRAINT fk_cross_dock_route
         FOREIGN KEY (outbound_route_id) REFERENCES delivery_routes (id) ON DELETE RESTRICT
+);
+
+-- ============================================================
+-- PAYMENT MODULE TABLES
+-- ============================================================
+
+-- payments
+-- Tracks per-order payment transactions via external payment gateway.
+-- order_id: no FK constraint — cross-context reference by ID only (DDD rule).
+-- gateway_transaction_id: the gateway's reference ID for reconciliation.
+-- gateway_response: full gateway callback payload stored for audit.
+CREATE TABLE payments (
+    id                      UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id                UUID            NOT NULL,
+    restaurant_id           UUID            NOT NULL,
+    amount                  NUMERIC(14, 2)  NOT NULL CHECK (amount > 0),
+    payment_method          VARCHAR(20)     NOT NULL
+                                CHECK (payment_method IN ('VNPAY', 'MOMO', 'ZALOPAY')),
+    gateway_transaction_id  VARCHAR(255),
+    status                  VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
+                                CHECK (status IN ('PENDING', 'SUCCEEDED', 'FAILED', 'CANCELLED')),
+    gateway_response        JSONB,
+    paid_at                 TIMESTAMPTZ,
+    created_at              TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_payments_order_id ON payments (order_id);
+CREATE INDEX idx_payments_restaurant_id ON payments (restaurant_id);
+CREATE INDEX idx_payments_status ON payments (status) WHERE status = 'PENDING';
+
+-- refunds
+-- Tracks partial or full refunds issued against a payment.
+-- Triggered by: hub discrepancy flags, order cancellation after payment.
+-- reason: 'hub_shortage', 'hub_damage', 'customer_cancel', 'system'
+CREATE TABLE refunds (
+    id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    payment_id      UUID            NOT NULL,
+    order_id        UUID            NOT NULL,
+    reason          VARCHAR(255)    NOT NULL
+                        CHECK (reason IN ('hub_shortage', 'hub_damage', 'customer_cancel', 'system')),
+    amount          NUMERIC(14, 2)  NOT NULL CHECK (amount > 0),
+    status          VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
+                        CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED')),
+    refunded_at     TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_refunds_payment
+        FOREIGN KEY (payment_id) REFERENCES payments (id) ON DELETE RESTRICT
+);
+
+CREATE INDEX idx_refunds_payment_id ON refunds (payment_id);
+CREATE INDEX idx_refunds_order_id ON refunds (order_id);
+
+-- driver_profiles
+-- Extended profile for users with role 'driver'.
+-- current_vehicle_id: the vehicle currently assigned to this driver (nullable).
+-- status: operational status for dispatch planning.
+CREATE TABLE driver_profiles (
+    id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id             UUID        UNIQUE NOT NULL,
+    license_number      VARCHAR(50),
+    current_vehicle_id  UUID,
+    status              VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE'
+                            CHECK (status IN ('AVAILABLE', 'ON_DUTY', 'OFF_DUTY')),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_driver_profiles_user
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_driver_profiles_vehicle
+        FOREIGN KEY (current_vehicle_id) REFERENCES vehicles (id) ON DELETE SET NULL
 );
 
 -- ============================================================
@@ -1148,12 +1248,13 @@ All six PostgreSQL ENUM types are defined at the top of the DDL block in Section
 
 | Enum Type | Values | Used In |
 |-----------|--------|---------|
-| `user_role` | `admin`, `kiosk_staff`, `restaurant` | `users.role` |
-| `order_status` | `pending`, `confirmed`, `processing`, `ready_for_pickup`, `in_transit`, `delivered`, `cancelled` | `orders.status` |
+| `user_role` | `admin`, `kiosk_staff` (legacy), `market_agent`, `hub_staff`, `driver`, `restaurant` | `users.role` |
+| `order_status` | `draft`, `payment_pending`, `confirmed`, `batched`, `picked_up`, `at_hub`, `delivering`, `delivered`, `cancelled` | `orders.status` |
+| `payment_status` | `pending`, `paid`, `refunded`, `failed` | `orders.payment_status` |
 | `order_group_status` | `open`, `locked`, `dispatched`, `completed` | `order_groups.status` |
 | `delivery_status` | `pending`, `picked_up`, `in_transit`, `delivered`, `failed` | `deliveries.status` |
 | `route_status` | `planned`, `in_progress`, `completed`, `cancelled` | `delivery_routes.status` |
-| `notification_type` | `price_change`, `order_status`, `delivery_update`, `system` | `notifications.type` |
+| `notification_type` | `price_change`, `order_status`, `delivery_update`, `payment`, `hub_discrepancy`, `system` | `notifications.type` |
 
 **Trade-off:** PostgreSQL ENUMs are efficient (stored as integers internally) but require a DDL migration to add new values (`ALTER TYPE ... ADD VALUE`). For `cross_dock_transfers.status` and `export_jobs.status` (which may evolve), a `TEXT` column with a `CHECK` constraint is used instead — simpler to extend in application code without a blocking migration.
 
@@ -1227,7 +1328,7 @@ All Redis keys follow the patterns below. The application uses StackExchange.Red
 
 | Key Pattern | Data Structure | Content | TTL | Invalidation Trigger | Notes |
 |-------------|---------------|---------|-----|---------------------|-------|
-| `price:{marketId}:{productId}` | Hash | Fields: `price` (string decimal e.g. `"125000.00"`), `quantity` (int string e.g. `"300"`), `reserved` (int string), `updated_at` (ISO 8601), `updated_by` (userId string) | 5 min (absolute, reset on each write) | Kiosk Staff `PATCH /price` or `PATCH /quantity` — `PricingCacheWriter` calls `HSET` + `EXPIRE` atomically after PostgreSQL commit | On cache miss, fall back to `market_products` PostgreSQL table. Redis failure must NOT block the price write path — log and continue. |
+| `price:{marketId}:{productId}` | Hash | Fields: `price` (string decimal e.g. `"125000.00"`), `quantity` (int string e.g. `"300"`), `reserved` (int string), `updated_at` (ISO 8601), `updated_by` (userId string) | 5 min (absolute, reset on each write) | Market Agent `PATCH /price` or `PATCH /quantity` — `PricingCacheWriter` calls `HSET` + `EXPIRE` atomically after PostgreSQL commit | On cache miss, fall back to `market_products` PostgreSQL table. Redis failure must NOT block the price write path — log and continue. |
 | `session:{userId}:refresh_count` | String (integer) | Count of currently non-revoked refresh tokens for this user. Used to detect excessive concurrent sessions (future rate limiting). | 7 days absolute (matches refresh token TTL) | Incremented (`INCR`) on token issuance; decremented (`DECR`) on revocation or logout. Reset to 0 on full family invalidation. | Supplementary to the PostgreSQL `refresh_tokens` table. If Redis is unavailable, session counting is skipped gracefully — it is advisory, not a security control. |
 | `route:{sha256(sorted_stop_ids + criterion)}` | String (JSON) | Serialized `DeliveryRoute` calculation result including stops, distances, durations, estimated costs. Same structure as `delivery_routes.route_metadata` JSONB. | 1 hour absolute | Explicit `DEL` on vehicle re-assignment to a route (`DeliveryScheduleService`); natural key change when stop list changes (hash changes → new key, old key expires) | Hash input: sorted concatenation of all stop entity UUIDs + optimization criterion string. Different criteria produce different cache keys. Prevents recomputing identical VRP requests within the hour window. |
 | `analytics:price_trend:{marketProductId}:{date}` | String (JSON) | Pre-aggregated hourly price data for the given day. Array of `{hour, avg_price, min_price, max_price, snapshot_count}`. | 15 min absolute | Explicit `DEL` triggered by `PricingCacheWriter` on any new `price_snapshots` insert for the given `market_product_id` on that date | Date format: `YYYY-MM-DD` in `Asia/Ho_Chi_Minh` timezone. Cache miss falls back to `analytics_aggregations` table, then to live query on `price_snapshots` read replica. |

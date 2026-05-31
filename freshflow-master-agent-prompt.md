@@ -27,15 +27,23 @@ Your mission is to **fully analyze the requirements and design the system** befo
 - Auth: JWT with refresh token rotation
 - Deploy: Docker + CI/CD
 
-**User Roles:** Admin · Kiosk Staff (at wholesale markets) · Restaurant
+**User Roles:** Admin / Operations Manager · Market Agent (internal FreshFlow staff at wholesale markets) · Hub Staff · Driver · Restaurant
+
+**Role notes:**
+- Market Agent = internal FreshFlow employee (not external vendor); goes to wholesale markets to scout prices AND purchase goods
+- Kiosk interface is used BY Market Agent, not by external vendors; legacy role enum `KIOSK_STAFF` = `MARKET_AGENT`
+- Hub Staff operates the distribution hub (receiving, QC, cross-docking, flagging discrepancies)
+- Driver performs last-mile delivery (multi-drop routing, stop status updates)
+- Restaurant = single actor covering both owner/manager and ordering staff functions
 
 **Core Domains:**
-1. Real-time pricing (market kiosk → SignalR → restaurant clients)
-2. Order management (bulk orders, scheduled orders, order grouping)
+1. Real-time pricing (Market Agent kiosk → SignalR → restaurant clients)
+2. Order management (bulk orders, scheduled orders, auto-batching at 22:00 cutoff)
 3. Logistics optimization (Vehicle Routing Problem, Market → Hub → Restaurant)
-4. Hub management (cross-docking, goods aggregation)
-5. Analytics & AI price prediction (optional advanced)
-6. Authentication & authorization (JWT, role-based)
+4. Hub management (cross-docking, goods aggregation, QC, discrepancy handling)
+5. Payment processing (per-order via VNPay/MoMo/ZaloPay, with auto-refund on hub discrepancy)
+6. Analytics & AI price prediction (optional advanced)
+7. Authentication & authorization (JWT, role-based)
 
 ---
 
