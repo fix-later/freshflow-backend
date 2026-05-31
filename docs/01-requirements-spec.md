@@ -1,0 +1,283 @@
+# FreshFlow (FFX) — Requirements Specification
+
+**Version:** 1.0  
+**Date:** 2026-05-09  
+**Project:** FreshFlow – An Intermediary Platform for Food Procurement and Logistics Optimization from Wholesale Markets for Restaurants in Ho Chi Minh City  
+**Status:** Draft for Review
+
+---
+
+## Table of Contents
+
+1. [Functional Requirements](#1-functional-requirements)
+   - 1.1 [Authentication & Authorization (FR-AUTH)](#11-authentication--authorization-fr-auth)
+   - 1.2 [Pricing Management (FR-PRI)](#12-pricing-management-fr-pri)
+   - 1.3 [Order Management (FR-ORD)](#13-order-management-fr-ord)
+   - 1.4 [Logistics Optimization (FR-LOG)](#14-logistics-optimization-fr-log)
+   - 1.5 [Hub Management (FR-HUB)](#15-hub-management-fr-hub)
+   - 1.6 [Analytics & Dashboards (FR-ANA)](#16-analytics--dashboards-fr-ana)
+   - 1.7 [Notifications (FR-NOT)](#17-notifications-fr-not)
+2. [Non-Functional Requirements](#2-non-functional-requirements)
+3. [Requirement Gaps & Assumptions](#3-requirement-gaps--assumptions)
+4. [Out of Scope](#4-out-of-scope)
+5. [Domain Glossary](#5-domain-glossary)
+
+---
+
+## 1. Functional Requirements
+
+> **Reading guide:** Priority levels follow MoSCoW — **Must** (release blocker), **Should** (strong preference), **Could** (nice-to-have if time allows). Acceptance criteria are written as specific, independently testable conditions.
+
+---
+
+### 1.1 Authentication & Authorization (FR-AUTH)
+
+| ID | Description | Priority | Affected Roles | Acceptance Criteria |
+|----|-------------|----------|---------------|---------------------|
+| FR-AUTH-001 | A registered user shall be able to log in with a valid email address and password. On success, the server returns a signed JWT access token (TTL 15 min) and a refresh token (TTL 7 days) in the response body. | Must | Admin, Kiosk Staff, Restaurant | 1. `POST /api/auth/login` with valid credentials returns HTTP 200, a `accessToken` field, and a `refreshToken` field. 2. `POST /api/auth/login` with an incorrect password returns HTTP 401 with an error code `INVALID_CREDENTIALS`; the response body does not include any token. 3. `POST /api/auth/login` with a non-existent email returns HTTP 401 with the same generic error code (no user-enumeration leak). 4. The returned JWT payload contains `sub` (user ID), `role`, `email`, and `exp` claims; decoding it confirms `exp - iat = 900` seconds. |
+| FR-AUTH-002 | A client holding a valid, non-expired refresh token shall be able to exchange it for a new access token and a new refresh token. The old refresh token must be invalidated immediately upon use (token rotation). | Must | Admin, Kiosk Staff, Restaurant | 1. `POST /api/auth/refresh` with a valid refresh token returns HTTP 200 with a new `accessToken` and a new `refreshToken`. 2. Reusing the same refresh token a second time returns HTTP 401 with error code `REFRESH_TOKEN_REUSE`; the entire token family is invalidated (refresh token rotation security policy). 3. An expired refresh token (past 7-day TTL) returns HTTP 401 with error code `REFRESH_TOKEN_EXPIRED`. 4. The new access token is valid and the previous access token (before its own TTL expires) is still independently valid until its `exp`. |
+| FR-AUTH-003 | A logged-in user shall be able to log out. Logout must invalidate the current refresh token so it cannot be reused. | Must | Admin, Kiosk Staff, Restaurant | 1. `POST /api/auth/logout` with a valid Bearer access token and a valid refresh token body returns HTTP 204. 2. After logout, attempting `POST /api/auth/refresh` with the invalidated refresh token returns HTTP 401. 3. Logging out without an access token returns HTTP 401 — the endpoint is protected. 4. Logout of one session does not affect other concurrent sessions (device-level isolation). |
+| FR-AUTH-004 | An Admin shall be able to create new user accounts for Kiosk Staff and Restaurant roles. Self-registration is not available for Kiosk Staff. Restaurant self-registration is configurable by Admin (see GA-009). | Must | Admin | 1. `POST /api/admin/users` by an Admin with role `KIOSK_STAFF` or `RESTAURANT` in the body creates the account and returns HTTP 201 with the new user's `id`. 2. The new user can log in immediately with the temporary password assigned by Admin. 3. A non-Admin attempting `POST /api/admin/users` receives HTTP 403. 4. Creating a user with a duplicate email address returns HTTP 409 with error code `EMAIL_ALREADY_EXISTS`. |
+| FR-AUTH-005 | The system shall enforce role-based access control (RBAC) on every API endpoint. Requests with a valid token but insufficient role must be rejected. | Must | Admin, Kiosk Staff, Restaurant | 1. A `RESTAURANT` token calling an Admin-only endpoint (e.g., `POST /api/admin/users`) returns HTTP 403. 2. A `KIOSK_STAFF` token calling a Restaurant-only endpoint (e.g., `POST /api/orders`) returns HTTP 403. 3. A missing or malformed JWT on any protected endpoint returns HTTP 401. 4. Endpoint-role mapping is documented in the API spec; any new endpoint without explicit role annotation causes a CI lint check failure. |
+
+---
+
+### 1.2 Pricing Management (FR-PRI)
+
+| ID | Description | Priority | Affected Roles | Acceptance Criteria |
+|----|-------------|----------|---------------|---------------------|
+| FR-PRI-001 | An authenticated Kiosk Staff member shall be able to update the unit price of a product at their assigned market. The update must be persisted to PostgreSQL and the updated price reflected in Redis within the same request cycle. | Must | Kiosk Staff | 1. `PATCH /api/markets/{marketId}/products/{productId}/price` with a valid price value returns HTTP 200 with the updated price snapshot including `updatedAt`. 2. The updated price is readable from `GET /api/markets/{marketId}/products/{productId}` immediately after the PATCH response. 3. A Kiosk Staff member assigned to Market A cannot update prices at Market B — returns HTTP 403. 4. Price values must be positive numbers; a zero or negative price returns HTTP 422 with field-level validation error. |
+| FR-PRI-002 | An authenticated Kiosk Staff member shall be able to update the available quantity of a product at their assigned market. Quantity must be a non-negative integer. | Must | Kiosk Staff | 1. `PATCH /api/markets/{marketId}/products/{productId}/quantity` with a valid integer value returns HTTP 200 with updated quantity and `updatedAt`. 2. Setting quantity to 0 is valid and represents out-of-stock; the product remains visible but marked `OUT_OF_STOCK`. 3. A negative quantity value returns HTTP 422 with field-level validation error. 4. A non-integer (e.g. `1.5`) returns HTTP 422. |
+| FR-PRI-003 | Upon a successful price or quantity update, the system shall broadcast the updated price snapshot to all connected clients via SignalR within 500 ms of the database write. Restaurant clients must receive the update without polling. | Must | Kiosk Staff (trigger), Restaurant (receiver), Admin (receiver) | 1. A connected SignalR client subscribed to the relevant market group receives a `PriceUpdated` event within 500 ms of the PATCH response timestamp. 2. The event payload contains `productId`, `marketId`, `newPrice`, `newQuantity`, and `updatedAt`. 3. Clients connected after the update do NOT receive historical events; they must call `GET /api/markets/{marketId}/products` to get current state. 4. If no clients are connected, the update completes without error — broadcast is fire-and-forget with no blocking side effects. |
+| FR-PRI-004 | The system shall store a complete, immutable price history for every product at every market. Each price-change event must be recorded with its value, quantity at the time, actor, and timestamp. | Must | Admin, Restaurant | 1. `GET /api/markets/{marketId}/products/{productId}/price-history` returns a paginated list of price snapshot records sorted descending by `recordedAt`. 2. Each record includes `price`, `quantity`, `updatedByUserId`, `recordedAt`, and `marketId`. 3. Records are immutable — no endpoint allows deletion or modification of historical entries. 4. After 10 consecutive price updates to the same product, the history endpoint returns at least 10 distinct records with monotonically distinct `recordedAt` values. |
+| FR-PRI-005 | The system shall detect and flag significant price changes. A significant change is defined as a price movement of ≥ 5% relative to the last recorded price for that product at that market, or a threshold configurable by Admin. When detected, the system triggers a dedicated high-priority notification (see FR-NOT-001). | Should | Admin (configure), Restaurant (receive alert) | 1. When a price update results in a change of ≥ 5% (or the configured threshold), a `SignificantPriceChange` event is emitted via SignalR in addition to the standard `PriceUpdated` event. 2. Admin can call `PATCH /api/admin/config/significant-price-threshold` to set the threshold to a value between 1% and 50%; the new threshold applies to all subsequent updates. 3. A price change of exactly the threshold value (e.g. exactly 5%) is treated as significant (inclusive boundary). 4. Changing quantity alone without changing price does not trigger a significant-change event. |
+| FR-PRI-006 | Admin shall be able to create, update, deactivate, and list products in the system-wide product catalog. Kiosk Staff can only update price and quantity for products that already exist in the catalog; they cannot create or delete product definitions. | Must | Admin (CRUD), Kiosk Staff (read + price/qty update only) | 1. `POST /api/admin/products` by Admin creates a new product with `name`, `unit`, `category`, and optional `description`; returns HTTP 201 with `productId`. 2. `DELETE /api/admin/products/{productId}` (or `PATCH` to `status: INACTIVE`) soft-deletes the product; it no longer appears in Kiosk Staff or Restaurant product lists but historical records are preserved. 3. A Kiosk Staff calling `POST /api/admin/products` receives HTTP 403. 4. Listing `GET /api/products` without admin token returns only `ACTIVE` products; listing with admin token supports a `?includeInactive=true` query parameter. |
+
+---
+
+### 1.3 Order Management (FR-ORD)
+
+| ID | Description | Priority | Affected Roles | Acceptance Criteria |
+|----|-------------|----------|---------------|---------------------|
+| FR-ORD-001 | An authenticated Restaurant user shall be able to create a bulk order containing one or more line items (product + quantity + source market). The order must be created with status `PENDING` and all line items must reference valid, active products. | Must | Restaurant | 1. `POST /api/orders` with a valid body (at least one line item) returns HTTP 201 with `orderId` and status `PENDING`. 2. A line item referencing a non-existent or inactive product returns HTTP 422 with `INVALID_PRODUCT` error referencing the offending `productId`. 3. An order with zero line items returns HTTP 422. 4. A Restaurant can only create orders under their own account — the `restaurantId` in the created order matches the JWT `sub`; any attempt to create an order for a different restaurant returns HTTP 403. |
+| FR-ORD-002 | An authenticated Restaurant user shall be able to create a scheduled recurring order that repeats on a daily or weekly cadence. The scheduled order runs in the timezone `Asia/Ho_Chi_Minh`. It repeats indefinitely until manually cancelled by the Restaurant or Admin. | Must | Restaurant | 1. `POST /api/orders/scheduled` with `recurrence: DAILY` or `recurrence: WEEKLY` and a `firstRunAt` (ISO 8601 with timezone) returns HTTP 201 with `scheduledOrderId` and next execution time in `Asia/Ho_Chi_Minh`. 2. At the scheduled time, a concrete order instance is automatically created with status `PENDING` and linked to the `scheduledOrderId`. 3. `GET /api/orders/scheduled/{scheduledOrderId}/instances` returns all generated order instances. 4. If the scheduled time passes but the system was down, the system generates the missed instance upon recovery and logs a `MISSED_EXECUTION` event — it does not silently skip. |
+| FR-ORD-003 | Any authenticated user with access to an order shall be able to view its real-time status. Order status changes must be pushed to connected clients via SignalR without requiring polling. | Must | Restaurant (own orders), Admin (all orders), Kiosk Staff (orders sourced from their market) | 1. `GET /api/orders/{orderId}` returns the current order with its `status` field. 2. When an order status changes (e.g., `PENDING` → `CONFIRMED` → `IN_TRANSIT` → `DELIVERED`), a `OrderStatusChanged` SignalR event is emitted to the restaurant's personal SignalR group within 500 ms. 3. The status event payload includes `orderId`, `newStatus`, `previousStatus`, `changedAt`, and `changedByUserId`. 4. A Restaurant can only receive status events for their own orders; subscribing to another restaurant's order group returns HTTP 403 on the hub negotiate endpoint. |
+| FR-ORD-004 | An authenticated Restaurant user shall be able to cancel an order if its status is `PENDING` or `CONFIRMED`. Cancellation of orders in `IN_TRANSIT` or `DELIVERED` status must be rejected. | Must | Restaurant (own orders), Admin (any order) | 1. `DELETE /api/orders/{orderId}` (or `PATCH /api/orders/{orderId}/cancel`) when status is `PENDING` or `CONFIRMED` transitions status to `CANCELLED` and returns HTTP 200. 2. Attempting to cancel an order with status `IN_TRANSIT` returns HTTP 409 with error code `ORDER_NOT_CANCELLABLE`. 3. Attempting to cancel an order with status `DELIVERED` returns HTTP 409 with error code `ORDER_NOT_CANCELLABLE`. 4. Upon cancellation, any soft-reserved stock for the order line items is released in Redis (see GA-003). |
+| FR-ORD-005 | The system shall support order grouping: multiple restaurant orders with overlapping delivery routes or pickup sources may be grouped into a single logistics delivery batch by Admin or the logistics engine. | Should | Admin, Logistics Operator | 1. `POST /api/admin/order-groups` with a list of `orderIds` creates an `OrderGroup` entity and links the specified orders; returns HTTP 201 with `orderGroupId`. 2. All orders in the group must have status `CONFIRMED`; including an order with any other status returns HTTP 422. 3. An order cannot belong to more than one active order group simultaneously — attempting to add it to a second group returns HTTP 409. 4. `GET /api/admin/order-groups/{orderGroupId}` returns the group with all member orders, their statuses, and the suggested delivery route (if calculated). |
+| FR-ORD-006 | An authenticated Restaurant user shall be able to view their complete order history, including both one-off and scheduled order instances. Results must be paginated, sortable by date, and filterable by status. | Must | Restaurant, Admin | 1. `GET /api/orders?status=DELIVERED&page=1&pageSize=20` returns the first 20 delivered orders for the requesting restaurant, with `totalCount`, `page`, and `pageSize` in the response envelope. 2. The response is sorted by `createdAt` descending by default; `?sort=createdAt:asc` reverses the sort. 3. An Admin can call `GET /api/admin/orders?restaurantId={id}` to view any restaurant's order history. 4. Scheduled order instances appear in the history list and include a `scheduledOrderId` field linking them to their parent schedule. |
+| FR-ORD-007 | Before confirming a placed order, the system shall validate that available stock (quantity) for each line item is sufficient to satisfy the requested quantity, applying a soft-reservation model. If any line item exceeds available stock, the order must be rejected with a clear, per-item error. | Must | Restaurant (trigger), System (enforcement) | 1. `POST /api/orders` where a line item requests quantity Q and the available stock is less than Q returns HTTP 422 with `INSUFFICIENT_STOCK` error, including `productId`, `requestedQty`, and `availableQty` for each failing line item. 2. On successful order creation, the requested quantities are soft-reserved in Redis (decrement from available quantity key), preventing double-allocation within the reservation window. 3. If order creation fails for any reason after soft-reservation is applied, the reservation is rolled back. 4. Soft-reservations not confirmed within 30 minutes are automatically released by a background job. |
+
+---
+
+### 1.4 Logistics Optimization (FR-LOG)
+
+| ID | Description | Priority | Affected Roles | Acceptance Criteria |
+|----|-------------|----------|---------------|---------------------|
+| FR-LOG-001 | The system shall calculate a delivery route from one or more wholesale Markets through one or more distribution Hubs to one or more Restaurants (Market → Hub → Restaurant path). | Must | Admin, Logistics Operator | 1. `POST /api/logistics/routes/calculate` with a body specifying `sourceMarketIds`, `hubIds`, and `destinationRestaurantIds` returns a route plan within 3 seconds including ordered stops, estimated distance (km), estimated duration (minutes), and estimated cost. 2. If a specified Hub is at capacity or inactive, the system excludes it and notes the exclusion in the response. 3. The route result includes a `routeType: HUB_RELAY` field to distinguish from direct routes. 4. The route calculation endpoint returns HTTP 422 if `sourceMarketIds` or `destinationRestaurantIds` is empty. |
+| FR-LOG-002 | The system shall calculate direct delivery routes from one or more wholesale Markets to one or more Restaurants (Market → Restaurant path), bypassing hubs entirely. | Must | Admin, Logistics Operator | 1. `POST /api/logistics/routes/calculate` with `hubIds: []` (empty) returns a direct route plan with `routeType: DIRECT`. 2. The direct route plan includes all the same fields as hub relay routes (stops, distance, duration, cost). 3. The system allows simultaneous calculation of a direct route and a hub relay route for the same set of restaurants; the response includes both options for operator comparison when `?compareWithHub=true` is passed. 4. Route calculation with a single market and a single restaurant returns a two-stop route (market → restaurant). |
+| FR-LOG-003 | The route calculation engine shall optimize routes according to configurable criteria: shortest distance, fastest time, or lowest estimated cost. The optimization criterion must be selectable per calculation request. | Must | Admin, Logistics Operator | 1. `POST /api/logistics/routes/calculate` accepts an `optimizationCriteria` field with values `DISTANCE`, `TIME`, or `COST`; the calculated route reflects that criterion in the ordering of stops. 2. For the same set of inputs, a `DISTANCE` route and a `TIME` route may produce different stop orderings; both are valid responses. 3. If `optimizationCriteria` is omitted, the system defaults to `COST`. 4. The response always includes all three metrics (distance, time, estimated cost) regardless of which criterion was used for optimization. |
+| FR-LOG-004 | Admin shall be able to register vehicles in the system and assign a specific vehicle to a calculated delivery route. Each vehicle has a capacity (kg or units), a vehicle type, and an active/inactive status. | Must | Admin | 1. `POST /api/admin/vehicles` creates a vehicle record with `plateNumber`, `capacityKg`, `vehicleType` (e.g., `VAN`, `TRUCK`), and `status: ACTIVE`; returns HTTP 201 with `vehicleId`. 2. `POST /api/logistics/routes/{routeId}/assign-vehicle` with a `vehicleId` assigns the vehicle to the route; returns HTTP 200. 3. Assigning a vehicle that is already assigned to another active route on the same date/time returns HTTP 409 with `VEHICLE_NOT_AVAILABLE`. 4. Assigning an `INACTIVE` vehicle returns HTTP 422. |
+| FR-LOG-005 | Admin shall be able to create a delivery schedule that links a calculated route, an assigned vehicle, and a planned departure time. The schedule must respect vehicle capacity constraints against the total weight of the order group assigned to the route. | Must | Admin | 1. `POST /api/logistics/schedules` with `routeId`, `vehicleId`, and `plannedDepartureAt` returns HTTP 201 with `scheduleId` and a capacity utilization percentage. 2. If the total weight of all orders in the linked order group exceeds the assigned vehicle's `capacityKg`, the system returns HTTP 422 with `VEHICLE_CAPACITY_EXCEEDED` and the actual vs. capacity values. 3. `GET /api/logistics/schedules?date=2026-05-09` returns all schedules for that date with status (`SCHEDULED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`). 4. Admin can update the `plannedDepartureAt` of a `SCHEDULED` delivery schedule; updating a schedule that is `IN_PROGRESS` or `COMPLETED` returns HTTP 409. |
+| FR-LOG-006 | The route calculation engine shall support multi-drop routing: a single vehicle on a single route may serve multiple restaurant destinations in an optimized stop sequence. The engine must determine the optimal visit order among all destination stops. | Must | Admin, Logistics Operator | 1. `POST /api/logistics/routes/calculate` with three or more `destinationRestaurantIds` returns a route with stops in an optimized sequence (not necessarily the input order). 2. The response includes a `stops` array where each element contains `stopOrder`, `entityType` (`MARKET`, `HUB`, or `RESTAURANT`), `entityId`, `entityName`, `estimatedArrivalAt`, and `estimatedDeparture At`. 3. Route calculation for up to 20 stops completes within 3 seconds. 4. Route calculation for more than 20 stops returns HTTP 422 with `STOP_LIMIT_EXCEEDED` — large routes must be split into multiple schedules. |
+
+---
+
+### 1.5 Hub Management (FR-HUB)
+
+| ID | Description | Priority | Affected Roles | Acceptance Criteria |
+|----|-------------|----------|---------------|---------------------|
+| FR-HUB-001 | Admin shall be able to create and manage distribution Hubs in the system. Each Hub has a name, geographic location (latitude/longitude), address, storage capacity (kg), and active/inactive status. | Must | Admin | 1. `POST /api/admin/hubs` creates a hub with `name`, `address`, `latitude`, `longitude`, `capacityKg`, and `status: ACTIVE`; returns HTTP 201 with `hubId`. 2. `GET /api/admin/hubs` returns all hubs including their current `occupiedCapacityKg` and `availableCapacityKg`. 3. `PATCH /api/admin/hubs/{hubId}` allows updating any field except `hubId`; returns HTTP 200. 4. Deactivating a hub (`status: INACTIVE`) that has pending inbound deliveries returns HTTP 409 with `HUB_HAS_PENDING_DELIVERIES`. |
+| FR-HUB-002 | The system shall support cross-docking operations at a Hub: goods arriving from one market route are transferred directly to an outbound route without extended storage. Admin can register a cross-dock transfer linking an inbound delivery to an outbound route. | Should | Admin, Logistics Operator | 1. `POST /api/hubs/{hubId}/cross-dock` with `inboundDeliveryId` and `outboundRouteId` creates a cross-dock transfer record and returns HTTP 201 with `crossDockId`. 2. The inbound delivery must have status `ARRIVED_AT_HUB`; any other status returns HTTP 422. 3. The outbound route must originate from the same hub; a mismatched hub returns HTTP 422. 4. `GET /api/hubs/{hubId}/cross-dock` lists all cross-dock transfers at the hub including status (`PENDING`, `IN_PROGRESS`, `COMPLETED`). |
+| FR-HUB-003 | The system shall track all goods arriving at a Hub (inbound tracking). Each inbound event records the source market or market route, the set of products and quantities received, and the timestamp of arrival. | Must | Admin, Logistics Operator | 1. `POST /api/hubs/{hubId}/inbound` records an inbound goods event with `sourceMarketId`, `deliveryScheduleId`, a list of `{productId, quantityKg}` items, and `arrivedAt`; returns HTTP 201 with `inboundId`. 2. Recording an inbound event for a delivery schedule that has already been inbound-confirmed returns HTTP 409 with `ALREADY_RECEIVED`. 3. `GET /api/hubs/{hubId}/inbound?date=2026-05-09` returns all inbound records for that date with totals. 4. Hub `occupiedCapacityKg` is updated upon inbound recording; if the inbound quantity would exceed hub capacity, the system returns HTTP 422 with `HUB_CAPACITY_EXCEEDED`. |
+| FR-HUB-004 | The system shall track all goods departing from a Hub (outbound tracking). Each outbound event records the destination (restaurant or route), the products and quantities dispatched, and the dispatch timestamp. | Must | Admin, Logistics Operator | 1. `POST /api/hubs/{hubId}/outbound` records an outbound goods event with `destinationRouteId`, a list of `{productId, quantityKg}` items, and `dispatchedAt`; returns HTTP 201 with `outboundId`. 2. The quantities dispatched cannot exceed the hub's current stock for each product; over-dispatch returns HTTP 422 with `INSUFFICIENT_HUB_STOCK`. 3. `GET /api/hubs/{hubId}/outbound?date=2026-05-09` returns all outbound records for that date. 4. Hub `occupiedCapacityKg` is reduced upon outbound recording. |
+| FR-HUB-005 | The system shall provide redistribution suggestions for a Hub: given current hub stock and pending restaurant orders, the system recommends which products to dispatch to which restaurants and in what quantities, prioritizing order confirmation age and delivery urgency. | Could | Admin, Logistics Operator | 1. `GET /api/hubs/{hubId}/redistribution-suggestions` returns a list of suggested dispatch actions, each containing `restaurantId`, `orderId`, `productId`, `suggestedQuantityKg`, and `rationale` (e.g., `OLDEST_PENDING_ORDER`). 2. Suggestions only recommend quantities that are currently available in the hub's stock. 3. The endpoint completes within 2 seconds regardless of the number of pending orders. 4. Suggestions are advisory only — no automatic dispatch is triggered; Admin must manually confirm via `POST /api/hubs/{hubId}/outbound`. |
+
+---
+
+### 1.6 Analytics & Dashboards (FR-ANA)
+
+| ID | Description | Priority | Affected Roles | Acceptance Criteria |
+|----|-------------|----------|---------------|---------------------|
+| FR-ANA-001 | The system shall provide a price trend dashboard showing historical price movements for selected products across selected markets over a configurable time range. | Must | Admin, Restaurant | 1. `GET /api/analytics/price-trends?productId={id}&marketId={id}&from=2026-04-01&to=2026-05-01` returns an ordered time-series array of `{recordedAt, price, quantity}` data points. 2. The response includes summary statistics: `minPrice`, `maxPrice`, `avgPrice`, and `priceVolatility` (standard deviation) for the requested period. 3. The endpoint supports multiple `productId` values in a single request (up to 10 products); each product's series is returned as a separate array keyed by `productId`. 4. Requests spanning more than 12 months return data aggregated by day (not individual records) to limit response size. |
+| FR-ANA-002 | The system shall provide a demand heatmap dataset showing order volume and product demand concentration by geographic zone (restaurant cluster), by time of day, and by day of week. | Should | Admin | 1. `GET /api/analytics/demand-heatmap?from=2026-04-01&to=2026-05-01` returns a dataset with `restaurantId`, `latitude`, `longitude`, `totalOrderCount`, `totalOrderValueVND`, and `dominantProductCategory` for each restaurant with orders in the period. 2. `GET /api/analytics/demand-heatmap/time-distribution` returns order counts bucketed by hour-of-day and day-of-week (7×24 matrix). 3. Hubs with zero activity in the period are excluded from the results. 4. The endpoint is restricted to Admin; a Restaurant token returns HTTP 403. |
+| FR-ANA-003 | The system shall provide a delivery performance dashboard reporting on-time delivery rate, average delivery duration, route efficiency, and vehicle utilization across a selected period. | Should | Admin | 1. `GET /api/analytics/delivery-performance?from=2026-04-01&to=2026-05-01` returns `totalDeliveries`, `onTimeCount`, `lateCount`, `onTimeRatePercent`, `avgDeliveryDurationMinutes`, and `avgVehicleUtilizationPercent`. 2. A delivery is classified as `LATE` if `actualArrivalAt` exceeds `plannedDepartureAt` plus the estimated route duration by more than 15 minutes. 3. `GET /api/analytics/delivery-performance/by-route` returns the same metrics broken down per route. 4. The dashboard data is served from a pre-aggregated analytics table (or Redis cache) and must respond within 800 ms. |
+| FR-ANA-004 | Admin shall be able to export analytics data (price history, order history, delivery performance) as a CSV file for a specified date range. | Could | Admin | 1. `GET /api/analytics/export/price-history?from=2026-04-01&to=2026-05-01&format=csv` returns a downloadable CSV file with proper `Content-Disposition: attachment` header and `Content-Type: text/csv`. 2. The CSV includes a header row with column names matching the API field names. 3. Large exports (> 50,000 rows) are processed asynchronously; the endpoint immediately returns HTTP 202 with a `jobId`, and the client polls `GET /api/analytics/export/{jobId}/status` until `status: READY`, then downloads via `GET /api/analytics/export/{jobId}/download`. 4. Export files are available for download for 24 hours, after which they are purged from storage. |
+
+---
+
+### 1.7 Notifications (FR-NOT)
+
+| ID | Description | Priority | Affected Roles | Acceptance Criteria |
+|----|-------------|----------|---------------|---------------------|
+| FR-NOT-001 | The system shall push a real-time price-change notification to all connected Restaurant clients via SignalR whenever a product price is updated. When the change qualifies as significant (see FR-PRI-005), a separate high-priority event with additional context must be emitted. | Must | Restaurant (receiver), Kiosk Staff (trigger) | 1. All Restaurant clients subscribed to the relevant market's SignalR group receive a `PriceUpdated` event within 500 ms of a Kiosk Staff price update. 2. When the price change exceeds the configured significance threshold, a separate `SignificantPriceAlert` event is also emitted to the same group within 500 ms; this event includes `changePercent`, `previousPrice`, `newPrice`, and a `severity` field (`MEDIUM` for 5–15%, `HIGH` for > 15%). 3. Clients not subscribed to a market group do not receive notifications for that market. 4. Clients that reconnect to SignalR after a disconnection do not receive missed events retroactively — they receive only events after re-subscription; stale state is recovered via REST `GET /api/markets/{marketId}/products`. |
+| FR-NOT-002 | The system shall push a real-time order status change notification to the owning Restaurant client via SignalR whenever the status of one of their orders changes. | Must | Restaurant (receiver) | 1. When an order transitions between any two statuses (`PENDING` → `CONFIRMED`, `CONFIRMED` → `IN_TRANSIT`, `IN_TRANSIT` → `DELIVERED`, any → `CANCELLED`), a `OrderStatusChanged` event is emitted to the restaurant's personal SignalR group within 500 ms. 2. The event payload contains `orderId`, `previousStatus`, `newStatus`, `changedAt`, and `estimatedDeliveryAt` (nullable). 3. Admin and Kiosk Staff do not receive order status events for orders they do not own unless they explicitly join an admin monitoring group (Admin only). 4. If the restaurant client is offline when the status changes, the change is persisted in the database and the client sees the correct status upon next `GET /api/orders/{orderId}` — no event is retried. |
+| FR-NOT-003 | The system shall push a real-time delivery update notification to the owning Restaurant client via SignalR when a delivery schedule linked to their order changes status (e.g., departed hub, approaching, delivered). | Must | Restaurant (receiver), Admin (trigger) | 1. When a delivery schedule status changes to `IN_PROGRESS` (departed), a `DeliveryStarted` event is emitted to all restaurants whose orders are included in the schedule, within 500 ms. 2. When a delivery schedule status changes to `COMPLETED`, a `DeliveryCompleted` event is emitted to all affected restaurants within 500 ms, including `actualDeliveredAt`. 3. The event payload includes `scheduleId`, `routeId`, `estimatedArrivalAt`, and the list of `orderIds` in the delivery. 4. Delivery update events are emitted per-restaurant (each restaurant only sees events for their own orders) even when the delivery serves multiple restaurants in a multi-drop route. |
+
+---
+
+## 2. Non-Functional Requirements
+
+### 2.1 Performance
+
+| Metric | Target | Notes |
+|--------|--------|-------|
+| SignalR price broadcast latency | < 500 ms end-to-end | Measured from kiosk PATCH response timestamp to client event receipt |
+| REST API p95 response time | < 800 ms | All endpoints except route calculation and async export |
+| Route calculation response time | < 3 seconds | For routes with up to 20 stops; > 20 stops is rejected (FR-LOG-006) |
+| Concurrent WebSocket connections | 200 (Phase 1 baseline); design for 1,000 | SignalR backplane via Redis to support horizontal scaling |
+| Concurrent REST API users | 500 simultaneous | At p95 < 800 ms under this load |
+| Price update write throughput | 100 updates/second | Aggregate across all markets simultaneously |
+| Scheduled order job latency | < 60 seconds from scheduled time | Background job runs every 60 seconds to generate instances |
+| Analytics endpoint response time | < 800 ms | Served from pre-aggregated data or Redis cache |
+
+### 2.2 Availability
+
+- **Monthly SLA:** 99.5% uptime (allows ≤ 3.65 hours downtime per month).
+- **Peak hours (HCM local time, Asia/Ho_Chi_Minh):**
+  - **02:00–06:00** — Wholesale market opening; high kiosk price update frequency.
+  - **07:00–09:00** — Restaurant ordering rush; high read and order creation load.
+- **Planned maintenance** must be scheduled outside peak windows. Maintenance windows require 24-hour advance notice to affected users.
+- **Database failover:** PostgreSQL must be configured with at minimum one hot-standby replica. Failover RTO (Recovery Time Objective): < 5 minutes.
+- **Redis failover:** Redis must operate in Sentinel or Cluster mode. Loss of Redis must degrade gracefully — the system falls back to PostgreSQL reads for pricing data rather than returning errors.
+
+### 2.3 Security
+
+| Control | Specification |
+|---------|--------------|
+| JWT access token TTL | 15 minutes |
+| Refresh token TTL | 7 days |
+| Refresh token rotation | Old token is invalidated immediately on use; reuse of a rotated token invalidates the entire token family |
+| Transport security | HTTPS required on all endpoints in all environments (including staging); HTTP is rejected (301 redirect or 403) |
+| Role-based resource isolation | Restaurant can only read/write their own orders; Kiosk Staff can only update prices at their assigned market |
+| Rate limiting — Auth endpoints | 10 requests/minute per IP for `/api/auth/login` and `/api/auth/refresh` |
+| Rate limiting — Price update endpoints | 120 requests/minute per Kiosk Staff user for `PATCH /api/markets/*/products/*/price` and `*/quantity` |
+| Rate limiting — Order creation | 30 requests/minute per Restaurant user for `POST /api/orders` |
+| Rate limiting — Analytics/export | 5 requests/minute per Admin user for `GET /api/analytics/export/*` |
+| Input validation | All API boundaries validate input types, ranges, and required fields; validation errors return HTTP 422 with field-level detail |
+| Secrets management | Database connection strings, JWT signing keys, and Redis passwords must not be stored in source code; use environment variables or a secrets manager |
+| Password storage | Passwords hashed using bcrypt with work factor ≥ 12 |
+
+### 2.4 Reliability
+
+- **Price data durability:** All price updates are written to PostgreSQL before the SignalR broadcast is sent. Redis is a cache/soft-reservation store; its loss must not result in permanent data loss.
+- **Order durability:** Orders and all state transitions are written to PostgreSQL transactionally. In-memory state (e.g., Redis soft reservations) is supplementary and reconciled by a background job every 5 minutes.
+- **SignalR reconnection:** Client SDKs (Angular web, React Native mobile) must implement automatic reconnection with exponential backoff (initial: 1 s, max: 30 s). Upon reconnection, clients must re-join their market and personal SignalR groups. Missed events during disconnection are not retried — clients must re-fetch current state via REST on reconnect.
+- **Background job resilience:** Scheduled order generation jobs and soft-reservation expiry jobs must be idempotent — running the job twice in the same window must not generate duplicate orders or double-release reservations.
+- **Transaction integrity:** Any operation that writes to both PostgreSQL and Redis must handle Redis failure gracefully. If the Redis write fails (e.g., soft-reservation), the system returns HTTP 500 and the PostgreSQL write is rolled back, keeping state consistent.
+
+### 2.5 Usability
+
+- The Kiosk Staff interface (mobile app, React Native) must allow a price or quantity update to be completed in no more than 4 taps/interactions from the product list view.
+- The Restaurant web interface (Angular) must display a live price board that updates without any manual refresh action.
+- All user-facing error messages must be in both English and Vietnamese.
+- The analytics dashboard must render meaningful charts for date ranges as short as 1 day and as long as 12 months without layout or data degradation.
+
+### 2.6 Maintainability
+
+- **API documentation:** All API endpoints must be documented in OpenAPI 3.0 format, auto-generated from ASP.NET Core XML comments and Swashbuckle. The OpenAPI spec must be published and accessible at `/swagger` in non-production environments.
+- **Modular architecture:** Backend organized into vertical slice feature folders (Auth, Pricing, Orders, Logistics, Hub, Analytics, Notifications); no cross-feature direct dependencies — inter-feature communication via domain events or service interfaces.
+- **Structured logging:** All log entries use structured JSON format (Serilog) with mandatory fields: `correlationId`, `userId`, `timestamp`, `level`, `message`. Correlation IDs must propagate from HTTP request headers through SignalR events.
+- **Health checks:** `GET /health` endpoint returning system status (database, Redis, SignalR backplane) for load-balancer and orchestrator probes.
+- **Code coverage:** Minimum 70% line coverage on unit tests for domain logic; enforced in CI pipeline.
+
+### 2.7 Deployment
+
+- **Containerization:** All services (backend API, background jobs) packaged as Docker images. `docker-compose.yml` provided for local development with PostgreSQL, Redis, and the API.
+- **CI/CD:** GitHub Actions (or equivalent) pipeline running on every pull request: build → unit tests → integration tests → lint → Docker image build. Deployment to staging on merge to `main`; production deployment is manual gate.
+- **Environment parity:** Development, staging, and production environments use the same Docker image; configuration differs only via environment variables.
+- **Database migrations:** All schema changes applied via EF Core migrations; migrations run automatically on application startup in a controlled migration step before traffic is accepted.
+- **Cloud deployment target:** Any major cloud provider (AWS, GCP, Azure) supporting managed PostgreSQL, managed Redis, and container hosting. Infrastructure-as-code preferred (Terraform or Bicep).
+
+---
+
+## 3. Requirement Gaps & Assumptions
+
+The following gaps were identified during analysis of the source registration document. Each gap records the open question, the assumption made for v1 implementation, and the risk of the assumption being wrong.
+
+| Gap ID | Description | Assumption Made | Risk Level |
+|--------|-------------|-----------------|------------|
+| GA-001 | "Significant price change" threshold is undefined in the source documents. No numeric definition or configurability model is described. | A price change of ≥ 5% relative to the last recorded price is treated as significant. Admin can override this threshold via `PATCH /api/admin/config/significant-price-threshold` (valid range 1%–50%). The threshold applies system-wide to all products and markets. | Medium |
+| GA-002 | Scheduled order recurrence end-date, timezone handling, and holiday conflict behavior are not specified. It is unclear whether orders stop on Vietnamese public holidays or run indefinitely. | Scheduled orders repeat indefinitely until manually cancelled by the Restaurant owner or an Admin. Timezone is `Asia/Ho_Chi_Minh` (UTC+7, no DST). Holiday logic is not implemented in v1 — orders generate on holidays. This can be added in v2 if requested. | Low |
+| GA-003 | Stock reservation model not specified — it is unclear whether placing an order soft-locks or hard-reserves inventory. Hard-reserve prevents overselling but may strand stock if orders are abandoned. | Soft-reservation on order creation: available quantity in Redis is decremented immediately (preventing double-allocation). Hard-deduction from PostgreSQL stock occurs on order confirmation (`CONFIRMED` status). Soft-reservations not confirmed within 30 minutes are automatically released by a background job. | High |
+| GA-004 | Concurrent price update conflict resolution is not specified. If two Kiosk Staff members update the same product simultaneously, the source document provides no conflict policy. | Last-write-wins using `updated_at` timestamp. If two updates arrive with the same base version, the system uses optimistic concurrency: the second writer receives HTTP 409 with error code `OPTIMISTIC_CONCURRENCY_CONFLICT` and must re-fetch and retry. The `updatedAt` of the existing record must be provided in the request as an `If-Unmodified-Since` header or `expectedVersion` field. | Medium |
+| GA-005 | Payment and billing are completely absent from the source documents. No invoicing, payment gateway, or credit terms are described. | Payment and billing are entirely out of scope for v1. All orders are placed on credit/trust between restaurants and market operators. No payment gateway integration is built. Financial reconciliation is assumed to occur offline. | Low |
+| GA-006 | Vehicle ownership model is unclear — it is unspecified whether vehicles are owned by hubs, markets, or third-party logistics providers. | Vehicles are registered in the system by Admin as fleet assets not tied to any specific market or hub. A vehicle can be assigned to any route regardless of origin. Third-party fleet management is not in scope for v1. | Medium |
+| GA-007 | Product catalog ownership is not specified. The source documents do not clarify who creates and maintains product definitions (name, category, unit of measure). | Admin creates and maintains the product catalog. Kiosk Staff can only update price and quantity for existing product-market associations — they cannot create new product definitions or delete existing ones. If a Kiosk Staff needs a new product added, they must request it from Admin. | Low |
+| GA-008 | Multi-market scope is ambiguous — three HCM markets (Hoc Mon, Binh Dien, Thu Duc) are mentioned but it is unclear if all three are in scope for v1 or only one for MVP. | All three markets (Hoc Mon, Binh Dien, Thu Duc) are supported in v1. Each is a separate `Market` entity in the database with its own set of Kiosk Staff, products, and price histories. Adding additional markets requires only data entry (Admin CRUD), not code changes. | Low |
+| GA-009 | Restaurant onboarding and KYC (Know Your Customer) — no approval flow is described. It is unclear if restaurants self-register or require Admin approval before they can place orders. | Restaurants may self-register via `POST /api/auth/register` with role `RESTAURANT`. The account is created with status `PENDING_APPROVAL`. Admin can approve (`PATCH /api/admin/users/{id}/approve`) or auto-approve based on an Admin-configurable system setting (`autoApproveRestaurants: true/false`, default `false`). A `PENDING_APPROVAL` restaurant cannot place orders. | Medium |
+| GA-010 | Admin bootstrap — no first-admin account creation flow is described. Without a bootstrapped admin, the system cannot be initialized. | The first Admin account is seeded via a database seed script executed once during initial deployment. The seed script reads Admin credentials from environment variables (`SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`). No self-registration or public endpoint exists for creating Admin accounts. The seed is idempotent — running it twice does not create a second admin. | Low |
+| GA-011 | Hub geographic location and the total number of hubs are not specified. It is unclear if hubs are fixed infrastructure or dynamically managed. | Admin manages full Hub CRUD (create, read, update, deactivate). There is no fixed number of hubs — the system supports as many hubs as Admin registers. Hub locations are stored as latitude/longitude coordinates and human-readable addresses. | Low |
+| GA-012 | Delivery driver role is not defined in the source documents. It is unclear whether drivers have a dedicated app for accepting, executing, and reporting on deliveries. | No driver-facing UI or mobile app is built in v1. Delivery routes and schedules are managed entirely by Admin or logistics operators via the Admin web interface. Driver-facing features (GPS tracking, delivery confirmation from driver side) are deferred to v2. | Medium |
+
+### Conflicting Requirements
+
+| Conflict ID | Description | Resolution |
+|-------------|-------------|------------|
+| CONFLICT-001 | FR-ORD-005 (order grouping for logistics efficiency) may conflict with individual restaurant expectations under FR-ORD-003 (real-time status tracking). Grouping multiple restaurant orders into a single delivery batch improves route efficiency but may delay individual order fulfillment if the batch waits for all members to be confirmed. | The system **suggests** order grouping to Admin/logistics operators but does not automatically apply grouping. Restaurants can explicitly opt out of grouping for a specific order (a future `allowGrouping: false` flag on order creation). Grouped orders must not have their individual status update delayed — status transitions occur per-order, not per-group. An order's status moves to `IN_TRANSIT` when its group's delivery schedule starts, regardless of other orders in the group. |
+| CONFLICT-002 | FR-LOG-006 limits multi-drop routing to 20 stops per route for performance reasons (< 3 s response time). However, a large Order Group (FR-ORD-005) assembled by Admin could theoretically include more than 20 restaurant destinations. | Logistics operators are required to split large order groups into sub-routes of ≤ 20 stops each. The Order Group entity remains intact for reporting, but each sub-route is a separate `DeliverySchedule`. The system validates stop count when calculating a route and returns a clear error (`STOP_LIMIT_EXCEEDED`) guiding the operator to split the group. |
+
+---
+
+## 4. Out of Scope
+
+### 4.1 Not in Scope for v1
+
+The following features are explicitly excluded from the v1 release of FreshFlow. They must not be built or partially implemented without a formal scope change request.
+
+| Feature | Reason for Exclusion |
+|---------|---------------------|
+| Payment processing and invoicing | No payment gateway, billing cycle, or invoice generation. Orders placed on credit; financial settlement is out-of-band. |
+| Driver mobile application (delivery tracking from driver's perspective) | No driver-facing app, GPS tracking UI, or driver role exists in v1. Delivery management is entirely operator-driven. |
+| Multi-city expansion beyond Ho Chi Minh City | Platform is scoped to HCM. Data model should not preclude future city expansion, but no multi-city routing, timezone, or market data for other cities is built. |
+| Restaurant internal inventory management | FreshFlow tracks hub and market stock; restaurant-side inventory, waste tracking, and consumption management are out of scope. |
+| Vendor or supplier self-registration at markets | Market vendors cannot self-register or self-manage their stalls in v1. Admin manages all market-product-kiosk associations. |
+| SMS notifications | Only in-app (Angular/React Native) and SignalR push notifications are built. No SMS gateway integration. |
+| Email notifications | No transactional email is sent for order updates or price alerts in v1 (could be added in v2 as a separate notification channel). |
+| Integration with external ERP, POS, or accounting systems | No webhooks, EDI, or API integration with third-party restaurant POS (e.g., KiotViet, Sapo) or ERP systems. |
+| Public marketplace or storefront | FreshFlow is a B2B operational platform, not a public e-commerce marketplace. No public product listing, customer-facing storefront, or search engine indexing. |
+
+### 4.2 Advanced Features — Explicitly Deferred
+
+The following features are described in the source document as "advanced/optional." They are architecturally acknowledged (data is captured to support them) but no implementation is planned for v1.
+
+| Deferred Feature | Deferral Notes |
+|-----------------|----------------|
+| AI Price Prediction module | Historical price data captured from day one (FR-PRI-004) to support future model training. The prediction endpoints, model training pipelines, and "Buy now / Wait" recommendation UI are deferred to v2+. |
+| Demand & Supply Matching engine | Order demand data is captured. Automated batching suggestions, delay recommendations, and algorithmic supply-demand coordination beyond FR-HUB-005 (manual redistribution suggestion) are deferred. |
+| Delivery driver GPS tracking | Infrastructure (delivery schedule, route model) is designed to accept future driver location data. No real-time GPS ingestion or map display is built in v1. |
+| Restaurant opt-out of order grouping | The `allowGrouping` flag on orders is noted (CONFLICT-001) but the UI and enforcement logic are deferred to v2. In v1, grouping is always an Admin-initiated manual action. |
+
+---
+
+## 5. Domain Glossary
+
+| Term | Vietnamese | Definition | Used In |
+|------|-----------|------------|---------|
+| FFX | FFX | Official abbreviation for FreshFlow, used in internal identifiers, code prefixes, and documentation references. | All domains |
+| Chợ đầu mối (Wholesale Market) | Chợ đầu mối | A large-scale primary wholesale food market. In HCM, the three primary markets are Hoc Mon (agricultural produce), Binh Dien (aquatic products), and Thu Duc (mixed produce). In FFX, a `Market` entity represents one of these facilities. | FR-PRI, FR-LOG, FR-HUB |
+| Hub (Distribution Hub) | Trung tâm phân phối | An intermediate logistics node operated by FFX between wholesale markets and restaurants. Hubs aggregate goods from multiple markets, perform cross-docking, and consolidate outbound deliveries to restaurants. A `Hub` entity has a fixed geographic location, storage capacity, and operating hours. | FR-HUB, FR-LOG |
+| Kiosk | Kiosk (quầy điện tử) | A physical or tablet-based terminal operated by Kiosk Staff at a wholesale market. The Kiosk interface (React Native mobile app) is the primary input channel for real-time price and quantity updates. In the data model, a Kiosk is a system user with role `KIOSK_STAFF` assigned to a specific `Market`. | FR-PRI, FR-AUTH |
+| Kiosk Staff | Nhân viên kiosk | A user role in FFX assigned to staff operating at wholesale markets. Kiosk Staff can update prices and quantities for products at their assigned market. They cannot access order management, hub management, or administrative functions. | FR-AUTH, FR-PRI |
+| Price Snapshot | Ảnh chụp giá | An immutable record of a product's price and available quantity at a specific market at a specific point in time. Created every time Kiosk Staff performs a price or quantity update. The basis of price history (FR-PRI-004) and trend analytics (FR-ANA-001). | FR-PRI, FR-ANA |
+| Significant Price Change | Biến động giá đáng kể | A price change meeting or exceeding the configured threshold (default ≥ 5% relative change). Triggers a high-priority `SignificantPriceAlert` SignalR event in addition to the standard `PriceUpdated` event. See FR-PRI-005, GA-001. | FR-PRI, FR-NOT |
+| Bulk Order | Đơn hàng số lượng lớn | An order placed by a Restaurant containing one or more line items with quantities appropriate for commercial food service (as opposed to retail/consumer quantities). All FFX orders are inherently bulk orders; the term distinguishes FFX's model from consumer e-commerce. | FR-ORD |
+| Scheduled Order | Đơn hàng định kỳ | An order template created by a Restaurant that automatically generates a concrete order instance on a recurring daily or weekly schedule. The schedule persists until manually cancelled. See FR-ORD-002. | FR-ORD |
+| Order Group | Nhóm đơn hàng | An administrative grouping of two or more confirmed Restaurant orders that will be fulfilled in a single logistics delivery batch. Created by Admin/logistics operators to enable multi-drop routing. See FR-ORD-005, CONFLICT-001. | FR-ORD, FR-LOG |
+| Soft Reservation | Đặt trước tạm thời | A temporary decrement of available stock in Redis when an order is created, preventing double-allocation before the order is confirmed. Soft reservations expire automatically after 30 minutes if not confirmed. See GA-003, FR-ORD-007. | FR-ORD |
+| Delivery Route | Tuyến giao hàng | A planned sequence of stops (markets, hubs, restaurants) that a single vehicle will traverse in a single delivery run. Calculated by the logistics optimization engine. Includes estimated distances, durations, and costs per stop. See FR-LOG-001 through FR-LOG-006. | FR-LOG, FR-HUB |
+| Multi-drop Routing | Giao hàng nhiều điểm | A routing strategy where a single vehicle delivers to multiple restaurant destinations in a single trip, following an optimized stop sequence. Equivalent to a simplified Vehicle Routing Problem (VRP). See FR-LOG-006. | FR-LOG |
+| VRP (Vehicle Routing Problem) | Bài toán định tuyến xe | A class of combinatorial optimization problems concerned with determining optimal routes for a fleet of vehicles to serve a set of customers (restaurants). FFX's logistics engine solves a simplified VRP variant (single depot, single vehicle per route, capacity constraints). See NFR Section 2.1 for time constraints. | FR-LOG |
+| Cross-docking | Trung chuyển hàng trực tiếp | A logistics procedure at a Hub where incoming goods from a market delivery are transferred directly to an outbound vehicle without entering storage. Minimizes hub dwell time and storage requirements. See FR-HUB-002. | FR-HUB |
+| Aggregate Root | Tổng thể miền (DDD) | A Domain-Driven Design (DDD) term for the primary entity in a bounded context through which all external interactions are routed. In FFX: `Order` is the aggregate root of the Orders domain; `DeliverySchedule` is the aggregate root of the Logistics domain. | Architecture |
+| Inbound Tracking | Theo dõi hàng vào | Recording the arrival of goods at a Hub, including source market, products, quantities, and timestamp. See FR-HUB-003. | FR-HUB |
+| Outbound Tracking | Theo dõi hàng ra | Recording the departure of goods from a Hub toward restaurant destinations, including destination route, products, quantities, and dispatch timestamp. See FR-HUB-004. | FR-HUB |
+| Restaurant | Nhà hàng / cơ sở F&B | A business user role in FFX representing a restaurant, café, or other food service establishment that purchases ingredients through the platform. Restaurants can view prices, place orders, and track deliveries. | FR-AUTH, FR-ORD, FR-NOT |
+| Admin | Quản trị viên | A privileged system user role with full access to all FFX functions: user management, product catalog management, hub management, vehicle management, logistics scheduling, and system configuration. | FR-AUTH, all domains |
+| SignalR Group | Nhóm SignalR | A named channel within ASP.NET Core SignalR to which clients subscribe to receive targeted real-time events. FFX uses three group patterns: market groups (for price updates), personal restaurant groups (for order and delivery events), and an admin monitoring group. | FR-NOT, NFR 2.1 |
+| p95 Response Time | Thời gian phản hồi p95 | The 95th percentile of API response times measured under load. 95% of all requests complete within this duration. FFX's target is < 800 ms p95 for standard REST endpoints. | NFR Section 2.1 |
+
+---
+
+*End of FreshFlow Requirements Specification v1.0*
+
+*Prepared by: Requirements Analysis Agent | Project: FFX Capstone 2026*
