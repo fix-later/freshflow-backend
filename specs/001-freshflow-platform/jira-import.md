@@ -309,7 +309,7 @@ Implement `LogoutCommand` + handler. Set `revoked_at = NOW()` cho refresh token 
 ---
 
 ### FFX-012
-**Summary**: Implement POST /auth/register (Admin only) + market assignment  
+**Summary**: Implement POST /admin/users (Admin only) + market assignment and restaurant approval  
 **Epic**: EPIC-AUTH  
 **Assignee**: BE/DevOps  
 **Story Points**: 5  
@@ -317,19 +317,21 @@ Implement `LogoutCommand` + handler. Set `revoked_at = NOW()` cho refresh token 
 **Labels**: auth, admin  
 
 **Description**:
-Implement `RegisterUserCommand` + validator. Chỉ Admin role được phép. Thêm endpoint `PATCH /admin/users/{id}/approve` và `POST /admin/users/{id}/market-assignments`.
+Implement `CreateUserCommand` + validator. Chỉ Admin role được phép. Thêm endpoint `PATCH /admin/restaurants/{id}/approve` và market assignment khi tạo `market_agent`.
 
 **Files**:
-- `FreshFlow.Auth.Application/Commands/Register/RegisterUserCommand.cs`
-- `FreshFlow.Auth.Application/Commands/Register/RegisterUserCommandHandler.cs`
-- `FreshFlow.Auth.Application/Commands/Register/RegisterUserCommandValidator.cs`
+- `FreshFlow.Auth.Application/Commands/CreateUser/CreateUserCommand.cs`
+- `FreshFlow.Auth.Application/Commands/CreateUser/CreateUserCommandHandler.cs`
+- `FreshFlow.Auth.Application/Commands/CreateUser/CreateUserCommandValidator.cs`
+- `FreshFlow.Auth.Application/Commands/ApproveRestaurant/ApproveRestaurantCommand.cs`
 - `FreshFlow.API/Controllers/AdminController.cs`
 
 **Acceptance Criteria**:
-1. `POST /api/v1/auth/register` bởi Admin với `role: kiosk_staff` → HTTP 201 với `userId`.
+1. `POST /api/v1/admin/users` bởi Admin với `role: market_agent` → HTTP 201 với `userId` và market assignment nếu có `marketId`.
 2. Token không phải Admin → HTTP 403.
 3. Email đã tồn tại → HTTP 409 `EMAIL_ALREADY_EXISTS`.
-4. `PATCH /api/v1/admin/users/{id}/approve` set `is_active: true` cho PENDING accounts.
+4. Tạo `role: restaurant` tạo Restaurant account với `is_approved = false`.
+5. `PATCH /api/v1/admin/restaurants/{id}/approve` set `is_approved = true`.
 
 **Depends on**: FFX-009
 

@@ -32,7 +32,7 @@
 | `products` | Yes | Pricing | System-wide product catalog. Many-to-many with `markets` via `market_products`. |
 | `market_products` | No | Pricing | Join entity between `markets` and `products` carrying current price/quantity state. One-to-many with `price_snapshots`, `order_items`, `hub_inventory`. |
 | `price_snapshots` | No | Pricing | Append-only audit log. Many-to-one with `market_products`. Partitioned by month. |
-| `system_config` | No | Pricing | Key-value store for Admin-configurable parameters (e.g., cutoff time, price band tolerance, restaurant auto-approval). |
+| `system_config` | No | Pricing | Key-value store for Admin-configurable parameters (e.g., cutoff time, price band tolerance). |
 | `restaurants` | Yes | Orders | One-to-one with `users`. One-to-many with `orders`. |
 | `orders` | Yes | Orders | Aggregate root of the order lifecycle. One-to-many with `order_items`. Many-to-one with `restaurants`, `order_groups`. |
 | `order_items` | No | Orders | Line items. Many-to-one with `orders` and `market_products`. |

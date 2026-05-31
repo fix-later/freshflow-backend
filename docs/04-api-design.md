@@ -143,7 +143,7 @@ Soft-deleted resources (where `deleted_at IS NOT NULL`) are treated as non-exist
 
 ### 1.9 Authentication
 
-All endpoints except `/api/v1/auth/login`, `/api/v1/auth/refresh`, and `/api/v1/auth/register` (Admin-only) require a valid JWT Bearer token in the `Authorization` header:
+All endpoints except `/api/v1/auth/login` and `/api/v1/auth/refresh` require a valid JWT Bearer token in the `Authorization` header:
 
 ```
 Authorization: Bearer <accessToken>
@@ -198,7 +198,7 @@ Authenticates a user with email and password. Returns a short-lived JWT access t
 | `accessToken` | Signed JWT. TTL 15 minutes (900 seconds). Contains `sub` (user ID), `email`, `role`, `iat`, and `exp` claims. |
 | `refreshToken` | Opaque random string. TTL 7 days. Stored hashed in the database. |
 | `expiresIn` | Access token TTL in seconds. Always `900`. |
-| `user.role` | One of: `admin`, `kiosk_staff`, `restaurant` |
+| `user.role` | One of: `admin`, `market_agent`, `hub_staff`, `driver`, `restaurant`; `kiosk_staff` is accepted only as a backward-compatible alias for `market_agent` |
 
 **Error responses:**
 
@@ -289,60 +289,7 @@ Note: If the `refreshToken` in the body is already revoked or does not match the
 
 ---
 
-### POST /api/v1/auth/register
-
-**Role:** Admin only
-
-Creates a new user account. Restaurant users may also self-register if the `autoApproveRestaurants` system config is relevant (see GA-009), but the register endpoint itself requires Admin authorization in v1. Self-registration flow is not exposed publicly.
-
-**Request header:** `Authorization: Bearer <adminAccessToken>`
-
-**Request body:**
-
-```json
-{
-  "email": "staff.hocmon@freshflow.vn",
-  "password": "TempP@ssw0rd!",
-  "role": "kiosk_staff",
-  "marketId": "b2c3d4e5-f6a7-8901-bcde-f01234567890",
-  "restaurantName": null
-}
-```
-
-| Field | Type | Required | Validation |
-|-------|------|----------|------------|
-| `email` | string | Yes | Valid email format, max 255 characters, must be unique |
-| `password` | string | Yes | Min 8 characters, at least 1 uppercase letter, 1 digit, 1 special character |
-| `role` | string | Yes | One of: `kiosk_staff`, `restaurant` |
-| `marketId` | UUID | Conditional | Required when `role = kiosk_staff`. Must be a valid, active market ID. |
-| `restaurantName` | string | Conditional | Required when `role = restaurant`. The name of the restaurant business. Max 200 characters. |
-
-**Success response — 201 Created:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
-    "email": "staff.hocmon@freshflow.vn",
-    "role": "kiosk_staff",
-    "isActive": true,
-    "createdAt": "2026-05-09T10:30:00+07:00"
-  }
-}
-```
-
-For `role = restaurant`, the account is created with `is_approved = false` (pending Admin approval before ordering is allowed).
-
-**Error responses:**
-
-| Status | Error Code | Condition |
-|--------|-----------|-----------|
-| 400 Bad Request | `VALIDATION_ERROR` | Any required field is missing or fails format validation |
-| 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid access token |
-| 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
-| 409 Conflict | `EMAIL_ALREADY_EXISTS` | An account with this email address already exists (active or soft-deleted) |
-| 422 Unprocessable Entity | `INVALID_MARKET` | `marketId` does not reference an active market (when `role = kiosk_staff`) |
+Public self-registration is not exposed in v1. Admin-managed user creation is documented under `POST /api/v1/admin/users`.
 
 ---
 
@@ -2108,11 +2055,69 @@ Polls the status of an async export job. When `status` is `ready`, a `downloadUr
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
+| POST | `/api/v1/admin/users` | Admin | Create a user account for any v1 role |
 | GET | `/api/v1/admin/users` | Admin | List all users |
 | PATCH | `/api/v1/admin/users/{userId}/activate` | Admin | Activate or deactivate a user account |
 | PATCH | `/api/v1/admin/restaurants/{restaurantId}/approve` | Admin | Approve a restaurant registration |
 | GET | `/api/v1/admin/system-config` | Admin | View system configuration |
 | PATCH | `/api/v1/admin/system-config` | Admin | Update system configuration |
+
+---
+
+#### POST /api/v1/admin/users
+
+**Role:** Admin only
+
+Creates a user account for a v1 role. Public self-registration is deferred; all v1 accounts are Admin-managed.
+
+**Request header:** `Authorization: Bearer <adminAccessToken>`
+
+**Request body:**
+
+```json
+{
+  "email": "staff.hocmon@freshflow.vn",
+  "password": "TempP@ssw0rd!",
+  "role": "market_agent",
+  "marketId": "b2c3d4e5-f6a7-8901-bcde-f01234567890",
+  "restaurantName": null
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `email` | string | Yes | Valid email format, max 255 characters, must be unique |
+| `password` | string | Yes | Min 8 characters, at least 1 uppercase letter, 1 digit, 1 special character |
+| `role` | string | Yes | One of: `market_agent`, `hub_staff`, `driver`, `restaurant`; `kiosk_staff` accepted as legacy alias for `market_agent` |
+| `marketId` | UUID | Conditional | Required when `role = market_agent` or legacy `kiosk_staff`; must reference an active market |
+| `restaurantName` | string | Conditional | Required when `role = restaurant`; max 200 characters |
+
+**Success response — 201 Created:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
+    "email": "staff.hocmon@freshflow.vn",
+    "role": "market_agent",
+    "isActive": true,
+    "createdAt": "2026-05-09T10:30:00+07:00"
+  }
+}
+```
+
+For `role = restaurant`, the account is created with `is_approved = false` and must be approved before placing orders.
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `VALIDATION_ERROR` | Any required field is missing or fails format validation |
+| 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid access token |
+| 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
+| 409 Conflict | `EMAIL_ALREADY_EXISTS` | An account with this email address already exists |
+| 422 Unprocessable Entity | `INVALID_MARKET` | `marketId` does not reference an active market when required |
 
 ---
 
@@ -2126,7 +2131,7 @@ Returns a paginated list of all user accounts (active and inactive, all roles).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `role` | string | No | Filter by role: `admin`, `kiosk_staff`, `restaurant` |
+| `role` | string | No | Filter by role: `admin`, `market_agent`, `hub_staff`, `driver`, `restaurant` |
 | `isActive` | boolean | No | Filter by active status |
 | `search` | string | No | Filter by email (case-insensitive partial match) |
 | `page` | integer | No | Default: 1 |
@@ -2141,7 +2146,7 @@ Returns a paginated list of all user accounts (active and inactive, all roles).
     {
       "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
       "email": "staff.hocmon@freshflow.vn",
-      "role": "kiosk_staff",
+      "role": "market_agent",
       "isActive": true,
       "createdAt": "2026-05-09T10:30:00+07:00",
       "marketAssignments": [
@@ -2169,7 +2174,7 @@ Returns a paginated list of all user accounts (active and inactive, all roles).
 }
 ```
 
-`marketAssignments` is populated only for `kiosk_staff` users. `isApproved` is included only for `restaurant` users.
+`marketAssignments` is populated only for `market_agent` users. `isApproved` is included only for `restaurant` users.
 
 **Error responses:**
 
@@ -2212,7 +2217,7 @@ Activates or deactivates a user account. Deactivating a user prevents future log
   "data": {
     "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
     "email": "staff.hocmon@freshflow.vn",
-    "role": "kiosk_staff",
+    "role": "market_agent",
     "isActive": false,
     "updatedAt": "2026-05-09T14:00:00+07:00"
   }
@@ -2285,7 +2290,6 @@ Returns all system-wide configurable parameters.
   "data": {
     "dailyOrderCutoffTime": "22:00",
     "priceBandTolerancePercent": 10.00,
-    "autoApproveRestaurants": false,
     "softReservationWindowMinutes": 30,
     "updatedAt": "2026-05-09T07:00:00+07:00",
     "updatedBy": "admin-user-uuid"
@@ -2313,8 +2317,7 @@ Updates one or more system configuration values. Only the provided fields are up
 ```json
 {
   "dailyOrderCutoffTime": "22:00",
-  "priceBandTolerancePercent": 10.00,
-  "autoApproveRestaurants": false
+  "priceBandTolerancePercent": 10.00
 }
 ```
 
@@ -2322,7 +2325,6 @@ Updates one or more system configuration values. Only the provided fields are up
 |-------|------|----------|------------|
 | `dailyOrderCutoffTime` | string (`HH:mm`) | No | Local time in `Asia/Ho_Chi_Minh`; default `22:00` |
 | `priceBandTolerancePercent` | number | No | Must be between 0.00 and 50.00 (inclusive); default `10.00` |
-| `autoApproveRestaurants` | boolean | No | `true` or `false` |
 | `softReservationWindowMinutes` | integer | No | Must be between 5 and 120 (inclusive) |
 
 **Success response — 200 OK:**
@@ -2333,7 +2335,6 @@ Updates one or more system configuration values. Only the provided fields are up
   "data": {
     "dailyOrderCutoffTime": "22:00",
     "priceBandTolerancePercent": 10.00,
-    "autoApproveRestaurants": false,
     "softReservationWindowMinutes": 30,
     "updatedAt": "2026-05-09T15:00:00+07:00",
     "updatedBy": "admin-user-uuid"
@@ -2587,7 +2588,7 @@ The following table shows which roles can access each endpoint group. A checkmar
 | `POST /auth/login` | ✓ | ✓ | ✓ | ✓ |
 | `POST /auth/refresh` | ✓ | ✓ | ✓ | ✓ |
 | `POST /auth/logout` | ✓ | ✓ | ✓ | ✗ |
-| `POST /auth/register` | ✓ | ✗ | ✗ | ✗ |
+| `POST /admin/users` | ✓ | ✗ | ✗ | ✗ |
 | `GET /markets` | ✓ | ✓ | ✓ | ✗ |
 | `GET /markets/{id}/products` | ✓ | ✓ | ✓ | ✗ |
 | `GET /markets/{id}/products/{id}/price-history` | ✓ | ✓ | ✓ | ✗ |

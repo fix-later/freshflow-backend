@@ -253,7 +253,7 @@ src/FreshFlow.API/appsettings.json  (Serilog config)
 - [ ] T009 [US1] Implement POST /auth/login endpoint
 - [ ] T010 [US1] Implement POST /auth/refresh with token rotation
 - [ ] T011 [P] [US1] Implement POST /auth/logout endpoint
-- [ ] T012 [P] [US1] Implement POST /auth/register (Admin only) + market assignment endpoint
+- [ ] T012 [P] [US1] Implement POST /admin/users (Admin only) + market assignment and restaurant approval
 - [ ] T013 [P] [US1] Scaffold Angular app with routing, auth guard, and JWT HTTP interceptor
 - [ ] T014 [US1] Implement Angular login page and auth service
 - [ ] T015 [P] [US1] Set up Angular shared component library + kiosk feature module scaffold
@@ -340,26 +340,28 @@ tests/Integration/FreshFlow.IntegrationTests/Auth/LogoutEndpointTests.cs
 
 ---
 
-### T012 — Implement POST /auth/register (Admin only) + user market assignment
+### T012 — Implement POST /admin/users (Admin only) + market assignment and restaurant approval
 **Assignee**: BE/DevOps | **Estimated**: M (1 day) | **Story points**: 5
 
 **Files to create/modify**:
 ```
-src/Modules/Auth/FreshFlow.Auth.Application/Commands/Register/RegisterUserCommand.cs
-src/Modules/Auth/FreshFlow.Auth.Application/Commands/Register/RegisterUserCommandHandler.cs
-src/Modules/Auth/FreshFlow.Auth.Application/Commands/Register/RegisterUserCommandValidator.cs
-src/FreshFlow.API/Controllers/AdminController.cs  (POST /admin/users, PATCH /admin/users/{id}/approve)
+src/Modules/Auth/FreshFlow.Auth.Application/Commands/CreateUser/CreateUserCommand.cs
+src/Modules/Auth/FreshFlow.Auth.Application/Commands/CreateUser/CreateUserCommandHandler.cs
+src/Modules/Auth/FreshFlow.Auth.Application/Commands/CreateUser/CreateUserCommandValidator.cs
+src/Modules/Auth/FreshFlow.Auth.Application/Commands/ApproveRestaurant/ApproveRestaurantCommand.cs
+src/FreshFlow.API/Controllers/AdminController.cs  (POST /admin/users, PATCH /admin/restaurants/{id}/approve)
 src/Modules/Auth/FreshFlow.Auth.Application/Commands/AssignMarket/AssignMarketCommand.cs
-tests/Integration/FreshFlow.IntegrationTests/Auth/RegisterEndpointTests.cs
+tests/Integration/FreshFlow.IntegrationTests/Auth/AdminUsersEndpointTests.cs
 ```
 
 **Depends on**: T009
 
 **Acceptance criteria**:
-1. `POST /api/v1/auth/register` by an Admin with `role: kiosk_staff` creates the account and returns HTTP 201 with `userId`.
+1. `POST /api/v1/admin/users` by an Admin with `role: market_agent` creates the account, assigns the requested market, and returns HTTP 201 with `userId`.
 2. A non-Admin token returns HTTP 403.
 3. Duplicate email returns HTTP 409 `EMAIL_ALREADY_EXISTS`.
-4. `PATCH /api/v1/admin/users/{id}/approve` sets `is_active: true` for PENDING accounts.
+4. `POST /api/v1/admin/users` with `role: restaurant` creates a Restaurant account with `is_approved = false`.
+5. `PATCH /api/v1/admin/restaurants/{id}/approve` sets `is_approved = true`; public Restaurant self-registration is not exposed in v1.
 
 ---
 
@@ -1421,7 +1423,7 @@ Copy the following into Jira. Story points: S=2, M=3–5, L=8.
 | T009 | Implement POST /auth/login endpoint | BE/DevOps | 5 |
 | T010 | Implement POST /auth/refresh with token rotation | BE/DevOps | 5 |
 | T011 | Implement POST /auth/logout endpoint | BE/DevOps | 2 |
-| T012 | Implement POST /auth/register (Admin only) | BE/DevOps | 5 |
+| T012 | Implement POST /admin/users (Admin only) | BE/DevOps | 5 |
 | T013 | Scaffold Angular app with routing, auth guard, HTTP interceptor | FE1-Web | 8 |
 | T014 | Implement Angular login page and auth service | FE1-Web | 5 |
 | T015 | Set up Angular shared component library + kiosk module scaffold | FE2-Web | 5 |
