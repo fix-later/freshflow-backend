@@ -2,6 +2,7 @@ using FluentValidation;
 using FreshFlow.Auth.Infrastructure;
 using FreshFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,8 +10,39 @@ var builder = WebApplication.CreateBuilder(args);
 // ── Controllers ───────────────────────────────────────────────
 builder.Services.AddControllers();
 
-// ── OpenAPI (built-in ASP.NET Core 10) ───────────────────────
-builder.Services.AddOpenApi();
+// ── Swagger / OpenAPI ─────────────────────────────────────────
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "FreshFlow API",
+        Version = "v1",
+        Description = "Wholesale market food procurement & logistics platform"
+    });
+
+    var bearerScheme = new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Paste the access token returned by POST /api/v1/auth/login"
+    };
+
+    options.AddSecurityDefinition("Bearer", bearerScheme);
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 // ── Database ──────────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(opt =>
@@ -52,15 +84,23 @@ app.UseExceptionHandler(errorApp =>
 // ── API docs (Development only) ──────────────────────────────
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi(); // spec at /openapi/v1.json
+    // Swashbuckle generates spec at /swagger/v1/swagger.json
+    app.UseSwagger();
 
-    app.MapScalarApiReference(opt => opt.WithTitle("FreshFlow API"));
-
+    // Swagger UI at /swagger
     app.UseSwaggerUI(opt =>
     {
-        opt.SwaggerEndpoint("/openapi/v1.json", "FreshFlow API v1");
+        opt.SwaggerEndpoint("/swagger/v1/swagger.json", "FreshFlow API v1");
         opt.RoutePrefix = "swagger";
+        opt.EnablePersistAuthorization();
     });
+
+    // Scalar reads the same Swashbuckle spec
+    app.MapScalarApiReference(opt => opt
+        .WithTitle("FreshFlow API")
+        .WithOpenApiRoutePattern("/swagger/v1/swagger.json")
+        .WithPreferredScheme("Bearer")
+        .WithHttpBearerAuthentication(bearer => { bearer.Token = ""; }));
 }
 
 app.UseAuthentication();
