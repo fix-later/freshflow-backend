@@ -52,8 +52,15 @@ app.UseExceptionHandler(errorApp =>
 // ── API docs (Development only) ──────────────────────────────
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi(); // spec at /openapi/v1.json
+
     app.MapScalarApiReference(opt => opt.WithTitle("FreshFlow API"));
+
+    app.UseSwaggerUI(opt =>
+    {
+        opt.SwaggerEndpoint("/openapi/v1.json", "FreshFlow API v1");
+        opt.RoutePrefix = "swagger";
+    });
 }
 
 app.UseAuthentication();

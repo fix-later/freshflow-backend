@@ -15,6 +15,7 @@
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="*" />
     <PackageReference Include="Scalar.AspNetCore" Version="*" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="*" />
   </ItemGroup>
 
   <ItemGroup>
