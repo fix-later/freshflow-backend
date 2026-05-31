@@ -1,4 +1,4 @@
-﻿namespace FreshFlow.Auth.UnitTests;
+namespace FreshFlow.Auth.UnitTests;
 
 public class UnitTest1
 {

@@ -1,3 +1,5 @@
+using FluentValidation;
+using FreshFlow.Auth.Infrastructure;
 using FreshFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -14,15 +16,38 @@ builder.Services.AddOpenApi();
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// ── Module registrations ──────────────────────────────────────
+builder.Services.AddAuthModule(builder.Configuration);
+// builder.Services.AddPricingModule(builder.Configuration);
+// builder.Services.AddOrdersModule(builder.Configuration);
+
 // ── Health Checks ─────────────────────────────────────────────
 builder.Services.AddHealthChecks();
 
-// ── Module registrations (added per sprint) ───────────────────
-// services.AddAuthModule(config)
-// services.AddPricingModule(config)
-// ...
-
 var app = builder.Build();
+
+// ── Global exception handler (converts ValidationException → 400) ──
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async ctx =>
+    {
+        var feature = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        if (feature?.Error is ValidationException ve)
+        {
+            ctx.Response.StatusCode = 400;
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.WriteAsJsonAsync(new
+            {
+                code = "VALIDATION_ERROR",
+                errors = ve.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+            return;
+        }
+        ctx.Response.StatusCode = 500;
+        ctx.Response.ContentType = "application/json";
+        await ctx.Response.WriteAsJsonAsync(new { code = "INTERNAL_ERROR", message = "An unexpected error occurred." });
+    });
+});
 
 // ── API docs (Development only) ──────────────────────────────
 if (app.Environment.IsDevelopment())

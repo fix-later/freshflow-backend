@@ -8,8 +8,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     {
         base.OnModelCreating(modelBuilder);
 
-        // Each module's Infrastructure assembly registers its own IEntityTypeConfiguration<T>.
-        // Add assemblies here as modules are implemented:
-        //   modelBuilder.ApplyConfigurationsFromAssembly(typeof(AuthModuleMarker).Assembly);
+        // Scan all FreshFlow assemblies in AppDomain — module DI extensions force-load their
+        // assemblies via EfAssemblyRegistry.Register() or DesignTimeDbContextFactory.ForceLoadModuleAssemblies().
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => !a.IsDynamic && (a.FullName?.StartsWith("FreshFlow") ?? false)))
+        {
+            modelBuilder.ApplyConfigurationsFromAssembly(assembly);
+        }
     }
 }
