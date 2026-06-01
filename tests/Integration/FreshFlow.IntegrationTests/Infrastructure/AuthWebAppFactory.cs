@@ -36,8 +36,8 @@ public sealed class AuthWebAppFactory : WebApplicationFactory<Program>, IAsyncLi
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ADMIN_SEED_EMAIL"] = "admin@test.freshflow",
-                ["ADMIN_SEED_PASSWORD"] = "AdminP@ss1",
+                ["AdminSeed:Email"] = "admin@test.freshflow",
+                ["AdminSeed:Password"] = "AdminP@ss1",
                 ["JWT:Key"] = "integration-test-secret-key-min-32-chars!!",
                 ["JWT:Issuer"] = "https://test.freshflow",
                 ["JWT:Audience"] = "freshflow-api"
