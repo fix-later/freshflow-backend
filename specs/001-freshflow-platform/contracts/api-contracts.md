@@ -75,14 +75,25 @@ https://api.freshflow.vn/api/v1
 
 ---
 
-### POST /api/v1/auth/register
+---
+
+## Admin User Endpoints
+
+### POST /api/v1/admin/users
 **Role**: Admin only
 
-**Request**: `{ email, password, role, name }` (role = `kiosk_staff` | `restaurant`)
+**Request**: `{ email, password, role, marketId?, restaurantName? }` (role = `market_agent` | `hub_staff` | `driver` | `restaurant`; `kiosk_staff` accepted as legacy alias)
 
-**Response 201**: `{ "data": { "userId": "<uuid>" } }`
+**Response 201**: `{ "data": { "userId": "<uuid>", "email": "<email>", "role": "<role>", "isActive": true } }`
 
 **Errors**: 409 `EMAIL_ALREADY_EXISTS`
+
+---
+
+### PATCH /api/v1/admin/restaurants/{restaurantId}/approve
+**Role**: Admin only
+**Response 200**: `{ "data": { "restaurantId": "<uuid>", "isApproved": true, "approvedAt": "<iso8601>" } }`
+**Errors**: 404 `RESTAURANT_NOT_FOUND`, 409 `ALREADY_APPROVED`
 
 ---
 

@@ -1,4 +1,4 @@
-﻿namespace FreshFlow.IntegrationTests;
+namespace FreshFlow.IntegrationTests;
 
 public class UnitTest1
 {

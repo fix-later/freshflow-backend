@@ -219,8 +219,8 @@ The ASP.NET Core application host wires all seven modules together. Each module'
 **Responsibility:** Manages all aspects of user identity — JWT issuance, refresh token lifecycle, role-based claims, and user account administration.
 
 **Internal Components:**
-- `AuthController` — endpoints: `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `POST /api/auth/register`
-- `AdminUsersController` — endpoints: `POST /api/admin/users`, `PATCH /api/admin/users/{id}/approve`
+- `AuthController` — endpoints: `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`
+- `AdminUsersController` — endpoints: `POST /api/v1/admin/users`, `PATCH /api/v1/admin/users/{id}/activate`, `PATCH /api/v1/admin/restaurants/{restaurantId}/approve`
 - `TokenService` — generates signed JWT access tokens and cryptographically random refresh tokens; enforces TTL (access: 15 min, refresh: 7 days)
 - `RefreshTokenRepository` — persists and queries the `refresh_tokens` table; implements token rotation and family invalidation logic
 - `PasswordService` — wraps BCrypt with work factor ≥ 12 for hashing and verification
