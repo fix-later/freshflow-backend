@@ -16,6 +16,7 @@
 | 03 | [03-database-schema.md](./03-database-schema.md) | PostgreSQL DDL, index strategy, Redis key design, migration strategy | 1,260 | Complete |
 | 04 | [04-api-design.md](./04-api-design.md) | REST endpoints, SignalR hubs, validation rules, RBAC matrix | 2,641 | Complete |
 | 05 | [05-implementation-plan.md](./05-implementation-plan.md) | 50-task breakdown, critical path, MVP scope, folder structure, coding standards | 912 | Complete |
+| 07 | [07-dev-vps-access.md](./07-dev-vps-access.md) | Dev VPS SSH tunnel access for API, PostgreSQL, Redis, RedisInsight, including Windows setup | — | Active |
 | — | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | Cross-reference gaps, inconsistencies, readiness assessment | — | Complete |
 
 ---
