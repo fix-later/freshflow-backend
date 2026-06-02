@@ -18,16 +18,17 @@ jobs:
     steps:
       - name: Configure SSH
         env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_PORT: ${{ secrets.VPS_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
+          test -n "$VPS_KNOWN_HOSTS"
 
           mkdir -p ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/freshflow_vps_key
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/freshflow_vps_key
-          ssh-keyscan -H -p "$VPS_PORT" "$VPS_HOST" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
       - name: Deploy
         env:
@@ -55,7 +56,21 @@ jobs:
           docker compose --env-file .env.dev-vps -f docker-compose.dev-vps.yml config >/dev/null
           docker compose --env-file .env.dev-vps -f docker-compose.dev-vps.yml up -d --build --remove-orphans
 
-          API_PORT="$(awk -F= '/^API_PORT=/{print $2}' .env.dev-vps | tail -n 1)"
+          API_PORT="$(
+            awk '
+              /^[[:space:]]*API_PORT[[:space:]]*=/ {
+                value = $0
+                sub(/^[^=]*=/, "", value)
+                last = value
+              }
+              END { print last }
+            ' .env.dev-vps \
+              | tr -d '\r' \
+              | sed -E "s/^[[:space:]]+//; s/[[:space:]]+\$//; s/^[\"']//; s/[\"']\$//; s/^[[:space:]]+//; s/[[:space:]]+\$//"
+          )"
+          if ! [[ "$API_PORT" =~ ^[0-9]+$ ]]; then
+            API_PORT=""
+          fi
           API_PORT="${API_PORT:-8080}"
 
           for i in $(seq 1 30); do
