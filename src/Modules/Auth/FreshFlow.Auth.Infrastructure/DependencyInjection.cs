@@ -11,6 +11,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace FreshFlow.Auth.Infrastructure;
@@ -38,29 +39,30 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        // JWT Bearer authentication
-        var jwtKey = config["JWT__Key"]
-                     ?? config.GetSection("JWT")["Key"]
-                     ?? throw new InvalidOperationException("JWT:Key configuration is required.");
-
+        // JWT Bearer authentication — options configured lazily from IOptions<JwtSettings>
+        // so WebApplicationFactory's ConfigureAppConfiguration values are visible at resolve time.
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options =>
+            .AddJwtBearer();
+
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<IOptions<JwtSettings>>((bearerOptions, settingsOptions) =>
             {
-                options.TokenValidationParameters = new TokenValidationParameters
+                var s = settingsOptions.Value;
+                bearerOptions.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
-                    ValidIssuer = config["JWT__Issuer"] ?? config.GetSection("JWT")["Issuer"],
+                    ValidIssuer = s.Issuer,
                     ValidateAudience = true,
-                    ValidAudience = config["JWT__Audience"] ?? config.GetSection("JWT")["Audience"],
+                    ValidAudience = s.Audience,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(s.Key)),
                     ClockSkew = TimeSpan.Zero,
                     RoleClaimType = System.Security.Claims.ClaimTypes.Role
                 };
 
                 // SignalR: read token from query string
-                options.Events = new JwtBearerEvents
+                bearerOptions.Events = new JwtBearerEvents
                 {
                     OnMessageReceived = ctx =>
                     {
