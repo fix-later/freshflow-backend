@@ -22,6 +22,7 @@ jobs:
           VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
+          test -n "$VPS_SSH_KEY"
           test -n "$VPS_KNOWN_HOSTS"
 
           mkdir -p ~/.ssh
