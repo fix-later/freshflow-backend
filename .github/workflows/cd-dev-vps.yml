@@ -1,0 +1,91 @@
+name: CD Dev VPS
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: dev-vps
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to Dev VPS
+    runs-on: ubuntu-latest
+    environment: dev-vps
+
+    steps:
+      - name: Configure SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_KNOWN_HOSTS"
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/freshflow_vps_key
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/freshflow_vps_key
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_BRANCH: dev
+        run: |
+          set -euo pipefail
+
+          ssh -i ~/.ssh/freshflow_vps_key -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" \
+            bash -s -- "$DEPLOY_PATH" "$DEPLOY_BRANCH" <<'EOF'
+          set -euo pipefail
+
+          DEPLOY_PATH="$1"
+          DEPLOY_BRANCH="$2"
+
+          cd "$DEPLOY_PATH"
+
+          git fetch origin "$DEPLOY_BRANCH"
+          git reset --hard "origin/$DEPLOY_BRANCH"
+
+          test -f .env.dev-vps
+          docker compose --env-file .env.dev-vps -f docker-compose.dev-vps.yml config >/dev/null
+          docker compose --env-file .env.dev-vps -f docker-compose.dev-vps.yml up -d --build --remove-orphans
+
+          API_PORT="$(
+            awk '
+              /^[[:space:]]*API_PORT[[:space:]]*=/ {
+                value = $0
+                sub(/^[^=]*=/, "", value)
+                last = value
+              }
+              END { print last }
+            ' .env.dev-vps \
+              | tr -d '\r' \
+              | sed -E "s/^[[:space:]]+//; s/[[:space:]]+\$//; s/^[\"']//; s/[\"']\$//; s/^[[:space:]]+//; s/[[:space:]]+\$//"
+          )"
+          if ! [[ "$API_PORT" =~ ^[0-9]+$ ]]; then
+            API_PORT=""
+          fi
+          API_PORT="${API_PORT:-8080}"
+
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:${API_PORT}/health"; then
+              break
+            fi
+
+            if [ "$i" -eq 30 ]; then
+              docker compose --env-file .env.dev-vps -f docker-compose.dev-vps.yml logs --tail=120 api
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          docker image prune -f
+          EOF
