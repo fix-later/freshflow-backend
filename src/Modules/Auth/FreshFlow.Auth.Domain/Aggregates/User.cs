@@ -6,6 +6,9 @@ namespace FreshFlow.Auth.Domain.Aggregates;
 
 public sealed class User : AggregateRoot
 {
+    private const int MaxFailedAttempts = 5;
+    private static readonly TimeSpan LockDuration = TimeSpan.FromMinutes(15);
+
     private User() { }  // EF Core materialisation
 
     private User(string email, string passwordHash, Guid roleId, string? phone)
@@ -36,6 +39,15 @@ public sealed class User : AggregateRoot
 
     public bool IsActive { get; private set; }
 
+    /// <summary>Consecutive failed login attempts since the last successful login.</summary>
+    public int FailedLoginCount { get; private set; }
+
+    /// <summary>When set, the account is locked until this UTC time.</summary>
+    public DateTime? LockedUntil { get; private set; }
+
+    /// <summary>True while the lockout window has not yet expired.</summary>
+    public bool IsLockedOut => LockedUntil.HasValue && LockedUntil > DateTime.UtcNow;
+
     /// <summary>
     /// Factory — sets both <see cref="RoleId"/> (FK) and the <see cref="Role"/> navigation so that
     /// the entity is fully usable in memory (e.g. in unit tests) without an EF context.
@@ -65,5 +77,37 @@ public sealed class User : AggregateRoot
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public bool CanLogin() => IsActive && !IsDeleted;
+    /// <summary>
+    /// Records a failed login attempt and locks the account when <see cref="MaxFailedAttempts"/> is reached.
+    /// </summary>
+    public void RecordFailedLogin()
+    {
+        FailedLoginCount++;
+        if (FailedLoginCount >= MaxFailedAttempts)
+            LockedUntil = DateTime.UtcNow.Add(LockDuration);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Resets the failed-attempt counter on a successful login.
+    /// <see cref="LockedUntil"/> is intentionally left as-is — it auto-expires via <see cref="IsLockedOut"/>.
+    /// </summary>
+    public void RecordSuccessfulLogin()
+    {
+        FailedLoginCount = 0;
+        LockedUntil = null;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Admin-initiated unlock: clears both the counter and the lockout timestamp.
+    /// </summary>
+    public void Unlock()
+    {
+        FailedLoginCount = 0;
+        LockedUntil = null;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public bool CanLogin() => IsActive && !IsDeleted && !IsLockedOut;
 }

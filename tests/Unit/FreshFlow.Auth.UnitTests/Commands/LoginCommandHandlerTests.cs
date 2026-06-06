@@ -97,4 +97,78 @@ public sealed class LoginCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("ACCOUNT_INACTIVE");
     }
+
+    [Fact]
+    public async Task Handle_LockedAccount_ReturnsAccountLocked()
+    {
+        // Arrange — user already locked (5 prior failed attempts)
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
+        for (var i = 0; i < 5; i++) user.RecordFailedLogin();
+        _users.FindByIdentifierAsync("u@test.com", default).Returns(user);
+
+        // Act
+        var result = await _sut.Handle(new LoginCommand("u@test.com", "anything"), default);
+
+        // Assert — no password check, no counter increment
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ACCOUNT_LOCKED");
+        await _users.DidNotReceive().SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Handle_WrongPassword_IncrementsFailedLoginCount()
+    {
+        // Arrange
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
+        _users.FindByIdentifierAsync("u@test.com", default).Returns(user);
+        _hasher.Verify("wrong", "hashed").Returns(false);
+
+        // Act
+        var result = await _sut.Handle(new LoginCommand("u@test.com", "wrong"), default);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INVALID_CREDENTIALS");
+        user.FailedLoginCount.Should().Be(1);
+        await _users.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Handle_FifthWrongPassword_LocksAccount()
+    {
+        // Arrange — 4 previous failures
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
+        for (var i = 0; i < 4; i++) user.RecordFailedLogin();
+        _users.FindByIdentifierAsync("u@test.com", default).Returns(user);
+        _hasher.Verify("wrong", "hashed").Returns(false);
+
+        // Act — 5th bad attempt
+        var result = await _sut.Handle(new LoginCommand("u@test.com", "wrong"), default);
+
+        // Assert — still INVALID_CREDENTIALS but account is now locked for next attempt
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INVALID_CREDENTIALS");
+        user.IsLockedOut.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Handle_SuccessfulLogin_ClearsFailedLoginCount()
+    {
+        // Arrange — user has 3 previous failures
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
+        for (var i = 0; i < 3; i++) user.RecordFailedLogin();
+        _users.FindByIdentifierAsync("u@test.com", default).Returns(user);
+        _hasher.Verify("correct", "hashed").Returns(true);
+        _tokenService.GenerateAccessToken(user.Id, user.Email, Arg.Any<string>()).Returns("access");
+        _tokenService.GenerateRefreshToken().Returns("raw");
+        _tokenService.HashRefreshToken("raw").Returns("hashed-refresh");
+
+        // Act
+        var result = await _sut.Handle(new LoginCommand("u@test.com", "correct"), default);
+
+        // Assert — counter reset on success
+        result.IsSuccess.Should().BeTrue();
+        user.FailedLoginCount.Should().Be(0);
+        user.LockedUntil.Should().BeNull();
+    }
 }

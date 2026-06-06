@@ -24,6 +24,9 @@ public static class ErrorExtensions
         if (error.Code is "VALIDATION_ERROR")
             return new BadRequestObjectResult(new { code = error.Code, message = error.Message });
 
+        if (error.Code is "ACCOUNT_LOCKED")
+            return new ObjectResult(new { code = error.Code, message = error.Message }) { StatusCode = 423 };
+
         if (error.Code is "CANNOT_DEACTIVATE_SELF" or "INVALID_MARKET" || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(new { code = error.Code, message = error.Message });
 

@@ -11,23 +11,43 @@ internal sealed class LoginCommandHandler(
     IPasswordHasher hasher,
     ITokenService tokenService) : IRequestHandler<LoginCommand, Result<LoginResponse>>
 {
+    private static readonly Error InvalidCredentials =
+        Error.Unauthorized("INVALID_CREDENTIALS", "Identifier or password is incorrect.");
+
+    private static Error BuildAccountLockedError(DateTime? lockedUntil) =>
+        Error.Conflict("ACCOUNT_LOCKED", $"Account locked until {lockedUntil:O}.");
+
+    private static readonly Error AccountInactive =
+        Error.Validation("ACCOUNT_INACTIVE", "This account has been deactivated.");
+
     public async Task<Result<LoginResponse>> Handle(LoginCommand request, CancellationToken ct)
     {
         var user = await users.FindByIdentifierAsync(request.Identifier, ct);
 
-        if (user is null || !hasher.Verify(request.Password, user.PasswordHash))
-            return Result<LoginResponse>.Failure(
-                Error.Unauthorized("INVALID_CREDENTIALS", "Identifier or password is incorrect."));
+        if (user is null)
+            return Result<LoginResponse>.Failure(InvalidCredentials);
+
+        if (user.IsLockedOut)
+            return Result<LoginResponse>.Failure(BuildAccountLockedError(user.LockedUntil));
+
+        if (!hasher.Verify(request.Password, user.PasswordHash))
+        {
+            user.RecordFailedLogin();
+            await users.SaveChangesAsync(ct);
+            return Result<LoginResponse>.Failure(InvalidCredentials);
+        }
 
         if (!user.IsActive)
-            return Result<LoginResponse>.Failure(
-                Error.Validation("ACCOUNT_INACTIVE", "This account has been deactivated."));
+            return Result<LoginResponse>.Failure(AccountInactive);
 
         if (user.Role.Name == RoleNames.Restaurant)
         {
             // Restaurant login block checked via restaurant approval status — handled downstream.
             // For now, IsActive check above covers the deactivation path.
         }
+
+        // Successful login — reset failed-attempt counter (LockedUntil auto-expires).
+        user.RecordSuccessfulLogin();
 
         var accessToken = tokenService.GenerateAccessToken(
             user.Id, user.Email, user.Role.Name);

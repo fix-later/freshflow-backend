@@ -3,6 +3,7 @@ using FreshFlow.API.Extensions;
 using FreshFlow.Auth.Application.Commands.Admin.ActivateUser;
 using FreshFlow.Auth.Application.Commands.Admin.ApproveRestaurant;
 using FreshFlow.Auth.Application.Commands.Admin.CreateUser;
+using FreshFlow.Auth.Application.Commands.Admin.UnlockUser;
 using FreshFlow.Auth.Application.Queries.GetUsers;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -46,6 +47,13 @@ public sealed class AdminController(ISender sender) : ControllerBase
 
         var result = await sender.Send(new ActivateUserCommand(userId, body.IsActive, adminId), ct);
         return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+    }
+
+    [HttpPost("users/{userId:guid}/unlock")]
+    public async Task<IActionResult> UnlockUser(Guid userId, CancellationToken ct)
+    {
+        var result = await sender.Send(new UnlockUserCommand(userId), ct);
+        return result.IsSuccess ? NoContent() : result.Error.ToActionResult();
     }
 
     [HttpPatch("restaurants/{restaurantId:guid}/approve")]

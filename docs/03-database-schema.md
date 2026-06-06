@@ -154,15 +154,17 @@ CREATE TABLE roles (
 -- role_id: one global role per user through the roles lookup table.
 -- phone: optional second login identifier. Phone OTP/SMS verification is deferred in v1.
 CREATE TABLE users (
-    id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
-    email           VARCHAR(255)    NOT NULL,
-    phone           VARCHAR(20),
-    password_hash   TEXT            NOT NULL,
-    role_id         UUID            NOT NULL,
-    is_active       BOOLEAN         NOT NULL DEFAULT true,
-    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    deleted_at      TIMESTAMPTZ,
+    id                   UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    email                VARCHAR(255)    NOT NULL,
+    phone                VARCHAR(20),
+    password_hash        TEXT            NOT NULL,
+    role_id              UUID            NOT NULL,
+    is_active            BOOLEAN         NOT NULL DEFAULT true,
+    failed_login_count   INT             NOT NULL DEFAULT 0,   -- FR-AUTH-009: lockout counter
+    locked_until         TIMESTAMPTZ,                          -- FR-AUTH-009: NULL = not locked
+    created_at           TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    deleted_at           TIMESTAMPTZ,
     CONSTRAINT users_email_unique UNIQUE (email),
     CONSTRAINT fk_users_role
         FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE RESTRICT
