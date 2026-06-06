@@ -17,7 +17,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginRequest body, CancellationToken ct)
     {
-        var result = await sender.Send(new LoginCommand(body.Email, body.Password), ct);
+        var result = await sender.Send(new LoginCommand(body.Identifier, body.Password), ct);
         return result.IsSuccess
             ? Ok(result.Value)
             : result.Error.ToActionResult();
@@ -48,6 +48,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     }
 }
 
-public sealed record LoginRequest(string Email, string Password);
+/// <param name="Identifier">Email address or phone number.</param>
+public sealed record LoginRequest(string Identifier, string Password);
 public sealed record RefreshRequest(string RefreshToken);
 public sealed record LogoutRequest(string RefreshToken);

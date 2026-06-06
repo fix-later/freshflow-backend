@@ -62,9 +62,9 @@ public sealed class RbacEnforcementTests(AuthWebAppFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    private async Task<string> LoginAsync(string email, string password)
+    private async Task<string> LoginAsync(string identifier, string password)
     {
-        var resp = await _client.PostAsJsonAsync("/api/v1/auth/login", new { email, password });
+        var resp = await _client.PostAsJsonAsync("/api/v1/auth/login", new { identifier, password });
         resp.EnsureSuccessStatusCode();
         var body = await resp.Content.ReadFromJsonAsync<RbacTokenPair>();
         return body!.AccessToken;

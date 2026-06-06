@@ -1,5 +1,4 @@
 using FreshFlow.Auth.Application.Abstractions;
-using FreshFlow.Auth.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 
@@ -48,7 +47,7 @@ internal sealed class RefreshTokenCommandHandler(
         await tokens.SaveChangesAsync(ct);
 
         var accessToken = tokenService.GenerateAccessToken(
-            user.Id, user.Email, user.Role.ToApiString());
+            user.Id, user.Email, user.Role.Name);
 
         return Result<RefreshTokenResponse>.Success(
             new RefreshTokenResponse(accessToken, newRaw, tokenService.AccessTokenTtlSeconds));

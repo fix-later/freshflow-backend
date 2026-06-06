@@ -153,9 +153,11 @@ For SignalR connections, the token is passed as a query string parameter during 
 
 JWT access tokens are stateless and live for 15 minutes. Refresh tokens live for 7 days and are stored only as hashes in `refresh_tokens`.
 
-Role values exposed by the API are `roles.name` values. Seeded values are: `ADMIN`, `OPERATIONS_MANAGER`, `MARKET_AGENT`, `KIOSK_STAFF` (legacy alias for `MARKET_AGENT`), `HUB_STAFF`, `DRIVER`, `RESTAURANT_MANAGER`, and `RESTAURANT_STAFF`. Each user has exactly one global role through `users.role_id`.
+Role values exposed by the API are lowercase `roles.name` values. Seeded values are: `admin`, `operations_manager`, `market_agent`, `hub_staff`, `driver`, and `restaurant`. The legacy request value `kiosk_staff` is accepted only as an alias for `market_agent` during Admin user creation. Each user has exactly one global role through `users.role_id`.
 
 **Session expiry (FR-AUTH-008):** a request carrying an expired access token returns HTTP 401 with error code `TOKEN_EXPIRED`; a malformed or tampered token returns HTTP 401 with `UNAUTHORIZED`. While the refresh token is valid, the client obtains a new access token via `POST /api/v1/auth/refresh` (FR-AUTH-007). Once the refresh token is expired, revoked, or its token family is invalidated, the client must log in again.
+
+**Phone OTP scope:** v1 does not implement SMS delivery or phone OTP verification. Phone numbers may still be stored on user profiles and used as a login identifier when present. Password reset and verification flows use email only; `PHONE` is reserved for a future version and returns `CHANNEL_NOT_SUPPORTED` where a channel field is accepted.
 
 ---
 
@@ -167,11 +169,11 @@ Role values exposed by the API are `roles.name` values. Seeded values are: `ADMI
 |----|--------|------|------|-------------|
 | UC-AUTH-01 | POST | `/api/v1/auth/login` | Public | Login with email/phone and password |
 | UC-AUTH-02 | POST | `/api/v1/auth/logout` | Authenticated | Revoke the current refresh token |
-| UC-AUTH-03 | POST | `/api/v1/auth/forgot-password` | Public | Request password reset token or OTP |
-| UC-AUTH-04 | POST | `/api/v1/auth/reset-password` | Public | Set a new password using reset credential |
+| UC-AUTH-03 | POST | `/api/v1/auth/forgot-password` | Public | Request email password reset link |
+| UC-AUTH-04 | POST | `/api/v1/auth/reset-password` | Public | Set a new password using email reset token |
 | UC-AUTH-05 | POST | `/api/v1/auth/change-password` | Authenticated | Change own password |
-| UC-AUTH-06 | POST | `/api/v1/auth/verify/request` | Public | Request email/phone verification code |
-| UC-AUTH-06 | POST | `/api/v1/auth/verify` | Public | Verify email/phone code |
+| UC-AUTH-06 | POST | `/api/v1/auth/verify/request` | Public | Request email verification code |
+| UC-AUTH-06 | POST | `/api/v1/auth/verify` | Public | Verify email code |
 | UC-AUTH-07 | POST | `/api/v1/auth/refresh` | Public | Rotate refresh token and issue new token pair |
 | UC-AUTH-08 | All protected endpoints | N/A | Middleware | Reject expired/invalid access token |
 | UC-AUTH-09 | POST | `/api/v1/admin/users/{userId}/unlock` | Admin | Clear temporary account lock |
@@ -211,7 +213,7 @@ Authenticates a user with email or phone number and password. Returns a signed J
       "email": "manager@phobaatu.vn",
       "phone": "+84901234567",
       "fullName": "Nguyen Van A",
-      "role": "RESTAURANT_MANAGER",
+      "role": "restaurant",
       "status": "ACTIVE",
       "emailVerified": true,
       "phoneVerified": false
@@ -322,7 +324,7 @@ Note: If the `refreshToken` in the body is already revoked or does not match the
 
 **Role:** Public (no authentication required)
 
-Initiates a password reset (FR-AUTH-003). The user submits their registered email or phone number. If the identifier belongs to an active account, the system creates a single-use credential in `password_reset_tokens` and dispatches a reset link or OTP out-of-band.
+Initiates a password reset (FR-AUTH-003). The user submits their registered email address. If the email belongs to an active account, the system creates a single-use credential in `password_reset_tokens` and dispatches a reset link by email. SMS and phone OTP password reset are deferred in v1.
 
 **Request body:**
 
@@ -334,7 +336,7 @@ Initiates a password reset (FR-AUTH-003). The user submits their registered emai
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| `identifier` | string | Yes | Registered email address or phone number |
+| `identifier` | string | Yes | Registered email address |
 
 **Success response — 202 Accepted**
 
@@ -345,13 +347,13 @@ Initiates a password reset (FR-AUTH-003). The user submits their registered emai
 }
 ```
 
-The response is **always** 202, whether or not the identifier matches an account, to prevent user enumeration. If it matches, a reset link/OTP is dispatched. The credential is single-use and expires after 15 minutes; issuing a new one invalidates any previously issued credential for that account.
+The response is **always** 202, whether or not the identifier matches an account, to prevent user enumeration. If it matches, an email reset link is dispatched. The credential is single-use and expires after 15 minutes; issuing a new one invalidates any previously issued credential for that account.
 
 **Error responses:**
 
 | Status | Error Code | Condition |
 |--------|-----------|-----------|
-| 400 Bad Request | `VALIDATION_ERROR` | `identifier` field is missing or malformed |
+| 400 Bad Request | `VALIDATION_ERROR` | `identifier` field is missing or is not a valid email address |
 | 429 Too Many Requests | `RATE_LIMITED` | Too many reset requests for the same identifier/IP in a short window |
 
 ---
@@ -360,7 +362,7 @@ The response is **always** 202, whether or not the identifier matches an account
 
 **Role:** Public (no authentication required — the reset credential is the proof of identity)
 
-Sets a new password using a valid reset token or OTP from `forgot-password` (FR-AUTH-004).
+Sets a new password using a valid email reset token from `forgot-password` (FR-AUTH-004).
 
 **Request body:**
 
@@ -373,7 +375,7 @@ Sets a new password using a valid reset token or OTP from `forgot-password` (FR-
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| `token` | string | Yes | The reset link token or OTP issued by `forgot-password` |
+| `token` | string | Yes | The reset link token issued by `forgot-password` |
 | `newPassword` | string | Yes | Must satisfy the password strength policy |
 
 **Success response — 200 OK**
@@ -391,8 +393,8 @@ On success, `users.password_hash` is updated, the reset credential is marked `us
 
 | Status | Error Code | Condition |
 |--------|-----------|-----------|
-| 400 Bad Request | `RESET_TOKEN_INVALID` | Token/OTP does not match any pending reset |
-| 400 Bad Request | `RESET_TOKEN_EXPIRED` | Token/OTP has expired or was already used |
+| 400 Bad Request | `RESET_TOKEN_INVALID` | Token does not match any pending reset |
+| 400 Bad Request | `RESET_TOKEN_EXPIRED` | Token has expired or was already used |
 | 400 Bad Request | `WEAK_PASSWORD` | `newPassword` fails the strength policy |
 
 ---
@@ -437,7 +439,7 @@ On success, all of the user's other active refresh tokens are revoked; the calli
 
 **Role:** Public (no authentication required)
 
-Sends a verification code to a user's email or phone (FR-AUTH-006). If the identifier belongs to a user, the system stores a hashed code in `verification_codes` with a short TTL. The response does not reveal whether the identifier exists.
+Sends a verification code to a user's email (FR-AUTH-006). If the identifier belongs to a user, the system stores a hashed code in `verification_codes` with a short TTL. The response does not reveal whether the identifier exists. Phone verification by SMS/OTP is deferred in v1.
 
 **Request body:**
 
@@ -450,8 +452,8 @@ Sends a verification code to a user's email or phone (FR-AUTH-006). If the ident
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| `identifier` | string | Yes | Email address or phone number to verify |
-| `channel` | string | Yes | One of `EMAIL`, `PHONE` |
+| `identifier` | string | Yes | Email address to verify |
+| `channel` | string | Yes | Must be `EMAIL` in v1. `PHONE` is reserved for future SMS/OTP support. |
 
 **Success response — 202 Accepted** — a verification code is dispatched. Returns 202 regardless of account existence (no enumeration).
 
@@ -460,6 +462,7 @@ Sends a verification code to a user's email or phone (FR-AUTH-006). If the ident
 | Status | Error Code | Condition |
 |--------|-----------|-----------|
 | 400 Bad Request | `VALIDATION_ERROR` | `identifier` or `channel` is missing/invalid |
+| 422 Unprocessable Entity | `CHANNEL_NOT_SUPPORTED` | `channel = PHONE` because SMS/phone OTP is not implemented in v1 |
 | 429 Too Many Requests | `RATE_LIMITED` | Too many code requests in a short window |
 
 ---
@@ -468,7 +471,7 @@ Sends a verification code to a user's email or phone (FR-AUTH-006). If the ident
 
 **Role:** Public (no authentication required — the code is the proof)
 
-Confirms ownership of an email or phone by submitting the verification code (FR-AUTH-006).
+Confirms ownership of an email by submitting the verification code (FR-AUTH-006). Phone verification by SMS/OTP is deferred in v1.
 
 **Request body:**
 
@@ -482,17 +485,18 @@ Confirms ownership of an email or phone by submitting the verification code (FR-
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| `identifier` | string | Yes | Email address or phone number being verified |
-| `channel` | string | Yes | One of `EMAIL`, `PHONE` |
+| `identifier` | string | Yes | Email address being verified |
+| `channel` | string | Yes | Must be `EMAIL` in v1. `PHONE` is reserved for future SMS/OTP support. |
 | `code` | string | Yes | The verification code that was sent |
 
-**Success response — 200 OK** — the channel is marked verified (`email_verified_at` / `phone_verified_at` set). Re-verifying an already-verified channel is idempotent and also returns 200.
+**Success response — 200 OK** — the email channel is marked verified (`email_verified_at` set). Re-verifying an already-verified email is idempotent and also returns 200.
 
 **Error responses:**
 
 | Status | Error Code | Condition |
 |--------|-----------|-----------|
 | 400 Bad Request | `OTP_INVALID` | Code is incorrect, expired, or already used |
+| 422 Unprocessable Entity | `CHANNEL_NOT_SUPPORTED` | `channel = PHONE` because SMS/phone OTP is not implemented in v1 |
 
 ---
 
@@ -2289,13 +2293,13 @@ Returns all active roles from the `roles` table. Roles are seeded during deploym
   "data": [
     {
       "id": "11111111-1111-1111-1111-111111111111",
-      "name": "ADMIN",
+      "name": "admin",
       "description": "System administrator",
       "isActive": true
     },
     {
       "id": "22222222-2222-2222-2222-222222222222",
-      "name": "MARKET_AGENT",
+      "name": "market_agent",
       "description": "Updates prices, procures goods, and hands off to hub",
       "isActive": true
     }
@@ -2318,9 +2322,9 @@ Returns all active roles from the `roles` table. Roles are seeded during deploym
 
 Creates a user account with exactly one global role. Public self-registration is deferred; all v1 accounts are Admin-managed. The endpoint can also create role-specific associations:
 
-- For `MARKET_AGENT` / `KIOSK_STAFF`, `marketIds` create rows in `user_market_assignments`.
-- For `DRIVER`, `driverProfile` creates a row in `driver_profiles`.
-- For `RESTAURANT_MANAGER` / `RESTAURANT_STAFF`, either `restaurantId` attaches the user to an existing restaurant, or `restaurant` creates a new restaurant profile and then creates `restaurant_members`.
+- For `market_agent` / legacy request alias `kiosk_staff`, `marketId` creates a row in `user_market_assignments`.
+- For `driver`, the system creates a row in `driver_profiles`.
+- For `restaurant`, `restaurantName` creates a pending restaurant profile.
 
 **Request header:** `Authorization: Bearer <adminAccessToken>`
 
@@ -2329,30 +2333,22 @@ Creates a user account with exactly one global role. Public self-registration is
 ```json
 {
   "email": "staff.hocmon@freshflow.vn",
-  "phone": "+84901234567",
-  "fullName": "Tran Van B",
-  "temporaryPassword": "TempP@ssw0rd!",
-  "roleName": "MARKET_AGENT",
-  "marketIds": [
-    "b2c3d4e5-f6a7-8901-bcde-f01234567890"
-  ],
-  "restaurantId": null,
-  "restaurant": null,
-  "driverProfile": null
+  "password": "TempP@ssw0rd!",
+  "role": "market_agent",
+  "marketId": "b2c3d4e5-f6a7-8901-bcde-f01234567890",
+  "restaurantName": null,
+  "phone": "+84901234567"
 }
 ```
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
 | `email` | string | Yes | Valid email format, max 255 characters, must be unique |
-| `phone` | string | No | Must be unique when provided |
-| `fullName` | string | Yes | 1-100 characters |
-| `temporaryPassword` | string | Yes | Must satisfy password strength policy |
-| `roleName` | string | Yes | One seeded `roles.name` value |
-| `marketIds` | UUID array | Conditional | Required and non-empty for `MARKET_AGENT` / `KIOSK_STAFF` |
-| `restaurantId` | UUID | Conditional | Required for restaurant roles unless `restaurant` is provided |
-| `restaurant` | object | Conditional | Creates a new restaurant profile for a first restaurant manager |
-| `driverProfile` | object | Conditional | Optional driver metadata when `roleName = DRIVER` |
+| `password` | string | Yes | Must satisfy password strength policy |
+| `role` | string | Yes | One seeded lowercase `roles.name` value; `kiosk_staff` is accepted as an alias for `market_agent` |
+| `marketId` | UUID | Conditional | Required for `market_agent` / `kiosk_staff` |
+| `restaurantName` | string | Conditional | Required for `restaurant` |
+| `phone` | string | No | 7-15 digits with optional leading `+`; must be unique when provided |
 
 **Success response — 201 Created:**
 
@@ -2362,16 +2358,14 @@ Creates a user account with exactly one global role. Public self-registration is
   "data": {
     "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
     "email": "staff.hocmon@freshflow.vn",
-    "phone": "+84901234567",
-    "fullName": "Tran Van B",
-    "role": "MARKET_AGENT",
-    "status": "ACTIVE",
+    "role": "market_agent",
+    "isActive": true,
     "createdAt": "2026-05-09T10:30:00+07:00"
   }
 }
 ```
 
-When a new `restaurant` object is created, its initial `restaurants.status` is `PENDING_APPROVAL`; restaurant users can log in but cannot place orders until the restaurant is approved.
+When a `restaurant` user is created, its restaurant profile starts unapproved; restaurant users can log in but cannot place orders until the restaurant is approved.
 
 **Error responses:**
 
@@ -2382,9 +2376,8 @@ When a new `restaurant` object is created, its initial `restaurants.status` is `
 | 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
 | 409 Conflict | `EMAIL_ALREADY_EXISTS` | An account with this email address already exists |
 | 409 Conflict | `PHONE_ALREADY_EXISTS` | An account with this phone number already exists |
-| 422 Unprocessable Entity | `INVALID_ROLE` | `roleName` does not reference an active seeded role |
-| 422 Unprocessable Entity | `INVALID_MARKET` | One or more `marketIds` do not reference active markets |
-| 422 Unprocessable Entity | `INVALID_RESTAURANT` | `restaurantId` does not reference an active restaurant |
+| 422 Unprocessable Entity | `INVALID_ROLE` | `role` does not reference an active seeded role |
+| 422 Unprocessable Entity | `INVALID_MARKET` | `marketId` does not reference an active market |
 
 ---
 
@@ -2398,9 +2391,9 @@ Returns a paginated list of all user accounts (active and inactive, all roles).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `roleName` | string | No | Filter by role name, e.g. `MARKET_AGENT` |
-| `status` | string | No | Filter by `ACTIVE`, `SUSPENDED`, or `DELETED` |
-| `search` | string | No | Filter by email, phone, or full name |
+| `role` | string | No | Filter by lowercase role name, e.g. `market_agent` |
+| `isActive` | boolean | No | Filter by active/deactivated account state |
+| `search` | string | No | Filter by email or phone |
 | `page` | integer | No | Default: 1 |
 | `pageSize` | integer | No | Default: 20. Max: 100. |
 
@@ -2410,38 +2403,21 @@ Returns a paginated list of all user accounts (active and inactive, all roles).
 {
   "success": true,
   "data": [
-    {
+	    {
       "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
       "email": "staff.hocmon@freshflow.vn",
-      "phone": "+84901234567",
-      "fullName": "Tran Van B",
-      "role": "MARKET_AGENT",
-      "status": "ACTIVE",
-      "lockedUntil": null,
-      "createdAt": "2026-05-09T10:30:00+07:00",
-      "marketAssignments": [
-        {
-          "marketId": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
-          "marketName": "Chợ đầu mối Hóc Môn"
-        }
-      ]
+      "role": "market_agent",
+      "isActive": true,
+      "isApproved": null,
+      "createdAt": "2026-05-09T10:30:00+07:00"
     },
     {
       "id": "j0k1l2m3-n4o5-6789-pqrs-012345678901",
       "email": "manager@phobaatu.vn",
-      "fullName": "Nguyen Van A",
-      "role": "RESTAURANT_MANAGER",
-      "status": "ACTIVE",
-      "restaurantMemberships": [
-        {
-          "restaurantId": "r1s2t3u4-v5w6-7890-abcd-123456789012",
-          "restaurantName": "Nha hang Pho Ba Tu",
-          "restaurantStatus": "PENDING_APPROVAL",
-          "isActive": true
-        }
-      ],
-      "createdAt": "2026-05-08T14:00:00+07:00",
-      "marketAssignments": []
+      "role": "restaurant",
+      "isActive": true,
+      "isApproved": false,
+      "createdAt": "2026-05-08T14:00:00+07:00"
     }
   ],
   "meta": {
@@ -2452,7 +2428,7 @@ Returns a paginated list of all user accounts (active and inactive, all roles).
 }
 ```
 
-`marketAssignments` is populated only for Market Agent users. `restaurantMemberships` is populated only for restaurant users.
+`isApproved` is populated only for restaurant users.
 
 **Error responses:**
 
@@ -2495,7 +2471,7 @@ Updates `users.status`. Setting status to `SUSPENDED` or `DELETED` prevents new 
   "data": {
     "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
     "email": "staff.hocmon@freshflow.vn",
-    "role": "MARKET_AGENT",
+    "role": "market_agent",
     "status": "SUSPENDED",
     "updatedAt": "2026-05-09T14:00:00+07:00"
   }
@@ -2524,13 +2500,13 @@ Changes one user's global role by updating `users.role_id`. This is the RBAC adm
 
 ```json
 {
-  "roleName": "HUB_STAFF"
+  "roleName": "hub_staff"
 }
 ```
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| `roleName` | string | Yes | Must match an active row in `roles.name` |
+| `roleName` | string | Yes | Must match an active lowercase row in `roles.name` |
 
 **Success response — 200 OK:**
 
@@ -2540,7 +2516,7 @@ Changes one user's global role by updating `users.role_id`. This is the RBAC adm
   "data": {
     "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
     "email": "staff.hocmon@freshflow.vn",
-    "role": "HUB_STAFF",
+    "role": "hub_staff",
     "updatedAt": "2026-05-09T14:15:00+07:00"
   }
 }
@@ -2631,7 +2607,7 @@ Replaces a Market Agent user's market assignments in `user_market_assignments`. 
 | 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid JWT |
 | 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
 | 404 Not Found | `USER_NOT_FOUND` | `userId` does not exist |
-| 422 Unprocessable Entity | `INVALID_ROLE` | User is not a `MARKET_AGENT` or `KIOSK_STAFF` |
+| 422 Unprocessable Entity | `INVALID_ROLE` | User is not a `market_agent` or legacy alias `kiosk_staff` |
 | 422 Unprocessable Entity | `INVALID_MARKET` | One or more market IDs are invalid/inactive |
 
 ---
@@ -2981,9 +2957,9 @@ The following table defines all validation rules enforced by the API. Validation
 
 ### 6.1 RBAC Matrix
 
-The following table shows which roles can access each endpoint group. A checkmark (✓) means the role has access; a cross (✗) means access is denied with HTTP 403. `KIOSK_STAFF` is treated as a legacy alias of `MARKET_AGENT` wherever Market Agent access is listed.
+The following table shows which roles can access each endpoint group. A checkmark (✓) means the role has access; a cross (✗) means access is denied with HTTP 403. The legacy request value `kiosk_staff` is treated as an alias of `market_agent` wherever Market Agent access is listed.
 
-Role columns: `Admin` = `ADMIN`, `Ops` = `OPERATIONS_MANAGER`, `Agent` = `MARKET_AGENT`/`KIOSK_STAFF`, `Hub` = `HUB_STAFF`, `Driver` = `DRIVER`, `RMgr` = `RESTAURANT_MANAGER`, `RStaff` = `RESTAURANT_STAFF`.
+Role columns: `Admin` = `admin`, `Ops` = `operations_manager`, `Agent` = `market_agent`/`kiosk_staff`, `Hub` = `hub_staff`, `Driver` = `driver`, `Restaurant` = `restaurant`.
 
 | Endpoint Group | Admin | Ops | Agent | Hub | Driver | RMgr | RStaff | Public |
 |---------------|-------|-----|-------|-----|--------|------|--------|--------|
@@ -3081,7 +3057,7 @@ Resource-level authorization is enforced in the application service layer, not s
 
 **Market Agent market scope:** Market Agents can only update prices and quantities for markets in `user_market_assignments`. The market assignment check is performed by `PricingService` on every `PATCH /markets/{marketId}/products/{productId}/price` request by looking up the authenticated user's ID in `user_market_assignments` for the requested `marketId`. A user not assigned to the market receives HTTP 403 with error code `MARKET_ACCESS_DENIED`.
 
-**Admin and Operations Manager access:** Admin users bypass resource-level ownership checks and can access all orders, routes, hubs, and user accounts. Operations Manager users can access operational order/logistics/hub views where listed in the RBAC matrix, but cannot manage users, roles, or system configuration. Policy names use uppercase role names from `roles.name`, e.g. `[Authorize(Roles = "ADMIN")]`.
+**Admin and Operations Manager access:** Admin users bypass resource-level ownership checks and can access all orders, routes, hubs, and user accounts. Operations Manager users can access operational order/logistics/hub views where listed in the RBAC matrix, but cannot manage users, roles, or system configuration. Policy names use lowercase role names from `roles.name`, e.g. `[Authorize(Roles = "admin")]`.
 
 **Restaurant cross-data isolation:** A Restaurant Manager/Staff user cannot access any data belonging to restaurants outside their membership set. This includes orders, scheduled orders, invoices, delivery details, and SignalR groups. Query handlers must include membership-derived restaurant IDs in their predicates, e.g. `WHERE restaurant_id = ANY(@authorizedRestaurantIds)`.
 

@@ -1,5 +1,4 @@
 using FreshFlow.Auth.Application.Abstractions;
-using FreshFlow.Auth.Domain.Aggregates;
 using FreshFlow.Auth.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
@@ -20,14 +19,14 @@ internal sealed class GetUsersQueryHandler(
         foreach (var user in data)
         {
             bool? isApproved = null;
-            if (user.Role == UserRole.Restaurant)
+            if (user.Role.Name == RoleNames.Restaurant)
             {
                 var restaurant = await restaurants.FindByUserIdAsync(user.Id, ct);
                 isApproved = restaurant?.IsApproved;
             }
 
             dtos.Add(new UserSummaryDto(
-                user.Id, user.Email, user.Role.ToApiString(),
+                user.Id, user.Email, user.Role.Name,
                 user.IsActive, isApproved, user.CreatedAt));
         }
 

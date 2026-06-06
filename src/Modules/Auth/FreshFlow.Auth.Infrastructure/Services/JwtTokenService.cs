@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using FreshFlow.Auth.Application.Abstractions;
@@ -21,16 +20,19 @@ public sealed class JwtTokenService(IOptions<JwtSettings> options) : ITokenServi
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var now = DateTime.UtcNow;
 
+        // Use SecurityTokenDescriptor.Claims dictionary (not Subject.ClaimsIdentity) so that
+        // claim names are written verbatim — no OutboundClaimTypeMap transformations.
+        // JWT body will contain: sub, email, role, iat, exp (exp-iat = AccessTokenTtlSeconds = 900).
         var tokenDescriptor = new SecurityTokenDescriptor
         {
-            Subject = new ClaimsIdentity([
-                new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, email),
-                new Claim(ClaimTypes.Role, role),
-                new Claim(JwtRegisteredClaimNames.Iat,
-                    new DateTimeOffset(now).ToUnixTimeSeconds().ToString(),
-                    ClaimValueTypes.Integer64)
-            ]),
+            Claims = new Dictionary<string, object>
+            {
+                [JwtRegisteredClaimNames.Sub] = userId.ToString(),
+                [JwtRegisteredClaimNames.Email] = email,
+                ["role"] = role
+            },
+            IssuedAt = now,
+            NotBefore = now,
             Expires = now.AddSeconds(_settings.AccessTokenTtlSeconds),
             Issuer = _settings.Issuer,
             Audience = _settings.Audience,

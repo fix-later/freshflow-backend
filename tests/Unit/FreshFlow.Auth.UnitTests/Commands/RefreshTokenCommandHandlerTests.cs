@@ -3,7 +3,6 @@ using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Commands.RefreshToken;
 using FreshFlow.Auth.Domain.Aggregates;
 using FreshFlow.Auth.Domain.Entities;
-using FreshFlow.Auth.Domain.Enums;
 using NSubstitute;
 
 namespace FreshFlow.Auth.UnitTests.Commands;
@@ -36,7 +35,7 @@ public sealed class RefreshTokenCommandHandlerTests
         const string raw = "raw-token";
         const string hash = "sha256-hash";
         var stored = MakeValidToken(userId, hash);
-        var user = User.Create("u@test.com", "hashed", UserRole.Driver);
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
 
         _tokenService.HashRefreshToken(raw).Returns(hash);
         _tokens.FindByHashAsync(hash, default).Returns(stored);

@@ -16,7 +16,7 @@ public sealed class LoginEndpointTests(AuthWebAppFactory factory)
     {
         var response = await _client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            email = "admin@test.freshflow",
+            identifier = "admin@test.freshflow",
             password = "AdminP@ss1"
         });
 
@@ -32,7 +32,7 @@ public sealed class LoginEndpointTests(AuthWebAppFactory factory)
     {
         var response = await _client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            email = "admin@test.freshflow",
+            identifier = "admin@test.freshflow",
             password = "WrongPassword1!"
         });
 
@@ -42,11 +42,11 @@ public sealed class LoginEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task Login_WithMissingEmail_Returns400()
+    public async Task Login_WithMissingIdentifier_Returns400()
     {
         var response = await _client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            email = "",
+            identifier = "",
             password = "P@ss1"
         });
 
@@ -58,7 +58,7 @@ public sealed class LoginEndpointTests(AuthWebAppFactory factory)
     {
         var response = await _client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            email = "nobody@nowhere.com",
+            identifier = "nobody@nowhere.com",
             password = "P@ss1"
         });
 

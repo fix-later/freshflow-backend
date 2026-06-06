@@ -50,6 +50,7 @@ public static class DependencyInjection
             .Configure<IOptions<JwtSettings>>((bearerOptions, settingsOptions) =>
             {
                 var s = settingsOptions.Value;
+                bearerOptions.MapInboundClaims = false;
                 bearerOptions.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
@@ -60,7 +61,10 @@ public static class DependencyInjection
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(s.Key)),
                     ClockSkew = TimeSpan.Zero,
-                    RoleClaimType = System.Security.Claims.ClaimTypes.Role
+                    // Tokens carry the short "role" claim; tell ASP.NET Core to use it for
+                    // IsInRole() checks and [Authorize(Roles = ...)] attributes.
+                    RoleClaimType = "role",
+                    NameClaimType = "sub"
                 };
 
                 // SignalR: read token from query string.
@@ -118,6 +122,7 @@ public static class DependencyInjection
         // Repositories
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IRoleRepository, RoleRepository>();
 
         // Cross-module services
         services.AddScoped<IRestaurantRepository, RestaurantRepository>();

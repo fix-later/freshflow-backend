@@ -1,1 +1,12 @@
-{}
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [
+      "Bash(dotnet*)",
+      "Bash(git*)",
+      "Read",
+      "Grep",
+      "Glob"
+    ]
+  }
+}

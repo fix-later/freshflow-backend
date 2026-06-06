@@ -8,6 +8,7 @@ namespace FreshFlow.Auth.Application.Commands.Admin.CreateUser;
 
 internal sealed class CreateUserCommandHandler(
     IUserRepository users,
+    IRoleRepository roles,
     IPasswordHasher hasher,
     IRestaurantRepository restaurants,
     IDriverProfileCreator driverProfileCreator,
@@ -19,16 +20,23 @@ internal sealed class CreateUserCommandHandler(
             return Result<CreateUserResponse>.Failure(
                 Error.Conflict("EMAIL_ALREADY_EXISTS", $"A user with email '{request.Email}' already exists."));
 
-        UserRole role;
-        try { role = UserRoleExtensions.FromApiString(request.Role); }
-        catch (ArgumentException)
-        {
+        if (!string.IsNullOrWhiteSpace(request.Phone) &&
+            await users.ExistsByPhoneAsync(request.Phone, ct))
+            return Result<CreateUserResponse>.Failure(
+                Error.Conflict("PHONE_ALREADY_EXISTS", $"A user with phone '{request.Phone}' already exists."));
+
+        // Normalise the kiosk_staff alias used in older API versions
+        var roleName = request.Role.ToLowerInvariant() == "kiosk_staff"
+            ? RoleNames.MarketAgent
+            : request.Role.ToLowerInvariant();
+
+        var role = await roles.FindByNameAsync(roleName, ct);
+        if (role is null)
             return Result<CreateUserResponse>.Failure(
                 Error.Validation("VALIDATION_ERROR", $"Invalid role: {request.Role}"));
-        }
 
         // Validate market exists for market_agent
-        if (role == UserRole.MarketAgent && request.MarketId.HasValue)
+        if (roleName == RoleNames.MarketAgent && request.MarketId.HasValue)
         {
             var isValid = await marketValidator.IsActiveMarketAsync(request.MarketId.Value, ct);
             if (!isValid)
@@ -37,16 +45,16 @@ internal sealed class CreateUserCommandHandler(
         }
 
         var passwordHash = hasher.Hash(request.Password);
-        var user = User.Create(request.Email, passwordHash, role);
+        var user = User.Create(request.Email, passwordHash, role, request.Phone);
         await users.AddAsync(user, ct);
         await users.SaveChangesAsync(ct);
 
-        if (role == UserRole.Restaurant)
+        if (roleName == RoleNames.Restaurant)
             await restaurants.CreateAsync(user.Id, request.RestaurantName!, ct);
-        else if (role == UserRole.Driver)
+        else if (roleName == RoleNames.Driver)
             await driverProfileCreator.CreateAsync(user.Id, ct);
 
         return Result<CreateUserResponse>.Success(new CreateUserResponse(
-            user.Id, user.Email, user.Role.ToApiString(), user.IsActive, user.CreatedAt));
+            user.Id, user.Email, user.Role.Name, user.IsActive, user.CreatedAt));
     }
 }

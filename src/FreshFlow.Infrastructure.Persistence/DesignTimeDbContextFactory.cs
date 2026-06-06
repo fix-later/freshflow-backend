@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.Configuration;
 
 namespace FreshFlow.Infrastructure.Persistence;
 
@@ -14,11 +15,63 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<App
         ForceLoadModuleAssemblies();
 
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-        optionsBuilder.UseNpgsql(
-            Environment.GetEnvironmentVariable("DB_CONNECTION_STRING")
-            ?? "Host=localhost;Port=5432;Database=freshflow;Username=freshflow;Password=freshflow");
+        optionsBuilder.UseNpgsql(ResolveConnectionString());
 
         return new AppDbContext(optionsBuilder.Options);
+    }
+
+    private static string ResolveConnectionString()
+    {
+        var explicitConnectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING");
+        if (!string.IsNullOrWhiteSpace(explicitConnectionString))
+        {
+            return explicitConnectionString;
+        }
+
+        var apiConfigDirectory = ResolveApiConfigDirectory();
+        var environment =
+            Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? "Development";
+
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(apiConfigDirectory)
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+            .AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: false)
+            .AddEnvironmentVariables()
+            .Build();
+
+        return configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException(
+                "Missing ConnectionStrings:DefaultConnection in FreshFlow.API appsettings.");
+    }
+
+    private static string ResolveApiConfigDirectory()
+    {
+        foreach (var candidate in EnumerateConfigDirectoryCandidates())
+        {
+            if (File.Exists(Path.Combine(candidate, "appsettings.json")))
+            {
+                return candidate;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "Could not find FreshFlow.API appsettings.json for design-time DbContext creation.");
+    }
+
+    private static IEnumerable<string> EnumerateConfigDirectoryCandidates()
+    {
+        var currentDirectory = Directory.GetCurrentDirectory();
+
+        yield return Path.Combine(currentDirectory, "src", "FreshFlow.API");
+        yield return currentDirectory;
+        yield return AppContext.BaseDirectory;
+
+        for (var directory = new DirectoryInfo(currentDirectory); directory is not null; directory = directory.Parent)
+        {
+            yield return Path.Combine(directory.FullName, "src", "FreshFlow.API");
+        }
     }
 
     private static void ForceLoadModuleAssemblies()

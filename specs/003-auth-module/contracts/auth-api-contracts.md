@@ -19,14 +19,17 @@ All C# types use `record` (immutable, value equality) per Constitution IV.
 
 ```csharp
 // Commands/Login/LoginCommand.cs
-public sealed record LoginCommand(string Email, string Password) : ICommand<LoginResponse>;
+public sealed record LoginCommand(string Identifier, string Password) : ICommand<LoginResponse>;
 ```
 
 #### Validator
 
 ```csharp
 // Commands/Login/LoginCommandValidator.cs
-RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(255);
+RuleFor(x => x.Identifier)
+    .NotEmpty()
+    .MaximumLength(255)
+    .Must(id => IsEmail(id) || IsPhone(id));
 RuleFor(x => x.Password).NotEmpty();
 ```
 
@@ -143,7 +146,8 @@ public sealed record CreateUserCommand(
     string Password,
     string Role,
     Guid? MarketId,
-    string? RestaurantName
+    string? RestaurantName,
+    string? Phone = null
 ) : ICommand<CreateUserResponse>;
 ```
 
@@ -160,6 +164,9 @@ RuleFor(x => x.MarketId).NotEmpty()
     .When(x => x.Role is "market_agent" or "kiosk_staff");
 RuleFor(x => x.RestaurantName).NotEmpty().MaximumLength(200)
     .When(x => x.Role is "restaurant");
+RuleFor(x => x.Phone)
+    .Must(p => p is null || IsPhone(p))
+    .MaximumLength(20);
 
 private static readonly HashSet<string> ValidRoles =
     ["market_agent", "kiosk_staff", "hub_staff", "driver", "restaurant"];

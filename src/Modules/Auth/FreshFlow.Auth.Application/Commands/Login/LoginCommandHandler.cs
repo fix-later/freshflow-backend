@@ -13,24 +13,24 @@ internal sealed class LoginCommandHandler(
 {
     public async Task<Result<LoginResponse>> Handle(LoginCommand request, CancellationToken ct)
     {
-        var user = await users.FindByEmailAsync(request.Email, ct);
+        var user = await users.FindByIdentifierAsync(request.Identifier, ct);
 
         if (user is null || !hasher.Verify(request.Password, user.PasswordHash))
             return Result<LoginResponse>.Failure(
-                Error.Unauthorized("INVALID_CREDENTIALS", "Email or password is incorrect."));
+                Error.Unauthorized("INVALID_CREDENTIALS", "Identifier or password is incorrect."));
 
         if (!user.IsActive)
             return Result<LoginResponse>.Failure(
                 Error.Validation("ACCOUNT_INACTIVE", "This account has been deactivated."));
 
-        if (user.Role == UserRole.Restaurant)
+        if (user.Role.Name == RoleNames.Restaurant)
         {
             // Restaurant login block checked via restaurant approval status — handled downstream.
             // For now, IsActive check above covers the deactivation path.
         }
 
         var accessToken = tokenService.GenerateAccessToken(
-            user.Id, user.Email, user.Role.ToApiString());
+            user.Id, user.Email, user.Role.Name);
 
         var rawRefresh = tokenService.GenerateRefreshToken();
         var refreshHash = tokenService.HashRefreshToken(rawRefresh);
@@ -45,6 +45,6 @@ internal sealed class LoginCommandHandler(
             accessToken,
             rawRefresh,
             tokenService.AccessTokenTtlSeconds,
-            new LoginUserDto(user.Id, user.Email, user.Role.ToApiString())));
+            new LoginUserDto(user.Id, user.Email, user.Role.Name)));
     }
 }

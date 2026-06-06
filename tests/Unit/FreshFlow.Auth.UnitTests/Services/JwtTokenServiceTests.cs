@@ -49,7 +49,8 @@ public sealed class JwtTokenServiceTests
         var principal = handler.ValidateToken(token, validationParams, out _);
         principal.FindFirstValue(JwtRegisteredClaimNames.Sub).Should().Be(userId.ToString());
         principal.FindFirstValue(JwtRegisteredClaimNames.Email).Should().Be("test@example.com");
-        principal.FindFirstValue(ClaimTypes.Role).Should().Be("admin");
+        // Token carries the short "role" claim (not the full ClaimTypes.Role URI).
+        principal.FindFirstValue("role").Should().Be("admin");
     }
 
     [Fact]

@@ -16,7 +16,7 @@ public sealed class AdminUsersEndpointTests(AuthWebAppFactory factory)
     {
         var resp = await _client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            email = "admin@test.freshflow",
+            identifier = "admin@test.freshflow",
             password = "AdminP@ss1"
         });
         resp.EnsureSuccessStatusCode();
@@ -87,6 +87,35 @@ public sealed class AdminUsersEndpointTests(AuthWebAppFactory factory)
         var response = await _client.GetAsync("/api/v1/admin/users?page=1&pageSize=10");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task CreatedUser_WithPhone_CanLoginUsingPhone()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var unique = Guid.NewGuid().ToString("N")[..8];
+        var phone = $"+8490{Random.Shared.Next(1000000, 9999999)}";
+
+        var create = await _client.PostAsJsonAsync("/api/v1/admin/users", new
+        {
+            email = $"phone-login-{unique}@test.freshflow",
+            password = "DriverP@ss1",
+            role = "driver",
+            phone
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        _client.DefaultRequestHeaders.Authorization = null;
+        var login = await _client.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            identifier = phone,
+            password = "DriverP@ss1"
+        });
+
+        login.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await login.Content.ReadFromJsonAsync<AdminTokenPair>();
+        body!.AccessToken.Should().NotBeNullOrWhiteSpace();
     }
 }
 

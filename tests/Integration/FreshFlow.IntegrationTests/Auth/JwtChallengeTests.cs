@@ -92,7 +92,7 @@ public sealed class JwtChallengeTests(AuthWebAppFactory factory)
         // Arrange — obtain a fresh valid access token via login
         var loginResp = await _client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            email = "admin@test.freshflow",
+            identifier = "admin@test.freshflow",
             password = "AdminP@ss1"
         });
         loginResp.EnsureSuccessStatusCode();
