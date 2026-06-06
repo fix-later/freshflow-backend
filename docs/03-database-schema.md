@@ -161,7 +161,7 @@ CREATE TABLE users (
 -- Append-only — no updated_at or deleted_at.
 -- token_hash: stores bcrypt hash of the raw token, never the raw token itself.
 -- family_id: groups tokens issued from the same login session for family-wide
---   invalidation on reuse detection (FR-AUTH-002).
+--   invalidation on reuse detection (FR-AUTH-007).
 -- replaced_by_token_id: links the chain of rotated tokens for audit trail.
 -- revoked_at: NULL = still valid. Set to NOW() on use (rotation) or logout.
 CREATE TABLE refresh_tokens (
@@ -805,7 +805,7 @@ CREATE INDEX idx_users_deleted_at
 -- Already creates an index on token_hash — used on every /auth/refresh lookup.
 
 -- Supports querying all valid (non-revoked) tokens for a user.
--- e.g. "list active sessions for user" or "count active tokens" (GA-010 / FR-AUTH-003)
+-- e.g. "list active sessions for user" or "count active tokens" (GA-010 / FR-AUTH-002)
 CREATE INDEX idx_refresh_tokens_user_id_revoked_at
     ON refresh_tokens (user_id, revoked_at);
 

@@ -126,14 +126,14 @@ Route calculation uses a custom nearest-neighbor heuristic with 2-opt improvemen
 
 | Domain | FRs | Must | Should | Could | Tables | Endpoints | Tasks |
 |---|---|---|---|---|---|---|---|
-| Auth | 5 | 5 | 0 | 0 | 2 | 4 | 4 |
+| Auth | 11 | 11 | 0 | 0 | 2 | 9 | 4 |
 | Pricing | 5 | 5 | 0 | 0 | 4 | 5 | 6 |
 | Orders | 7 | 6 | 1 | 0 | 4 | 9 | 9 |
 | Logistics | 6 | 6 | 0 | 0 | 3 | 5 | 6 |
 | Hub | 5 | 4 | 1 | 1 | 4 | 5 | 5 |
 | Analytics | 4 | 1 | 2 | 1 | 1 | 5 | 4 |
 | Notifications | 3 | 3 | 0 | 0 | 1 | 2 | 2 |
-| **Total** | **35** | **30** | **4** | **2** | **19** | **35** | **36** |
+| **Total** | **41** | **36** | **4** | **2** | **19** | **40** | **36** |
 
 > Infrastructure tasks (T001–T008) and frontend tasks (T045–T050) are not counted in the domain task column above.
 

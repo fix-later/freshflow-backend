@@ -143,13 +143,15 @@ Soft-deleted resources (where `deleted_at IS NOT NULL`) are treated as non-exist
 
 ### 1.9 Authentication
 
-All endpoints except `/api/v1/auth/login` and `/api/v1/auth/refresh` require a valid JWT Bearer token in the `Authorization` header:
+All endpoints require a valid JWT Bearer token in the `Authorization` header **except** the public auth endpoints: `/api/v1/auth/login`, `/api/v1/auth/refresh`, `/api/v1/auth/forgot-password`, `/api/v1/auth/reset-password`, `/api/v1/auth/verify`, and `/api/v1/auth/verify/request`.
 
 ```
 Authorization: Bearer <accessToken>
 ```
 
 For SignalR connections, the token is passed as a query string parameter during the negotiate handshake: `?access_token=<accessToken>`.
+
+**Session expiry (FR-AUTH-008):** a request carrying an expired access token returns HTTP 401 with error code `TOKEN_EXPIRED`; a malformed or tampered token returns HTTP 401 with `UNAUTHORIZED`. While the refresh token is still valid, the client obtains a new access token via `POST /api/v1/auth/refresh` (FR-AUTH-007) without forcing a full re-login. Once the refresh token is also expired or revoked, the client must log in again.
 
 ---
 
@@ -205,9 +207,14 @@ Authenticates a user with email and password. Returns a short-lived JWT access t
 | Status | Error Code | Condition |
 |--------|-----------|-----------|
 | 400 Bad Request | `VALIDATION_ERROR` | `email` or `password` field is missing or malformed |
-| 401 Unauthorized | `INVALID_CREDENTIALS` | Email not found or password is incorrect. Same error code for both cases to prevent user enumeration. |
+| 401 Unauthorized | `INVALID_CREDENTIALS` | Identifier (email/phone) not found or password is incorrect. Same error code for both cases to prevent user enumeration. |
 | 422 Unprocessable Entity | `ACCOUNT_INACTIVE` | Account exists but `is_active = false` or `deleted_at IS NOT NULL` |
 | 422 Unprocessable Entity | `ACCOUNT_PENDING_APPROVAL` | Restaurant account exists but `is_approved = false` (cannot log in until approved) |
+| 423 Locked | `ACCOUNT_LOCKED` | Account is temporarily locked after too many consecutive failed login attempts (FR-AUTH-009). Returned regardless of whether the supplied password is correct, until the cool-down window elapses. |
+
+**Account lockout (FR-AUTH-009):** after **5** consecutive failed login attempts the account is locked for a **15-minute** cool-down. A successful login resets the failed-attempt counter; the lock also auto-expires after the window, and an Admin may unlock manually. Both the threshold and window are configurable via `system_config`.
+
+The `email` field accepts either a registered email address or a phone number as the login identifier (FR-AUTH-001).
 
 ---
 
@@ -286,6 +293,184 @@ No response body.
 | 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid access token in the Authorization header |
 
 Note: If the `refreshToken` in the body is already revoked or does not match the authenticated user, the server still returns 204. This prevents oracle attacks on token existence.
+
+---
+
+### POST /api/v1/auth/forgot-password
+
+**Role:** Public (no authentication required)
+
+Initiates a password reset (FR-AUTH-003). The user submits their registered email or phone number; the system issues a single-use, time-limited reset credential (link token and/or OTP) delivered out-of-band.
+
+**Request body:**
+
+```json
+{
+  "identifier": "manager@phobaatu.vn"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `identifier` | string | Yes | Registered email address or phone number |
+
+**Success response — 202 Accepted**
+
+```json
+{
+  "success": true,
+  "data": null
+}
+```
+
+The response is **always** 202, whether or not the identifier matches an account, to prevent user enumeration. If it matches, a reset link/OTP is dispatched. The credential is single-use and expires after 15 minutes; issuing a new one invalidates any previously issued credential for that account.
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `VALIDATION_ERROR` | `identifier` field is missing or malformed |
+| 429 Too Many Requests | `RATE_LIMITED` | Too many reset requests for the same identifier/IP in a short window |
+
+---
+
+### POST /api/v1/auth/reset-password
+
+**Role:** Public (no authentication required — the reset credential is the proof of identity)
+
+Sets a new password using a valid reset token or OTP from `forgot-password` (FR-AUTH-004).
+
+**Request body:**
+
+```json
+{
+  "token": "f1e3c8ef9a2b7f3a1c42d4914568b79a",
+  "newPassword": "MyNewSecureP@ss1"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `token` | string | Yes | The reset link token or OTP issued by `forgot-password` |
+| `newPassword` | string | Yes | Must satisfy the password strength policy (min 8 chars, mixed case, digit) |
+
+**Success response — 200 OK**
+
+```json
+{
+  "success": true,
+  "data": null
+}
+```
+
+On success the password hash is updated and **all** existing refresh-token families for the user are revoked, forcing re-login on every device.
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `RESET_TOKEN_INVALID` | Token/OTP does not match any pending reset |
+| 400 Bad Request | `RESET_TOKEN_EXPIRED` | Token/OTP has expired or was already used |
+| 400 Bad Request | `WEAK_PASSWORD` | `newPassword` fails the strength policy |
+
+---
+
+### POST /api/v1/auth/change-password
+
+**Role:** Any authenticated user (Admin, Market Agent, Hub Staff, Driver, Restaurant)
+
+Changes the authenticated user's own password (FR-AUTH-005). Requires the current password as a re-authentication step.
+
+**Request header:** `Authorization: Bearer <accessToken>`
+
+**Request body:**
+
+```json
+{
+  "currentPassword": "MySecureP@ss1",
+  "newPassword": "MyNewSecureP@ss1"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `currentPassword` | string | Yes | Non-empty string |
+| `newPassword` | string | Yes | Must satisfy the password strength policy; must differ from `currentPassword` |
+
+**Success response — 204 No Content**
+
+On success, all of the user's **other** active sessions are revoked; the calling session may continue.
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `INVALID_CREDENTIALS` | `currentPassword` is incorrect |
+| 400 Bad Request | `WEAK_PASSWORD` | `newPassword` fails the strength policy |
+| 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid access token |
+
+---
+
+### POST /api/v1/auth/verify/request
+
+**Role:** Public (no authentication required)
+
+Sends a verification code to a user's email or phone (FR-AUTH-006). Used both during onboarding and to (re)send a code.
+
+**Request body:**
+
+```json
+{
+  "identifier": "manager@phobaatu.vn",
+  "channel": "email"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `identifier` | string | Yes | Email address or phone number to verify |
+| `channel` | string | Yes | One of `email`, `phone` |
+
+**Success response — 202 Accepted** — a verification code is dispatched. Returns 202 regardless of account existence (no enumeration).
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `VALIDATION_ERROR` | `identifier` or `channel` is missing/invalid |
+| 429 Too Many Requests | `RATE_LIMITED` | Too many code requests in a short window |
+
+---
+
+### POST /api/v1/auth/verify
+
+**Role:** Public (no authentication required — the code is the proof)
+
+Confirms ownership of an email or phone by submitting the verification code (FR-AUTH-006).
+
+**Request body:**
+
+```json
+{
+  "identifier": "manager@phobaatu.vn",
+  "channel": "email",
+  "code": "482915"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `identifier` | string | Yes | Email address or phone number being verified |
+| `channel` | string | Yes | One of `email`, `phone` |
+| `code` | string | Yes | The verification code that was sent |
+
+**Success response — 200 OK** — the channel is marked verified (`email_verified_at` / `phone_verified_at` set). Re-verifying an already-verified channel is idempotent and also returns 200.
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `OTP_INVALID` | Code is incorrect, expired, or already used |
 
 ---
 

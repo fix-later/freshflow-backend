@@ -21,10 +21,16 @@
 | FR ID | Requirement | Schema Entity | API Endpoint | Task |
 |---|---|---|---|---|
 | FR-AUTH-001 | Login | `users` | `POST /auth/login` | T009 |
-| FR-AUTH-002 | Refresh token rotation | `refresh_tokens` | `POST /auth/refresh` | T010 |
-| FR-AUTH-003 | Logout | `refresh_tokens` | `POST /auth/logout` | T011 |
-| FR-AUTH-004 | Admin creates users | `users` | `POST /api/v1/admin/users` | T012 |
-| FR-AUTH-005 | RBAC enforcement | `users.role` + JWT claims | All endpoints (middleware) | T004 |
+| FR-AUTH-002 | Logout | `refresh_tokens` | `POST /auth/logout` | T011 |
+| FR-AUTH-003 | Forgot password | `password_reset_tokens` (planned) | `POST /auth/forgot-password` | TBD |
+| FR-AUTH-004 | Reset password | `password_reset_tokens` (planned) | `POST /auth/reset-password` | TBD |
+| FR-AUTH-005 | Change password | `users` | `POST /auth/change-password` | TBD |
+| FR-AUTH-006 | Verify email/phone | `users.email_verified_at` / `phone_verified_at` (planned) | `POST /auth/verify`, `POST /auth/verify/request` | TBD |
+| FR-AUTH-007 | Refresh token rotation | `refresh_tokens` | `POST /auth/refresh` | T010 |
+| FR-AUTH-008 | Handle session expired | `refresh_tokens` + JWT `exp` | All endpoints (middleware) → 401 `TOKEN_EXPIRED` | T004 |
+| FR-AUTH-009 | Account lock after failed logins | `users.failed_login_count` / `locked_until` (planned) | `POST /auth/login` → 423 `ACCOUNT_LOCKED` | TBD |
+| FR-AUTH-010 | RBAC enforcement | `users.role` + JWT claims | All endpoints (middleware) | T004 |
+| FR-AUTH-011 | Admin creates users | `users` | `POST /api/v1/admin/users` | T012 |
 | FR-PRI-001 | Kiosk updates price | `market_products`, `price_snapshots` | `PATCH /markets/{id}/products/{id}/price` | T016 |
 | FR-PRI-002 | Kiosk updates quantity | `market_products` | `PATCH /markets/{id}/products/{id}/price` (same endpoint) | T016 |
 | FR-PRI-003 | Real-time broadcast | SignalR + Redis backplane | PricingHub `PriceUpdated` event | T017 |
