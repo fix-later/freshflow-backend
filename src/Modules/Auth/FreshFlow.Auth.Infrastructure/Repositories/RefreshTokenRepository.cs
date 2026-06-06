@@ -19,6 +19,11 @@ internal sealed class RefreshTokenRepository(AppDbContext db) : IRefreshTokenRep
             .Where(t => t.FamilyId == familyId && t.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, DateTime.UtcNow), ct);
 
+    public async Task RevokeByUserAsync(Guid userId, CancellationToken ct) =>
+        await db.Set<RefreshToken>()
+            .Where(t => t.UserId == userId && t.RevokedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, DateTime.UtcNow), ct);
+
     public Task SaveChangesAsync(CancellationToken ct) =>
         db.SaveChangesAsync(ct);
 }

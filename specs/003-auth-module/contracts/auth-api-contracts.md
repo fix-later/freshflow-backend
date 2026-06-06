@@ -129,6 +129,55 @@ RuleFor(x => x.RefreshToken).NotEmpty();
 
 ---
 
+### POST /api/v1/auth/change-password
+
+**Role**: Any authenticated user
+
+#### Request
+
+```csharp
+// Commands/ChangePassword/ChangePasswordCommand.cs
+public sealed record ChangePasswordCommand(
+    Guid UserId,
+    string CurrentPassword,
+    string NewPassword
+) : ICommand;
+// UserId populated from JWT claim in controller — not from request body
+```
+
+**HTTP body**:
+```json
+{
+  "currentPassword": "OldP@ss1",
+  "newPassword": "NewP@ss1"
+}
+```
+
+#### Validator
+
+```csharp
+RuleFor(x => x.CurrentPassword).NotEmpty();
+RuleFor(x => x.NewPassword).NotEmpty().MinimumLength(8)
+    .Matches("[A-Z]").Matches("[0-9]").Matches("[^a-zA-Z0-9]")
+    .NotEqual(x => x.CurrentPassword);
+```
+
+#### Response
+
+- **204 No Content** on success (no response body)
+- On success, all refresh tokens for the user are revoked. Existing stateless access tokens remain valid until their normal `exp`.
+- No email, SMS, or phone OTP is sent by this flow in v1.
+
+#### Error codes
+
+| Status | Code |
+|--------|------|
+| 400 | `VALIDATION_ERROR` |
+| 401 | `UNAUTHORIZED` |
+| 401 | `INVALID_CURRENT_PASSWORD` |
+
+---
+
 ## Admin User Endpoints (`/api/v1/admin`)
 
 All endpoints require `[Authorize(Roles = "admin")]`.

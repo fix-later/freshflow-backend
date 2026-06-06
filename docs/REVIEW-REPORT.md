@@ -24,7 +24,7 @@
 | FR-AUTH-002 | Logout | `refresh_tokens` | `POST /auth/logout` | T011 |
 | FR-AUTH-003 | Forgot password | `password_reset_tokens` (planned) | `POST /auth/forgot-password` | TBD |
 | FR-AUTH-004 | Reset password | `password_reset_tokens` (planned) | `POST /auth/reset-password` | TBD |
-| FR-AUTH-005 | Change password | `users` | `POST /auth/change-password` | TBD |
+| FR-AUTH-005 | Change password | `users`, `refresh_tokens` | `POST /auth/change-password` | Implemented in UC-AUTH-05 pass |
 | FR-AUTH-006 | Verify email/phone | `users.email_verified_at` / `phone_verified_at` (planned) | `POST /auth/verify`, `POST /auth/verify/request` | TBD |
 | FR-AUTH-007 | Refresh token rotation | `refresh_tokens` | `POST /auth/refresh` | T010 |
 | FR-AUTH-008 | Handle session expired | `refresh_tokens` + JWT `exp` | All endpoints (middleware) → 401 `TOKEN_EXPIRED` | T004 |

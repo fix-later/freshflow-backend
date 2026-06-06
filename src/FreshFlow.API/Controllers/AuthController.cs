@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
+using FreshFlow.Auth.Application.Commands.ChangePassword;
 using FreshFlow.Auth.Application.Commands.Login;
 using FreshFlow.Auth.Application.Commands.Logout;
 using FreshFlow.Auth.Application.Commands.RefreshToken;
@@ -46,9 +47,24 @@ public sealed class AuthController(ISender sender) : ControllerBase
 
         return result.IsSuccess ? NoContent() : result.Error.ToActionResult();
     }
+
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest body, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                     ?? User.FindFirstValue("sub")
+                     ?? throw new UnauthorizedAccessException();
+
+        var result = await sender.Send(
+            new ChangePasswordCommand(Guid.Parse(userId), body.CurrentPassword, body.NewPassword), ct);
+
+        return result.IsSuccess ? NoContent() : result.Error.ToActionResult();
+    }
 }
 
 /// <param name="Identifier">Email address or phone number.</param>
 public sealed record LoginRequest(string Identifier, string Password);
 public sealed record RefreshRequest(string RefreshToken);
 public sealed record LogoutRequest(string RefreshToken);
+public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);

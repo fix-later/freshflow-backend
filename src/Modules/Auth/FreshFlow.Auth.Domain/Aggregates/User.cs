@@ -59,5 +59,11 @@ public sealed class User : AggregateRoot
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void ChangePassword(string passwordHash)
+    {
+        PasswordHash = passwordHash;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public bool CanLogin() => IsActive && !IsDeleted;
 }

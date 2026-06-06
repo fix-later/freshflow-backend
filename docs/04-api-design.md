@@ -423,15 +423,17 @@ Changes the authenticated user's own password (FR-AUTH-005). Requires the curren
 
 **Success response — 204 No Content**
 
-On success, all of the user's other active refresh tokens are revoked; the calling session may continue.
+On success, all of the user's active refresh tokens are revoked. Existing stateless access tokens remain valid until their normal `exp`, but any subsequent refresh requires the user to log in again.
 
 **Error responses:**
 
 | Status | Error Code | Condition |
 |--------|-----------|-----------|
-| 400 Bad Request | `INVALID_CREDENTIALS` | `currentPassword` is incorrect |
-| 400 Bad Request | `WEAK_PASSWORD` | `newPassword` fails the strength policy |
+| 400 Bad Request | `VALIDATION_ERROR` | Missing required field, weak `newPassword`, or `newPassword` equals `currentPassword` |
+| 401 Unauthorized | `INVALID_CURRENT_PASSWORD` | `currentPassword` is incorrect |
 | 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid access token |
+
+No email, SMS, or phone OTP is sent by this flow in v1.
 
 ---
 
