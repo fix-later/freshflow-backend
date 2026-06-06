@@ -2,8 +2,10 @@ using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Auth.Application.Commands.Admin.ActivateUser;
 using FreshFlow.Auth.Application.Commands.Admin.ApproveRestaurant;
+using FreshFlow.Auth.Application.Commands.Admin.AssignRole;
 using FreshFlow.Auth.Application.Commands.Admin.CreateUser;
 using FreshFlow.Auth.Application.Commands.Admin.UnlockUser;
+using FreshFlow.Auth.Application.Queries.GetRoles;
 using FreshFlow.Auth.Application.Queries.GetUsers;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -56,6 +58,21 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? NoContent() : result.Error.ToActionResult();
     }
 
+    [HttpGet("roles")]
+    public async Task<IActionResult> GetRoles(CancellationToken ct)
+    {
+        var result = await sender.Send(new GetRolesQuery(), ct);
+        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+    }
+
+    [HttpPatch("users/{userId:guid}/role")]
+    public async Task<IActionResult> AssignRole(
+        Guid userId, [FromBody] AssignRoleRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(new AssignRoleCommand(userId, body.RoleName), ct);
+        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+    }
+
     [HttpPatch("restaurants/{restaurantId:guid}/approve")]
     public async Task<IActionResult> ApproveRestaurant(Guid restaurantId, CancellationToken ct)
     {
@@ -65,3 +82,4 @@ public sealed class AdminController(ISender sender) : ControllerBase
 }
 
 public sealed record ActivateRequest(bool IsActive);
+public sealed record AssignRoleRequest(string RoleName);

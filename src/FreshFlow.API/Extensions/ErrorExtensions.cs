@@ -21,13 +21,14 @@ public static class ErrorExtensions
         if (error.Code is "FORBIDDEN")
             return new ObjectResult(new { code = error.Code, message = error.Message }) { StatusCode = 403 };
 
-        if (error.Code is "VALIDATION_ERROR")
+        if (error.Code is "VALIDATION_ERROR" or "INVALID_ROLE")
             return new BadRequestObjectResult(new { code = error.Code, message = error.Message });
 
         if (error.Code is "ACCOUNT_LOCKED")
             return new ObjectResult(new { code = error.Code, message = error.Message }) { StatusCode = 423 };
 
-        if (error.Code is "CANNOT_DEACTIVATE_SELF" or "INVALID_MARKET" || error.Code.StartsWith("ACCOUNT_"))
+        if (error.Code is "CANNOT_DEACTIVATE_SELF" or "INVALID_MARKET"
+            || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(new { code = error.Code, message = error.Message });
 
         return new ObjectResult(new { code = error.Code, message = error.Message }) { StatusCode = 500 };

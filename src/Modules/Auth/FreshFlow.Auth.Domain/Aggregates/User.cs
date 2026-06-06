@@ -89,8 +89,8 @@ public sealed class User : AggregateRoot
     }
 
     /// <summary>
-    /// Resets the failed-attempt counter on a successful login.
-    /// <see cref="LockedUntil"/> is intentionally left as-is — it auto-expires via <see cref="IsLockedOut"/>.
+    /// Resets the failed-attempt counter and clears the lockout timestamp on a successful
+    /// user-initiated authentication. Called by the login flow after password verification passes.
     /// </summary>
     public void RecordSuccessfulLogin()
     {
@@ -101,11 +101,24 @@ public sealed class User : AggregateRoot
 
     /// <summary>
     /// Admin-initiated unlock: clears both the counter and the lockout timestamp.
+    /// Semantically distinct from <see cref="RecordSuccessfulLogin"/> — this is an explicit
+    /// override by an administrator, not a consequence of a successful authentication attempt.
     /// </summary>
     public void Unlock()
     {
         FailedLoginCount = 0;
         LockedUntil = null;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Assigns a new global role. Caller must revoke all active refresh tokens after this call
+    /// so that subsequent JWT claims reflect the new role.
+    /// </summary>
+    public void AssignRole(Role newRole)
+    {
+        RoleId = newRole.Id;
+        Role = newRole;
         UpdatedAt = DateTime.UtcNow;
     }
 
