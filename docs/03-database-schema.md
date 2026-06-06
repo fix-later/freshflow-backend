@@ -25,7 +25,8 @@
 
 | Entity | Aggregate Root | Owned By Module | Relationship Summary |
 |--------|---------------|-----------------|----------------------|
-| `users` | Yes | Auth | Root of all user accounts. Roles: `admin`, `market_agent` (alias: `kiosk_staff`), `hub_staff`, `driver`, `restaurant`. One-to-one with `restaurants` (restaurant role) and `driver_profiles` (driver role). One-to-many with `refresh_tokens`, `notifications`. Referenced by nearly every table as actor/author FK. |
+| `roles` | No | Auth | Lookup table for global user roles. Seeded values: `admin`, `operations_manager`, `market_agent`, `hub_staff`, `driver`, `restaurant`. |
+| `users` | Yes | Auth | Root of all user accounts. Each user has exactly one global role through `users.role_id`. Optional `phone` can be used as a second login identifier. One-to-one with `restaurants` (restaurant role) and `driver_profiles` (driver role). One-to-many with `refresh_tokens`, `notifications`. Referenced by nearly every table as actor/author FK. |
 | `refresh_tokens` | No | Auth | Many-to-one with `users`. Append-only; each row is an issued token. |
 | `user_market_assignments` | No | Auth | Many-to-many join between `users` (market_agent) and `markets`. Enforces market-level access control for Market Agents. |
 | `markets` | Yes | Pricing | Root of all market-level data. One-to-many with `market_products`. |
@@ -56,6 +57,7 @@
 ### 1.2 Key Relationships
 
 ```
+roles ──< users
 users ──< refresh_tokens
 users ──< user_market_assignments >── markets
 users ──< notifications
@@ -98,10 +100,6 @@ All tables use:
 -- ENUM TYPE DEFINITIONS
 -- ============================================================
 
--- user_role: 'market_agent' is the canonical new name; 'kiosk_staff' retained as a backward-compatible alias.
--- Use 'market_agent' in all new code. 'kiosk_staff' will be removed in a future migration.
-CREATE TYPE user_role AS ENUM ('admin', 'kiosk_staff', 'market_agent', 'hub_staff', 'driver', 'restaurant');
-
 CREATE TYPE order_status AS ENUM (
     'draft',             -- order created, not yet confirmed
     'payment_pending',   -- payment initiated, awaiting gateway response
@@ -139,22 +137,35 @@ CREATE TYPE notification_type AS ENUM (
 -- AUTH MODULE TABLES
 -- ============================================================
 
+-- roles
+-- Lookup table for global roles. Role names are stable lowercase strings exposed by the API.
+CREATE TABLE roles (
+    id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            VARCHAR(50)     NOT NULL,
+    description     VARCHAR(255)    NOT NULL,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    CONSTRAINT roles_name_unique UNIQUE (name)
+);
+
 -- users
 -- Aggregate root for all user accounts.
 -- Soft delete: deleted_at IS NOT NULL means the account is deactivated.
 -- is_active: used for fast active-status checks without reading deleted_at.
--- Design decision: role is an ENUM column (not a roles join table) because
--- FreshFlow has exactly 3 fixed roles with no dynamic permissions in v1.
+-- role_id: one global role per user through the roles lookup table.
+-- phone: optional second login identifier. Phone OTP/SMS verification is deferred in v1.
 CREATE TABLE users (
     id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
-    email           TEXT            NOT NULL,
+    email           VARCHAR(255)    NOT NULL,
+    phone           VARCHAR(20),
     password_hash   TEXT            NOT NULL,
-    role            user_role       NOT NULL,
+    role_id         UUID            NOT NULL,
     is_active       BOOLEAN         NOT NULL DEFAULT true,
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     deleted_at      TIMESTAMPTZ,
-    CONSTRAINT users_email_unique UNIQUE (email)
+    CONSTRAINT users_email_unique UNIQUE (email),
+    CONSTRAINT fk_users_role
+        FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE RESTRICT
 );
 
 -- refresh_tokens
@@ -770,7 +781,7 @@ CREATE TABLE export_jobs (
 ```
 
 > **Note on forward references:** `orders` references `scheduled_orders`, and `hub_inbound_events` / `hub_outbound_events` reference `delivery_routes`. When running as a migration, EF Core handles the dependency ordering automatically. If running raw DDL, create tables in this order:
-> `users` → `markets` → `products` → `market_products` → `price_snapshots` → `system_config` → `restaurants` → `order_groups` → `scheduled_orders` → `orders` → `order_items` → `hubs` → `hub_inventory` → `vehicles` → `delivery_routes` → `deliveries` → `hub_inbound_events` → `hub_outbound_events` → `cross_dock_transfers` → `user_market_assignments` → `notifications` → `analytics_aggregations` → `export_jobs`
+> `roles` → `users` → `markets` → `products` → `market_products` → `price_snapshots` → `system_config` → `restaurants` → `order_groups` → `scheduled_orders` → `orders` → `order_items` → `hubs` → `hub_inventory` → `vehicles` → `delivery_routes` → `deliveries` → `hub_inbound_events` → `hub_outbound_events` → `cross_dock_transfers` → `user_market_assignments` → `notifications` → `analytics_aggregations` → `export_jobs`
 
 > **No triggers policy:** All business logic (soft-reservation decrement, total_amount recalculation, status machine validation, hub capacity enforcement) lives in the application layer (ASP.NET Core services). No PostgreSQL triggers are used. This decision keeps business rules in a single, testable, language-native location and avoids hidden side effects during migrations and testing.
 
@@ -780,16 +791,28 @@ CREATE TABLE export_jobs (
 
 ```sql
 -- ============================================================
+-- roles
+-- ============================================================
+
+-- Covered by UNIQUE constraint: roles_name_unique
+-- Already creates an index on name — used by AdminSeeder and Admin user creation.
+
+-- ============================================================
 -- users
 -- ============================================================
 
 -- Covered by UNIQUE constraint: users_email_unique
 -- Already creates an index on email — no separate CREATE INDEX needed.
 
+-- Supports phone login and duplicate-phone checks while allowing users without phone.
+CREATE UNIQUE INDEX idx_users_phone_not_null
+    ON users (phone)
+    WHERE phone IS NOT NULL;
+
 -- Supports admin queries filtering by role and active status.
--- e.g. "list all active kiosk staff"
-CREATE INDEX idx_users_role_is_active
-    ON users (role, is_active)
+-- e.g. "list all active market agents"
+CREATE INDEX idx_users_role_id_is_active
+    ON users (role_id, is_active)
     WHERE deleted_at IS NULL;
 
 -- Supports soft-delete scoping on any user lookup
@@ -1243,17 +1266,16 @@ Stores event-specific data alongside the human-readable `title` and `body`. Stru
 
 ### 4.3 Enum Types
 
-All six PostgreSQL ENUM types are defined at the top of the DDL block in Section 2. Summary:
+Auth roles are stored in the `roles` lookup table, not as a PostgreSQL enum. The remaining PostgreSQL enum types are defined at the top of the DDL block in Section 2. Summary:
 
 | Enum Type | Values | Used In |
 |-----------|--------|---------|
-| `user_role` | `admin`, `kiosk_staff` (legacy), `market_agent`, `hub_staff`, `driver`, `restaurant` | `users.role` |
 | `order_status` | `draft`, `payment_pending`, `confirmed`, `batched`, `picked_up`, `at_hub`, `delivering`, `delivered`, `cancelled` | `orders.status` |
 | `payment_status` | `pending`, `paid`, `refunded`, `failed` | `orders.payment_status` |
 | `order_group_status` | `open`, `locked`, `dispatched`, `completed` | `order_groups.status` |
 | `delivery_status` | `pending`, `picked_up`, `in_transit`, `delivered`, `failed` | `deliveries.status` |
 | `route_status` | `planned`, `in_progress`, `completed`, `cancelled` | `delivery_routes.status` |
-| `notification_type` | `price_change`, `order_status`, `delivery_update`, `payment`, `hub_discrepancy`, `system` | `notifications.type` |
+| `notification_type` | `price_change`, `order_status`, `delivery_update`, `system` | `notifications.type` |
 
 **Trade-off:** PostgreSQL ENUMs are efficient (stored as integers internally) but require a DDL migration to add new values (`ALTER TYPE ... ADD VALUE`). For `cross_dock_transfers.status` and `export_jobs.status` (which may evolve), a `TEXT` column with a `CHECK` constraint is used instead — simpler to extend in application code without a blocking migration.
 
@@ -1303,7 +1325,8 @@ The following seed data is applied by a dedicated idempotent seeder run after mi
 
 | Entity | Count | Details |
 |--------|-------|---------|
-| `users` | 1 | Admin account: email from `SEED_ADMIN_EMAIL` env var, bcrypt-hashed password from `SEED_ADMIN_PASSWORD` |
+| `roles` | 6 | Canonical role names: `admin`, `operations_manager`, `market_agent`, `hub_staff`, `driver`, `restaurant` |
+| `users` | 1 | Admin account: email/password from `AdminSeed:Email` / `AdminSeed:Password` config or `ADMIN_SEED_EMAIL` / `ADMIN_SEED_PASSWORD` env vars; password is bcrypt-hashed |
 | `markets` | 3 | Hoc Mon (10.8912° N, 106.5981° E), Binh Dien (10.7230° N, 106.6050° E), Thu Duc (10.8567° N, 106.7547° E) |
 | `products` | 10 | Sample catalog covering categories: rau củ (vegetables), thủy hải sản (seafood), thịt (meat), gia vị (spices). Units: kg, bunch, piece |
 | `market_products` | 10–15 | Associates sample products with markets, with initial price/quantity values |
