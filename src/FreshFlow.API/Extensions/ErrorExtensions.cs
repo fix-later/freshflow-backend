@@ -13,7 +13,9 @@ public static class ErrorExtensions
         if (error.Code is "EMAIL_ALREADY_EXISTS" or "REFRESH_TOKEN_REUSE" or "ALREADY_APPROVED")
             return new ConflictObjectResult(new { code = error.Code, message = error.Message });
 
-        if (error.Code is "UNAUTHORIZED" or "INVALID_CREDENTIALS" or "INVALID_CURRENT_PASSWORD" or "REFRESH_TOKEN_EXPIRED" or "REFRESH_TOKEN_REVOKED")
+        if (error.Code is "UNAUTHORIZED" or "INVALID_CREDENTIALS" or "INVALID_CURRENT_PASSWORD"
+            or "TOKEN_INVALID" or "TOKEN_REUSE_DETECTED"
+            or "REFRESH_TOKEN_EXPIRED" or "REFRESH_TOKEN_REVOKED")
             return new UnauthorizedObjectResult(new { code = error.Code, message = error.Message });
 
         if (error.Code is "FORBIDDEN")

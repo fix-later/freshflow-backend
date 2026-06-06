@@ -22,15 +22,13 @@ public sealed class RefreshTokenCommandHandlerTests
         _sut = new RefreshTokenCommandHandler(_tokens, _users, _tokenService);
     }
 
-    private RefreshToken MakeValidToken(Guid userId, string hash)
-    {
-        var familyId = Guid.NewGuid();
-        return new RefreshToken(userId, hash, familyId, 7);
-    }
+    private RefreshToken MakeValidToken(Guid userId, string hash) =>
+        new(userId, hash, Guid.NewGuid(), 7);
 
     [Fact]
     public async Task Handle_ValidToken_RotatesAndReturnsNewPair()
     {
+        // Arrange
         var userId = Guid.NewGuid();
         const string raw = "raw-token";
         const string hash = "sha256-hash";
@@ -44,55 +42,67 @@ public sealed class RefreshTokenCommandHandlerTests
         _tokenService.GenerateRefreshToken().Returns("new-raw");
         _tokenService.HashRefreshToken("new-raw").Returns("new-hash");
 
+        // Act
         var result = await _sut.Handle(new RefreshTokenCommand(raw), default);
 
+        // Assert
         result.IsSuccess.Should().BeTrue();
         result.Value.AccessToken.Should().Be("new-access");
         result.Value.RefreshToken.Should().Be("new-raw");
+        stored.IsRevoked.Should().BeTrue();
+        stored.RevokedReason.Should().Be("rotated");
     }
 
     [Fact]
-    public async Task Handle_TokenNotFound_ReturnsRevoked()
+    public async Task Handle_TokenNotFound_ReturnsTokenInvalid()
     {
+        // Arrange
         _tokenService.HashRefreshToken(Arg.Any<string>()).Returns("hash");
         _tokens.FindByHashAsync("hash", default).Returns((RefreshToken?)null);
 
+        // Act
         var result = await _sut.Handle(new RefreshTokenCommand("raw"), default);
 
+        // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("REFRESH_TOKEN_REVOKED");
+        result.Error.Code.Should().Be("TOKEN_INVALID");
     }
 
     [Fact]
-    public async Task Handle_RevokedToken_RevokesFamily_ReturnsReuse()
+    public async Task Handle_RevokedToken_RevokesFamily_ReturnsTokenReuseDetected()
     {
+        // Arrange
         var userId = Guid.NewGuid();
         const string hash = "hashed";
         var stored = MakeValidToken(userId, hash);
-        stored.Revoke(); // Revoke it — simulates reuse
+        stored.Revoke(reason: "logout"); // already revoked — simulates reuse
 
         _tokenService.HashRefreshToken("raw").Returns(hash);
         _tokens.FindByHashAsync(hash, default).Returns(stored);
 
+        // Act
         var result = await _sut.Handle(new RefreshTokenCommand("raw"), default);
 
+        // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("REFRESH_TOKEN_REUSE");
-        await _tokens.Received(1).RevokeByFamilyAsync(stored.FamilyId, default);
+        result.Error.Code.Should().Be("TOKEN_REUSE_DETECTED");
+        await _tokens.Received(1).RevokeByFamilyAsync(stored.FamilyId, "family_compromised", default);
+        await _tokens.Received(1).SaveChangesAsync(default);
     }
 
     [Fact]
-    public async Task Handle_ExpiredToken_ReturnsExpired()
+    public async Task Handle_ExpiredToken_ReturnsTokenInvalid()
     {
-        var userId = Guid.NewGuid();
-        var stored = new RefreshToken(userId, "hash", Guid.NewGuid(), ttlDays: -1); // already expired
-
+        // Arrange — ttlDays: -1 creates an already-expired token
+        var stored = new RefreshToken(Guid.NewGuid(), "hash", Guid.NewGuid(), ttlDays: -1);
         _tokenService.HashRefreshToken("raw").Returns("hash");
         _tokens.FindByHashAsync("hash", default).Returns(stored);
 
+        // Act
         var result = await _sut.Handle(new RefreshTokenCommand("raw"), default);
 
+        // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("REFRESH_TOKEN_EXPIRED");
+        result.Error.Code.Should().Be("TOKEN_INVALID");
     }
 }
