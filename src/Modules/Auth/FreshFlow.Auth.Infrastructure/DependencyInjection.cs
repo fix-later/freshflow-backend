@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using FluentValidation;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Behaviors;
@@ -9,6 +10,7 @@ using FreshFlow.Auth.Infrastructure.Seed;
 using FreshFlow.Auth.Infrastructure.Services;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -61,7 +63,9 @@ public static class DependencyInjection
                     RoleClaimType = System.Security.Claims.ClaimTypes.Role
                 };
 
-                // SignalR: read token from query string
+                // SignalR: read token from query string.
+                // OnChallenge: return JSON { code, message } instead of the default
+                // WWW-Authenticate plain-text response (FR-AUTH-008 / UC-AUTH-08).
                 bearerOptions.Events = new JwtBearerEvents
                 {
                     OnMessageReceived = ctx =>
@@ -70,6 +74,37 @@ public static class DependencyInjection
                         if (!string.IsNullOrEmpty(accessToken))
                             ctx.Token = accessToken;
                         return Task.CompletedTask;
+                    },
+
+                    OnChallenge = async ctx =>
+                    {
+                        // Suppress the default WWW-Authenticate challenge response.
+                        ctx.HandleResponse();
+
+                        var isExpired = ctx.AuthenticateFailure is SecurityTokenExpiredException;
+                        var code = isExpired ? "TOKEN_EXPIRED" : "UNAUTHORIZED";
+                        var message = isExpired
+                            ? "The access token has expired."
+                            : "Authentication is required. Provide a valid Bearer token.";
+
+                        ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        ctx.Response.ContentType = "application/json";
+                        await ctx.Response.WriteAsync(
+                            JsonSerializer.Serialize(new { code, message }),
+                            ctx.HttpContext.RequestAborted);
+                    },
+
+                    OnForbidden = async ctx =>
+                    {
+                        ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        ctx.Response.ContentType = "application/json";
+                        await ctx.Response.WriteAsync(
+                            JsonSerializer.Serialize(new
+                            {
+                                code = "FORBIDDEN",
+                                message = "You do not have permission to access this resource."
+                            }),
+                            ctx.HttpContext.RequestAborted);
                     }
                 };
             });
