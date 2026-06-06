@@ -17,6 +17,7 @@ internal sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refre
         builder.HasIndex(t => t.FamilyId);
         builder.Property(t => t.ExpiresAt).IsRequired();
         builder.Property(t => t.RevokedAt);
+        builder.Property(t => t.RevokedReason).HasMaxLength(50);
         builder.Property(t => t.ReplacedByTokenId);
         builder.Property(t => t.CreatedAt).IsRequired();
 
