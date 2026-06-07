@@ -2372,7 +2372,7 @@ Returns all active roles from the `roles` table. Roles are seeded during deploym
 
 **Role:** Admin only
 
-Creates a user account with exactly one global role. Public self-registration is deferred; all v1 accounts are Admin-managed. The endpoint can also create role-specific associations:
+Creates a user account with exactly one global role. Restaurant owners may self-register via `POST /api/v1/auth/register` (UC-AUTH-11); all other roles (`market_agent`, `hub_staff`, `driver`) are Admin-managed. The endpoint can also create role-specific associations:
 
 - For `market_agent` / legacy request alias `kiosk_staff`, `marketId` creates a row in `user_market_assignments`.
 - For `driver`, the system creates a row in `driver_profiles`.
