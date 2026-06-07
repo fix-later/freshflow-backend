@@ -12,7 +12,8 @@ internal sealed class CreateUserCommandHandler(
     IPasswordHasher hasher,
     IRestaurantRepository restaurants,
     IDriverProfileCreator driverProfileCreator,
-    IMarketValidator marketValidator) : IRequestHandler<CreateUserCommand, Result<CreateUserResponse>>
+    IMarketValidator marketValidator,
+    IUserMarketAssignmentRepository marketAssignments) : IRequestHandler<CreateUserCommand, Result<CreateUserResponse>>
 {
     public async Task<Result<CreateUserResponse>> Handle(CreateUserCommand request, CancellationToken ct)
     {
@@ -47,6 +48,11 @@ internal sealed class CreateUserCommandHandler(
         var passwordHash = hasher.Hash(request.Password);
         var user = User.Create(request.Email, passwordHash, role, request.Phone);
         await users.AddAsync(user, ct);
+
+        if (roleName == RoleNames.MarketAgent && request.MarketId.HasValue)
+            await marketAssignments.AddAsync(
+                new Domain.Entities.UserMarketAssignment(user.Id, request.MarketId.Value, assignedBy: null), ct);
+
         await users.SaveChangesAsync(ct);
 
         if (roleName == RoleNames.Restaurant)

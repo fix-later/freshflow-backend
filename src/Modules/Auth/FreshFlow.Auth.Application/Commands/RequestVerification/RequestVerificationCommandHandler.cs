@@ -36,7 +36,14 @@ internal sealed class RequestVerificationCommandHandler(
         await codes.AddAsync(verificationCode, ct);
         await codes.SaveChangesAsync(ct);
 
-        await sender.SendVerificationCodeAsync(user.Email, rawCode, ct);
+        try
+        {
+            await sender.SendVerificationCodeAsync(user.Email, rawCode, ct);
+        }
+        catch
+        {
+            // Swallow delivery failures — they must not leak account existence to the caller.
+        }
 
         return Result.Success();
     }

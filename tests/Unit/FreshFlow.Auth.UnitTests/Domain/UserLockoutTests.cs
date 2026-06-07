@@ -1,3 +1,4 @@
+using System.Reflection;
 using FluentAssertions;
 using FreshFlow.Auth.Domain.Aggregates;
 using FreshFlow.Auth.Domain.Entities;
@@ -62,6 +63,35 @@ public sealed class UserLockoutTests
 
         user.Unlock();
 
+        user.IsLockedOut.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RecordFailedLogin_AfterExpiredLockout_ResetsCounterToOne()
+    {
+        // Arrange — lock the user (5 failures), then backdate LockedUntil to simulate
+        // the lockout window expiring naturally (LockedUntil.HasValue = true, IsLockedOut = false).
+        var user = MakeUser();
+        for (var i = 0; i < 5; i++)
+            user.RecordFailedLogin();
+
+        user.IsLockedOut.Should().BeTrue();
+        user.FailedLoginCount.Should().Be(5);
+
+        // Simulate clock advancing past the lockout window via reflection (private setter).
+        typeof(User)
+            .GetProperty("LockedUntil", BindingFlags.Instance | BindingFlags.Public)!
+            .GetSetMethod(nonPublic: true)!
+            .Invoke(user, [DateTime.UtcNow.AddMinutes(-1)]);
+
+        user.IsLockedOut.Should().BeFalse();        // window has passed
+        user.FailedLoginCount.Should().Be(5);       // stale high counter still present
+
+        // Act — one more bad password after expiry
+        user.RecordFailedLogin();
+
+        // Assert — counter resets to 1 (not 6), no immediate re-lock
+        user.FailedLoginCount.Should().Be(1);
         user.IsLockedOut.Should().BeFalse();
     }
 }

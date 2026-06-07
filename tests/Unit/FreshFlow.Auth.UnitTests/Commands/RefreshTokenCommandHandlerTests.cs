@@ -105,4 +105,33 @@ public sealed class RefreshTokenCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("TOKEN_INVALID");
     }
+
+    [Fact]
+    public async Task Handle_LockedOutUser_CanStillRefreshValidToken()
+    {
+        // Arrange — user is locked out (e.g. attacker hammering login endpoint)
+        // but holds a valid refresh token issued before the lockout.
+        var userId = Guid.NewGuid();
+        const string raw = "raw-token";
+        const string hash = "sha256-hash";
+        var stored = MakeValidToken(userId, hash);
+
+        var user = User.Create("victim@test.com", "hashed", new Role("restaurant", "Restaurant"));
+        for (var i = 0; i < 5; i++) user.RecordFailedLogin();   // locked out
+        user.IsLockedOut.Should().BeTrue();
+
+        _tokenService.HashRefreshToken(raw).Returns(hash);
+        _tokens.FindByHashAsync(hash, default).Returns(stored);
+        _users.FindByIdAsync(userId, default).Returns(user);
+        _tokenService.GenerateAccessToken(Arg.Any<Guid>(), user.Email, Arg.Any<string>()).Returns("new-access");
+        _tokenService.GenerateRefreshToken().Returns("new-raw");
+        _tokenService.HashRefreshToken("new-raw").Returns("new-hash");
+
+        // Act
+        var result = await _sut.Handle(new RefreshTokenCommand(raw), default);
+
+        // Assert — lockout must NOT kill refresh sessions (DoS prevention)
+        result.IsSuccess.Should().BeTrue();
+        result.Value.AccessToken.Should().Be("new-access");
+    }
 }

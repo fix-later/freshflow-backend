@@ -15,12 +15,14 @@ public sealed class CreateUserCommandHandlerTests
     private readonly IRestaurantRepository _restaurants = Substitute.For<IRestaurantRepository>();
     private readonly IDriverProfileCreator _driverCreator = Substitute.For<IDriverProfileCreator>();
     private readonly IMarketValidator _marketValidator = Substitute.For<IMarketValidator>();
+    private readonly IUserMarketAssignmentRepository _marketAssignments = Substitute.For<IUserMarketAssignmentRepository>();
     private readonly CreateUserCommandHandler _sut;
 
     public CreateUserCommandHandlerTests()
     {
         _hasher.Hash(Arg.Any<string>()).Returns("hashed");
-        _sut = new CreateUserCommandHandler(_users, _roles, _hasher, _restaurants, _driverCreator, _marketValidator);
+        _sut = new CreateUserCommandHandler(
+            _users, _roles, _hasher, _restaurants, _driverCreator, _marketValidator, _marketAssignments);
     }
 
     [Theory]
@@ -134,5 +136,44 @@ public sealed class CreateUserCommandHandlerTests
             new CreateUserCommand("d@test.com", "P@ss1", "driver", null, null, phone), default);
 
         result.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Handle_MarketAgentWithMarketId_CreatesMarketAssignment()
+    {
+        // Arrange
+        var marketId = Guid.NewGuid();
+        _users.ExistsAsync(Arg.Any<string>(), default).Returns(false);
+        _roles.FindByNameAsync("market_agent", default).Returns(new Role("market_agent", "Market Agent"));
+        _marketValidator.IsActiveMarketAsync(marketId, default).Returns(true);
+
+        // Act
+        var result = await _sut.Handle(
+            new CreateUserCommand("agent@test.com", "P@ss1", "market_agent", marketId, null), default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        await _marketAssignments.Received(1)
+            .AddAsync(
+                Arg.Is<FreshFlow.Auth.Domain.Entities.UserMarketAssignment>(a =>
+                    a.MarketId == marketId && a.AssignedBy == null),
+                default);
+    }
+
+    [Fact]
+    public async Task Handle_NonMarketAgentRole_DoesNotCreateMarketAssignment()
+    {
+        // Arrange
+        _users.ExistsAsync(Arg.Any<string>(), default).Returns(false);
+        _roles.FindByNameAsync("driver", default).Returns(new Role("driver", "Driver"));
+
+        // Act
+        var result = await _sut.Handle(
+            new CreateUserCommand("d@test.com", "P@ss1", "driver", null, null), default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        await _marketAssignments.DidNotReceive()
+            .AddAsync(Arg.Any<FreshFlow.Auth.Domain.Entities.UserMarketAssignment>(), default);
     }
 }

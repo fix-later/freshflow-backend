@@ -128,6 +128,8 @@ public static class DependencyInjection
         services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
         services.AddScoped<IVerificationSender, NoOpVerificationSender>();
 
+        services.AddScoped<IUserMarketAssignmentRepository, UserMarketAssignmentRepository>();
+
         // Cross-module services
         services.AddScoped<IRestaurantRepository, RestaurantRepository>();
         services.AddScoped<IDriverProfileCreator, DriverProfileCreator>();

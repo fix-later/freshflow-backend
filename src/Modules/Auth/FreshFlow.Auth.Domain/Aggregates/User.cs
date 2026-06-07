@@ -79,9 +79,17 @@ public sealed class User : AggregateRoot
 
     /// <summary>
     /// Records a failed login attempt and locks the account when <see cref="MaxFailedAttempts"/> is reached.
+    /// If a previous lockout window has already expired, the counter is reset to zero first so that
+    /// stale failed-attempt counts don't cause an immediate re-lock on the very next bad password.
     /// </summary>
     public void RecordFailedLogin()
     {
+        if (LockedUntil.HasValue && !IsLockedOut)   // lockout window has passed
+        {
+            FailedLoginCount = 0;
+            LockedUntil = null;
+        }
+
         FailedLoginCount++;
         if (FailedLoginCount >= MaxFailedAttempts)
             LockedUntil = DateTime.UtcNow.Add(LockDuration);
@@ -131,5 +139,12 @@ public sealed class User : AggregateRoot
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public bool CanLogin() => IsActive && !IsDeleted && !IsLockedOut;
+    /// <summary>
+    /// Returns true when the account is in a state that allows session operations (refresh, etc.).
+    /// Lockout is intentionally excluded: the <c>LoginCommandHandler</c> already checks
+    /// <see cref="IsLockedOut"/> explicitly before password verification, and removing it here
+    /// prevents an attacker from DoS-ing a victim's refresh sessions by repeatedly hammering the
+    /// login endpoint to keep the lockout window active.
+    /// </summary>
+    public bool CanLogin() => IsActive && !IsDeleted;
 }

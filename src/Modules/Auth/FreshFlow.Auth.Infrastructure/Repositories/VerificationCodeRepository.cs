@@ -10,10 +10,14 @@ internal sealed class VerificationCodeRepository(AppDbContext db) : IVerificatio
     public Task<VerificationCode?> FindByUserChannelAndHashAsync(
         Guid userId, string channel, string codeHash, CancellationToken ct) =>
         db.Set<VerificationCode>()
-            .FirstOrDefaultAsync(v =>
+            .Where(v =>
                 v.UserId == userId &&
                 v.Channel == channel &&
-                v.CodeHash == codeHash, ct);
+                v.CodeHash == codeHash &&
+                v.UsedAt == null &&
+                v.ExpiresAt > DateTime.UtcNow)
+            .OrderByDescending(v => v.CreatedAt)
+            .FirstOrDefaultAsync(ct);
 
     public async Task InvalidatePendingAsync(Guid userId, string channel, CancellationToken ct)
     {

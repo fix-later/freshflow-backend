@@ -92,4 +92,21 @@ public sealed class RequestVerificationCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task Handle_SenderThrows_ReturnsSuccessWithoutLeakingAccountExistence()
+    {
+        // Arrange — valid active user + sender that throws
+        var user = User.Create("user@test.com", "hash", AdminRole());
+        _users.FindByEmailAsync("user@test.com", default).Returns(user);
+        _sender
+            .SendVerificationCodeAsync(Arg.Any<string>(), Arg.Any<string>(), default)
+            .Returns(Task.FromException(new InvalidOperationException("SMTP failure")));
+
+        // Act
+        var result = await _sut.Handle(new RequestVerificationCommand("user@test.com", "EMAIL"), default);
+
+        // Assert — delivery failure must be swallowed; caller cannot distinguish from unknown email
+        result.IsSuccess.Should().BeTrue();
+    }
 }

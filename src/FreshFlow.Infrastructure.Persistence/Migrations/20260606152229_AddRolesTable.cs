@@ -62,7 +62,10 @@ public partial class AddRolesTable : Migration
             type: "uuid",
             nullable: true);
 
-        // 4. Populate RoleId from old Role (text) column
+        // 4. Populate RoleId from old Role (text) column.
+        // No ELSE branch: unrecognised role strings stay NULL and will trip the
+        // NOT NULL constraint in step 5, surfacing data issues instead of silently
+        // granting admin access.
         migrationBuilder.Sql($"""
             UPDATE users SET "RoleId" = CASE "Role"
                 WHEN 'admin'              THEN '{AdminRoleId}'::uuid
@@ -71,7 +74,6 @@ public partial class AddRolesTable : Migration
                 WHEN 'driver'             THEN '{DriverRoleId}'::uuid
                 WHEN 'restaurant'         THEN '{RestaurantRoleId}'::uuid
                 WHEN 'operations_manager' THEN '{OpsManagerRoleId}'::uuid
-                ELSE '{AdminRoleId}'::uuid
             END
             WHERE "RoleId" IS NULL;
             """);
