@@ -26,6 +26,7 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.IsActive).IsRequired().HasDefaultValue(true);
         builder.Property(u => u.FailedLoginCount).IsRequired().HasDefaultValue(0);
         builder.Property(u => u.LockedUntil);
+        builder.Property(u => u.EmailVerifiedAt);
         builder.Property(u => u.CreatedAt).IsRequired();
         builder.Property(u => u.UpdatedAt).IsRequired();
         builder.Property(u => u.DeletedAt);

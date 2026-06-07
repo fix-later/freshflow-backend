@@ -125,6 +125,8 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+        services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
+        services.AddScoped<IVerificationSender, NoOpVerificationSender>();
 
         // Cross-module services
         services.AddScoped<IRestaurantRepository, RestaurantRepository>();

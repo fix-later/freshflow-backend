@@ -27,7 +27,10 @@ public static class ErrorExtensions
         if (error.Code is "ACCOUNT_LOCKED")
             return new ObjectResult(new { code = error.Code, message = error.Message }) { StatusCode = 423 };
 
-        if (error.Code is "CANNOT_DEACTIVATE_SELF" or "INVALID_MARKET"
+        if (error.Code is "RESET_TOKEN_INVALID" or "RESET_TOKEN_EXPIRED" or "OTP_INVALID")
+            return new BadRequestObjectResult(new { code = error.Code, message = error.Message });
+
+        if (error.Code is "CHANNEL_NOT_SUPPORTED" or "CANNOT_DEACTIVATE_SELF" or "INVALID_MARKET"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(new { code = error.Code, message = error.Message });
 

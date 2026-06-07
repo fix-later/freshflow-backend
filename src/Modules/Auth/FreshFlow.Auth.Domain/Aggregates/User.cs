@@ -122,5 +122,14 @@ public sealed class User : AggregateRoot
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public DateTime? EmailVerifiedAt { get; private set; }
+
+    public void MarkEmailVerified()
+    {
+        if (EmailVerifiedAt.HasValue) return;
+        EmailVerifiedAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public bool CanLogin() => IsActive && !IsDeleted && !IsLockedOut;
 }
