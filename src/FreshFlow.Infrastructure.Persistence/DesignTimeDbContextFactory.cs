@@ -50,7 +50,7 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<App
     private static string ResolveApiConfigDirectory()
     {
         var candidate = EnumerateConfigDirectoryCandidates()
-            .Where(path => File.Exists(Path.Combine(path, "appsettings.json")))
+            .Where(path => File.Exists(Path.Join(path, "appsettings.json")))
             .FirstOrDefault();
 
         return candidate
@@ -62,13 +62,13 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<App
     {
         var currentDirectory = Directory.GetCurrentDirectory();
 
-        yield return Path.Combine(currentDirectory, "src", "FreshFlow.API");
+        yield return Path.Join(currentDirectory, "src", "FreshFlow.API");
         yield return currentDirectory;
         yield return AppContext.BaseDirectory;
 
         for (var directory = new DirectoryInfo(currentDirectory); directory is not null; directory = directory.Parent)
         {
-            yield return Path.Combine(directory.FullName, "src", "FreshFlow.API");
+            yield return Path.Join(directory.FullName, "src", "FreshFlow.API");
         }
     }
 

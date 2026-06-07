@@ -10,7 +10,8 @@ public static class ErrorExtensions
         if (error.Code.EndsWith("_NOT_FOUND"))
             return new NotFoundObjectResult(new { code = error.Code, message = error.Message });
 
-        if (error.Code is "EMAIL_ALREADY_EXISTS" or "REFRESH_TOKEN_REUSE" or "ALREADY_APPROVED")
+        if (error.Code is "EMAIL_ALREADY_EXISTS" or "PHONE_ALREADY_EXISTS"
+                        or "REFRESH_TOKEN_REUSE" or "ALREADY_APPROVED")
             return new ConflictObjectResult(new { code = error.Code, message = error.Message });
 
         if (error.Code is "UNAUTHORIZED" or "INVALID_CREDENTIALS" or "INVALID_CURRENT_PASSWORD"
@@ -33,6 +34,9 @@ public static class ErrorExtensions
         if (error.Code is "CHANNEL_NOT_SUPPORTED" or "CANNOT_DEACTIVATE_SELF" or "INVALID_MARKET"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(new { code = error.Code, message = error.Message });
+
+        if (error.Code is "ROLE_NOT_CONFIGURED")
+            return new ObjectResult(new { code = error.Code, message = error.Message }) { StatusCode = 500 };
 
         return new ObjectResult(new { code = error.Code, message = error.Message }) { StatusCode = 500 };
     }

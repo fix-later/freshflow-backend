@@ -40,9 +40,10 @@ internal sealed class RequestVerificationCommandHandler(
         {
             await sender.SendVerificationCodeAsync(user.Email, rawCode, ct);
         }
-        catch
+        catch (Exception) when (!ct.IsCancellationRequested)
         {
             // Swallow delivery failures — they must not leak account existence to the caller.
+            // The when-filter re-raises OperationCanceledException so cancellation propagates normally.
         }
 
         return Result.Success();

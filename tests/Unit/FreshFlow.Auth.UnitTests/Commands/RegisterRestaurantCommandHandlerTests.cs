@@ -89,7 +89,27 @@ public sealed class RegisterRestaurantCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_RoleNotFound_ReturnsValidationError()
+    public async Task Handle_DuplicatePhone_ReturnsPhoneAlreadyExists()
+    {
+        // Arrange
+        const string phone = "+84901234567";
+        _users.ExistsAsync(Arg.Any<string>(), default).Returns(false);
+        _users.ExistsByPhoneAsync(phone, default).Returns(true);
+
+        var cmd = new RegisterRestaurantCommand(
+            "owner@phobaatu.vn", "MySecureP@ss1", "Phở Bà Tú", phone);
+
+        // Act
+        var result = await _sut.Handle(cmd, default);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("PHONE_ALREADY_EXISTS");
+        await _users.DidNotReceive().AddAsync(Arg.Any<FreshFlow.Auth.Domain.Aggregates.User>(), default);
+    }
+
+    [Fact]
+    public async Task Handle_RoleNotFound_ReturnsRoleNotConfigured()
     {
         // Arrange
         _users.ExistsAsync(Arg.Any<string>(), default).Returns(false);
@@ -103,6 +123,6 @@ public sealed class RegisterRestaurantCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("VALIDATION_ERROR");
+        result.Error.Code.Should().Be("ROLE_NOT_CONFIGURED");
     }
 }

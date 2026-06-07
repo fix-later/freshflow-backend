@@ -22,6 +22,8 @@ public sealed class RegisterRestaurantCommandValidator : AbstractValidator<Regis
         RuleFor(x => x.RestaurantName)
             .NotEmpty().MaximumLength(200);
 
+        // Phone is optional; when provided the trimmed form must match the format.
+        // Normalisation (trim + lowercase) happens in the domain: User.Create stores phone?.Trim().ToLowerInvariant().
         RuleFor(x => x.Phone)
             .Must(p => p is null || PhoneRegex.IsMatch(p.Trim()))
             .WithMessage("Phone must be a valid phone number (7–15 digits, optional leading +).")
