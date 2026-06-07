@@ -57,6 +57,17 @@ public sealed class RegisterRestaurantCommandValidatorTests
         result.Errors.Should().Contain(e => e.PropertyName == nameof(RegisterRestaurantCommand.Phone));
     }
 
+    [Theory]
+    [InlineData(" +84901234567")]
+    [InlineData("+84901234567 ")]
+    [InlineData(" +84901234567 ")]
+    public async Task Validate_PhoneWithWhitespace_PassesAfterTrim(string phone)
+    {
+        var result = await _sut.ValidateAsync(
+            new RegisterRestaurantCommand("u@test.com", "ValidP@ss1", "My Restaurant", phone));
+        result.IsValid.Should().BeTrue();
+    }
+
     [Fact]
     public async Task Validate_ValidCommandWithPhone_Passes()
     {
