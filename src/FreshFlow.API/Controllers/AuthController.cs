@@ -5,6 +5,7 @@ using FreshFlow.Auth.Application.Commands.ForgotPassword;
 using FreshFlow.Auth.Application.Commands.Login;
 using FreshFlow.Auth.Application.Commands.Logout;
 using FreshFlow.Auth.Application.Commands.RefreshToken;
+using FreshFlow.Auth.Application.Commands.RegisterRestaurant;
 using FreshFlow.Auth.Application.Commands.RequestVerification;
 using FreshFlow.Auth.Application.Commands.ResetPassword;
 using FreshFlow.Auth.Application.Commands.VerifyEmail;
@@ -18,6 +19,17 @@ namespace FreshFlow.API.Controllers;
 [Route("api/v1/auth")]
 public sealed class AuthController(ISender sender) : ControllerBase
 {
+    [HttpPost("register")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Register([FromBody] RegisterRestaurantRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new RegisterRestaurantCommand(body.Email, body.Password, body.RestaurantName, body.Phone), ct);
+        return result.IsSuccess
+            ? Created(string.Empty, result.Value)
+            : result.Error.ToActionResult();
+    }
+
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginRequest body, CancellationToken ct)
@@ -100,6 +112,12 @@ public sealed class AuthController(ISender sender) : ControllerBase
         return result.IsSuccess ? NoContent() : result.Error.ToActionResult();
     }
 }
+
+public sealed record RegisterRestaurantRequest(
+    string Email,
+    string Password,
+    string RestaurantName,
+    string? Phone);
 
 /// <param name="Identifier">Email address or phone number.</param>
 public sealed record LoginRequest(string Identifier, string Password);

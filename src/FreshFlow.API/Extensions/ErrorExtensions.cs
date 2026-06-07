@@ -21,7 +21,7 @@ public static class ErrorExtensions
         if (error.Code is "FORBIDDEN")
             return new ObjectResult(new { code = error.Code, message = error.Message }) { StatusCode = 403 };
 
-        if (error.Code is "VALIDATION_ERROR" or "INVALID_ROLE")
+        if (error.Code is "VALIDATION_ERROR" or "INVALID_ROLE" or "WEAK_PASSWORD")
             return new BadRequestObjectResult(new { code = error.Code, message = error.Message });
 
         if (error.Code is "ACCOUNT_LOCKED")

@@ -143,7 +143,7 @@ Soft-deleted resources (where `deleted_at IS NOT NULL`) are treated as non-exist
 
 ### 1.9 Authentication
 
-All endpoints require a valid JWT Bearer token in the `Authorization` header **except** the public auth endpoints: `/api/v1/auth/login`, `/api/v1/auth/refresh`, `/api/v1/auth/forgot-password`, `/api/v1/auth/reset-password`, `/api/v1/auth/verify/request`, and `/api/v1/auth/verify`.
+All endpoints require a valid JWT Bearer token in the `Authorization` header **except** the public auth endpoints: `/api/v1/auth/login`, `/api/v1/auth/refresh`, `/api/v1/auth/forgot-password`, `/api/v1/auth/reset-password`, `/api/v1/auth/verify/request`, `/api/v1/auth/verify`, and `/api/v1/auth/register`.
 
 ```
 Authorization: Bearer <accessToken>
@@ -178,6 +178,7 @@ Role values exposed by the API are lowercase `roles.name` values. Seeded values 
 | UC-AUTH-08 | All protected endpoints | N/A | Middleware | Reject expired/invalid access token |
 | UC-AUTH-09 | POST | `/api/v1/admin/users/{userId}/unlock` | Admin | Clear temporary account lock |
 | UC-AUTH-10 | GET/PATCH | `/api/v1/admin/roles`, `/api/v1/admin/users/{userId}/role` | Admin | Manage global role assignment |
+| UC-AUTH-11 | POST | `/api/v1/auth/register` | Public | Restaurant self-registration (pending approval) |
 
 ### POST /api/v1/auth/login
 
@@ -502,7 +503,56 @@ Confirms ownership of an email by submitting the verification code (FR-AUTH-006)
 
 ---
 
-Public self-registration is not exposed in v1. Admin-managed user creation, role assignment, account status, and account unlock are documented under the Admin Domain.
+### POST /api/v1/auth/register
+
+**Role:** Public (no authentication required)
+
+Allows a restaurant owner to self-register an account (UC-AUTH-11). The system creates a `User` with role `restaurant` and a linked `Restaurant` profile with `is_approved = false`. The account is active immediately but cannot place orders until an Admin approves it via `PATCH /api/v1/admin/restaurants/{restaurantId}/approve`.
+
+**Request body:**
+
+```json
+{
+  "email": "owner@phobaatu.vn",
+  "password": "MySecureP@ss1",
+  "restaurantName": "Phở Bà Tú",
+  "phone": "+84901234567"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `email` | string | Yes | Valid email format; must not already exist |
+| `password` | string | Yes | Must satisfy the password strength policy (min 8 chars, uppercase, digit, special char) |
+| `restaurantName` | string | Yes | Non-empty, max 255 characters |
+| `phone` | string | No | Valid phone format if provided |
+
+**Success response — 201 Created**
+
+```json
+{
+  "success": true,
+  "data": {
+    "userId": "uuid",
+    "restaurantId": "uuid",
+    "email": "owner@phobaatu.vn",
+    "restaurantName": "Phở Bà Tú",
+    "isApproved": false
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 409 Conflict | `EMAIL_ALREADY_EXISTS` | Email is already registered |
+| 400 Bad Request | `VALIDATION_ERROR` | Missing required field or invalid format |
+| 400 Bad Request | `WEAK_PASSWORD` | `password` fails the strength policy |
+
+---
+
+Admin-managed user creation, role assignment, account status, and account unlock are documented under the Admin Domain.
 
 ---
 
