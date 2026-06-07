@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
@@ -48,16 +49,13 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<App
 
     private static string ResolveApiConfigDirectory()
     {
-        foreach (var candidate in EnumerateConfigDirectoryCandidates())
-        {
-            if (File.Exists(Path.Combine(candidate, "appsettings.json")))
-            {
-                return candidate;
-            }
-        }
+        var candidate = EnumerateConfigDirectoryCandidates()
+            .Where(path => File.Exists(Path.Combine(path, "appsettings.json")))
+            .FirstOrDefault();
 
-        throw new InvalidOperationException(
-            "Could not find FreshFlow.API appsettings.json for design-time DbContext creation.");
+        return candidate
+            ?? throw new InvalidOperationException(
+                "Could not find FreshFlow.API appsettings.json for design-time DbContext creation.");
     }
 
     private static IEnumerable<string> EnumerateConfigDirectoryCandidates()
