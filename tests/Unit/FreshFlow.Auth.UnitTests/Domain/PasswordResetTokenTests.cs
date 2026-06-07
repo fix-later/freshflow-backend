@@ -67,6 +67,18 @@ public sealed class PasswordResetTokenTests
     }
 
     [Fact]
+    public void IsValid_ReturnsFalse_WhenExpired()
+    {
+        var token = PasswordResetToken.Create(Guid.NewGuid(), "hash");
+        typeof(PasswordResetToken)
+            .GetProperty(nameof(PasswordResetToken.ExpiresAt))!
+            .SetValue(token, DateTime.UtcNow.AddMinutes(-1));
+
+        token.IsExpired.Should().BeTrue();
+        token.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
     public void MarkUsed_IsIdempotent()
     {
         var token = PasswordResetToken.Create(Guid.NewGuid(), "hash");
