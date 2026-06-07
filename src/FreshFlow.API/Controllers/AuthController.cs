@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Auth.Application.Commands.ChangePassword;
+using FreshFlow.Auth.Application.Commands.ForgotPassword;
 using FreshFlow.Auth.Application.Commands.Login;
 using FreshFlow.Auth.Application.Commands.Logout;
 using FreshFlow.Auth.Application.Commands.RefreshToken;
@@ -48,6 +49,16 @@ public sealed class AuthController(ISender sender) : ControllerBase
         return result.IsSuccess ? NoContent() : result.Error.ToActionResult();
     }
 
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(new ForgotPasswordCommand(body.Identifier), ct);
+
+        // Always 202 for valid requests — even when email does not match any account.
+        return result.IsSuccess ? Accepted() : result.Error.ToActionResult();
+    }
+
     [HttpPost("change-password")]
     [Authorize]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest body, CancellationToken ct)
@@ -65,6 +76,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
 
 /// <param name="Identifier">Email address or phone number.</param>
 public sealed record LoginRequest(string Identifier, string Password);
+public sealed record ForgotPasswordRequest(string Identifier);
 public sealed record RefreshRequest(string RefreshToken);
 public sealed record LogoutRequest(string RefreshToken);
 public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);

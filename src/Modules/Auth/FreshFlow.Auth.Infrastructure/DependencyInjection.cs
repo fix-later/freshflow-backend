@@ -118,11 +118,13 @@ public static class DependencyInjection
         // Application services
         services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
         services.AddScoped<ITokenService, JwtTokenService>();
+        services.AddScoped<IPasswordResetSender, NoOpPasswordResetSender>();
 
         // Repositories
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
+        services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
 
         // Cross-module services
         services.AddScoped<IRestaurantRepository, RestaurantRepository>();
