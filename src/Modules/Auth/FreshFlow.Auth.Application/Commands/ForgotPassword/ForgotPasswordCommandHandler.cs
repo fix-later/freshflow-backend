@@ -31,8 +31,17 @@ internal sealed class ForgotPasswordCommandHandler(
         await resetTokens.AddAsync(resetToken, ct);
         await resetTokens.SaveChangesAsync(ct);
 
-        // Dispatch reset link — no-op stub in v1.
-        await sender.SendResetLinkAsync(user.Email, rawToken, ct);
+        // Dispatch reset link — swallow delivery failures to prevent account-existence oracle:
+        // a Resend API outage must not produce a 500 that distinguishes known from unknown emails.
+        // The exception-filter re-raises OperationCanceledException so cancellation propagates normally.
+        try
+        {
+            await sender.SendResetLinkAsync(user.Email, rawToken, ct);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            // Intentionally swallowed — delivery failure must not leak account existence to the caller.
+        }
 
         return Result.Success();
     }

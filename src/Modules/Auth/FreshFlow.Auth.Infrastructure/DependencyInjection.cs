@@ -5,6 +5,7 @@ using FluentValidation;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Behaviors;
 using FreshFlow.Auth.Infrastructure.CrossModule;
+using FreshFlow.Auth.Infrastructure.Email;
 using FreshFlow.Auth.Infrastructure.Repositories;
 using FreshFlow.Auth.Infrastructure.Seed;
 using FreshFlow.Auth.Infrastructure.Services;
@@ -115,10 +116,24 @@ public static class DependencyInjection
 
         services.AddAuthorizationBuilder();
 
+        // Email (Resend)
+        services.AddOptions<EmailOptions>()
+            .Bind(config.GetSection("Email"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddHttpClient("Resend", (sp, client) =>
+        {
+            var key = sp.GetRequiredService<IOptions<EmailOptions>>().Value.ResendApiKey;
+            client.BaseAddress = new Uri("https://api.resend.com/");
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
+        });
+
         // Application services
         services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
         services.AddScoped<ITokenService, JwtTokenService>();
-        services.AddScoped<IPasswordResetSender, NoOpPasswordResetSender>();
+        services.AddScoped<IPasswordResetSender, ResendPasswordResetSender>();
 
         // Repositories
         services.AddScoped<IUserRepository, UserRepository>();
@@ -126,7 +141,7 @@ public static class DependencyInjection
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
         services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
-        services.AddScoped<IVerificationSender, NoOpVerificationSender>();
+        services.AddScoped<IVerificationSender, ResendVerificationSender>();
 
         services.AddScoped<IUserMarketAssignmentRepository, UserMarketAssignmentRepository>();
 

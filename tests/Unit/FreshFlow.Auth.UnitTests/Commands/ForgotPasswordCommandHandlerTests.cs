@@ -1,3 +1,4 @@
+using System.Net.Http;
 using FluentAssertions;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Commands.ForgotPassword;
@@ -75,6 +76,24 @@ public sealed class ForgotPasswordCommandHandlerTests
         await _resetTokens.Received(1).AddAsync(Arg.Any<PasswordResetToken>(), default);
         await _resetTokens.Received(1).SaveChangesAsync(default);
         await _sender.Received(1).SendResetLinkAsync("manager@example.com", "rawtoken123", default);
+    }
+
+    [Fact]
+    public async Task Handle_SenderThrows_StillReturnsSuccess()
+    {
+        // Arrange
+        var adminRole = new Role("admin", "Administrator");
+        var user = User.Create("owner@test.vn", "hash", adminRole);
+        _users.FindByEmailAsync("owner@test.vn", default).Returns(user);
+        _sender
+            .When(s => s.SendResetLinkAsync(Arg.Any<string>(), Arg.Any<string>(), default))
+            .Do(_ => throw new HttpRequestException("Resend unavailable"));
+
+        // Act
+        var result = await _sut.Handle(new ForgotPasswordCommand("owner@test.vn"), default);
+
+        // Assert — delivery failure must not surface to caller (anti-oracle)
+        result.IsSuccess.Should().BeTrue();
     }
 
     [Fact]
