@@ -19,14 +19,17 @@ All C# types use `record` (immutable, value equality) per Constitution IV.
 
 ```csharp
 // Commands/Login/LoginCommand.cs
-public sealed record LoginCommand(string Email, string Password) : ICommand<LoginResponse>;
+public sealed record LoginCommand(string Identifier, string Password) : ICommand<LoginResponse>;
 ```
 
 #### Validator
 
 ```csharp
 // Commands/Login/LoginCommandValidator.cs
-RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(255);
+RuleFor(x => x.Identifier)
+    .NotEmpty()
+    .MaximumLength(255)
+    .Must(id => IsEmail(id) || IsPhone(id));
 RuleFor(x => x.Password).NotEmpty();
 ```
 
@@ -126,6 +129,55 @@ RuleFor(x => x.RefreshToken).NotEmpty();
 
 ---
 
+### POST /api/v1/auth/change-password
+
+**Role**: Any authenticated user
+
+#### Request
+
+```csharp
+// Commands/ChangePassword/ChangePasswordCommand.cs
+public sealed record ChangePasswordCommand(
+    Guid UserId,
+    string CurrentPassword,
+    string NewPassword
+) : ICommand;
+// UserId populated from JWT claim in controller — not from request body
+```
+
+**HTTP body**:
+```json
+{
+  "currentPassword": "OldP@ss1",
+  "newPassword": "NewP@ss1"
+}
+```
+
+#### Validator
+
+```csharp
+RuleFor(x => x.CurrentPassword).NotEmpty();
+RuleFor(x => x.NewPassword).NotEmpty().MinimumLength(8)
+    .Matches("[A-Z]").Matches("[0-9]").Matches("[^a-zA-Z0-9]")
+    .NotEqual(x => x.CurrentPassword);
+```
+
+#### Response
+
+- **204 No Content** on success (no response body)
+- On success, all refresh tokens for the user are revoked. Existing stateless access tokens remain valid until their normal `exp`.
+- No email, SMS, or phone OTP is sent by this flow in v1.
+
+#### Error codes
+
+| Status | Code |
+|--------|------|
+| 400 | `VALIDATION_ERROR` |
+| 401 | `UNAUTHORIZED` |
+| 401 | `INVALID_CURRENT_PASSWORD` |
+
+---
+
 ## Admin User Endpoints (`/api/v1/admin`)
 
 All endpoints require `[Authorize(Roles = "admin")]`.
@@ -143,7 +195,8 @@ public sealed record CreateUserCommand(
     string Password,
     string Role,
     Guid? MarketId,
-    string? RestaurantName
+    string? RestaurantName,
+    string? Phone = null
 ) : ICommand<CreateUserResponse>;
 ```
 
@@ -160,6 +213,9 @@ RuleFor(x => x.MarketId).NotEmpty()
     .When(x => x.Role is "market_agent" or "kiosk_staff");
 RuleFor(x => x.RestaurantName).NotEmpty().MaximumLength(200)
     .When(x => x.Role is "restaurant");
+RuleFor(x => x.Phone)
+    .Must(p => p is null || IsPhone(p))
+    .MaximumLength(20);
 
 private static readonly HashSet<string> ValidRoles =
     ["market_agent", "kiosk_staff", "hub_staff", "driver", "restaurant"];

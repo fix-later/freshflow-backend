@@ -16,7 +16,7 @@ public sealed class ApproveRestaurantEndpointTests(AuthWebAppFactory factory)
     {
         var resp = await _client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            email = "admin@test.freshflow",
+            identifier = "admin@test.freshflow",
             password = "AdminP@ss1"
         });
         resp.EnsureSuccessStatusCode();

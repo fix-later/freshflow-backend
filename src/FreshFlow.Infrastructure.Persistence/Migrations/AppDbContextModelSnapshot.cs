@@ -39,18 +39,32 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<DateTime?>("EmailVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FailedLoginCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<string>("Phone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -59,6 +73,12 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("Phone")
+                        .IsUnique()
+                        .HasFilter("\"Phone\" IS NOT NULL");
+
+                    b.HasIndex("RoleId");
 
                     b.ToTable("users", (string)null);
                 });
@@ -94,6 +114,39 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("driver_profiles", (string)null);
                 });
 
+            modelBuilder.Entity("FreshFlow.Auth.Domain.Entities.PasswordResetToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("password_reset_tokens", (string)null);
+                });
+
             modelBuilder.Entity("FreshFlow.Auth.Domain.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -115,6 +168,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("RevokedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("RevokedReason")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasColumnType("text");
@@ -134,6 +191,33 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("refresh_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Auth.Domain.Entities.Role", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("roles", (string)null);
                 });
 
             modelBuilder.Entity("FreshFlow.Auth.Domain.Entities.UserMarketAssignment", b =>
@@ -165,6 +249,43 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("user_market_assignments", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Auth.Domain.Entities.VerificationCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CodeHash");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("verification_codes", (string)null);
                 });
 
             modelBuilder.Entity("FreshFlow.Auth.Infrastructure.CrossModule.MarketRow", b =>
@@ -216,6 +337,26 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("restaurants", (string)null);
                 });
 
+            modelBuilder.Entity("FreshFlow.Auth.Domain.Aggregates.User", b =>
+                {
+                    b.HasOne("FreshFlow.Auth.Domain.Entities.Role", "Role")
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("FreshFlow.Auth.Domain.Entities.PasswordResetToken", b =>
+                {
+                    b.HasOne("FreshFlow.Auth.Domain.Aggregates.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FreshFlow.Auth.Domain.Entities.RefreshToken", b =>
                 {
                     b.HasOne("FreshFlow.Auth.Domain.Entities.RefreshToken", null)
@@ -238,6 +379,15 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("FreshFlow.Auth.Domain.Aggregates.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FreshFlow.Auth.Domain.Entities.VerificationCode", b =>
+                {
                     b.HasOne("FreshFlow.Auth.Domain.Aggregates.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")

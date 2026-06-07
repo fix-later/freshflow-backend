@@ -2,7 +2,7 @@ using FluentAssertions;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Commands.Login;
 using FreshFlow.Auth.Domain.Aggregates;
-using FreshFlow.Auth.Domain.Enums;
+using FreshFlow.Auth.Domain.Entities;
 using NSubstitute;
 
 namespace FreshFlow.Auth.UnitTests.Commands;
@@ -24,10 +24,10 @@ public sealed class LoginCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidCredentials_ReturnsTokens()
+    public async Task Handle_ValidEmailCredentials_ReturnsTokens()
     {
-        var user = User.Create("admin@test.com", "hashed", UserRole.Admin);
-        _users.FindByEmailAsync("admin@test.com", default).Returns(user);
+        var user = User.Create("admin@test.com", "hashed", new Role("admin", "Admin"));
+        _users.FindByIdentifierAsync("admin@test.com", default).Returns(user);
         _hasher.Verify("P@ss1", "hashed").Returns(true);
         _tokenService.GenerateAccessToken(user.Id, user.Email, Arg.Any<string>()).Returns("access-token");
         _tokenService.GenerateRefreshToken().Returns("raw-refresh");
@@ -42,9 +42,28 @@ public sealed class LoginCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_UserNotFound_ReturnsInvalidCredentials()
+    public async Task Handle_ValidPhoneCredentials_ReturnsTokens()
     {
-        _users.FindByEmailAsync(Arg.Any<string>(), default).Returns((User?)null);
+        const string phone = "+84901234567";
+        var user = User.Create("driver@test.com", "hashed", new Role("driver", "Driver"), phone);
+        _users.FindByIdentifierAsync(phone, default).Returns(user);
+        _hasher.Verify("P@ss1", "hashed").Returns(true);
+        _tokenService.GenerateAccessToken(user.Id, user.Email, Arg.Any<string>()).Returns("access-token");
+        _tokenService.GenerateRefreshToken().Returns("raw-refresh");
+        _tokenService.HashRefreshToken("raw-refresh").Returns("hashed-refresh");
+
+        var result = await _sut.Handle(new LoginCommand(phone, "P@ss1"), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.AccessToken.Should().Be("access-token");
+        // LoginUserDto.Email comes from the resolved user's email, not the phone identifier
+        result.Value.User.Email.Should().Be("driver@test.com");
+    }
+
+    [Fact]
+    public async Task Handle_IdentifierNotFound_ReturnsInvalidCredentials()
+    {
+        _users.FindByIdentifierAsync(Arg.Any<string>(), default).Returns((User?)null);
 
         var result = await _sut.Handle(new LoginCommand("no@one.com", "pass"), default);
 
@@ -55,8 +74,8 @@ public sealed class LoginCommandHandlerTests
     [Fact]
     public async Task Handle_WrongPassword_ReturnsInvalidCredentials()
     {
-        var user = User.Create("u@test.com", "hashed", UserRole.Driver);
-        _users.FindByEmailAsync("u@test.com", default).Returns(user);
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
+        _users.FindByIdentifierAsync("u@test.com", default).Returns(user);
         _hasher.Verify("wrong", "hashed").Returns(false);
 
         var result = await _sut.Handle(new LoginCommand("u@test.com", "wrong"), default);
@@ -68,14 +87,88 @@ public sealed class LoginCommandHandlerTests
     [Fact]
     public async Task Handle_InactiveUser_ReturnsAccountInactive()
     {
-        var user = User.Create("u@test.com", "hashed", UserRole.HubStaff);
+        var user = User.Create("u@test.com", "hashed", new Role("hub_staff", "Hub Staff"));
         user.Deactivate();
-        _users.FindByEmailAsync("u@test.com", default).Returns(user);
+        _users.FindByIdentifierAsync("u@test.com", default).Returns(user);
         _hasher.Verify("P@ss1", "hashed").Returns(true);
 
         var result = await _sut.Handle(new LoginCommand("u@test.com", "P@ss1"), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("ACCOUNT_INACTIVE");
+    }
+
+    [Fact]
+    public async Task Handle_LockedAccount_ReturnsAccountLocked()
+    {
+        // Arrange — user already locked (5 prior failed attempts)
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
+        for (var i = 0; i < 5; i++) user.RecordFailedLogin();
+        _users.FindByIdentifierAsync("u@test.com", default).Returns(user);
+
+        // Act
+        var result = await _sut.Handle(new LoginCommand("u@test.com", "anything"), default);
+
+        // Assert — no password check, no counter increment
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ACCOUNT_LOCKED");
+        await _users.DidNotReceive().SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Handle_WrongPassword_IncrementsFailedLoginCount()
+    {
+        // Arrange
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
+        _users.FindByIdentifierAsync("u@test.com", default).Returns(user);
+        _hasher.Verify("wrong", "hashed").Returns(false);
+
+        // Act
+        var result = await _sut.Handle(new LoginCommand("u@test.com", "wrong"), default);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INVALID_CREDENTIALS");
+        user.FailedLoginCount.Should().Be(1);
+        await _users.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Handle_FifthWrongPassword_LocksAccount()
+    {
+        // Arrange — 4 previous failures
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
+        for (var i = 0; i < 4; i++) user.RecordFailedLogin();
+        _users.FindByIdentifierAsync("u@test.com", default).Returns(user);
+        _hasher.Verify("wrong", "hashed").Returns(false);
+
+        // Act — 5th bad attempt
+        var result = await _sut.Handle(new LoginCommand("u@test.com", "wrong"), default);
+
+        // Assert — still INVALID_CREDENTIALS but account is now locked for next attempt
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INVALID_CREDENTIALS");
+        user.IsLockedOut.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Handle_SuccessfulLogin_ClearsFailedLoginCount()
+    {
+        // Arrange — user has 3 previous failures
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
+        for (var i = 0; i < 3; i++) user.RecordFailedLogin();
+        _users.FindByIdentifierAsync("u@test.com", default).Returns(user);
+        _hasher.Verify("correct", "hashed").Returns(true);
+        _tokenService.GenerateAccessToken(user.Id, user.Email, Arg.Any<string>()).Returns("access");
+        _tokenService.GenerateRefreshToken().Returns("raw");
+        _tokenService.HashRefreshToken("raw").Returns("hashed-refresh");
+
+        // Act
+        var result = await _sut.Handle(new LoginCommand("u@test.com", "correct"), default);
+
+        // Assert — counter reset on success
+        result.IsSuccess.Should().BeTrue();
+        user.FailedLoginCount.Should().Be(0);
+        user.LockedUntil.Should().BeNull();
     }
 }

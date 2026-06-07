@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using FluentValidation;
 
 namespace FreshFlow.Auth.Application.Commands.Admin.CreateUser;
@@ -6,6 +7,9 @@ public sealed class CreateUserCommandValidator : AbstractValidator<CreateUserCom
 {
     private static readonly HashSet<string> ValidRoles =
         ["market_agent", "kiosk_staff", "hub_staff", "driver", "restaurant"];
+
+    private static readonly Regex PhoneRegex =
+        new(@"^\+?[0-9]{7,15}$", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
 
     public CreateUserCommandValidator()
     {
@@ -32,5 +36,12 @@ public sealed class CreateUserCommandValidator : AbstractValidator<CreateUserCom
             .NotEmpty().MaximumLength(200)
             .When(x => x.Role?.ToLowerInvariant() is "restaurant")
             .WithMessage("RestaurantName is required for restaurant role.");
+
+        // Phone is optional but must be a valid format when provided
+        RuleFor(x => x.Phone)
+            .Must(p => p is null || PhoneRegex.IsMatch(p.Trim()))
+            .WithMessage("Phone must be a valid phone number (7–15 digits, optional leading +).")
+            .MaximumLength(20)
+            .When(x => x.Phone is not null);
     }
 }

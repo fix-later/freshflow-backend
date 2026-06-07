@@ -2,7 +2,7 @@ using FluentAssertions;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Commands.Admin.ActivateUser;
 using FreshFlow.Auth.Domain.Aggregates;
-using FreshFlow.Auth.Domain.Enums;
+using FreshFlow.Auth.Domain.Entities;
 using NSubstitute;
 
 namespace FreshFlow.Auth.UnitTests.Commands;
@@ -21,7 +21,7 @@ public sealed class ActivateUserCommandHandlerTests
     {
         var adminId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var user = User.Create("u@test.com", "hashed", UserRole.Driver);
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
         _users.FindByIdAsync(userId, default).Returns(user);
 
         var result = await _sut.Handle(new ActivateUserCommand(userId, false, adminId), default);
@@ -58,7 +58,7 @@ public sealed class ActivateUserCommandHandlerTests
     {
         var adminId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var user = User.Create("u@test.com", "hashed", UserRole.Driver);
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
         user.Deactivate();
         _users.FindByIdAsync(userId, default).Returns(user);
 

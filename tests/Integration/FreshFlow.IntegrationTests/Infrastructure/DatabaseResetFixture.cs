@@ -23,9 +23,11 @@ public sealed class DatabaseResetFixture(AuthWebAppFactory factory)
 
         // Re-seed the Admin account (AdminSeeder runs at startup but truncation removes it)
         await db.Database.ExecuteSqlRawAsync("""
-            INSERT INTO users (id, email, password_hash, role, is_active, created_at, updated_at)
+            INSERT INTO users (id, email, password_hash, "RoleId", is_active, created_at, updated_at)
             SELECT gen_random_uuid(), 'admin@test.freshflow',
-                   '$2a$12$placeholderHashForTestAdmin', 'admin', true, NOW(), NOW()
+                   '$2a$12$placeholderHashForTestAdmin',
+                   (SELECT "Id" FROM roles WHERE "Name" = 'admin'),
+                   true, NOW(), NOW()
             WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin@test.freshflow');
             """);
     }

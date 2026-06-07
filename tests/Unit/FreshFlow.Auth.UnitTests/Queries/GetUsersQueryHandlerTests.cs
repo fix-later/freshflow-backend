@@ -2,7 +2,7 @@ using FluentAssertions;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Queries.GetUsers;
 using FreshFlow.Auth.Domain.Aggregates;
-using FreshFlow.Auth.Domain.Enums;
+using FreshFlow.Auth.Domain.Entities;
 using NSubstitute;
 
 namespace FreshFlow.Auth.UnitTests.Queries;
@@ -20,7 +20,7 @@ public sealed class GetUsersQueryHandlerTests
     [Fact]
     public async Task Handle_NoFilters_ReturnsPaginatedUsers()
     {
-        var users = new List<User> { User.Create("a@test.com", "h", UserRole.Driver) };
+        var users = new List<User> { User.Create("a@test.com", "h", new Role("driver", "Driver")) };
         _users.GetPagedAsync(null, null, null, 1, 20, default).Returns((users, 1));
 
         var result = await _sut.Handle(new GetUsersQuery(null, null, null), default);
@@ -33,7 +33,7 @@ public sealed class GetUsersQueryHandlerTests
     [Fact]
     public async Task Handle_RestaurantUser_IncludesIsApproved()
     {
-        var user = User.Create("r@test.com", "h", UserRole.Restaurant);
+        var user = User.Create("r@test.com", "h", new Role("restaurant", "Restaurant"));
         _users.GetPagedAsync(null, null, null, 1, 20, default)
             .Returns((new List<User> { user }, 1));
         _restaurants.FindByUserIdAsync(user.Id, default)

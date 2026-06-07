@@ -1,5 +1,6 @@
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Domain.Aggregates;
+using FreshFlow.Auth.Domain.Entities;
 using FreshFlow.Auth.Domain.Enums;
 using FreshFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,16 @@ internal sealed class AdminSeeder(
     IConfiguration config,
     ILogger<AdminSeeder> logger) : IHostedService
 {
+    private static readonly IReadOnlyList<(string Name, string Description)> SeedRoles =
+    [
+        (RoleNames.Admin, "System administrator with full access"),
+        (RoleNames.MarketAgent, "Market agent or kiosk staff managing a market"),
+        (RoleNames.Restaurant, "Restaurant owner or operator"),
+        (RoleNames.HubStaff, "Hub warehouse and logistics staff"),
+        (RoleNames.Driver, "Delivery driver"),
+        (RoleNames.OperationsManager, "Operations manager with cross-module visibility")
+    ];
+
     public async Task StartAsync(CancellationToken ct)
     {
         // Env vars take priority; fall back to AdminSeed config section (useful for local dev)
@@ -33,7 +44,28 @@ internal sealed class AdminSeeder(
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
 
         await db.Database.MigrateAsync(ct);
+        await SeedRolesAsync(db, ct);
+        await SeedAdminUserAsync(db, hasher, email, password, ct);
+    }
 
+    private async Task SeedRolesAsync(AppDbContext db, CancellationToken ct)
+    {
+        foreach (var (name, description) in SeedRoles)
+        {
+            var exists = await db.Set<Role>().AnyAsync(r => r.Name == name, ct);
+            if (!exists)
+            {
+                db.Set<Role>().Add(new Role(name, description));
+                logger.LogInformation("[AdminSeeder] Seeding role: {Name}", name);
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    private async Task SeedAdminUserAsync(AppDbContext db, IPasswordHasher hasher,
+        string email, string password, CancellationToken ct)
+    {
         var exists = await db.Set<User>()
             .IgnoreQueryFilters()
             .AnyAsync(u => u.Email == email.ToLowerInvariant(), ct);
@@ -44,7 +76,10 @@ internal sealed class AdminSeeder(
             return;
         }
 
-        var admin = User.Create(email, hasher.Hash(password), UserRole.Admin);
+        var adminRole = await db.Set<Role>().FirstOrDefaultAsync(r => r.Name == RoleNames.Admin, ct)
+            ?? throw new InvalidOperationException("Admin role not found after seeding — this should not happen.");
+
+        var admin = User.Create(email, hasher.Hash(password), adminRole);
         db.Set<User>().Add(admin);
         await db.SaveChangesAsync(ct);
 

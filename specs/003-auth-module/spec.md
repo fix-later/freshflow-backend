@@ -63,7 +63,7 @@ As the platform owner, I want every protected endpoint to enforce role access co
 - Login for inactive, deleted, or pending-approval accounts is rejected.
 - Refresh token expiry returns `REFRESH_TOKEN_EXPIRED`.
 - Logout returns success without exposing whether the submitted refresh token exists.
-- Public Restaurant self-registration is not exposed in v1.
+- Self-registered restaurants start unapproved and cannot place orders until Admin approves.
 - Legacy role value `kiosk_staff` may be accepted as an alias for `market_agent`, but new contracts use `market_agent`.
 
 ## Requirements *(mandatory)*
@@ -79,7 +79,7 @@ As the platform owner, I want every protected endpoint to enforce role access co
 - **FR-AUTH-007**: Admin user creation MUST use `POST /api/v1/admin/users`; `POST /api/v1/auth/register` is not a v1 endpoint.
 - **FR-AUTH-008**: Admin MUST be able to create `market_agent`, `hub_staff`, `driver`, and `restaurant` users.
 - **FR-AUTH-009**: Restaurant users created by Admin MUST start unapproved and require `PATCH /api/v1/admin/restaurants/{restaurantId}/approve`.
-- **FR-AUTH-010**: Public Restaurant self-registration MUST be deferred and unavailable in v1.
+- **FR-AUTH-010**: Restaurant owners MAY self-register via `POST /api/v1/auth/register` (UC-AUTH-11). The account starts with `is_approved = false` and cannot place orders until approved by an Admin.
 - **FR-AUTH-011**: RBAC MUST return HTTP 401 for missing/invalid tokens and HTTP 403 for valid tokens with insufficient role.
 - **FR-AUTH-012**: The first Admin account MUST be seeded idempotently from deployment configuration.
 
@@ -105,6 +105,6 @@ As the platform owner, I want every protected endpoint to enforce role access co
 ## Assumptions
 
 - `docs/` remains the product source of truth; this feature spec narrows the Auth implementation slice.
-- Public Restaurant self-registration is post-v1 unless a later feature explicitly reintroduces it.
+- Restaurant self-registration is available via `POST /api/v1/auth/register` (UC-AUTH-11); self-registered accounts start pending approval.
 - The Auth module is implemented before Pricing, Orders, Logistics, Hub, Analytics, and Notifications.
 - Existing Clean Architecture boundaries remain in effect: domain models do not depend on other modules.

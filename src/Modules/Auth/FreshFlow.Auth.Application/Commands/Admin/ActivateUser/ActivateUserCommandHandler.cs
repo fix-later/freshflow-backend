@@ -1,5 +1,4 @@
 using FreshFlow.Auth.Application.Abstractions;
-using FreshFlow.Auth.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 
@@ -26,6 +25,6 @@ internal sealed class ActivateUserCommandHandler(IUserRepository users)
 
         return Result<ActivateUserResponse>.Success(
             new ActivateUserResponse(user.Id, user.Email,
-                user.Role.ToApiString(), user.IsActive, user.UpdatedAt));
+                user.Role.Name, user.IsActive, user.UpdatedAt));
     }
 }

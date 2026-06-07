@@ -16,7 +16,7 @@ public sealed class AdminSeedTests(AuthWebAppFactory factory)
     {
         var response = await _client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            email = "admin@test.freshflow",
+            identifier = "admin@test.freshflow",
             password = "AdminP@ss1"
         });
 
@@ -29,7 +29,7 @@ public sealed class AdminSeedTests(AuthWebAppFactory factory)
         // Login succeeds — admin exists
         var first = await _client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            email = "admin@test.freshflow",
+            identifier = "admin@test.freshflow",
             password = "AdminP@ss1"
         });
         first.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -37,7 +37,7 @@ public sealed class AdminSeedTests(AuthWebAppFactory factory)
         // Login again — still one account, no conflict
         var second = await _client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            email = "admin@test.freshflow",
+            identifier = "admin@test.freshflow",
             password = "AdminP@ss1"
         });
         second.StatusCode.Should().Be(HttpStatusCode.OK);

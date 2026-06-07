@@ -14,6 +14,7 @@
 | 01 | [01-requirements-spec.md](./01-requirements-spec.md) | Functional & non-functional requirements, gaps, glossary | 283 | Complete |
 | 02 | [02-system-architecture.md](./02-system-architecture.md) | Architecture pattern, component diagrams, module breakdown, caching, deployment | 713 | Complete |
 | 03 | [03-database-schema.md](./03-database-schema.md) | PostgreSQL DDL, index strategy, Redis key design, migration strategy | 1,260 | Complete |
+| 03A | [03-database-schema.dbml](./03-database-schema.dbml) | Unified DBML for dbdiagram.io visualization | 1,049 | Draft |
 | 04 | [04-api-design.md](./04-api-design.md) | REST endpoints, SignalR hubs, validation rules, RBAC matrix | 2,641 | Complete |
 | 05 | [05-implementation-plan.md](./05-implementation-plan.md) | 50-task breakdown, critical path, MVP scope, folder structure, coding standards | 912 | Complete |
 | — | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | Cross-reference gaps, inconsistencies, readiness assessment | — | Complete |
@@ -126,14 +127,14 @@ Route calculation uses a custom nearest-neighbor heuristic with 2-opt improvemen
 
 | Domain | FRs | Must | Should | Could | Tables | Endpoints | Tasks |
 |---|---|---|---|---|---|---|---|
-| Auth | 5 | 5 | 0 | 0 | 2 | 4 | 4 |
+| Auth | 11 | 11 | 0 | 0 | 2 | 9 | 4 |
 | Pricing | 5 | 5 | 0 | 0 | 4 | 5 | 6 |
 | Orders | 7 | 6 | 1 | 0 | 4 | 9 | 9 |
 | Logistics | 6 | 6 | 0 | 0 | 3 | 5 | 6 |
 | Hub | 5 | 4 | 1 | 1 | 4 | 5 | 5 |
 | Analytics | 4 | 1 | 2 | 1 | 1 | 5 | 4 |
 | Notifications | 3 | 3 | 0 | 0 | 1 | 2 | 2 |
-| **Total** | **35** | **30** | **4** | **2** | **19** | **35** | **36** |
+| **Total** | **41** | **36** | **4** | **2** | **19** | **40** | **36** |
 
 > Infrastructure tasks (T001–T008) and frontend tasks (T045–T050) are not counted in the domain task column above.
 

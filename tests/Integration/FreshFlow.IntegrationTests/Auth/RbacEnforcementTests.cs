@@ -47,6 +47,11 @@ public sealed class RbacEnforcementTests(AuthWebAppFactory factory)
 
         var response = await _client.GetAsync("/api/v1/admin/users");
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var body = await response.Content.ReadFromJsonAsync<RbacErrorBody>();
+        body.Should().NotBeNull();
+        body!.Code.Should().Be("FORBIDDEN");
+        body.Message.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -57,9 +62,9 @@ public sealed class RbacEnforcementTests(AuthWebAppFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    private async Task<string> LoginAsync(string email, string password)
+    private async Task<string> LoginAsync(string identifier, string password)
     {
-        var resp = await _client.PostAsJsonAsync("/api/v1/auth/login", new { email, password });
+        var resp = await _client.PostAsJsonAsync("/api/v1/auth/login", new { identifier, password });
         resp.EnsureSuccessStatusCode();
         var body = await resp.Content.ReadFromJsonAsync<RbacTokenPair>();
         return body!.AccessToken;
@@ -67,3 +72,4 @@ public sealed class RbacEnforcementTests(AuthWebAppFactory factory)
 }
 
 file sealed record RbacTokenPair(string AccessToken, string RefreshToken, int ExpiresIn);
+file sealed record RbacErrorBody(string Code, string Message);

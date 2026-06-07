@@ -20,6 +20,7 @@ public sealed class RefreshToken
     public Guid FamilyId { get; private set; }
     public DateTime ExpiresAt { get; private set; }
     public DateTime? RevokedAt { get; private set; }
+    public string? RevokedReason { get; private set; }
     public Guid? ReplacedByTokenId { get; private set; }
     public DateTime CreatedAt { get; private set; }
 
@@ -27,9 +28,10 @@ public sealed class RefreshToken
     public bool IsRevoked => RevokedAt.HasValue;
     public bool IsValid => !IsExpired && !IsRevoked;
 
-    public void Revoke(Guid? replacedByTokenId = null)
+    public void Revoke(Guid? replacedByTokenId = null, string? reason = null)
     {
         RevokedAt = DateTime.UtcNow;
+        RevokedReason = reason;
         ReplacedByTokenId = replacedByTokenId;
     }
 }
