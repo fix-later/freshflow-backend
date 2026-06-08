@@ -147,6 +147,7 @@ public static class DependencyInjection
 
         // Cross-module services
         services.AddScoped<IRestaurantRepository, RestaurantRepository>();
+        services.AddScoped<IDeliveryAddressRepository, DeliveryAddressRepository>();
         services.AddScoped<IDriverProfileCreator, DriverProfileCreator>();
         services.AddScoped<IMarketValidator, MarketValidator>();
 
