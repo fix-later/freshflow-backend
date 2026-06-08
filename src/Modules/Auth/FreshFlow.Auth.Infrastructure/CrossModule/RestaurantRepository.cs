@@ -53,6 +53,31 @@ internal sealed class RestaurantRepository(AppDbContext db) : IRestaurantReposit
         return true;
     }
 
+    public async Task<RestaurantDto> UpdateProfileAsync(
+        Guid restaurantId,
+        string name,
+        string? address,
+        string? contactPerson,
+        TimeOnly? pickupStart,
+        TimeOnly? pickupEnd,
+        CancellationToken ct)
+    {
+        var row = await db.Set<RestaurantRow>()
+            .FirstOrDefaultAsync(r => r.Id == restaurantId, ct)
+            ?? throw new InvalidOperationException(
+                $"Restaurant '{restaurantId}' not found during profile update.");
+
+        row.Name = name;
+        row.Address = address;
+        row.ContactPerson = contactPerson;
+        row.PickupStart = pickupStart;
+        row.PickupEnd = pickupEnd;
+        row.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return ToDto(row);
+    }
+
     private static RestaurantDto ToDto(RestaurantRow row) =>
-        new(row.Id, row.Name, row.IsApproved, row.UpdatedAt, row.UserId);
+        new(row.Id, row.Name, row.IsApproved, row.UpdatedAt, row.UserId,
+            row.Address, row.ContactPerson, row.PickupStart, row.PickupEnd);
 }
