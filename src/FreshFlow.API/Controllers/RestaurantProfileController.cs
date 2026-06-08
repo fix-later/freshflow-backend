@@ -5,6 +5,7 @@ using FreshFlow.Auth.Application.Commands.DeliveryAddress.Delete;
 using FreshFlow.Auth.Application.Commands.DeliveryAddress.Update;
 using FreshFlow.Auth.Application.Commands.UpdateRestaurantProfile;
 using FreshFlow.Auth.Application.Queries.GetDeliveryAddresses;
+using FreshFlow.Auth.Application.Queries.GetRestaurantApprovalStatus;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +17,18 @@ namespace FreshFlow.API.Controllers;
 [Authorize(Roles = "restaurant")]
 public sealed class RestaurantProfileController(ISender sender) : ControllerBase
 {
+    // ── Approval Status ──────────────────────────────────────────────────────
+
+    /// <summary>GET /api/v1/restaurants/me/approval-status — returns the restaurant's current approval status.</summary>
+    [HttpGet("me/approval-status")]
+    public async Task<IActionResult> GetApprovalStatus(CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new GetRestaurantApprovalStatusQuery(ResolveUserId()), ct);
+
+        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+    }
+
     // ── Profile ──────────────────────────────────────────────────────────────
 
     /// <summary>PUT /api/v1/restaurants/me/profile — updates the authenticated restaurant's profile.</summary>
