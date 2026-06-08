@@ -1,3 +1,5 @@
+using FreshFlow.Auth.Domain.Enums;
+
 namespace FreshFlow.Auth.Infrastructure.CrossModule;
 
 // Infrastructure-only EF entity — maps to the restaurants table that Orders module owns.
@@ -11,7 +13,7 @@ internal sealed class RestaurantRow
     public string? ContactPerson { get; set; }
     public TimeOnly? PickupStart { get; set; }
     public TimeOnly? PickupEnd { get; set; }
-    public bool IsApproved { get; set; }
+    public RestaurantStatus Status { get; set; } = RestaurantStatus.Pending;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

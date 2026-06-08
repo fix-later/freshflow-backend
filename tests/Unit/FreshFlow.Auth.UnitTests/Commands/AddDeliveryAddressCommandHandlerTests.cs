@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Commands.DeliveryAddress.Add;
+using FreshFlow.Auth.Domain.Enums;
 using NSubstitute;
 
 namespace FreshFlow.Auth.UnitTests.Commands;
@@ -19,7 +20,7 @@ public sealed class AddDeliveryAddressCommandHandlerTests
         _sut = new AddDeliveryAddressCommandHandler(_restaurants, _addresses);
 
     private static RestaurantDto RestaurantFor(Guid userId) =>
-        new(RestaurantId, "Test Restaurant", true, DateTime.UtcNow, userId);
+        new(RestaurantId, "Test Restaurant", RestaurantStatus.Active, DateTime.UtcNow, userId);
 
     private static DeliveryAddressDto SampleAddress(Guid id) =>
         new(id, RestaurantId, "John", "+84901234567", "123 Main St",

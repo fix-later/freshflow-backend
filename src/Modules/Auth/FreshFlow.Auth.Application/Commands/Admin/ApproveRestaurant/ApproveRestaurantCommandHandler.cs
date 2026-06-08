@@ -1,4 +1,5 @@
 using FreshFlow.Auth.Application.Abstractions;
+using FreshFlow.Auth.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 
@@ -15,7 +16,7 @@ internal sealed class ApproveRestaurantCommandHandler(IRestaurantRepository rest
             return Result<ApproveRestaurantResponse>.Failure(
                 Error.NotFound("Restaurant", request.RestaurantId));
 
-        if (restaurant.IsApproved)
+        if (restaurant.Status == RestaurantStatus.Active)
             return Result<ApproveRestaurantResponse>.Failure(
                 Error.Validation("ALREADY_APPROVED", "This restaurant is already approved."));
 

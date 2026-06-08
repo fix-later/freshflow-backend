@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Commands.DeliveryAddress.Delete;
+using FreshFlow.Auth.Domain.Enums;
 using NSubstitute;
 
 namespace FreshFlow.Auth.UnitTests.Commands;
@@ -20,7 +21,7 @@ public sealed class DeleteDeliveryAddressCommandHandlerTests
         _sut = new DeleteDeliveryAddressCommandHandler(_restaurants, _addresses);
 
     private static RestaurantDto RestaurantFor(Guid userId) =>
-        new(RestaurantId, "Test", true, DateTime.UtcNow, userId);
+        new(RestaurantId, "Test", RestaurantStatus.Active, DateTime.UtcNow, userId);
 
     private static DeliveryAddressDto SampleAddress() =>
         new(AddressId, RestaurantId, null, null, "123 Street",

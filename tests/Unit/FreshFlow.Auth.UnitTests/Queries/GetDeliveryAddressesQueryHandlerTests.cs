@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Queries.GetDeliveryAddresses;
+using FreshFlow.Auth.Domain.Enums;
 using NSubstitute;
 
 namespace FreshFlow.Auth.UnitTests.Queries;
@@ -19,7 +20,7 @@ public sealed class GetDeliveryAddressesQueryHandlerTests
         _sut = new GetDeliveryAddressesQueryHandler(_restaurants, _addresses);
 
     private static RestaurantDto RestaurantFor(Guid userId) =>
-        new(RestaurantId, "Test", true, DateTime.UtcNow, userId);
+        new(RestaurantId, "Test", RestaurantStatus.Active, DateTime.UtcNow, userId);
 
     [Fact]
     public async Task Handle_ValidQuery_ReturnsAddresses()

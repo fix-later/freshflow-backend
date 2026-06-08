@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Commands.UpdateRestaurantProfile;
+using FreshFlow.Auth.Domain.Enums;
 using NSubstitute;
 
 namespace FreshFlow.Auth.UnitTests.Commands;
@@ -22,10 +23,10 @@ public sealed class UpdateRestaurantProfileCommandHandlerTests
     {
         // Arrange
         var existingDto = new RestaurantDto(
-            RestaurantId, "Old Name", true, DateTime.UtcNow, UserId);
+            RestaurantId, "Old Name", RestaurantStatus.Active, DateTime.UtcNow, UserId);
 
         var updatedDto = new RestaurantDto(
-            RestaurantId, "New Name", true, DateTime.UtcNow, UserId,
+            RestaurantId, "New Name", RestaurantStatus.Active, DateTime.UtcNow, UserId,
             "123 Main St", "John Doe",
             new TimeOnly(8, 0), new TimeOnly(12, 0));
 
@@ -57,10 +58,10 @@ public sealed class UpdateRestaurantProfileCommandHandlerTests
     {
         // Arrange
         var existingDto = new RestaurantDto(
-            RestaurantId, "Old Name", false, DateTime.UtcNow, UserId);
+            RestaurantId, "Old Name", RestaurantStatus.Pending, DateTime.UtcNow, UserId);
 
         var updatedDto = new RestaurantDto(
-            RestaurantId, "Updated Name", false, DateTime.UtcNow, UserId);
+            RestaurantId, "Updated Name", RestaurantStatus.Pending, DateTime.UtcNow, UserId);
 
         _restaurants.FindByUserIdAsync(UserId, default).Returns(existingDto);
         _restaurants.UpdateProfileAsync(
@@ -104,10 +105,10 @@ public sealed class UpdateRestaurantProfileCommandHandlerTests
     {
         // Arrange
         var existingDto = new RestaurantDto(
-            RestaurantId, "Old", true, DateTime.UtcNow, UserId);
+            RestaurantId, "Old", RestaurantStatus.Active, DateTime.UtcNow, UserId);
 
         var updatedDto = new RestaurantDto(
-            RestaurantId, "New", true, DateTime.UtcNow, UserId,
+            RestaurantId, "New", RestaurantStatus.Active, DateTime.UtcNow, UserId,
             "456 Street", null, new TimeOnly(9, 30), new TimeOnly(17, 0));
 
         _restaurants.FindByUserIdAsync(UserId, default).Returns(existingDto);
