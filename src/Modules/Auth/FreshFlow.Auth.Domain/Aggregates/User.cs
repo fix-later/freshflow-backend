@@ -138,10 +138,13 @@ public sealed class User : AggregateRoot
 
     /// <summary>
     /// Updates mutable profile fields. Null arguments clear the corresponding field.
+    /// Phone is normalised (trimmed + lowercased) the same way as the constructor.
+    /// Email and Role are intentionally excluded — use dedicated operations for those.
     /// </summary>
-    public void UpdateProfile(string? fullName, string? avatarUrl)
+    public void UpdateProfile(string? fullName, string? phone, string? avatarUrl)
     {
         FullName = string.IsNullOrWhiteSpace(fullName) ? null : fullName.Trim();
+        Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim().ToLowerInvariant();
         AvatarUrl = string.IsNullOrWhiteSpace(avatarUrl) ? null : avatarUrl.Trim();
         UpdatedAt = DateTime.UtcNow;
     }

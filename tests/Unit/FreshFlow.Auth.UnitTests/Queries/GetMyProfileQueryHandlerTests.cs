@@ -25,7 +25,7 @@ public sealed class GetMyProfileQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var user = RestaurantUser();
-        user.UpdateProfile("Nguyen Van A", "https://cdn.example.com/avatar.jpg");
+        user.UpdateProfile("Nguyen Van A", "+84901234567", "https://cdn.example.com/avatar.jpg");
         _users.FindByIdAsync(userId, default).Returns(user);
 
         // Act
