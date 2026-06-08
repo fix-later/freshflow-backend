@@ -12,6 +12,8 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasKey(u => u.Id);
         builder.Property(u => u.Email).IsRequired().HasMaxLength(255);
         builder.HasIndex(u => u.Email).IsUnique();
+        builder.Property(u => u.FullName).HasMaxLength(255);
+        builder.Property(u => u.AvatarUrl).HasMaxLength(512);
         builder.Property(u => u.Phone).HasMaxLength(20);
         builder.HasIndex(u => u.Phone).IsUnique().HasFilter("\"Phone\" IS NOT NULL");
         builder.Property(u => u.PasswordHash).IsRequired();
