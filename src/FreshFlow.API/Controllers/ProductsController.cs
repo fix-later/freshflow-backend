@@ -22,8 +22,8 @@ public sealed class ProductsController(ISender sender) : ControllerBase
     public async Task<IActionResult> CreateProductAsync(
         [FromBody] CreateProductRequest body, CancellationToken ct)
     {
-        var createdBy = User.FindFirstValue(ClaimTypes.NameIdentifier) is { } sub
-            ? Guid.Parse(sub)
+        var createdBy = Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var parsedId)
+            ? parsedId
             : (Guid?)null;
 
         var result = await sender.Send(

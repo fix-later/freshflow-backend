@@ -21,7 +21,7 @@ internal sealed class ProductRepository(AppDbContext db) : IProductRepository
         string? search, string? category, bool includeInactive,
         int page, int pageSize, CancellationToken ct)
     {
-        var query = db.Set<Product>().AsQueryable();
+        var query = db.Set<Product>().AsNoTracking();
 
         if (!includeInactive)
             query = query.Where(p => p.DeletedAt == null);

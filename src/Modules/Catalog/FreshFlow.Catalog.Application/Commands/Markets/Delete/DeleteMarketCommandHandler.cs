@@ -14,6 +14,7 @@ internal sealed class DeleteMarketCommandHandler(IMarketRepository markets)
             return Result.Failure(Error.NotFound("Market", request.Id));
 
         market.Delete();
+        markets.Track(market);
         await markets.SaveChangesAsync(ct);
 
         return Result.Success();

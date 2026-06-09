@@ -16,6 +16,7 @@ internal sealed class UpdateMarketCommandHandler(IMarketRepository markets)
             return Result<MarketDto>.Failure(Error.NotFound("Market", request.Id));
 
         market.Update(request.Name, request.Location, request.Address, request.Latitude, request.Longitude);
+        markets.Track(market);
         await markets.SaveChangesAsync(ct);
 
         return Result<MarketDto>.Success(CreateMarketCommandHandler.ToDto(market));

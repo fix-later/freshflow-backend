@@ -17,7 +17,7 @@ internal sealed class ProductCategoryConfiguration : IEntityTypeConfiguration<Pr
         builder.Property(c => c.UpdatedAt).IsRequired();
         builder.Property(c => c.DeletedAt);
 
-        builder.HasIndex(c => c.Name).IsUnique();
+        builder.HasIndex(c => c.Name).IsUnique().HasFilter("\"DeletedAt\" IS NULL");
         builder.HasIndex(c => c.IsActive);
     }
 }

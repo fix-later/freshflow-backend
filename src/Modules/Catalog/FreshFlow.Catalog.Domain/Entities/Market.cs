@@ -8,6 +8,9 @@ public sealed class Market : AggregateRoot
 
     public Market(string name, string? location, string? address, decimal? latitude, decimal? longitude)
     {
+        ValidateName(name);
+        ValidateCoordinates(latitude, longitude);
+
         Name = name;
         Location = location;
         Address = address;
@@ -25,6 +28,9 @@ public sealed class Market : AggregateRoot
 
     public void Update(string name, string? location, string? address, decimal? latitude, decimal? longitude)
     {
+        ValidateName(name);
+        ValidateCoordinates(latitude, longitude);
+
         Name = name;
         Location = location;
         Address = address;
@@ -50,5 +56,24 @@ public sealed class Market : AggregateRoot
         SoftDelete();
         IsActive = false;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    // ── Invariant helpers ────────────────────────────────────────────────────
+
+    private static void ValidateName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Market name must not be blank.", nameof(name));
+    }
+
+    private static void ValidateCoordinates(decimal? latitude, decimal? longitude)
+    {
+        if (latitude is not null && (latitude < -90 || latitude > 90))
+            throw new ArgumentOutOfRangeException(nameof(latitude), latitude,
+                "Latitude must be between -90 and 90.");
+
+        if (longitude is not null && (longitude < -180 || longitude > 180))
+            throw new ArgumentOutOfRangeException(nameof(longitude), longitude,
+                "Longitude must be between -180 and 180.");
     }
 }

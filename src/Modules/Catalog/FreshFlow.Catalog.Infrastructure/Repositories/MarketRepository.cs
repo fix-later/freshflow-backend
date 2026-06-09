@@ -9,7 +9,10 @@ internal sealed class MarketRepository(AppDbContext db) : IMarketRepository
 {
     public Task<Market?> FindByIdAsync(Guid id, CancellationToken ct) =>
         db.Set<Market>()
+            .AsNoTracking()
             .FirstOrDefaultAsync(m => m.Id == id && m.DeletedAt == null, ct);
+
+    public void Track(Market market) => db.Update(market);
 
     public async Task<IReadOnlyList<Market>> GetAllAsync(bool activeOnly, CancellationToken ct)
     {

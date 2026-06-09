@@ -8,7 +8,7 @@ public sealed class ProductCategory : AggregateRoot
 
     public ProductCategory(string name)
     {
-        Name = name;
+        Name = ValidateName(name);
         IsActive = true;
     }
 
@@ -17,7 +17,7 @@ public sealed class ProductCategory : AggregateRoot
 
     public void Rename(string name)
     {
-        Name = name;
+        Name = ValidateName(name);
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -38,5 +38,15 @@ public sealed class ProductCategory : AggregateRoot
         SoftDelete();
         IsActive = false;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    // ── Invariant helpers ────────────────────────────────────────────────────
+
+    private static string ValidateName(string name)
+    {
+        var trimmed = name?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(trimmed))
+            throw new ArgumentException("Category name must not be blank.", nameof(name));
+        return trimmed;
     }
 }

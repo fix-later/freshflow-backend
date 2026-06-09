@@ -16,6 +16,7 @@ internal sealed class DeactivateMarketCommandHandler(IMarketRepository markets)
             return Result<MarketDto>.Failure(Error.NotFound("Market", request.Id));
 
         market.Deactivate();
+        markets.Track(market);
         await markets.SaveChangesAsync(ct);
 
         return Result<MarketDto>.Success(CreateMarketCommandHandler.ToDto(market));

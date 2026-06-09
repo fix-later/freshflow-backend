@@ -18,7 +18,7 @@ internal sealed class UnitOfMeasurementConfiguration : IEntityTypeConfiguration<
         builder.Property(u => u.UpdatedAt).IsRequired();
         builder.Property(u => u.DeletedAt);
 
-        builder.HasIndex(u => u.Name).IsUnique();
+        builder.HasIndex(u => u.Name).IsUnique().HasFilter("\"DeletedAt\" IS NULL");
         builder.HasIndex(u => u.IsActive);
     }
 }

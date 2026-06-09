@@ -48,9 +48,9 @@ public sealed class AdminController(ISender sender) : ControllerBase
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> ActivateUserAsync(Guid userId, [FromBody] ActivateRequest body, CancellationToken ct)
     {
-        var adminId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)
-                                 ?? User.FindFirstValue("sub")
-                                 ?? throw new UnauthorizedAccessException());
+        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (!Guid.TryParse(raw, out var adminId))
+            return Unauthorized();
 
         var result = await sender.Send(new ActivateUserCommand(userId, body.IsActive, adminId), ct);
         return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
@@ -115,8 +115,8 @@ public sealed class AdminController(ISender sender) : ControllerBase
         [FromBody] ReplaceMarketAssignmentsRequest body,
         CancellationToken ct)
     {
-        var assignedById = User.FindFirstValue(ClaimTypes.NameIdentifier) is { } sub
-            ? Guid.Parse(sub)
+        var assignedById = Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var parsedAssignedBy)
+            ? parsedAssignedBy
             : (Guid?)null;
 
         var result = await sender.Send(
