@@ -26,7 +26,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(command, ct);
         return result.IsSuccess
-            ? CreatedAtAction(nameof(GetUsersAsync), null, result.Value)
+            ? CreatedAtAction("GetUsers", null, result.Value)
             : result.Error.ToActionResult();
     }
 
