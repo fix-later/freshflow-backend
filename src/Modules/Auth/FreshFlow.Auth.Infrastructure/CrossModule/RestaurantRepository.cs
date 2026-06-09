@@ -67,7 +67,7 @@ internal sealed class RestaurantRepository(AppDbContext db) : IRestaurantReposit
         return true;
     }
 
-    public async Task<RestaurantDto> UpdateProfileAsync(
+    public async Task<RestaurantDto?> UpdateProfileAsync(
         Guid restaurantId,
         string name,
         string? address,
@@ -77,9 +77,10 @@ internal sealed class RestaurantRepository(AppDbContext db) : IRestaurantReposit
         CancellationToken ct)
     {
         var row = await db.Set<RestaurantRow>()
-            .FirstOrDefaultAsync(r => r.Id == restaurantId, ct)
-            ?? throw new InvalidOperationException(
-                $"Restaurant '{restaurantId}' not found during profile update.");
+            .FirstOrDefaultAsync(r => r.Id == restaurantId, ct);
+
+        if (row is null)
+            return null;
 
         row.Name = name;
         row.Address = address;

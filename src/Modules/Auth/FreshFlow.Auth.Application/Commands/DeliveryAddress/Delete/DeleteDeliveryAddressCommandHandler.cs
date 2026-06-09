@@ -23,7 +23,7 @@ internal sealed class DeleteDeliveryAddressCommandHandler(
                 new Error("DELIVERY_ADDRESS_NOT_FOUND",
                     $"Delivery address '{request.AddressId}' was not found."));
 
-        await addresses.SoftDeleteAsync(request.AddressId, ct);
+        await addresses.SoftDeleteAsync(request.AddressId, restaurant.Id, ct);
         return Result.Success();
     }
 }

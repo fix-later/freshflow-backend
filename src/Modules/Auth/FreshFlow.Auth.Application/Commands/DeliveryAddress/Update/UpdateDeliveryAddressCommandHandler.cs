@@ -24,11 +24,9 @@ internal sealed class UpdateDeliveryAddressCommandHandler(
                 new Error("DELIVERY_ADDRESS_NOT_FOUND",
                     $"Delivery address '{request.AddressId}' was not found."));
 
-        if (request.IsDefault)
-            await addresses.ClearDefaultsAsync(restaurant.Id, ct);
-
         var dto = await addresses.UpdateAsync(
             request.AddressId,
+            restaurant.Id,
             request.RecipientName,
             request.Phone,
             request.AddressLine,
@@ -36,6 +34,11 @@ internal sealed class UpdateDeliveryAddressCommandHandler(
             request.Longitude,
             request.IsDefault,
             ct);
+
+        if (dto is null)
+            return Result<UpdateDeliveryAddressResponse>.Failure(
+                new Error("DELIVERY_ADDRESS_NOT_FOUND",
+                    $"Delivery address '{request.AddressId}' was not found."));
 
         return Result<UpdateDeliveryAddressResponse>.Success(ToResponse(dto));
     }

@@ -15,7 +15,7 @@ public sealed class ProfileController(ISender sender) : ControllerBase
 {
     /// <summary>GET /api/v1/profile/me — returns the authenticated user's personal profile.</summary>
     [HttpGet("me")]
-    public async Task<IActionResult> GetMyProfile(CancellationToken ct)
+    public async Task<IActionResult> GetMyProfileAsync(CancellationToken ct)
     {
         if (!TryResolveUserId(out var userId))
             return Unauthorized(new { code = "UNAUTHORIZED", message = "User ID claim is missing or malformed." });
@@ -26,7 +26,7 @@ public sealed class ProfileController(ISender sender) : ControllerBase
 
     /// <summary>PUT /api/v1/profile/me — updates the authenticated user's personal profile.</summary>
     [HttpPut("me")]
-    public async Task<IActionResult> UpdateMyProfile(
+    public async Task<IActionResult> UpdateMyProfileAsync(
         [FromBody] UpdateMyProfileRequest body, CancellationToken ct)
     {
         if (!TryResolveUserId(out var userId))

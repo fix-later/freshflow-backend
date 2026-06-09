@@ -17,9 +17,6 @@ internal sealed class AddDeliveryAddressCommandHandler(
             return Result<AddDeliveryAddressResponse>.Failure(
                 Error.NotFound("Restaurant", request.UserId));
 
-        if (request.IsDefault)
-            await addresses.ClearDefaultsAsync(restaurant.Id, ct);
-
         var dto = await addresses.AddAsync(
             restaurant.Id,
             request.RecipientName,

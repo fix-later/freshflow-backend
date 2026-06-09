@@ -24,6 +24,10 @@ internal sealed class UpdateRestaurantProfileCommandHandler(IRestaurantRepositor
             request.PickupEnd,
             ct);
 
+        if (updated is null)
+            return Result<UpdateRestaurantProfileResponse>.Failure(
+                Error.NotFound("Restaurant", restaurant.Id));
+
         return Result<UpdateRestaurantProfileResponse>.Success(
             new UpdateRestaurantProfileResponse(
                 updated.Id,

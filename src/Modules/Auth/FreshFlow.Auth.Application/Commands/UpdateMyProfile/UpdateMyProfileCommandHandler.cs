@@ -29,7 +29,7 @@ internal sealed class UpdateMyProfileCommandHandler(IUserRepository users)
                         "Phone number is already in use by another account."));
         }
 
-        user.UpdateProfile(request.FullName, request.Phone, request.AvatarUrl);
+        user.UpdateProfile(request.FullName, normalizedPhone, request.AvatarUrl);
         await users.SaveChangesAsync(ct);
 
         return Result<UpdateMyProfileResponse>.Success(

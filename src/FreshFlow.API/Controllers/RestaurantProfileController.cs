@@ -21,7 +21,7 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
 
     /// <summary>GET /api/v1/restaurants/me/approval-status — returns the restaurant's current approval status.</summary>
     [HttpGet("me/approval-status")]
-    public async Task<IActionResult> GetApprovalStatus(CancellationToken ct)
+    public async Task<IActionResult> GetApprovalStatusAsync(CancellationToken ct)
     {
         var result = await sender.Send(
             new GetRestaurantApprovalStatusQuery(ResolveUserId()), ct);
@@ -33,7 +33,7 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
 
     /// <summary>PUT /api/v1/restaurants/me/profile — updates the authenticated restaurant's profile.</summary>
     [HttpPut("me/profile")]
-    public async Task<IActionResult> UpdateProfile(
+    public async Task<IActionResult> UpdateProfileAsync(
         [FromBody] UpdateRestaurantProfileRequest body, CancellationToken ct)
     {
         var userId = ResolveUserId();
@@ -55,7 +55,7 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
 
     /// <summary>GET /api/v1/restaurants/me/delivery-addresses — lists all active delivery addresses.</summary>
     [HttpGet("me/delivery-addresses")]
-    public async Task<IActionResult> GetDeliveryAddresses(CancellationToken ct)
+    public async Task<IActionResult> GetDeliveryAddressesAsync(CancellationToken ct)
     {
         var result = await sender.Send(new GetDeliveryAddressesQuery(ResolveUserId()), ct);
         return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
@@ -63,7 +63,7 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
 
     /// <summary>POST /api/v1/restaurants/me/delivery-addresses — adds a delivery address.</summary>
     [HttpPost("me/delivery-addresses")]
-    public async Task<IActionResult> AddDeliveryAddress(
+    public async Task<IActionResult> AddDeliveryAddressAsync(
         [FromBody] DeliveryAddressRequest body, CancellationToken ct)
     {
         var result = await sender.Send(
@@ -78,13 +78,13 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
             ct);
 
         return result.IsSuccess
-            ? CreatedAtAction(nameof(GetDeliveryAddresses), null, result.Value)
+            ? CreatedAtAction(nameof(GetDeliveryAddressesAsync), null, result.Value)
             : result.Error.ToActionResult();
     }
 
     /// <summary>PUT /api/v1/restaurants/me/delivery-addresses/{id} — updates a delivery address.</summary>
     [HttpPut("me/delivery-addresses/{id:guid}")]
-    public async Task<IActionResult> UpdateDeliveryAddress(
+    public async Task<IActionResult> UpdateDeliveryAddressAsync(
         Guid id, [FromBody] DeliveryAddressRequest body, CancellationToken ct)
     {
         var result = await sender.Send(
@@ -104,7 +104,7 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
 
     /// <summary>DELETE /api/v1/restaurants/me/delivery-addresses/{id} — soft-deletes a delivery address.</summary>
     [HttpDelete("me/delivery-addresses/{id:guid}")]
-    public async Task<IActionResult> DeleteDeliveryAddress(Guid id, CancellationToken ct)
+    public async Task<IActionResult> DeleteDeliveryAddressAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(
             new DeleteDeliveryAddressCommand(ResolveUserId(), id), ct);

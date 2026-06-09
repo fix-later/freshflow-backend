@@ -9,7 +9,7 @@ public interface IRestaurantRepository
     public Task<RestaurantDto?> FindByUserIdAsync(Guid userId, CancellationToken ct);
     public Task<bool> ApproveAsync(Guid restaurantId, CancellationToken ct);
     public Task<bool> SuspendAsync(Guid restaurantId, CancellationToken ct);
-    public Task<RestaurantDto> UpdateProfileAsync(
+    public Task<RestaurantDto?> UpdateProfileAsync(
         Guid restaurantId,
         string name,
         string? address,

@@ -101,6 +101,29 @@ public sealed class UpdateRestaurantProfileCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_UpdateProfileAsyncReturnsNull_ReturnsNotFoundError()
+    {
+        // Arrange — simulates race-condition where restaurant disappears between Find and Update
+        var existingDto = new RestaurantDto(
+            RestaurantId, "Old Name", RestaurantStatus.Active, DateTime.UtcNow, UserId);
+
+        _restaurants.FindByUserIdAsync(UserId, default).Returns(existingDto);
+        _restaurants.UpdateProfileAsync(
+            RestaurantId, "New Name", null, null, null, null, default)
+            .Returns((RestaurantDto?)null);
+
+        var command = new UpdateRestaurantProfileCommand(
+            UserId, "New Name", null, null, null, null);
+
+        // Act
+        var result = await _sut.Handle(command, default);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("RESTAURANT_NOT_FOUND");
+    }
+
+    [Fact]
     public async Task Handle_ValidCommand_CallsUpdateWithCorrectArguments()
     {
         // Arrange

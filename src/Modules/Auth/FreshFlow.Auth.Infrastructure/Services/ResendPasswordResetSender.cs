@@ -9,6 +9,8 @@ internal sealed class ResendPasswordResetSender(
     IHttpClientFactory httpClientFactory,
     IOptions<EmailOptions> options) : IPasswordResetSender
 {
+    private const int ResendHttpTimeoutSeconds = 10;
+
     public async Task SendResetLinkAsync(string email, string rawToken, CancellationToken ct)
     {
         var opt = options.Value;
@@ -22,8 +24,11 @@ internal sealed class ResendPasswordResetSender(
             html = BuildResetEmail(resetLink)
         };
 
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(ResendHttpTimeoutSeconds));
+
         var client = httpClientFactory.CreateClient("Resend");
-        var response = await client.PostAsJsonAsync("emails", payload, ct);
+        var response = await client.PostAsJsonAsync("emails", payload, cts.Token);
         response.EnsureSuccessStatusCode();
     }
 

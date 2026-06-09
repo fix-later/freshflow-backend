@@ -29,6 +29,17 @@ internal sealed class DeliveryAddressRepository(AppDbContext db) : IDeliveryAddr
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
+
+        if (isDefault)
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await ClearDefaultsInternalAsync(restaurantId, ct);
+            db.Set<DeliveryAddressRow>().Add(row);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return ToDto(row);
+        }
+
         db.Set<DeliveryAddressRow>().Add(row);
         await db.SaveChangesAsync(ct);
         return ToDto(row);
@@ -39,7 +50,7 @@ internal sealed class DeliveryAddressRepository(AppDbContext db) : IDeliveryAddr
     {
         var rows = await db.Set<DeliveryAddressRow>()
             .AsNoTracking()
-            .Where(a => a.RestaurantId == restaurantId)
+            .Where(a => a.RestaurantId == restaurantId && a.DeletedAt == null)
             .OrderByDescending(a => a.IsDefault)
             .ThenBy(a => a.CreatedAt)
             .ToListAsync(ct);
@@ -52,12 +63,13 @@ internal sealed class DeliveryAddressRepository(AppDbContext db) : IDeliveryAddr
         var row = await db.Set<DeliveryAddressRow>()
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                a => a.Id == addressId && a.RestaurantId == restaurantId, ct);
+                a => a.Id == addressId && a.RestaurantId == restaurantId && a.DeletedAt == null, ct);
         return row is null ? null : ToDto(row);
     }
 
-    public async Task<DeliveryAddressDto> UpdateAsync(
+    public async Task<DeliveryAddressDto?> UpdateAsync(
         Guid addressId,
+        Guid restaurantId,
         string? recipientName,
         string? phone,
         string addressLine,
@@ -67,9 +79,11 @@ internal sealed class DeliveryAddressRepository(AppDbContext db) : IDeliveryAddr
         CancellationToken ct)
     {
         var row = await db.Set<DeliveryAddressRow>()
-            .FirstOrDefaultAsync(a => a.Id == addressId, ct)
-            ?? throw new InvalidOperationException(
-                $"DeliveryAddress '{addressId}' not found during update.");
+            .FirstOrDefaultAsync(
+                a => a.Id == addressId && a.RestaurantId == restaurantId && a.DeletedAt == null, ct);
+
+        if (row is null)
+            return null;
 
         row.RecipientName = recipientName;
         row.Phone = phone;
@@ -78,16 +92,29 @@ internal sealed class DeliveryAddressRepository(AppDbContext db) : IDeliveryAddr
         row.Longitude = longitude;
         row.IsDefault = isDefault;
         row.UpdatedAt = DateTime.UtcNow;
+
+        if (isDefault)
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            // Exclude addressId: EF identity map returns the same tracked instance for this row,
+            // so including it in the clear sweep would set IsDefault=false and clobber our mutation.
+            await ClearDefaultsInternalAsync(restaurantId, ct, excludeId: addressId);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return ToDto(row);
+        }
+
         await db.SaveChangesAsync(ct);
         return ToDto(row);
     }
 
-    public async Task SoftDeleteAsync(Guid addressId, CancellationToken ct)
+    public async Task SoftDeleteAsync(Guid addressId, Guid restaurantId, CancellationToken ct)
     {
         var row = await db.Set<DeliveryAddressRow>()
-            .FirstOrDefaultAsync(a => a.Id == addressId, ct)
-            ?? throw new InvalidOperationException(
-                $"DeliveryAddress '{addressId}' not found during soft-delete.");
+            .FirstOrDefaultAsync(a => a.Id == addressId && a.RestaurantId == restaurantId, ct);
+
+        if (row is null)
+            return;
 
         row.DeletedAt = DateTime.UtcNow;
         row.UpdatedAt = DateTime.UtcNow;
@@ -96,18 +123,30 @@ internal sealed class DeliveryAddressRepository(AppDbContext db) : IDeliveryAddr
 
     public async Task ClearDefaultsAsync(Guid restaurantId, CancellationToken ct)
     {
-        var defaults = await db.Set<DeliveryAddressRow>()
-            .Where(a => a.RestaurantId == restaurantId && a.IsDefault)
-            .ToListAsync(ct);
+        await ClearDefaultsInternalAsync(restaurantId, ct);
+        await db.SaveChangesAsync(ct);
+    }
 
-        if (defaults.Count == 0) return;
+    // excludeId: when updating an existing row that is already the default, EF's identity map
+    // will return the same tracked instance for that row during the Where query, causing
+    // ClearDefaults to set its IsDefault=false and clobber the caller's IsDefault=true mutation.
+    // Excluding the row-being-updated from the sweep prevents this silent data loss.
+    private async Task ClearDefaultsInternalAsync(
+        Guid restaurantId, CancellationToken ct, Guid? excludeId = null)
+    {
+        var query = db.Set<DeliveryAddressRow>()
+            .Where(a => a.RestaurantId == restaurantId && a.IsDefault && a.DeletedAt == null);
+
+        if (excludeId.HasValue)
+            query = query.Where(a => a.Id != excludeId.Value);
+
+        var defaults = await query.ToListAsync(ct);
 
         foreach (var row in defaults)
         {
             row.IsDefault = false;
             row.UpdatedAt = DateTime.UtcNow;
         }
-        await db.SaveChangesAsync(ct);
     }
 
     private static DeliveryAddressDto ToDto(DeliveryAddressRow row) =>

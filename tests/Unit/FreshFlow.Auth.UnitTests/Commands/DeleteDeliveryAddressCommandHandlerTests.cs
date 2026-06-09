@@ -41,7 +41,7 @@ public sealed class DeleteDeliveryAddressCommandHandlerTests
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        await _addresses.Received(1).SoftDeleteAsync(AddressId, default);
+        await _addresses.Received(1).SoftDeleteAsync(AddressId, RestaurantId, default);
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class DeleteDeliveryAddressCommandHandlerTests
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("RESTAURANT_NOT_FOUND");
-        await _addresses.DidNotReceive().SoftDeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _addresses.DidNotReceive().SoftDeleteAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -77,6 +77,6 @@ public sealed class DeleteDeliveryAddressCommandHandlerTests
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("DELIVERY_ADDRESS_NOT_FOUND");
-        await _addresses.DidNotReceive().SoftDeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _addresses.DidNotReceive().SoftDeleteAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 }

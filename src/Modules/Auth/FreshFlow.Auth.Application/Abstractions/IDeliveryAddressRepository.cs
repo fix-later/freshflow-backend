@@ -18,8 +18,9 @@ public interface IDeliveryAddressRepository
     public Task<DeliveryAddressDto?> FindByIdAndRestaurantIdAsync(
         Guid addressId, Guid restaurantId, CancellationToken ct);
 
-    public Task<DeliveryAddressDto> UpdateAsync(
+    public Task<DeliveryAddressDto?> UpdateAsync(
         Guid addressId,
+        Guid restaurantId,
         string? recipientName,
         string? phone,
         string addressLine,
@@ -28,7 +29,7 @@ public interface IDeliveryAddressRepository
         bool isDefault,
         CancellationToken ct);
 
-    public Task SoftDeleteAsync(Guid addressId, CancellationToken ct);
+    public Task SoftDeleteAsync(Guid addressId, Guid restaurantId, CancellationToken ct);
 
     public Task ClearDefaultsAsync(Guid restaurantId, CancellationToken ct);
 }

@@ -35,7 +35,7 @@ public sealed class UpdateDeliveryAddressCommandHandlerTests
         _restaurants.FindByUserIdAsync(UserId, default).Returns(RestaurantFor(UserId));
         _addresses.FindByIdAndRestaurantIdAsync(AddressId, RestaurantId, default).Returns(SampleAddress());
         _addresses.UpdateAsync(
-            AddressId, "Jane", null, "New line", null, null, false, default)
+            AddressId, RestaurantId, "Jane", null, "New line", null, null, false, default)
             .Returns(updated);
 
         var command = new UpdateDeliveryAddressCommand(
@@ -86,23 +86,46 @@ public sealed class UpdateDeliveryAddressCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_IsDefaultTrue_ClearsExistingDefaultsFirst()
+    public async Task Handle_UpdateAsyncReturnsNull_ReturnsNotFoundError()
     {
-        // Arrange
+        // Arrange — simulates race-condition where address disappears between Find and Update
         _restaurants.FindByUserIdAsync(UserId, default).Returns(RestaurantFor(UserId));
         _addresses.FindByIdAndRestaurantIdAsync(AddressId, RestaurantId, default).Returns(SampleAddress());
         _addresses.UpdateAsync(
-            AddressId, null, null, "Updated", null, null, true, default)
+            AddressId, RestaurantId, null, null, "Updated", null, null, false, default)
+            .Returns((DeliveryAddressDto?)null);
+
+        var command = new UpdateDeliveryAddressCommand(
+            UserId, AddressId, null, null, "Updated", null, null, false);
+
+        // Act
+        var result = await _sut.Handle(command, default);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("DELIVERY_ADDRESS_NOT_FOUND");
+    }
+
+    [Fact]
+    public async Task Handle_IsDefaultTrue_DelegatesAtomicDefaultClearToRepository()
+    {
+        // Arrange — atomicity (ClearDefaults + Update) is now handled inside UpdateAsync; handler must NOT call ClearDefaultsAsync
+        _restaurants.FindByUserIdAsync(UserId, default).Returns(RestaurantFor(UserId));
+        _addresses.FindByIdAndRestaurantIdAsync(AddressId, RestaurantId, default).Returns(SampleAddress());
+        _addresses.UpdateAsync(
+            AddressId, RestaurantId, null, null, "Updated", null, null, true, default)
             .Returns(SampleAddress(isDefault: true) with { AddressLine = "Updated" });
 
         var command = new UpdateDeliveryAddressCommand(
             UserId, AddressId, null, null, "Updated", null, null, true);
 
         // Act
-        await _sut.Handle(command, default);
+        var result = await _sut.Handle(command, default);
 
         // Assert
-        await _addresses.Received(1).ClearDefaultsAsync(RestaurantId, default);
+        result.IsSuccess.Should().BeTrue();
+        await _addresses.DidNotReceive().ClearDefaultsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _addresses.Received(1).UpdateAsync(AddressId, RestaurantId, null, null, "Updated", null, null, true, default);
     }
 
     [Fact]
@@ -112,7 +135,7 @@ public sealed class UpdateDeliveryAddressCommandHandlerTests
         _restaurants.FindByUserIdAsync(UserId, default).Returns(RestaurantFor(UserId));
         _addresses.FindByIdAndRestaurantIdAsync(AddressId, RestaurantId, default).Returns(SampleAddress());
         _addresses.UpdateAsync(
-            AddressId, null, null, "Updated", null, null, false, default)
+            AddressId, RestaurantId, null, null, "Updated", null, null, false, default)
             .Returns(SampleAddress() with { AddressLine = "Updated" });
 
         var command = new UpdateDeliveryAddressCommand(
@@ -123,5 +146,30 @@ public sealed class UpdateDeliveryAddressCommandHandlerTests
 
         // Assert
         await _addresses.DidNotReceive().ClearDefaultsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_IsDefaultTrue_PropagatesIsDefaultTrueFromDto()
+    {
+        // Arrange — verifies handler correctly propagates IsDefault=true from the DTO returned by UpdateAsync.
+        // The real regression guard for the EF identity-map clobber is the excludeId filter in
+        // ClearDefaultsInternalAsync (infrastructure layer), documented there with an explanatory comment.
+        _restaurants.FindByUserIdAsync(UserId, default).Returns(RestaurantFor(UserId));
+        _addresses.FindByIdAndRestaurantIdAsync(AddressId, RestaurantId, default)
+            .Returns(SampleAddress(isDefault: true));
+        _addresses.UpdateAsync(
+            AddressId, RestaurantId, null, null, "Updated", null, null, true, default)
+            .Returns(SampleAddress(isDefault: true) with { AddressLine = "Updated" });
+
+        var command = new UpdateDeliveryAddressCommand(
+            UserId, AddressId, null, null, "Updated", null, null, true);
+
+        // Act
+        var result = await _sut.Handle(command, default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.IsDefault.Should().BeTrue();
+        result.Value.AddressLine.Should().Be("Updated");
     }
 }

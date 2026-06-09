@@ -22,9 +22,9 @@ public sealed class AddDeliveryAddressCommandHandlerTests
     private static RestaurantDto RestaurantFor(Guid userId) =>
         new(RestaurantId, "Test Restaurant", RestaurantStatus.Active, DateTime.UtcNow, userId);
 
-    private static DeliveryAddressDto SampleAddress(Guid id) =>
+    private static DeliveryAddressDto SampleAddress(Guid id, bool isDefault = false) =>
         new(id, RestaurantId, "John", "+84901234567", "123 Main St",
-            10.762622m, 106.660172m, false, DateTime.UtcNow, DateTime.UtcNow);
+            10.762622m, 106.660172m, isDefault, DateTime.UtcNow, DateTime.UtcNow);
 
     [Fact]
     public async Task Handle_ValidCommand_AddsAndReturnsAddress()
@@ -68,25 +68,26 @@ public sealed class AddDeliveryAddressCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_IsDefaultTrue_ClearsExistingDefaultsFirst()
+    public async Task Handle_IsDefaultTrue_DelegatesAtomicDefaultClearToRepository()
     {
-        // Arrange
+        // Arrange — atomicity (ClearDefaults + Add) is now handled inside AddAsync; handler must NOT call ClearDefaultsAsync
         var addressId = Guid.NewGuid();
         _restaurants.FindByUserIdAsync(UserId, default).Returns(RestaurantFor(UserId));
-        var defaultAddress = SampleAddress(addressId) with { IsDefault = true };
         _addresses.AddAsync(
             RestaurantId, null, null, "New default address",
             null, null, true, default)
-            .Returns(defaultAddress);
+            .Returns(SampleAddress(addressId, isDefault: true));
 
         var command = new AddDeliveryAddressCommand(
             UserId, null, null, "New default address", null, null, true);
 
         // Act
-        await _sut.Handle(command, default);
+        var result = await _sut.Handle(command, default);
 
         // Assert
-        await _addresses.Received(1).ClearDefaultsAsync(RestaurantId, default);
+        result.IsSuccess.Should().BeTrue();
+        await _addresses.DidNotReceive().ClearDefaultsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _addresses.Received(1).AddAsync(RestaurantId, null, null, "New default address", null, null, true, default);
     }
 
     [Fact]
