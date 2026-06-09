@@ -11,7 +11,8 @@ public static class ErrorExtensions
             return new NotFoundObjectResult(new { code = error.Code, message = error.Message });
 
         if (error.Code is "EMAIL_ALREADY_EXISTS" or "PHONE_ALREADY_EXISTS"
-                        or "REFRESH_TOKEN_REUSE" or "ALREADY_APPROVED")
+                        or "REFRESH_TOKEN_REUSE" or "ALREADY_APPROVED"
+                        or "CATEGORY_NAME_CONFLICT" or "UNIT_NAME_CONFLICT")
             return new ConflictObjectResult(new { code = error.Code, message = error.Message });
 
         if (error.Code is "UNAUTHORIZED" or "INVALID_CREDENTIALS" or "INVALID_CURRENT_PASSWORD"
