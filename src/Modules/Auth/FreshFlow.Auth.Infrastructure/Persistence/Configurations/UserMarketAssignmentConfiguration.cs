@@ -1,5 +1,4 @@
 using FreshFlow.Auth.Domain.Entities;
-using FreshFlow.Auth.Infrastructure.CrossModule;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -23,9 +22,10 @@ internal sealed class UserMarketAssignmentConfiguration : IEntityTypeConfigurati
             .HasForeignKey(a => a.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne<MarketRow>()
-            .WithMany()
-            .HasForeignKey(a => a.MarketId)
-            .OnDelete(DeleteBehavior.Cascade);
+        // Note: the DB FK from market_id → markets.id is preserved as a manual constraint
+        // in the CatalogModuleInit migration (not tracked by EF to avoid a cross-module
+        // project reference from Auth.Infrastructure → Catalog.Domain).
+        // Index on MarketId is also maintained there.
+        builder.HasIndex(a => a.MarketId).HasDatabaseName("IX_user_market_assignments_MarketId");
     }
 }

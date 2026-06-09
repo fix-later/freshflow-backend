@@ -7,8 +7,12 @@ internal sealed class MarketRowConfiguration : IEntityTypeConfiguration<MarketRo
 {
     public void Configure(EntityTypeBuilder<MarketRow> builder)
     {
-        builder.ToTable("markets");
-        builder.HasKey(m => m.Id);
-        builder.Property(m => m.IsActive).IsRequired().HasDefaultValue(true);
+        // MarketRow is a read-only projection onto the markets table owned by Catalog.Market.
+        // Auth only reads Id + IsActive for validation; it does not own the schema.
+        // HasNoKey + ToView suppresses any schema migration generation for this type.
+        builder.HasNoKey();
+        builder.ToView("markets");
+        builder.Property(m => m.Id);
+        builder.Property(m => m.IsActive);
     }
 }
