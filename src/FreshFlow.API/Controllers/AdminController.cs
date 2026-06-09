@@ -4,7 +4,9 @@ using FreshFlow.Auth.Application.Commands.Admin.ActivateUser;
 using FreshFlow.Auth.Application.Commands.Admin.ApproveRestaurant;
 using FreshFlow.Auth.Application.Commands.Admin.AssignRole;
 using FreshFlow.Auth.Application.Commands.Admin.CreateUser;
+using FreshFlow.Auth.Application.Commands.Admin.ReplaceMarketAssignments;
 using FreshFlow.Auth.Application.Commands.Admin.UnlockUser;
+using FreshFlow.Auth.Application.Queries.GetMarketAssignments;
 using FreshFlow.Auth.Application.Queries.GetRoles;
 using FreshFlow.Auth.Application.Queries.GetUsers;
 using MediatR;
@@ -15,20 +17,22 @@ namespace FreshFlow.API.Controllers;
 
 [ApiController]
 [Route("api/v1/admin")]
-[Authorize(Roles = "admin")]
+[Authorize]   // All endpoints require authentication; roles are enforced per-action below.
 public sealed class AdminController(ISender sender) : ControllerBase
 {
     [HttpPost("users")]
-    public async Task<IActionResult> CreateUser([FromBody] CreateUserCommand command, CancellationToken ct)
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> CreateUserAsync([FromBody] CreateUserCommand command, CancellationToken ct)
     {
         var result = await sender.Send(command, ct);
         return result.IsSuccess
-            ? CreatedAtAction(nameof(GetUsers), null, result.Value)
+            ? CreatedAtAction(nameof(GetUsersAsync), null, result.Value)
             : result.Error.ToActionResult();
     }
 
     [HttpGet("users")]
-    public async Task<IActionResult> GetUsers(
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetUsersAsync(
         [FromQuery] string? role,
         [FromQuery] bool? isActive,
         [FromQuery] string? search,
@@ -41,7 +45,8 @@ public sealed class AdminController(ISender sender) : ControllerBase
     }
 
     [HttpPatch("users/{userId:guid}/activate")]
-    public async Task<IActionResult> ActivateUser(Guid userId, [FromBody] ActivateRequest body, CancellationToken ct)
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> ActivateUserAsync(Guid userId, [FromBody] ActivateRequest body, CancellationToken ct)
     {
         var adminId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)
                                  ?? User.FindFirstValue("sub")
@@ -52,21 +57,24 @@ public sealed class AdminController(ISender sender) : ControllerBase
     }
 
     [HttpPost("users/{userId:guid}/unlock")]
-    public async Task<IActionResult> UnlockUser(Guid userId, CancellationToken ct)
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> UnlockUserAsync(Guid userId, CancellationToken ct)
     {
         var result = await sender.Send(new UnlockUserCommand(userId), ct);
         return result.IsSuccess ? NoContent() : result.Error.ToActionResult();
     }
 
     [HttpGet("roles")]
-    public async Task<IActionResult> GetRoles(CancellationToken ct)
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetRolesAsync(CancellationToken ct)
     {
         var result = await sender.Send(new GetRolesQuery(), ct);
         return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
     }
 
     [HttpPatch("users/{userId:guid}/role")]
-    public async Task<IActionResult> AssignRole(
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> AssignRoleAsync(
         Guid userId, [FromBody] AssignRoleRequest body, CancellationToken ct)
     {
         var result = await sender.Send(new AssignRoleCommand(userId, body.RoleName), ct);
@@ -74,12 +82,52 @@ public sealed class AdminController(ISender sender) : ControllerBase
     }
 
     [HttpPatch("restaurants/{restaurantId:guid}/approve")]
-    public async Task<IActionResult> ApproveRestaurant(Guid restaurantId, CancellationToken ct)
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> ApproveRestaurantAsync(Guid restaurantId, CancellationToken ct)
     {
         var result = await sender.Send(new ApproveRestaurantCommand(restaurantId), ct);
         return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
     }
+
+    // ── Market Assignments (Admin + Operations Manager) ───────────────────────
+
+    /// <summary>
+    /// GET /api/v1/admin/users/{userId}/market-assignments
+    /// Returns the current market assignments for the specified user.
+    /// </summary>
+    [HttpGet("users/{userId:guid}/market-assignments")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetMarketAssignmentsAsync(Guid userId, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetMarketAssignmentsQuery(userId), ct);
+        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+    }
+
+    /// <summary>
+    /// PUT /api/v1/admin/users/{userId}/market-assignments
+    /// Replaces all market assignments for the specified user (must be a market_agent).
+    /// An empty MarketIds array clears all assignments.
+    /// </summary>
+    [HttpPut("users/{userId:guid}/market-assignments")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> ReplaceMarketAssignmentsAsync(
+        Guid userId,
+        [FromBody] ReplaceMarketAssignmentsRequest body,
+        CancellationToken ct)
+    {
+        var assignedById = User.FindFirstValue(ClaimTypes.NameIdentifier) is { } sub
+            ? Guid.Parse(sub)
+            : (Guid?)null;
+
+        var result = await sender.Send(
+            new ReplaceMarketAssignmentsCommand(userId, body.MarketIds, assignedById), ct);
+
+        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+    }
 }
+
+// ── Request DTOs ──────────────────────────────────────────────────────────────
 
 public sealed record ActivateRequest(bool IsActive);
 public sealed record AssignRoleRequest(string RoleName);
+public sealed record ReplaceMarketAssignmentsRequest(IReadOnlyList<Guid> MarketIds);
