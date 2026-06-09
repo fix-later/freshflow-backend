@@ -109,6 +109,25 @@ public sealed class RegisterRestaurantCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_RestaurantCreationFails_PropagatesException()
+    {
+        // Arrange
+        _users.ExistsAsync("owner@test.vn", default).Returns(false);
+        _restaurants.CreateAsync(Arg.Any<Guid>(), Arg.Any<string>(), default)
+            .Returns(Task.FromException<Guid>(new InvalidOperationException("DB error")));
+
+        var cmd = new RegisterRestaurantCommand("owner@test.vn", "MySecureP@ss1", "Test Restaurant", null);
+
+        // Act
+        var act = async () => await _sut.Handle(cmd, default);
+
+        // Assert — exception propagates; user was staged but never committed (SaveChangesAsync inside CreateAsync threw)
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        await _users.Received(1).AddAsync(Arg.Any<FreshFlow.Auth.Domain.Aggregates.User>(), default);
+        await _users.DidNotReceive().SaveChangesAsync(default);
+    }
+
+    [Fact]
     public async Task Handle_RoleNotFound_ReturnsRoleNotConfigured()
     {
         // Arrange

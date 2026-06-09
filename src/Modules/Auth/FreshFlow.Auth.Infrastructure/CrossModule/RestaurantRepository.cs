@@ -1,4 +1,5 @@
 using FreshFlow.Auth.Application.Abstractions;
+using FreshFlow.Auth.Domain.Enums;
 using FreshFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,7 +14,7 @@ internal sealed class RestaurantRepository(AppDbContext db) : IRestaurantReposit
             Id = Guid.NewGuid(),
             UserId = userId,
             Name = restaurantName,
-            IsApproved = false,
+            Status = RestaurantStatus.Pending,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -47,12 +48,51 @@ internal sealed class RestaurantRepository(AppDbContext db) : IRestaurantReposit
 
         if (row is null) return false;
 
-        row.IsApproved = true;
+        row.Status = RestaurantStatus.Active;
         row.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
         return true;
     }
 
+    public async Task<bool> SuspendAsync(Guid restaurantId, CancellationToken ct)
+    {
+        var row = await db.Set<RestaurantRow>()
+            .FirstOrDefaultAsync(r => r.Id == restaurantId, ct);
+
+        if (row is null) return false;
+
+        row.Status = RestaurantStatus.Suspended;
+        row.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<RestaurantDto?> UpdateProfileAsync(
+        Guid restaurantId,
+        string name,
+        string? address,
+        string? contactPerson,
+        TimeOnly? pickupStart,
+        TimeOnly? pickupEnd,
+        CancellationToken ct)
+    {
+        var row = await db.Set<RestaurantRow>()
+            .FirstOrDefaultAsync(r => r.Id == restaurantId, ct);
+
+        if (row is null)
+            return null;
+
+        row.Name = name;
+        row.Address = address;
+        row.ContactPerson = contactPerson;
+        row.PickupStart = pickupStart;
+        row.PickupEnd = pickupEnd;
+        row.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return ToDto(row);
+    }
+
     private static RestaurantDto ToDto(RestaurantRow row) =>
-        new(row.Id, row.Name, row.IsApproved, row.UpdatedAt, row.UserId);
+        new(row.Id, row.Name, row.Status, row.UpdatedAt, row.UserId,
+            row.Address, row.ContactPerson, row.PickupStart, row.PickupEnd);
 }

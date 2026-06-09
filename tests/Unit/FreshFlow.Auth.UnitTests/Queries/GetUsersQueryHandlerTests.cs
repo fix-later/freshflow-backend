@@ -3,6 +3,7 @@ using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Queries.GetUsers;
 using FreshFlow.Auth.Domain.Aggregates;
 using FreshFlow.Auth.Domain.Entities;
+using FreshFlow.Auth.Domain.Enums;
 using NSubstitute;
 
 namespace FreshFlow.Auth.UnitTests.Queries;
@@ -37,7 +38,7 @@ public sealed class GetUsersQueryHandlerTests
         _users.GetPagedAsync(null, null, null, 1, 20, default)
             .Returns((new List<User> { user }, 1));
         _restaurants.FindByUserIdAsync(user.Id, default)
-            .Returns(new RestaurantDto(Guid.NewGuid(), "Test", true, DateTime.UtcNow, user.Id));
+            .Returns(new RestaurantDto(Guid.NewGuid(), "Test", RestaurantStatus.Active, DateTime.UtcNow, user.Id));
 
         var result = await _sut.Handle(new GetUsersQuery(null, null, null), default);
 

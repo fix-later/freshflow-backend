@@ -22,6 +22,12 @@ public sealed class User : AggregateRoot
 
     public string Email { get; private set; } = string.Empty;
 
+    /// <summary>Display name — set by the user via UpdateProfile.</summary>
+    public string? FullName { get; private set; }
+
+    /// <summary>URL of the user's profile picture — set by the user via UpdateProfile.</summary>
+    public string? AvatarUrl { get; private set; }
+
     /// <summary>
     /// Optional phone number stored in normalised (lowercased/trimmed) form.
     /// Used as a second login identifier alongside email.
@@ -127,6 +133,19 @@ public sealed class User : AggregateRoot
     {
         RoleId = newRole.Id;
         Role = newRole;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Updates mutable profile fields. Null arguments clear the corresponding field.
+    /// Phone is normalised (trimmed + lowercased) the same way as the constructor.
+    /// Email and Role are intentionally excluded — use dedicated operations for those.
+    /// </summary>
+    public void UpdateProfile(string? fullName, string? phone, string? avatarUrl)
+    {
+        FullName = string.IsNullOrWhiteSpace(fullName) ? null : fullName.Trim();
+        Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim().ToLowerInvariant();
+        AvatarUrl = string.IsNullOrWhiteSpace(avatarUrl) ? null : avatarUrl.Trim();
         UpdatedAt = DateTime.UtcNow;
     }
 
