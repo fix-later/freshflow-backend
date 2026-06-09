@@ -3,6 +3,7 @@ using FreshFlow.API.Extensions;
 using FreshFlow.Catalog.Application.Commands.Products.Create;
 using FreshFlow.Catalog.Application.Commands.Products.Deactivate;
 using FreshFlow.Catalog.Application.Commands.Products.Update;
+using FreshFlow.Catalog.Application.Queries.Products.GetProductById;
 using FreshFlow.Catalog.Application.Queries.Products.GetProducts;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -38,17 +39,22 @@ public sealed class ProductsController(ISender sender) : ControllerBase
     [Authorize(Roles = "admin,operations_manager,market_agent,hub_staff,restaurant")]
     public async Task<IActionResult> GetProductsAsync([FromQuery] GetProductsQuery query, CancellationToken ct)
     {
-        var result = await sender.Send(query, ct);
+        // Only admin and operations_manager may view inactive products; for all other roles
+        // force IncludeInactive to false, ignoring whatever was in the query string.
+        var isPrivileged = User.IsInRole("admin") || User.IsInRole("operations_manager");
+        var effectiveQuery = isPrivileged ? query : query with { IncludeInactive = false };
+
+        var result = await sender.Send(effectiveQuery, ct);
         return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
     }
 
-    /// <summary>GET /api/v1/products/{id} — placeholder; implemented in view tasks.</summary>
+    /// <summary>GET /api/v1/products/{id} — Returns a single product by ID.</summary>
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = "admin,operations_manager,market_agent,hub_staff,restaurant")]
     public async Task<IActionResult> GetProductAsync(Guid id, CancellationToken ct)
     {
-        // Implemented in UC-CAT-03
-        await Task.CompletedTask;
-        return NotFound(new { code = "NOT_IMPLEMENTED", message = "Use view tasks." });
+        var result = await sender.Send(new GetProductByIdQuery(id), ct);
+        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
     }
 
     /// <summary>PUT /api/v1/products/{id} — Admin only.</summary>

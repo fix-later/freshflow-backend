@@ -14,6 +14,10 @@ internal sealed class UpdateProductCommandValidator : AbstractValidator<UpdatePr
 
         RuleFor(x => x.UnitId).NotEmpty();
 
+        RuleFor(x => x.Description)
+            .MaximumLength(1000)
+            .When(x => x.Description is not null);
+
         RuleFor(x => x.CategoryId)
             .NotEqual(Guid.Empty)
             .WithMessage("CategoryId must not be an empty GUID.")

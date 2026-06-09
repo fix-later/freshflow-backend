@@ -14,7 +14,7 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.Name).IsRequired().HasMaxLength(200);
         builder.Property(p => p.CategoryId);
         builder.Property(p => p.UnitId).IsRequired();
-        builder.Property(p => p.Description);
+        builder.Property(p => p.Description).HasMaxLength(1000);
         builder.Property(p => p.CreatedBy);
 
         // Legacy free-text fields kept for data transition (mapped to original column names)
