@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<IMarketRepository, MarketRepository>();
         services.AddScoped<IProductCategoryRepository, ProductCategoryRepository>();
         services.AddScoped<IUnitOfMeasurementRepository, UnitOfMeasurementRepository>();
+        services.AddScoped<IProductRepository, ProductRepository>();
 
         return services;
     }

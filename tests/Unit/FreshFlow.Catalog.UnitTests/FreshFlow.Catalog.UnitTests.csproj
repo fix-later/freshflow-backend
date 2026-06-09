@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Modules\Catalog\FreshFlow.Catalog.Application\FreshFlow.Catalog.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Catalog\FreshFlow.Catalog.Domain\FreshFlow.Catalog.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\FreshFlow.API\FreshFlow.API.csproj" />
   </ItemGroup>
 
 </Project>

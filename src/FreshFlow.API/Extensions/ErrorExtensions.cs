@@ -33,7 +33,7 @@ public static class ErrorExtensions
             return new BadRequestObjectResult(new { code = error.Code, message = error.Message });
 
         if (error.Code is "CHANNEL_NOT_SUPPORTED" or "CANNOT_DEACTIVATE_SELF" or "INVALID_MARKET"
-                        or "INVALID_ASSIGNMENT_TARGET"
+                        or "INVALID_ASSIGNMENT_TARGET" or "INVALID_UNIT" or "INVALID_CATEGORY"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(new { code = error.Code, message = error.Message });
 
