@@ -251,7 +251,8 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MarketId");
+                    b.HasIndex("MarketId")
+                        .HasDatabaseName("IX_user_market_assignments_MarketId");
 
                     b.HasIndex("UserId", "MarketId")
                         .IsUnique();
@@ -348,17 +349,14 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("FreshFlow.Auth.Infrastructure.CrossModule.MarketRow", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+                        .HasColumnType("boolean");
 
-                    b.HasKey("Id");
+                    b.ToTable((string)null);
 
-                    b.ToTable("markets", (string)null);
+                    b.ToSqlQuery("SELECT \"Id\", \"IsActive\" FROM markets WHERE \"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Auth.Infrastructure.CrossModule.RestaurantRow", b =>
@@ -411,6 +409,185 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("restaurants", (string)null);
                 });
 
+            modelBuilder.Entity("FreshFlow.Catalog.Domain.Entities.Market", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<decimal?>("Latitude")
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeletedAt");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("idx_markets_is_active");
+
+                    b.ToTable("markets", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Catalog.Domain.Entities.Product", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("LegacyCategory")
+                        .HasColumnType("text")
+                        .HasColumnName("category");
+
+                    b.Property<string>("LegacyUnit")
+                        .HasColumnType("text")
+                        .HasColumnName("unit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("DeletedAt");
+
+                    b.HasIndex("Name");
+
+                    b.HasIndex("UnitId");
+
+                    b.ToTable("products", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Catalog.Domain.Entities.ProductCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasFilter("\"DeletedAt\" IS NULL");
+
+                    b.ToTable("product_categories", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Catalog.Domain.Entities.UnitOfMeasurement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Abbreviation")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasFilter("\"DeletedAt\" IS NULL");
+
+                    b.ToTable("units_of_measurement", (string)null);
+                });
+
             modelBuilder.Entity("FreshFlow.Auth.Domain.Aggregates.User", b =>
                 {
                     b.HasOne("FreshFlow.Auth.Domain.Entities.Role", "Role")
@@ -447,12 +624,6 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FreshFlow.Auth.Domain.Entities.UserMarketAssignment", b =>
                 {
-                    b.HasOne("FreshFlow.Auth.Infrastructure.CrossModule.MarketRow", null)
-                        .WithMany()
-                        .HasForeignKey("MarketId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("FreshFlow.Auth.Domain.Aggregates.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -475,6 +646,20 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("RestaurantId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FreshFlow.Catalog.Domain.Entities.Product", b =>
+                {
+                    b.HasOne("FreshFlow.Catalog.Domain.Entities.ProductCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("FreshFlow.Catalog.Domain.Entities.UnitOfMeasurement", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618
