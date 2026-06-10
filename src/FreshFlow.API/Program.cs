@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using FluentValidation;
 using FreshFlow.Auth.Infrastructure;
 using FreshFlow.Catalog.Infrastructure;
@@ -9,7 +10,10 @@ using Scalar.AspNetCore;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Controllers ───────────────────────────────────────────────
-builder.Services.AddControllers();
+// SuppressAsyncSuffixInActionNames = false: keep "Async" in action names so
+// CreatedAtAction(nameof(GetXxxAsync), ...) resolves correctly without stripping.
+builder.Services.AddControllers(options =>
+    options.SuppressAsyncSuffixInActionNames = false);
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
@@ -49,6 +53,56 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// ── CORS ─────────────────────────────────────────────────────
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        var origins = builder.Configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>() ?? [];
+        policy.WithOrigins(origins)
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
+// ── Rate limiting — "auth" policy: fixed window per remote IP ───
+// Limit and window are configurable via "RateLimiting:Auth:*" so integration
+// tests can override to a high value and avoid accidentally hitting the cap.
+var authPermitLimit = builder.Configuration.GetValue("RateLimiting:Auth:PermitLimit", defaultValue: 10);
+var authWindowMinutes = builder.Configuration.GetValue("RateLimiting:Auth:WindowMinutes", defaultValue: 1);
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("auth", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(authWindowMinutes),
+                PermitLimit = authPermitLimit,
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    // Return the standard API error envelope so all 429 responses are machine-readable.
+    options.OnRejected = async (ctx, ct) =>
+    {
+        ctx.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        ctx.HttpContext.Response.ContentType = "application/json";
+        await ctx.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            success = false,
+            error = new
+            {
+                code = "TOO_MANY_REQUESTS",
+                message = "Too many requests. Please slow down and try again shortly."
+            }
+        }, ct);
+    };
+});
+
 // ── Module registrations ──────────────────────────────────────
 builder.Services.AddAuthModule(builder.Configuration);
 builder.Services.AddCatalogModule(builder.Configuration);
@@ -72,16 +126,47 @@ app.UseExceptionHandler(errorApp =>
             ctx.Response.ContentType = "application/json";
             await ctx.Response.WriteAsJsonAsync(new
             {
-                code = "VALIDATION_ERROR",
-                errors = ve.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+                success = false,
+                error = new
+                {
+                    code = "VALIDATION_ERROR",
+                    message = "One or more fields failed validation.",
+                    details = ve.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+                }
             });
             return;
         }
+
+        // Log non-validation errors with request context — do NOT expose details in response (M8-host).
+        if (feature?.Error is not null)
+        {
+            var logger = ctx.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError(
+                feature.Error,
+                "Unhandled exception on {Method} {Path}: {ExceptionType}",
+                ctx.Request.Method,
+                ctx.Request.Path,
+                feature.Error.GetType().Name);
+        }
+
         ctx.Response.StatusCode = 500;
         ctx.Response.ContentType = "application/json";
-        await ctx.Response.WriteAsJsonAsync(new { code = "INTERNAL_ERROR", message = "An unexpected error occurred." });
+        await ctx.Response.WriteAsJsonAsync(new
+        {
+            success = false,
+            error = new { code = "INTERNAL_ERROR", message = "An unexpected error occurred." }
+        });
     });
 });
+
+// ── HSTS — only outside Development (browsers ignore for non-prod origins) ──
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
+// ── HTTPS redirect — no-op when no HTTPS port is configured (e.g. tests) ──
+app.UseHttpsRedirection();
 
 // ── API docs (Development only) ──────────────────────────────
 if (app.Environment.IsDevelopment())
@@ -105,8 +190,10 @@ if (app.Environment.IsDevelopment())
         .WithHttpBearerAuthentication(bearer => { bearer.Token = ""; }));
 }
 
+app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.MapControllers();
 app.MapHealthChecks("/health");
 

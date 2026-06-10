@@ -21,10 +21,11 @@ public sealed class LoginEndpointTests(AuthWebAppFactory factory)
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<LoginResponse>();
-        body!.AccessToken.Should().NotBeNullOrEmpty();
-        body.RefreshToken.Should().NotBeNullOrEmpty();
-        body.ExpiresIn.Should().Be(900);
+        var env = await response.Content.ReadFromJsonAsync<Envelope<TokenBody>>();
+        env!.Success.Should().BeTrue();
+        env.Data!.AccessToken.Should().NotBeNullOrEmpty();
+        env.Data.RefreshToken.Should().NotBeNullOrEmpty();
+        env.Data.ExpiresIn.Should().Be(900);
     }
 
     [Fact]
@@ -37,8 +38,8 @@ public sealed class LoginEndpointTests(AuthWebAppFactory factory)
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        var body = await response.Content.ReadAsStringAsync();
-        body.Should().Contain("INVALID_CREDENTIALS");
+        var env = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
+        env!.Error!.Code.Should().Be("INVALID_CREDENTIALS");
     }
 
     [Fact]
@@ -65,5 +66,3 @@ public sealed class LoginEndpointTests(AuthWebAppFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }
-
-file sealed record LoginResponse(string AccessToken, string RefreshToken, int ExpiresIn, object User);

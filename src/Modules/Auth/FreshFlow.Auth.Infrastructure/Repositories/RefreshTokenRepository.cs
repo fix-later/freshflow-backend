@@ -23,10 +23,14 @@ internal sealed class RefreshTokenRepository(AppDbContext db) : IRefreshTokenRep
                     .SetProperty(t => t.RevokedReason, reason),
                 ct);
 
-    public async Task RevokeByUserAsync(Guid userId, CancellationToken ct) =>
+    public async Task RevokeByUserAsync(Guid userId, string reason, CancellationToken ct) =>
         await db.Set<RefreshToken>()
             .Where(t => t.UserId == userId && t.RevokedAt == null)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, DateTime.UtcNow), ct);
+            .ExecuteUpdateAsync(
+                s => s
+                    .SetProperty(t => t.RevokedAt, DateTime.UtcNow)
+                    .SetProperty(t => t.RevokedReason, reason),
+                ct);
 
     public Task SaveChangesAsync(CancellationToken ct) =>
         db.SaveChangesAsync(ct);

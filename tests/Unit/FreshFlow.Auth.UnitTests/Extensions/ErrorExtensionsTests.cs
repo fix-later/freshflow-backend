@@ -62,6 +62,7 @@ public sealed class ErrorExtensionsTests
     [InlineData("INVALID_CREDENTIALS")]
     [InlineData("TOKEN_INVALID")]
     [InlineData("UNAUTHORIZED")]
+    [InlineData("REFRESH_TOKEN_EXPIRED")]
     public void ToActionResult_UnauthorizedCodes_Returns401(string code)
     {
         var error = new Error(code, "unauthorized");

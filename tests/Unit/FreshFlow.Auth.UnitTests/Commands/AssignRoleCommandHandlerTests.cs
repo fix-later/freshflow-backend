@@ -38,7 +38,7 @@ public sealed class AssignRoleCommandHandlerTests
         result.Value.Role.Should().Be("hub_staff");
         result.Value.Email.Should().Be("u@test.com");
         user.RoleId.Should().Be(hubRole.Id);
-        await _tokens.Received(1).RevokeByUserAsync(userId, default);
+        await _tokens.Received(1).RevokeByUserAsync(userId, Arg.Any<string>(), default);
         await _users.Received(1).SaveChangesAsync(default);
     }
 

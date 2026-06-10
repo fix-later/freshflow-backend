@@ -12,11 +12,13 @@ using FreshFlow.Auth.Application.Commands.VerifyEmail;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace FreshFlow.API.Controllers;
 
 [ApiController]
 [Route("api/v1/auth")]
+[EnableRateLimiting("auth")]
 public sealed class AuthController(ISender sender) : ControllerBase
 {
     [HttpPost("register")]
@@ -26,7 +28,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new RegisterRestaurantCommand(body.Email, body.Password, body.RestaurantName, body.Phone), ct);
         return result.IsSuccess
-            ? Created(string.Empty, result.Value)
+            ? Created(string.Empty, ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
     }
 
@@ -36,7 +38,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(new LoginCommand(body.Identifier, body.Password), ct);
         return result.IsSuccess
-            ? Ok(result.Value)
+            ? Ok(ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
     }
 
@@ -46,7 +48,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(new RefreshTokenCommand(body.RefreshToken), ct);
         return result.IsSuccess
-            ? Ok(result.Value)
+            ? Ok(ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
     }
 
@@ -71,7 +73,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
         var result = await sender.Send(new ForgotPasswordCommand(body.Identifier), ct);
 
         // Always 202 for valid requests — even when email does not match any account.
-        return result.IsSuccess ? Accepted() : result.Error.ToActionResult();
+        return result.IsSuccess ? Accepted(ApiResponse.OkEmpty()) : result.Error.ToActionResult();
     }
 
     [HttpPost("reset-password")]
@@ -79,7 +81,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest body, CancellationToken ct)
     {
         var result = await sender.Send(new ResetPasswordCommand(body.Token, body.NewPassword), ct);
-        return result.IsSuccess ? Ok() : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.OkEmpty()) : result.Error.ToActionResult();
     }
 
     [HttpPost("verify/request")]
@@ -87,7 +89,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     public async Task<IActionResult> RequestVerification([FromBody] RequestVerificationRequest body, CancellationToken ct)
     {
         var result = await sender.Send(new RequestVerificationCommand(body.Identifier, body.Channel), ct);
-        return result.IsSuccess ? Accepted() : result.Error.ToActionResult();
+        return result.IsSuccess ? Accepted(ApiResponse.OkEmpty()) : result.Error.ToActionResult();
     }
 
     [HttpPost("verify")]
@@ -95,7 +97,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     public async Task<IActionResult> Verify([FromBody] VerifyRequest body, CancellationToken ct)
     {
         var result = await sender.Send(new VerifyEmailCommand(body.Identifier, body.Channel, body.Code), ct);
-        return result.IsSuccess ? Ok() : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.OkEmpty()) : result.Error.ToActionResult();
     }
 
     [HttpPost("change-password")]

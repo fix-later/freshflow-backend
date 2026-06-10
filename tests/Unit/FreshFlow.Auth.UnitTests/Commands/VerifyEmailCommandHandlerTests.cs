@@ -43,18 +43,38 @@ public sealed class VerifyEmailCommandHandlerTests
         result.Error.Code.Should().Be("OTP_INVALID");
     }
 
+    // M7 — After reorder, already-verified returns Success ONLY if code is also valid.
     [Fact]
-    public async Task Handle_AlreadyVerified_ReturnsSuccess()
+    public async Task Handle_AlreadyVerified_ValidCode_ReturnsSuccess()
     {
         var user = User.Create("user@test.com", "hash", AdminRole());
         user.MarkEmailVerified();
         _users.FindByEmailAsync("user@test.com", default).Returns(user);
 
+        var validCode = VerificationCode.Create(user.Id, "EMAIL", "codeHash");
+        _codes.FindByUserChannelAndHashAsync(user.Id, "EMAIL", "codeHash", default).Returns(validCode);
+
         var result = await _sut.Handle(new VerifyEmailCommand("user@test.com", "EMAIL", "123456"), default);
 
         result.IsSuccess.Should().BeTrue();
-        await _codes.DidNotReceive().FindByUserChannelAndHashAsync(
-            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(), default);
+        // Code lookup IS performed before idempotent success check
+        await _codes.Received(1).FindByUserChannelAndHashAsync(user.Id, "EMAIL", "codeHash", default);
+    }
+
+    [Fact]
+    public async Task Handle_AlreadyVerified_InvalidCode_ReturnsOtpInvalid()
+    {
+        // M7 — without a valid code, even an already-verified account must return OTP_INVALID
+        var user = User.Create("user@test.com", "hash", AdminRole());
+        user.MarkEmailVerified();
+        _users.FindByEmailAsync("user@test.com", default).Returns(user);
+        _codes.FindByUserChannelAndHashAsync(user.Id, "EMAIL", "codeHash", default)
+            .Returns((VerificationCode?)null);
+
+        var result = await _sut.Handle(new VerifyEmailCommand("user@test.com", "EMAIL", "wrongcode"), default);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Code.Should().Be("OTP_INVALID");
     }
 
     [Fact]

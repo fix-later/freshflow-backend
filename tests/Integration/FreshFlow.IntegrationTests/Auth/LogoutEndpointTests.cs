@@ -20,8 +20,8 @@ public sealed class LogoutEndpointTests(AuthWebAppFactory factory)
             password = "AdminP@ss1"
         });
         resp.EnsureSuccessStatusCode();
-        var body = await resp.Content.ReadFromJsonAsync<LogoutTokenPair>();
-        return (body!.AccessToken, body.RefreshToken);
+        var env = await resp.Content.ReadFromJsonAsync<Envelope<TokenBody>>();
+        return (env!.Data!.AccessToken, env.Data.RefreshToken);
     }
 
     [Fact]
@@ -60,5 +60,3 @@ public sealed class LogoutEndpointTests(AuthWebAppFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 }
-
-file sealed record LogoutTokenPair(string AccessToken, string RefreshToken, int ExpiresIn);

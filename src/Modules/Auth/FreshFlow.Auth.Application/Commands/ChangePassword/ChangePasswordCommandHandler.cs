@@ -28,7 +28,7 @@ internal sealed class ChangePasswordCommandHandler(
         user.ChangePassword(newPasswordHash);
 
         await users.SaveChangesAsync(ct);
-        await tokens.RevokeByUserAsync(user.Id, ct);
+        await tokens.RevokeByUserAsync(user.Id, "PASSWORD_CHANGED", ct);
 
         return Result.Success();
     }

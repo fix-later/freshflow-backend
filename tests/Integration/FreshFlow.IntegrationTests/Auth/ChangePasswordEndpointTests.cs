@@ -80,8 +80,8 @@ public sealed class ChangePasswordEndpointTests(AuthWebAppFactory factory)
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        var body = await response.Content.ReadFromJsonAsync<ChangePasswordErrorBody>();
-        body!.Code.Should().Be("INVALID_CURRENT_PASSWORD");
+        var env = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
+        env!.Error!.Code.Should().Be("INVALID_CURRENT_PASSWORD");
 
         _client.DefaultRequestHeaders.Authorization = null;
         var oldLogin = await _client.PostAsJsonAsync("/api/v1/auth/login", new
@@ -149,10 +149,7 @@ public sealed class ChangePasswordEndpointTests(AuthWebAppFactory factory)
             password
         });
         response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<ChangePasswordTokenPair>();
-        return (body!.AccessToken, body.RefreshToken);
+        var env = await response.Content.ReadFromJsonAsync<Envelope<TokenBody>>();
+        return (env!.Data!.AccessToken, env.Data.RefreshToken);
     }
 }
-
-file sealed record ChangePasswordTokenPair(string AccessToken, string RefreshToken, int ExpiresIn);
-file sealed record ChangePasswordErrorBody(string Code, string Message);

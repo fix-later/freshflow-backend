@@ -20,8 +20,8 @@ public sealed class AdminUsersEndpointTests(AuthWebAppFactory factory)
             password = "AdminP@ss1"
         });
         resp.EnsureSuccessStatusCode();
-        var body = await resp.Content.ReadFromJsonAsync<AdminTokenPair>();
-        return body!.AccessToken;
+        var env = await resp.Content.ReadFromJsonAsync<Envelope<TokenBody>>();
+        return env!.Data!.AccessToken;
     }
 
     [Fact]
@@ -114,9 +114,7 @@ public sealed class AdminUsersEndpointTests(AuthWebAppFactory factory)
         });
 
         login.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await login.Content.ReadFromJsonAsync<AdminTokenPair>();
-        body!.AccessToken.Should().NotBeNullOrWhiteSpace();
+        var env = await login.Content.ReadFromJsonAsync<Envelope<TokenBody>>();
+        env!.Data!.AccessToken.Should().NotBeNullOrWhiteSpace();
     }
 }
-
-file sealed record AdminTokenPair(string AccessToken, string RefreshToken, int ExpiresIn);

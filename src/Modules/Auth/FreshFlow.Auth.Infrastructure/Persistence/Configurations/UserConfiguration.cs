@@ -11,7 +11,9 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.ToTable("users");
         builder.HasKey(u => u.Id);
         builder.Property(u => u.Email).IsRequired().HasMaxLength(255);
-        builder.HasIndex(u => u.Email).IsUnique();
+        // Soft-deleted users' emails must be reusable, so the unique index excludes rows
+        // where DeletedAt is set (mirrors the Phone index filter below).
+        builder.HasIndex(u => u.Email).IsUnique().HasFilter("\"DeletedAt\" IS NULL");
         builder.Property(u => u.FullName).HasMaxLength(255);
         builder.Property(u => u.AvatarUrl).HasMaxLength(512);
         builder.Property(u => u.Phone).HasMaxLength(20);

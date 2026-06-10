@@ -2,6 +2,7 @@ using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Domain.Entities;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace FreshFlow.Auth.Application.Commands.ForgotPassword;
 
@@ -9,7 +10,8 @@ internal sealed class ForgotPasswordCommandHandler(
     IUserRepository users,
     IPasswordResetTokenRepository resetTokens,
     IPasswordResetSender sender,
-    ITokenService tokenService) : IRequestHandler<ForgotPasswordCommand, Result>
+    ITokenService tokenService,
+    ILogger<ForgotPasswordCommandHandler> logger) : IRequestHandler<ForgotPasswordCommand, Result>
 {
     public async Task<Result> Handle(ForgotPasswordCommand request, CancellationToken ct)
     {
@@ -40,7 +42,10 @@ internal sealed class ForgotPasswordCommandHandler(
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
-            // Intentionally swallowed — delivery failure must not leak account existence to the caller.
+            // Log with userId context — NOT the email — so logs are useful without leaking PII (M8).
+            logger.LogWarning(
+                "Password reset email delivery failed for user {UserId}. Delivery errors are swallowed to prevent account-existence oracle.",
+                user.Id);
         }
 
         return Result.Success();

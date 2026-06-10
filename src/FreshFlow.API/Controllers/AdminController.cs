@@ -26,7 +26,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(command, ct);
         return result.IsSuccess
-            ? CreatedAtAction("GetUsers", null, result.Value)
+            ? CreatedAtAction(nameof(GetUsersAsync), null, ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
     }
 
@@ -41,7 +41,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
         CancellationToken ct = default)
     {
         var result = await sender.Send(new GetUsersQuery(role, isActive, search, page, pageSize), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     [HttpPatch("users/{userId:guid}/activate")]
@@ -53,7 +53,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
             return Unauthorized();
 
         var result = await sender.Send(new ActivateUserCommand(userId, body.IsActive, adminId), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     [HttpPost("users/{userId:guid}/unlock")]
@@ -69,7 +69,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetRolesAsync(CancellationToken ct)
     {
         var result = await sender.Send(new GetRolesQuery(), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     [HttpPatch("users/{userId:guid}/role")]
@@ -78,7 +78,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
         Guid userId, [FromBody] AssignRoleRequest body, CancellationToken ct)
     {
         var result = await sender.Send(new AssignRoleCommand(userId, body.RoleName), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     [HttpPatch("restaurants/{restaurantId:guid}/approve")]
@@ -86,7 +86,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
     public async Task<IActionResult> ApproveRestaurantAsync(Guid restaurantId, CancellationToken ct)
     {
         var result = await sender.Send(new ApproveRestaurantCommand(restaurantId), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     // ── Market Assignments (Admin + Operations Manager) ───────────────────────
@@ -100,7 +100,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetMarketAssignmentsAsync(Guid userId, CancellationToken ct)
     {
         var result = await sender.Send(new GetMarketAssignmentsQuery(userId), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>
@@ -122,7 +122,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new ReplaceMarketAssignmentsCommand(userId, body.MarketIds, assignedById), ct);
 
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 }
 

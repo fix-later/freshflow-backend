@@ -32,7 +32,7 @@ public sealed class ChangePasswordCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         user.PasswordHash.Should().Be("new-hash");
         await _users.Received(1).SaveChangesAsync(default);
-        await _tokens.Received(1).RevokeByUserAsync(user.Id, default);
+        await _tokens.Received(1).RevokeByUserAsync(user.Id, Arg.Any<string>(), default);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public sealed class ChangePasswordCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("INVALID_CURRENT_PASSWORD");
         _hasher.DidNotReceive().Hash(Arg.Any<string>());
-        await _tokens.DidNotReceive().RevokeByUserAsync(Arg.Any<Guid>(), default);
+        await _tokens.DidNotReceive().RevokeByUserAsync(Arg.Any<Guid>(), Arg.Any<string>(), default);
         await _users.DidNotReceive().SaveChangesAsync(default);
     }
 
@@ -91,6 +91,6 @@ public sealed class ChangePasswordCommandHandlerTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("VALIDATION_ERROR");
-        await _tokens.DidNotReceive().RevokeByUserAsync(Arg.Any<Guid>(), default);
+        await _tokens.DidNotReceive().RevokeByUserAsync(Arg.Any<Guid>(), Arg.Any<string>(), default);
     }
 }

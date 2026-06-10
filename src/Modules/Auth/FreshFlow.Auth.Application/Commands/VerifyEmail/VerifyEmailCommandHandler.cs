@@ -21,20 +21,23 @@ internal sealed class VerifyEmailCommandHandler(
             return Result.Failure(ChannelNotSupported);
 
         var email = request.Identifier.ToLowerInvariant();
+        var codeHash = tokenService.HashRefreshToken(request.Code);
+
         var user = await users.FindByEmailAsync(email, ct);
 
         if (user is null || !user.IsActive)
             return Result.Failure(OtpInvalid);
 
-        // Idempotent: already verified is a success.
-        if (user.EmailVerifiedAt.HasValue)
-            return Result.Success();
-
-        var codeHash = tokenService.HashRefreshToken(request.Code);
+        // Validate the code FIRST — prevents account-state oracle (M7).
+        // An attacker without a valid code must never learn whether the email is already verified.
         var verification = await codes.FindByUserChannelAndHashAsync(user.Id, "EMAIL", codeHash, ct);
 
         if (verification is null || !verification.IsValid)
             return Result.Failure(OtpInvalid);
+
+        // Idempotent: already verified is a success — but only reached with a valid code above.
+        if (user.EmailVerifiedAt.HasValue)
+            return Result.Success();
 
         verification.MarkUsed();
         user.MarkEmailVerified();

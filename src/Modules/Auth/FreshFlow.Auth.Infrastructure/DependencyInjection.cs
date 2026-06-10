@@ -95,7 +95,11 @@ public static class DependencyInjection
                         ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
                         ctx.Response.ContentType = "application/json";
                         await ctx.Response.WriteAsync(
-                            JsonSerializer.Serialize(new { code, message }),
+                            JsonSerializer.Serialize(new
+                            {
+                                success = false,
+                                error = new { code, message }
+                            }),
                             ctx.HttpContext.RequestAborted);
                     },
 
@@ -106,8 +110,12 @@ public static class DependencyInjection
                         await ctx.Response.WriteAsync(
                             JsonSerializer.Serialize(new
                             {
-                                code = "FORBIDDEN",
-                                message = "You do not have permission to access this resource."
+                                success = false,
+                                error = new
+                                {
+                                    code = "FORBIDDEN",
+                                    message = "You do not have permission to access this resource."
+                                }
                             }),
                             ctx.HttpContext.RequestAborted);
                     }

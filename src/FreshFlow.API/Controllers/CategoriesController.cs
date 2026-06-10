@@ -21,7 +21,7 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
         [FromQuery] bool activeOnly = true, CancellationToken ct = default)
     {
         var result = await sender.Send(new GetCategoriesQuery(activeOnly), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>GET /api/v1/categories/{id} — any authenticated user.</summary>
@@ -29,7 +29,7 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetCategoryByIdAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetCategoryByIdQuery(id), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>POST /api/v1/categories — Admin only.</summary>
@@ -40,7 +40,7 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(new CreateCategoryCommand(body.Name), ct);
         return result.IsSuccess
-            ? CreatedAtAction(nameof(GetCategoryByIdAsync), new { id = result.Value.Id }, result.Value)
+            ? CreatedAtAction(nameof(GetCategoryByIdAsync), new { id = result.Value.Id }, ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
     }
 
@@ -51,7 +51,7 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
         Guid id, [FromBody] UpdateCategoryRequest body, CancellationToken ct)
     {
         var result = await sender.Send(new UpdateCategoryCommand(id, body.Name), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>PATCH /api/v1/categories/{id}/deactivate — Admin only.</summary>
@@ -60,7 +60,7 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
     public async Task<IActionResult> DeactivateCategoryAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new DeactivateCategoryCommand(id), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 }
 
