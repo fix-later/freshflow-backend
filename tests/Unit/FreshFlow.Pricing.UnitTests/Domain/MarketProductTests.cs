@@ -141,48 +141,6 @@ public sealed class MarketProductTests
         mp.DomainEvents.Should().BeEmpty();
     }
 
-    // ── UpdateQuantity ───────────────────────────────────────────────────────
-
-    [Fact]
-    public void UpdateQuantity_ValidQuantity_UpdatesCurrentQuantity()
-    {
-        // Arrange
-        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, ActorId);
-
-        // Act
-        mp.UpdateQuantity(25, ActorId);
-
-        // Assert
-        mp.CurrentQuantity.Should().Be(25);
-    }
-
-    [Fact]
-    public void UpdateQuantity_ValidQuantity_UpdatesUpdatedBy()
-    {
-        // Arrange
-        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, null);
-        var newActor = Guid.NewGuid();
-
-        // Act
-        mp.UpdateQuantity(20, newActor);
-
-        // Assert
-        mp.UpdatedBy.Should().Be(newActor);
-    }
-
-    [Fact]
-    public void UpdateQuantity_NegativeQuantity_ThrowsArgumentOutOfRangeException()
-    {
-        // Arrange
-        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, ActorId);
-
-        // Act
-        var act = () => mp.UpdateQuantity(-5, ActorId);
-
-        // Assert
-        act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("quantity");
-    }
-
     // ── ApplyUpdate ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -333,16 +291,86 @@ public sealed class MarketProductTests
     }
 
     [Fact]
-    public void IsOutOfStock_AfterUpdateQuantityToZero_ReturnsTrue()
+    public void IsOutOfStock_AfterUpdateAvailableQuantityToZero_ReturnsTrue()
     {
         // Arrange
         var mp = new MarketProduct(MarketId, ProductId, 100m, 10, ActorId);
 
-        // Act
-        mp.UpdateQuantity(0, ActorId);
+        // Act — UpdateQuantity removed; use UpdateAvailableQuantity (production path)
+        mp.UpdateAvailableQuantity(0, ActorId);
 
         // Assert
         mp.IsOutOfStock.Should().BeTrue();
+    }
+
+    // ── UpdateAvailableQuantity ──────────────────────────────────────────────
+
+    [Fact]
+    public void UpdateAvailableQuantity_ValidQuantity_UpdatesCurrentQuantity()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, ActorId);
+
+        // Act
+        mp.UpdateAvailableQuantity(200, ActorId);
+
+        // Assert
+        mp.CurrentQuantity.Should().Be(200);
+    }
+
+    [Fact]
+    public void UpdateAvailableQuantity_ZeroQuantity_SetsIsOutOfStock()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, ActorId);
+
+        // Act
+        mp.UpdateAvailableQuantity(0, ActorId);
+
+        // Assert
+        mp.CurrentQuantity.Should().Be(0);
+        mp.IsOutOfStock.Should().BeTrue();
+    }
+
+    [Fact]
+    public void UpdateAvailableQuantity_ValidQuantity_PriceUnchanged()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, ActorId);
+
+        // Act
+        mp.UpdateAvailableQuantity(300, ActorId);
+
+        // Assert
+        mp.CurrentPrice.Should().Be(100m);
+    }
+
+    [Fact]
+    public void UpdateAvailableQuantity_RaisesPriceUpdatedDomainEvent()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, ActorId);
+
+        // Act
+        mp.UpdateAvailableQuantity(200, ActorId);
+
+        // Assert — downstream handlers (SignalR, Redis) rely on this event
+        mp.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<FreshFlow.Pricing.Domain.Events.PriceUpdatedDomainEvent>();
+    }
+
+    [Fact]
+    public void UpdateAvailableQuantity_NegativeQuantity_ThrowsArgumentOutOfRangeException()
+    {
+        // Arrange — handler pre-validates; domain defends in depth
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, ActorId);
+
+        // Act
+        var act = () => mp.UpdateAvailableQuantity(-1, ActorId);
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("quantity");
+        mp.DomainEvents.Should().BeEmpty();
     }
 
     // ── DomainEvents ─────────────────────────────────────────────────────────

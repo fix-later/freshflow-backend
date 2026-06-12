@@ -48,17 +48,14 @@ public sealed class MarketProduct : AggregateRoot
     }
 
     /// <summary>
-    /// Applies a quantity-only mutation. Does NOT raise a domain event
-    /// (use <see cref="ApplyUpdate"/> when price/quantity update must be recorded together).
+    /// Dedicated quantity-only update (UC-PRI-04).
+    /// Delegates to <see cref="ApplyUpdate"/> so exactly one <see cref="PriceUpdatedDomainEvent"/>
+    /// is raised with the full context required by downstream handlers.
+    ///
+    /// Caller (handler) must pre-validate quantity ≥ 0; domain defends in depth.
     /// </summary>
-    public void UpdateQuantity(int newQuantity, Guid? actor)
-    {
-        ValidateQuantity(newQuantity);
-
-        CurrentQuantity = newQuantity;
-        UpdatedBy = actor;
-        UpdatedAt = DateTime.UtcNow;
-    }
+    public void UpdateAvailableQuantity(int newQuantity, Guid? actor) =>
+        ApplyUpdate(newPrice: null, newQuantity: newQuantity, actor: actor);
 
     /// <summary>
     /// Combined update of price and/or quantity in a single operation.
