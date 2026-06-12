@@ -77,9 +77,9 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<App
         var moduleAssemblies = new[]
         {
             "FreshFlow.Auth.Infrastructure",
-            "FreshFlow.Catalog.Infrastructure"
+            "FreshFlow.Catalog.Infrastructure",
+            "FreshFlow.Pricing.Infrastructure"
             // Add more as modules are implemented:
-            // "FreshFlow.Pricing.Infrastructure",
         };
 
         foreach (var name in moduleAssemblies)
