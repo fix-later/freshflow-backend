@@ -30,7 +30,7 @@ public sealed class ProductsController(ISender sender) : ControllerBase
             new CreateProductCommand(body.Name, body.UnitId, body.CategoryId, body.Description, createdBy), ct);
 
         return result.IsSuccess
-            ? CreatedAtAction(nameof(GetProductAsync), new { id = result.Value.Id }, result.Value)
+            ? CreatedAtAction(nameof(GetProductAsync), new { id = result.Value.Id }, ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
     }
 
@@ -45,7 +45,7 @@ public sealed class ProductsController(ISender sender) : ControllerBase
         var effectiveQuery = isPrivileged ? query : query with { IncludeInactive = false };
 
         var result = await sender.Send(effectiveQuery, ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>GET /api/v1/products/{id} — Returns a single product by ID.</summary>
@@ -54,7 +54,7 @@ public sealed class ProductsController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetProductAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetProductByIdQuery(id), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>PUT /api/v1/products/{id} — Admin only.</summary>
@@ -66,7 +66,7 @@ public sealed class ProductsController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new UpdateProductCommand(id, body.Name, body.UnitId, body.CategoryId, body.Description), ct);
 
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>PATCH /api/v1/products/{id}/deactivate — Admin only.</summary>
@@ -75,7 +75,7 @@ public sealed class ProductsController(ISender sender) : ControllerBase
     public async Task<IActionResult> DeactivateProductAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new DeactivateProductCommand(id), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 }
 

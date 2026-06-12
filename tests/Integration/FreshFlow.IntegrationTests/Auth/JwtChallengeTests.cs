@@ -12,7 +12,7 @@ namespace FreshFlow.IntegrationTests.Auth;
 
 /// <summary>
 /// UC-AUTH-08 / FR-AUTH-008 — JWT challenge contract.
-/// Verifies that the JWT middleware returns a JSON { code, message } body
+/// Verifies that the JWT middleware returns a JSON envelope { success, error: { code, message } } body
 /// instead of the default WWW-Authenticate plain-text challenge.
 /// </summary>
 [Trait("Category", "Integration")]
@@ -42,10 +42,11 @@ public sealed class JwtChallengeTests(AuthWebAppFactory factory)
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
-        var body = await response.Content.ReadFromJsonAsync<ErrorBody>();
-        body.Should().NotBeNull();
-        body!.Code.Should().Be("TOKEN_EXPIRED");
-        body.Message.Should().NotBeNullOrWhiteSpace();
+        var env = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
+        env.Should().NotBeNull();
+        env!.Success.Should().BeFalse();
+        env.Error!.Code.Should().Be("TOKEN_EXPIRED");
+        env.Error.Message.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -62,10 +63,11 @@ public sealed class JwtChallengeTests(AuthWebAppFactory factory)
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
-        var body = await response.Content.ReadFromJsonAsync<ErrorBody>();
-        body.Should().NotBeNull();
-        body!.Code.Should().Be("UNAUTHORIZED");
-        body.Message.Should().NotBeNullOrWhiteSpace();
+        var env = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
+        env.Should().NotBeNull();
+        env!.Success.Should().BeFalse();
+        env.Error!.Code.Should().Be("UNAUTHORIZED");
+        env.Error.Message.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -80,10 +82,11 @@ public sealed class JwtChallengeTests(AuthWebAppFactory factory)
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
-        var body = await response.Content.ReadFromJsonAsync<ErrorBody>();
-        body.Should().NotBeNull();
-        body!.Code.Should().Be("UNAUTHORIZED");
-        body.Message.Should().NotBeNullOrWhiteSpace();
+        var env = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
+        env.Should().NotBeNull();
+        env!.Success.Should().BeFalse();
+        env.Error!.Code.Should().Be("UNAUTHORIZED");
+        env.Error.Message.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -96,9 +99,9 @@ public sealed class JwtChallengeTests(AuthWebAppFactory factory)
             password = "AdminP@ss1"
         });
         loginResp.EnsureSuccessStatusCode();
-        var pair = await loginResp.Content.ReadFromJsonAsync<JwtChallengeTokenPair>();
+        var env = await loginResp.Content.ReadFromJsonAsync<Envelope<TokenBody>>();
         _client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", pair!.AccessToken);
+            new AuthenticationHeaderValue("Bearer", env!.Data!.AccessToken);
 
         // Act
         var response = await _client.GetAsync(ProtectedPath);
@@ -153,5 +156,4 @@ public sealed class JwtChallengeTests(AuthWebAppFactory factory)
     }
 }
 
-file sealed record ErrorBody(string Code, string Message);
-file sealed record JwtChallengeTokenPair(string AccessToken, string RefreshToken, int ExpiresIn);
+// Shared envelope types are in Infrastructure/ApiEnvelopes.cs

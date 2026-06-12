@@ -19,8 +19,8 @@ public sealed class RefreshTokenEndpointTests(AuthWebAppFactory factory)
             password = "AdminP@ss1"
         });
         resp.EnsureSuccessStatusCode();
-        var body = await resp.Content.ReadFromJsonAsync<TokenPair>();
-        return (body!.AccessToken, body.RefreshToken);
+        var env = await resp.Content.ReadFromJsonAsync<Envelope<TokenBody>>();
+        return (env!.Data!.AccessToken, env.Data.RefreshToken);
     }
 
     [Fact]
@@ -31,22 +31,27 @@ public sealed class RefreshTokenEndpointTests(AuthWebAppFactory factory)
         var response = await _client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = refresh });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<TokenPair>();
-        body!.AccessToken.Should().NotBeNullOrEmpty();
-        body.RefreshToken.Should().NotBe(refresh, "token should be rotated");
+        var env = await response.Content.ReadFromJsonAsync<Envelope<TokenBody>>();
+        env!.Success.Should().BeTrue();
+        env.Data!.AccessToken.Should().NotBeNullOrEmpty();
+        env.Data.RefreshToken.Should().NotBe(refresh, "token should be rotated");
     }
 
     [Fact]
-    public async Task Refresh_WithOldToken_Returns401OrConflict()
+    public async Task Refresh_WithOldToken_Returns409Conflict()
     {
         var (_, refresh) = await LoginAsAdminAsync();
         // First refresh — rotates token
-        await _client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = refresh });
-        // Second refresh with the old token — should be rejected
+        var firstResponse = await _client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = refresh });
+        firstResponse.IsSuccessStatusCode.Should().BeTrue("first refresh with a valid token must succeed");
+        // Second refresh with the old token — token reuse detected
         var response = await _client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = refresh });
 
-        response.StatusCode.Should().BeOneOf(
-            HttpStatusCode.Unauthorized, HttpStatusCode.Conflict);
+        // FR-AUTH-007 AC2: reuse must return 409 with REFRESH_TOKEN_REUSE code
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var env = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
+        env!.Success.Should().BeFalse();
+        env.Error!.Code.Should().Be("REFRESH_TOKEN_REUSE");
     }
 
     [Fact]
@@ -58,5 +63,3 @@ public sealed class RefreshTokenEndpointTests(AuthWebAppFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }
-
-file sealed record TokenPair(string AccessToken, string RefreshToken, int ExpiresIn);

@@ -36,7 +36,7 @@ internal sealed class ResetPasswordCommandHandler(
         user.ChangePassword(newHash);
         resetToken.MarkUsed();
 
-        await tokens.RevokeByUserAsync(user.Id, ct);
+        await tokens.RevokeByUserAsync(user.Id, "PASSWORD_RESET", ct);
         await users.SaveChangesAsync(ct);
 
         return Result.Success();

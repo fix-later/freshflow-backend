@@ -25,7 +25,7 @@ internal sealed class AssignRoleCommandHandler(
         user.AssignRole(role);
 
         // Revoke all active sessions so next login/refresh carries the updated role claim.
-        await tokens.RevokeByUserAsync(request.UserId, ct);
+        await tokens.RevokeByUserAsync(request.UserId, "ROLE_CHANGED", ct);
         await users.SaveChangesAsync(ct);
 
         return Result<AssignRoleResponse>.Success(

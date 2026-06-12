@@ -27,7 +27,7 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new GetRestaurantApprovalStatusQuery(ResolveUserId()), ct);
 
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     // ── Profile ──────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new GetRestaurantProfileQuery(ResolveUserId()), ct);
 
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>PUT /api/v1/restaurants/me/profile — updates the authenticated restaurant's profile.</summary>
@@ -59,7 +59,7 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
                 body.PickupEnd),
             ct);
 
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     // ── Delivery Addresses ───────────────────────────────────────────────────
@@ -69,7 +69,7 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetDeliveryAddressesAsync(CancellationToken ct)
     {
         var result = await sender.Send(new GetDeliveryAddressesQuery(ResolveUserId()), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>POST /api/v1/restaurants/me/delivery-addresses — adds a delivery address.</summary>
@@ -89,7 +89,7 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
             ct);
 
         return result.IsSuccess
-            ? CreatedAtAction(nameof(GetDeliveryAddressesAsync), null, result.Value)
+            ? CreatedAtAction(nameof(GetDeliveryAddressesAsync), null, ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
     }
 
@@ -110,7 +110,7 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
                 body.IsDefault),
             ct);
 
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>DELETE /api/v1/restaurants/me/delivery-addresses/{id} — soft-deletes a delivery address.</summary>

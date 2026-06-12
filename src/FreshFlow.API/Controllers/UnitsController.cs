@@ -21,7 +21,7 @@ public sealed class UnitsController(ISender sender) : ControllerBase
         [FromQuery] bool activeOnly = true, CancellationToken ct = default)
     {
         var result = await sender.Send(new GetUnitsQuery(activeOnly), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>GET /api/v1/units/{id} — any authenticated user.</summary>
@@ -29,7 +29,7 @@ public sealed class UnitsController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetUnitByIdAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetUnitByIdQuery(id), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>POST /api/v1/units — Admin only.</summary>
@@ -40,7 +40,7 @@ public sealed class UnitsController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(new CreateUnitCommand(body.Name, body.Abbreviation), ct);
         return result.IsSuccess
-            ? CreatedAtAction(nameof(GetUnitByIdAsync), new { id = result.Value.Id }, result.Value)
+            ? CreatedAtAction(nameof(GetUnitByIdAsync), new { id = result.Value.Id }, ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
     }
 
@@ -51,7 +51,7 @@ public sealed class UnitsController(ISender sender) : ControllerBase
         Guid id, [FromBody] UpdateUnitRequest body, CancellationToken ct)
     {
         var result = await sender.Send(new UpdateUnitCommand(id, body.Name, body.Abbreviation), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>PATCH /api/v1/units/{id}/deactivate — Admin only.</summary>
@@ -60,7 +60,7 @@ public sealed class UnitsController(ISender sender) : ControllerBase
     public async Task<IActionResult> DeactivateUnitAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new DeactivateUnitCommand(id), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 }
 

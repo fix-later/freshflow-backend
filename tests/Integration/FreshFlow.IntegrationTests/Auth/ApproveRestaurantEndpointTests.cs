@@ -20,8 +20,8 @@ public sealed class ApproveRestaurantEndpointTests(AuthWebAppFactory factory)
             password = "AdminP@ss1"
         });
         resp.EnsureSuccessStatusCode();
-        var body = await resp.Content.ReadFromJsonAsync<ApproveTokenPair>();
-        return body!.AccessToken;
+        var env = await resp.Content.ReadFromJsonAsync<Envelope<TokenBody>>();
+        return env!.Data!.AccessToken;
     }
 
     private async Task<Guid> CreateRestaurantUserAsync(string token)
@@ -35,8 +35,8 @@ public sealed class ApproveRestaurantEndpointTests(AuthWebAppFactory factory)
             restaurantName = "Test Restaurant"
         });
         resp.EnsureSuccessStatusCode();
-        var body = await resp.Content.ReadFromJsonAsync<CreatedUserResponse>();
-        return body!.Id;
+        var env = await resp.Content.ReadFromJsonAsync<Envelope<CreatedUserBody>>();
+        return env!.Data!.Id;
     }
 
     [Fact]
@@ -61,5 +61,4 @@ public sealed class ApproveRestaurantEndpointTests(AuthWebAppFactory factory)
     }
 }
 
-file sealed record ApproveTokenPair(string AccessToken, string RefreshToken, int ExpiresIn);
-file sealed record CreatedUserResponse(Guid Id, string Email, string Role, bool IsActive, DateTime CreatedAt);
+file sealed record CreatedUserBody(Guid Id, string Email, string Role, bool IsActive, DateTime CreatedAt);

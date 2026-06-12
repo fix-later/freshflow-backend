@@ -9,8 +9,15 @@ internal sealed class LoginCommandHandler(
     IUserRepository users,
     IRefreshTokenRepository tokens,
     IPasswordHasher hasher,
-    ITokenService tokenService) : IRequestHandler<LoginCommand, Result<LoginResponse>>
+    ITokenService tokenService,
+    IRestaurantRepository restaurants) : IRequestHandler<LoginCommand, Result<LoginResponse>>
 {
+    // Pre-computed BCrypt hash used for constant-time dummy verification when the user is not found.
+    // Prevents timing-attack account-existence enumeration (M9).
+    // Source: BCrypt.Net test vector — not sensitive, exists only to equalize CPU time.
+    private const string DummyPasswordHash =
+        "$2a$12$zrj9MBs3pFKMFdMMpnME.eHBG3NfjHpE3ySc4AXHW7mXDu4/AqJAe";
+
     private static readonly Error InvalidCredentials =
         Error.Unauthorized("INVALID_CREDENTIALS", "Identifier or password is incorrect.");
 
@@ -25,7 +32,11 @@ internal sealed class LoginCommandHandler(
         var user = await users.FindByIdentifierAsync(request.Identifier, ct);
 
         if (user is null)
+        {
+            // Constant-time dummy verify — prevents timing-based account-existence enumeration.
+            hasher.Verify(request.Password, DummyPasswordHash);
             return Result<LoginResponse>.Failure(InvalidCredentials);
+        }
 
         if (user.IsLockedOut)
             return Result<LoginResponse>.Failure(BuildAccountLockedError(user.LockedUntil));
@@ -40,12 +51,6 @@ internal sealed class LoginCommandHandler(
         if (!user.IsActive)
             return Result<LoginResponse>.Failure(AccountInactive);
 
-        if (user.Role.Name == RoleNames.Restaurant)
-        {
-            // Restaurant login block checked via restaurant approval status — handled downstream.
-            // For now, IsActive check above covers the deactivation path.
-        }
-
         // Successful login — reset failed-attempt counter (LockedUntil auto-expires).
         user.RecordSuccessfulLogin();
 
@@ -58,6 +63,15 @@ internal sealed class LoginCommandHandler(
         var refreshToken = new Domain.Entities.RefreshToken(
             user.Id, refreshHash, familyId, tokenService.RefreshTokenTtlDays);
 
+        // Fetch restaurant status BEFORE SaveChangesAsync so that a lookup failure
+        // does not leave a persisted refresh token for a response that was never delivered.
+        RestaurantStatus? approvalStatus = null;
+        if (user.Role.Name == RoleNames.Restaurant)
+        {
+            var restaurant = await restaurants.FindByUserIdAsync(user.Id, ct);
+            approvalStatus = restaurant?.Status;
+        }
+
         await tokens.AddAsync(refreshToken, ct);
         await tokens.SaveChangesAsync(ct);
 
@@ -65,6 +79,7 @@ internal sealed class LoginCommandHandler(
             accessToken,
             rawRefresh,
             tokenService.AccessTokenTtlSeconds,
-            new LoginUserDto(user.Id, user.Email, user.Role.Name)));
+            new LoginUserDto(user.Id, user.Email, user.Role.Name),
+            approvalStatus));
     }
 }

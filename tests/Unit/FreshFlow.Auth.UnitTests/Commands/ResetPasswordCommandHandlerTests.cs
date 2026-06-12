@@ -80,7 +80,7 @@ public sealed class ResetPasswordCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         token.IsUsed.Should().BeTrue();
         user.PasswordHash.Should().Be("new-password-hash");
-        await _tokens.Received(1).RevokeByUserAsync(user.Id, default);
+        await _tokens.Received(1).RevokeByUserAsync(user.Id, "PASSWORD_RESET", default);
         await _users.Received(1).SaveChangesAsync(default);
     }
 }

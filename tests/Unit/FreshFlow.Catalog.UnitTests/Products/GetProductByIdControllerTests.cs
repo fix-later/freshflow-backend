@@ -77,10 +77,13 @@ public sealed class GetProductByIdControllerTests
         // Act
         var response = await sut.GetProductAsync(id, default);
 
-        // Assert
+        // Assert — response is wrapped in { success: true, data: dto } envelope
         response.Should().BeOfType<OkObjectResult>();
         var ok = (OkObjectResult)response;
-        ok.Value.Should().Be(dto);
+        ok.Value.Should().NotBeNull();
+        var data = ok.Value!.GetType().GetProperty("data")?.GetValue(ok.Value);
+        data.Should().NotBeNull("response envelope must include a 'data' property");
+        data.Should().Be(dto);
         await _sender.Received(1).Send(
             Arg.Is<GetProductByIdQuery>(q => q.Id == id),
             Arg.Any<CancellationToken>());

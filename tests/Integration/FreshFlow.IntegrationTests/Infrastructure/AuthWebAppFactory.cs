@@ -40,7 +40,10 @@ public sealed class AuthWebAppFactory : WebApplicationFactory<Program>, IAsyncLi
                 ["AdminSeed:Password"] = "AdminP@ss1",
                 ["JWT:Key"] = "integration-test-secret-key-min-32-chars!!",
                 ["JWT:Issuer"] = "https://test.freshflow",
-                ["JWT:Audience"] = "freshflow-api"
+                ["JWT:Audience"] = "freshflow-api",
+                // Raise the auth rate limit so individual integration test classes don't
+                // accidentally exhaust the 10-request production cap across their tests.
+                ["RateLimiting:Auth:PermitLimit"] = "1000"
             });
         });
     }

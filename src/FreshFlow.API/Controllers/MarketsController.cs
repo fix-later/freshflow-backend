@@ -22,7 +22,7 @@ public sealed class MarketsController(ISender sender) : ControllerBase
         [FromQuery] bool activeOnly = true, CancellationToken ct = default)
     {
         var result = await sender.Send(new GetMarketsQuery(activeOnly), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>GET /api/v1/markets/{id} — any authenticated user.</summary>
@@ -30,7 +30,7 @@ public sealed class MarketsController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetMarketByIdAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetMarketByIdQuery(id), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>POST /api/v1/markets — Admin only.</summary>
@@ -43,7 +43,7 @@ public sealed class MarketsController(ISender sender) : ControllerBase
             new CreateMarketCommand(body.Name, body.Location, body.Address, body.Latitude, body.Longitude), ct);
 
         return result.IsSuccess
-            ? CreatedAtAction(nameof(GetMarketByIdAsync), new { id = result.Value.Id }, result.Value)
+            ? CreatedAtAction(nameof(GetMarketByIdAsync), new { id = result.Value.Id }, ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
     }
 
@@ -56,7 +56,7 @@ public sealed class MarketsController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new UpdateMarketCommand(id, body.Name, body.Location, body.Address, body.Latitude, body.Longitude), ct);
 
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>PATCH /api/v1/markets/{id}/deactivate — Admin only.</summary>
@@ -65,7 +65,7 @@ public sealed class MarketsController(ISender sender) : ControllerBase
     public async Task<IActionResult> DeactivateMarketAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new DeactivateMarketCommand(id), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>DELETE /api/v1/markets/{id} — Admin only (soft-delete).</summary>

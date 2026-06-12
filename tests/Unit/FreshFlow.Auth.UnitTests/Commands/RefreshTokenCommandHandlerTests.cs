@@ -69,7 +69,7 @@ public sealed class RefreshTokenCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_RevokedToken_RevokesFamily_ReturnsTokenReuseDetected()
+    public async Task Handle_RevokedToken_RevokesFamily_ReturnsRefreshTokenReuse()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -83,15 +83,15 @@ public sealed class RefreshTokenCommandHandlerTests
         // Act
         var result = await _sut.Handle(new RefreshTokenCommand("raw"), default);
 
-        // Assert
+        // Assert — FR-AUTH-007 AC2: reuse → REFRESH_TOKEN_REUSE (HTTP 409)
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("TOKEN_REUSE_DETECTED");
+        result.Error.Code.Should().Be("REFRESH_TOKEN_REUSE");
         await _tokens.Received(1).RevokeByFamilyAsync(stored.FamilyId, "family_compromised", default);
         await _tokens.Received(1).SaveChangesAsync(default);
     }
 
     [Fact]
-    public async Task Handle_ExpiredToken_ReturnsTokenInvalid()
+    public async Task Handle_ExpiredToken_ReturnsRefreshTokenExpired()
     {
         // Arrange — ttlDays: -1 creates an already-expired token
         var stored = new RefreshToken(Guid.NewGuid(), "hash", Guid.NewGuid(), ttlDays: -1);
@@ -101,9 +101,9 @@ public sealed class RefreshTokenCommandHandlerTests
         // Act
         var result = await _sut.Handle(new RefreshTokenCommand("raw"), default);
 
-        // Assert
+        // Assert — FR-AUTH-007 AC2: expired → REFRESH_TOKEN_EXPIRED (HTTP 401)
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("TOKEN_INVALID");
+        result.Error.Code.Should().Be("REFRESH_TOKEN_EXPIRED");
     }
 
     [Fact]

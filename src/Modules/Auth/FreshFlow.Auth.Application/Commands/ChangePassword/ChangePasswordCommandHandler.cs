@@ -27,8 +27,12 @@ internal sealed class ChangePasswordCommandHandler(
         var newPasswordHash = hasher.Hash(request.NewPassword);
         user.ChangePassword(newPasswordHash);
 
+        // Revoke all sessions before persisting the password change so that
+        // the token revocation and the new password hash are committed together.
+        // A single SaveChangesAsync covers both the user update and the token revocations,
+        // preventing old sessions from remaining valid if persistence partially fails.
+        await tokens.RevokeByUserAsync(user.Id, "PASSWORD_CHANGED", ct);
         await users.SaveChangesAsync(ct);
-        await tokens.RevokeByUserAsync(user.Id, ct);
 
         return Result.Success();
     }

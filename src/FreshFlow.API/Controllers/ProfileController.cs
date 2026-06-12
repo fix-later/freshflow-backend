@@ -18,10 +18,10 @@ public sealed class ProfileController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetMyProfileAsync(CancellationToken ct)
     {
         if (!TryResolveUserId(out var userId))
-            return Unauthorized(new { code = "UNAUTHORIZED", message = "User ID claim is missing or malformed." });
+            return Unauthorized(ApiResponse.Err("UNAUTHORIZED", "User ID claim is missing or malformed."));
 
         var result = await sender.Send(new GetMyProfileQuery(userId), ct);
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>PUT /api/v1/profile/me — updates the authenticated user's personal profile.</summary>
@@ -30,12 +30,12 @@ public sealed class ProfileController(ISender sender) : ControllerBase
         [FromBody] UpdateMyProfileRequest body, CancellationToken ct)
     {
         if (!TryResolveUserId(out var userId))
-            return Unauthorized(new { code = "UNAUTHORIZED", message = "User ID claim is missing or malformed." });
+            return Unauthorized(ApiResponse.Err("UNAUTHORIZED", "User ID claim is missing or malformed."));
 
         var result = await sender.Send(
             new UpdateMyProfileCommand(userId, body.FullName, body.Phone, body.AvatarUrl), ct);
 
-        return result.IsSuccess ? Ok(result.Value) : result.Error.ToActionResult();
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

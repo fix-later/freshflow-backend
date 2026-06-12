@@ -10,10 +10,13 @@ internal sealed class RefreshTokenCommandHandler(
     ITokenService tokenService) : IRequestHandler<RefreshTokenCommand, Result<RefreshTokenResponse>>
 {
     private static readonly Error TokenInvalid =
-        Error.Unauthorized("TOKEN_INVALID", "Refresh token is invalid or expired.");
+        Error.Unauthorized("TOKEN_INVALID", "Refresh token is invalid.");
+
+    private static readonly Error TokenExpired =
+        Error.Unauthorized("REFRESH_TOKEN_EXPIRED", "Refresh token has expired.");
 
     private static readonly Error TokenReuseDetected =
-        Error.Unauthorized("TOKEN_REUSE_DETECTED", "Token reuse detected. All sessions invalidated.");
+        Error.Conflict("REFRESH_TOKEN_REUSE", "Token reuse detected. All sessions invalidated.");
 
     public async Task<Result<RefreshTokenResponse>> Handle(RefreshTokenCommand request, CancellationToken ct)
     {
@@ -32,7 +35,7 @@ internal sealed class RefreshTokenCommandHandler(
         }
 
         if (stored.IsExpired)
-            return Result<RefreshTokenResponse>.Failure(TokenInvalid);
+            return Result<RefreshTokenResponse>.Failure(TokenExpired);
 
         var user = await users.FindByIdAsync(stored.UserId, ct);
         if (user is null || !user.CanLogin())

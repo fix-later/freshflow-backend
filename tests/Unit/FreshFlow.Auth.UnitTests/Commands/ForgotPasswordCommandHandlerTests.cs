@@ -4,6 +4,7 @@ using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Commands.ForgotPassword;
 using FreshFlow.Auth.Domain.Aggregates;
 using FreshFlow.Auth.Domain.Entities;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 
 namespace FreshFlow.Auth.UnitTests.Commands;
@@ -11,18 +12,38 @@ namespace FreshFlow.Auth.UnitTests.Commands;
 [Trait("Category", "Unit")]
 public sealed class ForgotPasswordCommandHandlerTests
 {
+    // NSubstitute cannot proxy ILogger<InternalClass> (Castle.Core restriction on strong-named assemblies).
+    // Use a minimal capturing logger instead.
+    private sealed class CapturingLogger : ILogger<ForgotPasswordCommandHandler>
+    {
+        public readonly List<LogLevel> CapturedLevels = [];
+        public readonly List<string> CapturedMessages = [];
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            CapturedLevels.Add(logLevel);
+            CapturedMessages.Add(formatter(state, exception));
+        }
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+    }
+
     private readonly IUserRepository _users = Substitute.For<IUserRepository>();
     private readonly IPasswordResetTokenRepository _resetTokens =
         Substitute.For<IPasswordResetTokenRepository>();
     private readonly IPasswordResetSender _sender = Substitute.For<IPasswordResetSender>();
     private readonly ITokenService _tokenService = Substitute.For<ITokenService>();
+    private readonly CapturingLogger _logger = new();
     private readonly ForgotPasswordCommandHandler _sut;
 
     public ForgotPasswordCommandHandlerTests()
     {
         _tokenService.GenerateRefreshToken().Returns("rawtoken123");
         _tokenService.HashRefreshToken("rawtoken123").Returns("hashedtoken123");
-        _sut = new ForgotPasswordCommandHandler(_users, _resetTokens, _sender, _tokenService);
+        _sut = new ForgotPasswordCommandHandler(_users, _resetTokens, _sender, _tokenService, _logger);
     }
 
     [Fact]
@@ -107,5 +128,28 @@ public sealed class ForgotPasswordCommandHandlerTests
 
         // Assert
         await _users.Received(1).FindByEmailAsync("user@example.com", default);
+    }
+
+    // M8 — ForgotPassword: delivery failure must be logged at Warning with userId context
+    [Fact]
+    public async Task Handle_SenderThrows_LogsWarningWithUserId()
+    {
+        // Arrange
+        var role = new Role("admin", "Administrator");
+        var user = User.Create("owner@test.vn", "hash", role);
+        _users.FindByEmailAsync("owner@test.vn", default).Returns(user);
+        _sender
+            .When(s => s.SendResetLinkAsync(Arg.Any<string>(), Arg.Any<string>(), default))
+            .Do(_ => throw new HttpRequestException("Resend unavailable"));
+
+        // Act
+        var result = await _sut.Handle(new ForgotPasswordCommand("owner@test.vn"), default);
+
+        // Assert — warning logged AND result is still success (anti-oracle)
+        result.IsSuccess.Should().BeTrue();
+        _logger.CapturedLevels.Should().Contain(LogLevel.Warning,
+            "a Warning should be logged when email delivery fails");
+        _logger.CapturedMessages.Should().ContainMatch($"*{user.Id}*",
+            "log message must include the userId for observability without leaking PII");
     }
 }
