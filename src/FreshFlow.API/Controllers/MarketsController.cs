@@ -5,6 +5,7 @@ using FreshFlow.Catalog.Application.Commands.Markets.Delete;
 using FreshFlow.Catalog.Application.Commands.Markets.Update;
 using FreshFlow.Catalog.Application.Queries.Markets.GetMarketById;
 using FreshFlow.Catalog.Application.Queries.Markets.GetMarkets;
+using FreshFlow.Pricing.Application.Queries.GetMarketProducts;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -75,6 +76,33 @@ public sealed class MarketsController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(new DeleteMarketCommand(id), ct);
         return result.IsSuccess ? NoContent() : result.Error.ToActionResult();
+    }
+
+    /// <summary>
+    /// GET /api/v1/markets/{marketId}/products
+    /// Returns active products at a specific market with current price and stock.
+    /// Cursor-paginated; optionally filtered by category.
+    /// Any authenticated user.
+    /// </summary>
+    [HttpGet("{marketId:guid}/products")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetMarketProductsAsync(
+        Guid marketId,
+        [FromQuery] string? category,
+        [FromQuery] string? cursor,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var query = new GetMarketProductsQuery(marketId, category, cursor, pageSize);
+        var result = await sender.Send(query, ct);
+
+        if (!result.IsSuccess)
+            return result.Error.ToActionResult();
+
+        var page = result.Value;
+        return Ok(ApiResponse.OkPaged(page.Items, page.PageSize, page.NextCursor));
     }
 }
 

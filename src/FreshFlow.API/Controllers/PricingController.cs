@@ -18,6 +18,9 @@ public sealed class PricingController(ISender sender) : ControllerBase
     /// </summary>
     [HttpGet("assigned-markets")]
     [Authorize(Roles = "market_agent")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAssignedMarketsAsync(CancellationToken ct)
     {
         if (!TryResolveUserId(out var userId))

@@ -37,6 +37,7 @@ public static class DependencyInjection
 
         // Cross-module read services
         services.AddScoped<IAssignedMarketReader, AssignedMarketReader>();
+        services.AddScoped<IMarketProductReader, MarketProductReader>();
 
         return services;
     }
