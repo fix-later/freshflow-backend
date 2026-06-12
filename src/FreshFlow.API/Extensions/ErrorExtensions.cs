@@ -21,8 +21,11 @@ public static class ErrorExtensions
             or "TOKEN_INVALID" or "REFRESH_TOKEN_EXPIRED" or "REFRESH_TOKEN_REVOKED")
             return new UnauthorizedObjectResult(body);
 
-        if (error.Code is "FORBIDDEN")
+        if (error.Code is "FORBIDDEN" or "MARKET_ACCESS_DENIED")
             return new ObjectResult(body) { StatusCode = 403 };
+
+        if (error.Code is "OPTIMISTIC_CONCURRENCY_CONFLICT")
+            return new ConflictObjectResult(body);
 
         if (error.Code is "VALIDATION_ERROR" or "INVALID_ROLE" or "WEAK_PASSWORD")
             return new BadRequestObjectResult(body);
@@ -35,6 +38,7 @@ public static class ErrorExtensions
 
         if (error.Code is "CHANNEL_NOT_SUPPORTED" or "CANNOT_DEACTIVATE_SELF" or "INVALID_MARKET"
                         or "INVALID_ASSIGNMENT_TARGET" or "INVALID_UNIT" or "INVALID_CATEGORY"
+                        or "INVALID_PRICE" or "INVALID_QUANTITY"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 

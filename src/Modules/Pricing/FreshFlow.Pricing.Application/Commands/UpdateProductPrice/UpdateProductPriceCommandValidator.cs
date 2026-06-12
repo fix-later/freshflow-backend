@@ -4,6 +4,15 @@ using Microsoft.Extensions.Options;
 
 namespace FreshFlow.Pricing.Application.Commands.UpdateProductPrice;
 
+/// <summary>
+/// Validates the structural and format constraints of <see cref="UpdateProductPriceCommand"/>.
+///
+/// Responsibility split:
+/// • 400 (this validator) — missing IDs, at-least-one-field, price exceeds max threshold,
+///                          price has more than 2 decimal places.
+/// • 422 (handler)        — price ≤ 0 (INVALID_PRICE), quantity &lt; 0 (INVALID_QUANTITY).
+///   These are business-rule violations handled after the structural layer.
+/// </summary>
 internal sealed class UpdateProductPriceCommandValidator
     : AbstractValidator<UpdateProductPriceCommand>
 {
@@ -22,12 +31,11 @@ internal sealed class UpdateProductPriceCommandValidator
             .WithErrorCode("AtLeastOneFieldRequired")
             .WithMessage("At least one of 'price' or 'quantity' must be provided.");
 
-        // ── Price rules (when provided) ───────────────────────────────────────
+        // ── Price structural rules (when provided) ────────────────────────────
+        // NOTE: price ≤ 0 is a business-rule violation → handled by the handler (422 INVALID_PRICE).
         When(x => x.Price.HasValue, () =>
         {
             RuleFor(x => x.Price!.Value)
-                .GreaterThan(0)
-                .WithMessage("Price must be greater than 0.")
                 .LessThanOrEqualTo(maxPrice)
                 .WithMessage($"Price must not exceed {maxPrice:N0} VND.")
                 .Must(p => decimal.Round(p, 2) == p)
@@ -35,13 +43,8 @@ internal sealed class UpdateProductPriceCommandValidator
                 .OverridePropertyName(nameof(UpdateProductPriceCommand.Price));
         });
 
-        // ── Quantity rules (when provided) ────────────────────────────────────
-        When(x => x.Quantity.HasValue, () =>
-        {
-            RuleFor(x => x.Quantity!.Value)
-                .GreaterThanOrEqualTo(0)
-                .WithMessage("Quantity must be non-negative.")
-                .OverridePropertyName(nameof(UpdateProductPriceCommand.Quantity));
-        });
+        // ── Quantity structural rules ─────────────────────────────────────────
+        // NOTE: quantity < 0 is a business-rule violation → handled by the handler (422 INVALID_QUANTITY).
+        // The `int?` binding already rejects non-integer values at the model-binding layer (400).
     }
 }

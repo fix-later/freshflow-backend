@@ -30,6 +30,10 @@ public sealed class MarketProduct : AggregateRoot
     public int AvailableQuantity => CurrentQuantity - ReservedQuantity;
     public bool IsOutOfStock => CurrentQuantity == 0;
 
+    /// <summary>
+    /// Applies a price-only update. Raises <see cref="PriceUpdatedDomainEvent"/>.
+    /// Caller must ensure <paramref name="newPrice"/> is positive (domain defends in depth).
+    /// </summary>
     public void UpdatePrice(decimal newPrice, Guid? actor)
     {
         ValidatePrice(newPrice);
@@ -39,9 +43,14 @@ public sealed class MarketProduct : AggregateRoot
         UpdatedBy = actor;
         UpdatedAt = DateTime.UtcNow;
 
-        RaiseDomainEvent(new PriceUpdatedDomainEvent(Id, oldPrice, newPrice, actor, DateTime.UtcNow));
+        RaiseDomainEvent(new PriceUpdatedDomainEvent(
+            Id, MarketId, ProductId, oldPrice, CurrentPrice, CurrentQuantity, actor, DateTime.UtcNow));
     }
 
+    /// <summary>
+    /// Applies a quantity-only mutation. Does NOT raise a domain event
+    /// (use <see cref="ApplyUpdate"/> when price/quantity update must be recorded together).
+    /// </summary>
     public void UpdateQuantity(int newQuantity, Guid? actor)
     {
         ValidateQuantity(newQuantity);
@@ -49,6 +58,37 @@ public sealed class MarketProduct : AggregateRoot
         CurrentQuantity = newQuantity;
         UpdatedBy = actor;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Combined update of price and/or quantity in a single operation.
+    /// Raises exactly one <see cref="PriceUpdatedDomainEvent"/> carrying the full context
+    /// needed by downstream handlers (SignalR broadcast, Redis sync, price history).
+    ///
+    /// The handler (UC-PRI-03) pre-validates business rules before calling this method.
+    /// Domain-level guards are retained as a defence-in-depth layer.
+    /// </summary>
+    public void ApplyUpdate(decimal? newPrice, int? newQuantity, Guid? actor)
+    {
+        var previousPrice = CurrentPrice;
+
+        if (newPrice.HasValue)
+        {
+            ValidatePrice(newPrice.Value);
+            CurrentPrice = newPrice.Value;
+        }
+
+        if (newQuantity.HasValue)
+        {
+            ValidateQuantity(newQuantity.Value);
+            CurrentQuantity = newQuantity.Value;
+        }
+
+        UpdatedBy = actor;
+        UpdatedAt = DateTime.UtcNow;
+
+        RaiseDomainEvent(new PriceUpdatedDomainEvent(
+            Id, MarketId, ProductId, previousPrice, CurrentPrice, CurrentQuantity, actor, DateTime.UtcNow));
     }
 
     // ── Invariant helpers ────────────────────────────────────────────────────

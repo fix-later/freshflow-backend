@@ -25,4 +25,14 @@ internal sealed class AssignedMarketReader(AppDbContext db) : IAssignedMarketRea
 
         return result.AsReadOnly();
     }
+
+    public Task<bool> HasAssignmentAsync(
+        Guid agentUserId, Guid marketId, CancellationToken ct) =>
+        db.Set<UserMarketAssignmentRow>()
+            .Join(
+                db.Set<MarketRow>().Where(m => m.IsActive),
+                a => a.MarketId,
+                m => m.Id,
+                (a, _) => a)
+            .AnyAsync(a => a.UserId == agentUserId && a.MarketId == marketId, ct);
 }

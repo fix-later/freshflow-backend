@@ -5,6 +5,14 @@ using Microsoft.Extensions.Options;
 
 namespace FreshFlow.Pricing.UnitTests.Commands;
 
+/// <summary>
+/// Validates only the STRUCTURAL layer (400 Bad Request) of UpdateProductPriceCommand.
+///
+/// Responsibility split:
+/// • 400 (this validator)  — missing IDs, at-least-one-field, price &gt; max threshold,
+///                           price with more than 2 decimal places.
+/// • 422 (handler)         — price ≤ 0 (INVALID_PRICE), quantity &lt; 0 (INVALID_QUANTITY).
+/// </summary>
 [Trait("Category", "Unit")]
 public sealed class UpdateProductPriceCommandValidatorTests
 {
@@ -32,13 +40,9 @@ public sealed class UpdateProductPriceCommandValidatorTests
     [Fact]
     public async Task Validate_NeitherPriceNorQuantity_FailsValidation()
     {
-        // Arrange
         var cmd = Valid(price: null, quantity: null);
-
-        // Act
         var result = await _sut.ValidateAsync(cmd);
 
-        // Assert
         result.IsValid.Should().BeFalse();
         result.Errors.Should().ContainSingle(e =>
             e.ErrorCode == "AtLeastOneFieldRequired");
@@ -53,18 +57,25 @@ public sealed class UpdateProductPriceCommandValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
+    /// <summary>
+    /// price ≤ 0 is a BUSINESS RULE (422 INVALID_PRICE), NOT a structural constraint.
+    /// The validator intentionally lets these through; the handler returns 422.
+    /// </summary>
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
     [InlineData(-100_000)]
-    public async Task Validate_PriceZeroOrNegative_FailsValidation(decimal price)
+    public async Task Validate_PriceZeroOrNegative_PassesValidator_BusinessRuleEnforcedByHandler(decimal price)
     {
+        // Arrange — price ≤ 0 passes structural validation (handler returns 422 INVALID_PRICE)
         var cmd = Valid(price: price, quantity: null);
+
+        // Act
         var result = await _sut.ValidateAsync(cmd);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().ContainSingle(e =>
-            e.PropertyName == nameof(UpdateProductPriceCommand.Price));
+        // Assert — validator does NOT block negative/zero prices
+        result.IsValid.Should().BeTrue(
+            "price ≤ 0 is a 422 business-rule enforced in the handler, not a 400 structural error");
     }
 
     [Fact]
@@ -120,22 +131,29 @@ public sealed class UpdateProductPriceCommandValidatorTests
     [Fact]
     public async Task Validate_QuantityZero_PassesValidation()
     {
-        // quantity=0 is valid (out-of-stock)
+        // quantity=0 is valid (out-of-stock signal)
         var result = await _sut.ValidateAsync(Valid(price: null, quantity: 0));
         result.IsValid.Should().BeTrue();
     }
 
+    /// <summary>
+    /// quantity &lt; 0 is a BUSINESS RULE (422 INVALID_QUANTITY), NOT a structural constraint.
+    /// The validator intentionally lets these through; the handler returns 422.
+    /// </summary>
     [Theory]
     [InlineData(-1)]
     [InlineData(-100)]
-    public async Task Validate_QuantityNegative_FailsValidation(int quantity)
+    public async Task Validate_QuantityNegative_PassesValidator_BusinessRuleEnforcedByHandler(int quantity)
     {
+        // Arrange — negative quantity passes structural validation (handler returns 422 INVALID_QUANTITY)
         var cmd = Valid(price: null, quantity: quantity);
+
+        // Act
         var result = await _sut.ValidateAsync(cmd);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().ContainSingle(e =>
-            e.PropertyName == nameof(UpdateProductPriceCommand.Quantity));
+        // Assert — validator does NOT block negative quantities
+        result.IsValid.Should().BeTrue(
+            "quantity < 0 is a 422 business-rule enforced in the handler, not a 400 structural error");
     }
 
     // ── Both fields ───────────────────────────────────────────────────────────

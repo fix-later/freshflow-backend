@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Catalog.Application.Commands.Markets.Create;
 using FreshFlow.Catalog.Application.Commands.Markets.Deactivate;
@@ -5,6 +6,7 @@ using FreshFlow.Catalog.Application.Commands.Markets.Delete;
 using FreshFlow.Catalog.Application.Commands.Markets.Update;
 using FreshFlow.Catalog.Application.Queries.Markets.GetMarketById;
 using FreshFlow.Catalog.Application.Queries.Markets.GetMarkets;
+using FreshFlow.Pricing.Application.Commands.UpdateProductPrice;
 using FreshFlow.Pricing.Application.Queries.GetMarketProducts;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -104,6 +106,44 @@ public sealed class MarketsController(ISender sender) : ControllerBase
         var page = result.Value;
         return Ok(ApiResponse.OkPaged(page.Items, page.PageSize, page.NextCursor));
     }
+
+    /// <summary>
+    /// PATCH /api/v1/markets/{marketId}/products/{productId}/price
+    /// Updates the price and/or available quantity of a product at a market.
+    /// Market Agent must be assigned to this market.
+    /// </summary>
+    [HttpPatch("{marketId:guid}/products/{productId:guid}/price")]
+    [Authorize(Roles = "market_agent")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateProductPriceAsync(
+        Guid marketId,
+        Guid productId,
+        [FromBody] UpdateProductPriceRequest body,
+        CancellationToken ct)
+    {
+        if (!TryResolveAgentId(out var agentId))
+            return Unauthorized(ApiResponse.Err("UNAUTHORIZED", "User ID claim is missing."));
+
+        var command = new UpdateProductPriceCommand(
+            marketId, productId, agentId, body.Price, body.Quantity, body.ExpectedVersion);
+
+        var result = await sender.Send(command, ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private bool TryResolveAgentId(out Guid agentId)
+    {
+        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                  ?? User.FindFirstValue("sub");
+        return Guid.TryParse(raw, out agentId);
+    }
 }
 
 // ── Request DTOs ──────────────────────────────────────────────────────────────
@@ -121,3 +161,8 @@ public sealed record UpdateMarketRequest(
     string? Address,
     decimal? Latitude,
     decimal? Longitude);
+
+public sealed record UpdateProductPriceRequest(
+    decimal? Price,
+    int? Quantity,
+    DateTime? ExpectedVersion);

@@ -104,8 +104,11 @@ public sealed class MarketProductTests
         // Assert
         var evt = mp.DomainEvents.OfType<PriceUpdatedDomainEvent>().Single();
         evt.MarketProductId.Should().Be(mp.Id);
+        evt.MarketId.Should().Be(MarketId);
+        evt.ProductId.Should().Be(ProductId);
         evt.OldPrice.Should().Be(100m);
         evt.NewPrice.Should().Be(150m);
+        evt.CurrentQuantity.Should().Be(10); // unchanged
         evt.UpdatedBy.Should().Be(newActor);
         evt.OccurredAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
@@ -178,6 +181,121 @@ public sealed class MarketProductTests
 
         // Assert
         act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("quantity");
+    }
+
+    // ── ApplyUpdate ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ApplyUpdate_PriceOnly_UpdatesPriceAndRaisesOneEvent()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, ActorId);
+
+        // Act
+        mp.ApplyUpdate(newPrice: 150m, newQuantity: null, actor: ActorId);
+
+        // Assert
+        mp.CurrentPrice.Should().Be(150m);
+        mp.CurrentQuantity.Should().Be(50); // unchanged
+        mp.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<PriceUpdatedDomainEvent>();
+    }
+
+    [Fact]
+    public void ApplyUpdate_QuantityOnly_UpdatesQuantityAndRaisesOneEvent()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, ActorId);
+
+        // Act
+        mp.ApplyUpdate(newPrice: null, newQuantity: 200, actor: ActorId);
+
+        // Assert
+        mp.CurrentQuantity.Should().Be(200);
+        mp.CurrentPrice.Should().Be(100m); // unchanged
+        mp.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<PriceUpdatedDomainEvent>();
+    }
+
+    [Fact]
+    public void ApplyUpdate_BothFields_UpdatesBothAndRaisesOneEvent()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, ActorId);
+
+        // Act
+        mp.ApplyUpdate(newPrice: 120m, newQuantity: 300, actor: ActorId);
+
+        // Assert
+        mp.CurrentPrice.Should().Be(120m);
+        mp.CurrentQuantity.Should().Be(300);
+        mp.DomainEvents.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void ApplyUpdate_RaisedEvent_ContainsFullContext()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, null);
+        var newActor = Guid.NewGuid();
+
+        // Act
+        mp.ApplyUpdate(newPrice: 130m, newQuantity: 75, actor: newActor);
+
+        // Assert
+        var evt = mp.DomainEvents.OfType<PriceUpdatedDomainEvent>().Single();
+        evt.MarketProductId.Should().Be(mp.Id);
+        evt.MarketId.Should().Be(MarketId);
+        evt.ProductId.Should().Be(ProductId);
+        evt.OldPrice.Should().Be(100m);
+        evt.NewPrice.Should().Be(130m);
+        evt.CurrentQuantity.Should().Be(75);
+        evt.UpdatedBy.Should().Be(newActor);
+        evt.OccurredAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public void ApplyUpdate_QuantityOnlyChange_OldPriceEqualsNewPriceInEvent()
+    {
+        // Arrange — only quantity changes; price fields in event should be identical
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, ActorId);
+
+        // Act
+        mp.ApplyUpdate(newPrice: null, newQuantity: 200, actor: ActorId);
+
+        // Assert — price fields should be unchanged (old == new)
+        var evt = mp.DomainEvents.OfType<PriceUpdatedDomainEvent>().Single();
+        evt.OldPrice.Should().Be(100m);
+        evt.NewPrice.Should().Be(100m);
+        evt.CurrentQuantity.Should().Be(200);
+    }
+
+    [Fact]
+    public void ApplyUpdate_NegativePrice_ThrowsArgumentOutOfRangeException()
+    {
+        // Arrange — handler pre-validates, domain guards as defence-in-depth
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, ActorId);
+
+        // Act
+        var act = () => mp.ApplyUpdate(newPrice: -1m, newQuantity: null, actor: ActorId);
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("price");
+        mp.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ApplyUpdate_NegativeQuantity_ThrowsArgumentOutOfRangeException()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, ActorId);
+
+        // Act
+        var act = () => mp.ApplyUpdate(newPrice: null, newQuantity: -5, actor: ActorId);
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("quantity");
+        mp.DomainEvents.Should().BeEmpty();
     }
 
     // ── AvailableQuantity ────────────────────────────────────────────────────
