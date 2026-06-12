@@ -42,10 +42,9 @@ internal sealed class ProductRepository(AppDbContext db) : IProductRepository
             // covers the transition period when both columns are populated).
             // When the value is not a Guid, fall back to the original LegacyCategory
             // exact-match for backward compatibility.
-            if (Guid.TryParse(category, out var categoryId))
-                query = query.Where(p => p.CategoryId == categoryId || p.LegacyCategory == category);
-            else
-                query = query.Where(p => p.LegacyCategory == category);
+            query = Guid.TryParse(category, out var categoryId)
+                ? query.Where(p => p.CategoryId == categoryId || p.LegacyCategory == category)
+                : query.Where(p => p.LegacyCategory == category);
         }
 
         var total = await query.CountAsync(ct);

@@ -17,10 +17,14 @@ public sealed class ForgotPasswordCommandHandlerTests
     private sealed class CapturingLogger : ILogger<ForgotPasswordCommandHandler>
     {
         public readonly List<LogLevel> CapturedLevels = [];
+        public readonly List<string> CapturedMessages = [];
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
-            Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Exception? exception, Func<TState, Exception?, string> formatter)
+        {
             CapturedLevels.Add(logLevel);
+            CapturedMessages.Add(formatter(state, exception));
+        }
 
         public bool IsEnabled(LogLevel logLevel) => true;
 
@@ -145,5 +149,7 @@ public sealed class ForgotPasswordCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         _logger.CapturedLevels.Should().Contain(LogLevel.Warning,
             "a Warning should be logged when email delivery fails");
+        _logger.CapturedMessages.Should().ContainMatch($"*{user.Id}*",
+            "log message must include the userId for observability without leaking PII");
     }
 }

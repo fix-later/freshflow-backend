@@ -39,7 +39,8 @@ public sealed class LoginEndpointTests(AuthWebAppFactory factory)
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         var env = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
-        env!.Error!.Code.Should().Be("INVALID_CREDENTIALS");
+        env!.Success.Should().BeFalse();
+        env.Error!.Code.Should().Be("INVALID_CREDENTIALS");
     }
 
     [Fact]

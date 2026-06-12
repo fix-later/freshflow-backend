@@ -42,14 +42,16 @@ public sealed class RefreshTokenEndpointTests(AuthWebAppFactory factory)
     {
         var (_, refresh) = await LoginAsAdminAsync();
         // First refresh — rotates token
-        await _client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = refresh });
+        var firstResponse = await _client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = refresh });
+        firstResponse.IsSuccessStatusCode.Should().BeTrue("first refresh with a valid token must succeed");
         // Second refresh with the old token — token reuse detected
         var response = await _client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = refresh });
 
         // FR-AUTH-007 AC2: reuse must return 409 with REFRESH_TOKEN_REUSE code
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
         var env = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
-        env!.Error!.Code.Should().Be("REFRESH_TOKEN_REUSE");
+        env!.Success.Should().BeFalse();
+        env.Error!.Code.Should().Be("REFRESH_TOKEN_REUSE");
     }
 
     [Fact]

@@ -23,7 +23,10 @@ services:
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      # Use shell form with $$ so Docker Compose does not interpolate the variable at parse time;
+      # the literal string $REDIS_PASSWORD is evaluated inside the container at runtime,
+      # keeping the credential out of `docker inspect` output.
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping"]
       interval: 5s
       timeout: 5s
       retries: 10

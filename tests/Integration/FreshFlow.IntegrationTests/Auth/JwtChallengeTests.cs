@@ -44,7 +44,8 @@ public sealed class JwtChallengeTests(AuthWebAppFactory factory)
 
         var env = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
         env.Should().NotBeNull();
-        env!.Error!.Code.Should().Be("TOKEN_EXPIRED");
+        env!.Success.Should().BeFalse();
+        env.Error!.Code.Should().Be("TOKEN_EXPIRED");
         env.Error.Message.Should().NotBeNullOrWhiteSpace();
     }
 
@@ -64,7 +65,8 @@ public sealed class JwtChallengeTests(AuthWebAppFactory factory)
 
         var env = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
         env.Should().NotBeNull();
-        env!.Error!.Code.Should().Be("UNAUTHORIZED");
+        env!.Success.Should().BeFalse();
+        env.Error!.Code.Should().Be("UNAUTHORIZED");
         env.Error.Message.Should().NotBeNullOrWhiteSpace();
     }
 
@@ -82,7 +84,8 @@ public sealed class JwtChallengeTests(AuthWebAppFactory factory)
 
         var env = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
         env.Should().NotBeNull();
-        env!.Error!.Code.Should().Be("UNAUTHORIZED");
+        env!.Success.Should().BeFalse();
+        env.Error!.Code.Should().Be("UNAUTHORIZED");
         env.Error.Message.Should().NotBeNullOrWhiteSpace();
     }
 

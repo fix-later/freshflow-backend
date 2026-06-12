@@ -75,6 +75,8 @@ public sealed class VerifyEmailCommandHandlerTests
 
         result.IsSuccess.Should().BeFalse();
         result.Error.Code.Should().Be("OTP_INVALID");
+        // Code lookup must be performed even on already-verified path (M7 security gate)
+        await _codes.Received(1).FindByUserChannelAndHashAsync(user.Id, "EMAIL", "codeHash", default);
     }
 
     [Fact]

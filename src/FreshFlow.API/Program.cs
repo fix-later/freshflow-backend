@@ -3,6 +3,7 @@ using FluentValidation;
 using FreshFlow.Auth.Infrastructure;
 using FreshFlow.Catalog.Infrastructure;
 using FreshFlow.Infrastructure.Persistence;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
@@ -67,24 +68,40 @@ builder.Services.AddCors(options =>
     });
 });
 
+// ── Forwarded headers — trust X-Forwarded-For / X-Forwarded-Proto from proxies ──
+// Without this, Connection.RemoteIpAddress is always the proxy IP, which makes the
+// rate limiter partition key meaningless and would throttle all users together (DoS).
+// KnownNetworks/KnownProxies are cleared so we accept forwarded headers from any upstream;
+// restrict to specific proxy CIDRs in production if the infrastructure allows it.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 // ── Rate limiting — "auth" policy: fixed window per remote IP ───
 // Limit and window are configurable via "RateLimiting:Auth:*" so integration
 // tests can override to a high value and avoid accidentally hitting the cap.
-var authPermitLimit = builder.Configuration.GetValue("RateLimiting:Auth:PermitLimit", defaultValue: 10);
-var authWindowMinutes = builder.Configuration.GetValue("RateLimiting:Auth:WindowMinutes", defaultValue: 1);
-
+// Config is read lazily from IConfiguration at request time so WebApplicationFactory
+// ConfigureAppConfiguration overrides are respected (startup-time capture misses them).
 builder.Services.AddRateLimiter(options =>
 {
     options.AddPolicy("auth", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
+    {
+        var cfg = context.RequestServices.GetRequiredService<IConfiguration>();
+        var limit = cfg.GetValue("RateLimiting:Auth:PermitLimit", 10);
+        var window = cfg.GetValue("RateLimiting:Auth:WindowMinutes", 1);
+        return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                Window = TimeSpan.FromMinutes(authWindowMinutes),
-                PermitLimit = authPermitLimit,
+                Window = TimeSpan.FromMinutes(window),
+                PermitLimit = limit,
                 QueueLimit = 0,
                 AutoReplenishment = true
-            }));
+            });
+    });
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     // Return the standard API error envelope so all 429 responses are machine-readable.
     options.OnRejected = async (ctx, ct) =>
@@ -190,6 +207,7 @@ if (app.Environment.IsDevelopment())
         .WithHttpBearerAuthentication(bearer => { bearer.Token = ""; }));
 }
 
+app.UseForwardedHeaders();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();

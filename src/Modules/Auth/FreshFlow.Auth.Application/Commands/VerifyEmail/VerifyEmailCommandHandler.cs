@@ -36,8 +36,13 @@ internal sealed class VerifyEmailCommandHandler(
             return Result.Failure(OtpInvalid);
 
         // Idempotent: already verified is a success — but only reached with a valid code above.
+        // Consume the code even on the idempotent path so it cannot be replayed until expiry.
         if (user.EmailVerifiedAt.HasValue)
+        {
+            verification.MarkUsed();
+            await users.SaveChangesAsync(ct);
             return Result.Success();
+        }
 
         verification.MarkUsed();
         user.MarkEmailVerified();

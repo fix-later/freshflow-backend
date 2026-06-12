@@ -63,15 +63,17 @@ internal sealed class LoginCommandHandler(
         var refreshToken = new Domain.Entities.RefreshToken(
             user.Id, refreshHash, familyId, tokenService.RefreshTokenTtlDays);
 
-        await tokens.AddAsync(refreshToken, ct);
-        await tokens.SaveChangesAsync(ct);
-
+        // Fetch restaurant status BEFORE SaveChangesAsync so that a lookup failure
+        // does not leave a persisted refresh token for a response that was never delivered.
         RestaurantStatus? approvalStatus = null;
         if (user.Role.Name == RoleNames.Restaurant)
         {
             var restaurant = await restaurants.FindByUserIdAsync(user.Id, ct);
             approvalStatus = restaurant?.Status;
         }
+
+        await tokens.AddAsync(refreshToken, ct);
+        await tokens.SaveChangesAsync(ct);
 
         return Result<LoginResponse>.Success(new LoginResponse(
             accessToken,

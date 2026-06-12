@@ -82,6 +82,7 @@ public sealed class GetProductByIdControllerTests
         var ok = (OkObjectResult)response;
         ok.Value.Should().NotBeNull();
         var data = ok.Value!.GetType().GetProperty("data")?.GetValue(ok.Value);
+        data.Should().NotBeNull("response envelope must include a 'data' property");
         data.Should().Be(dto);
         await _sender.Received(1).Send(
             Arg.Is<GetProductByIdQuery>(q => q.Id == id),
