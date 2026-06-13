@@ -22,4 +22,5 @@ public interface IMarketProductReader
         string? cursor,
         int pageSize,
         CancellationToken ct);
+
 }
