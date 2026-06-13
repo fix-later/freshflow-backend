@@ -232,7 +232,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidQuantity_PersistsSnapshot()
+    public async Task Handle_ValidQuantity_PersistsSnapshotViaForFactory()
     {
         // Arrange — FR-PRI-004: snapshot is created on every price OR quantity change
         var mp = MakeProduct(initialPrice: 100_000m, initialQty: 50);
@@ -242,11 +242,11 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
         // Act
         await _sut.Handle(Cmd(quantity: 400), default);
 
-        // Assert — snapshot captures new quantity; price is unchanged
+        // Assert — PriceSnapshot.For(mp, actor): price unchanged, qty=new qty
         await _snapRepo.Received(1).AddAsync(
             Arg.Is<PriceSnapshot>(s =>
                 s.MarketProductId == mp.Id &&
-                s.Price == 100_000m &&  // price not changed
+                s.Price == 100_000m &&
                 s.Quantity == 400 &&
                 s.RecordedBy == AgentId),
             Arg.Any<CancellationToken>());

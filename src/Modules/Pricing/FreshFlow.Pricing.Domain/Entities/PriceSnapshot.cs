@@ -24,4 +24,11 @@ public sealed class PriceSnapshot
     public int Quantity { get; private init; }
     public Guid? RecordedBy { get; private init; }
     public DateTime RecordedAt { get; private init; }
+
+    /// <summary>
+    /// Single source of truth for snapshot construction after a price or quantity update.
+    /// Captures the post-change state of <paramref name="marketProduct"/>.
+    /// </summary>
+    public static PriceSnapshot For(MarketProduct marketProduct, Guid? actor) =>
+        new(marketProduct.Id, marketProduct.CurrentPrice, marketProduct.CurrentQuantity, actor);
 }

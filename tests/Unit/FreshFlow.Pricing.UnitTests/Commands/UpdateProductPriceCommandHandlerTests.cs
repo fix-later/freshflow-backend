@@ -1,7 +1,6 @@
 using FluentAssertions;
 using FreshFlow.Pricing.Application.Abstractions;
 using FreshFlow.Pricing.Application.Commands.UpdateProductPrice;
-using FreshFlow.Pricing.Application.Dtos;
 using FreshFlow.Pricing.Domain.Entities;
 using NSubstitute;
 using NSubstitute.ReturnsExtensions;
@@ -229,21 +228,22 @@ public sealed class UpdateProductPriceCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_PriceUpdate_PersistsSnapshotBeforeSave()
+    public async Task Handle_PriceUpdate_PersistsSnapshotViaForFactory()
     {
         // Arrange
-        var mp = MakeProduct();
+        var mp = MakeProduct(initialPrice: 125_000m, initialQty: 500);
         _reader.HasAssignmentAsync(AgentId, MarketId, default).Returns(true);
         _mpRepo.FindByMarketAndProductAsync(MarketId, ProductId, default).Returns(mp);
 
         // Act
         await _sut.Handle(Cmd(price: 135_000m), default);
 
-        // Assert — snapshot added to repo
+        // Assert — snapshot created via PriceSnapshot.For(mp, actor): price=new price, qty=current qty
         await _snapRepo.Received(1).AddAsync(
             Arg.Is<PriceSnapshot>(s =>
                 s.MarketProductId == mp.Id &&
                 s.Price == 135_000m &&
+                s.Quantity == 500 &&
                 s.RecordedBy == AgentId),
             Arg.Any<CancellationToken>());
     }

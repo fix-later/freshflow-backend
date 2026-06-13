@@ -74,10 +74,9 @@ internal sealed class UpdateProductPriceCommandHandler(
         marketProductRepository.Track(mp);
         mp.ApplyUpdate(request.Price, request.Quantity, request.AgentUserId);
 
-        // ── 7. Create immutable price snapshot ────────────────────────────────
-        var snapshot = new PriceSnapshot(
-            mp.Id, mp.CurrentPrice, mp.CurrentQuantity, request.AgentUserId);
-
+        // ── 7. Create immutable price snapshot (FR-PRI-004) ───────────────────
+        // PriceSnapshot.For is the single source of truth for snapshot construction.
+        var snapshot = PriceSnapshot.For(mp, request.AgentUserId);
         await snapshotRepository.AddAsync(snapshot, cancellationToken);
 
         // ── 8. Persist (single unit-of-work; same AppDbContext) ───────────────

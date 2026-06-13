@@ -73,9 +73,8 @@ internal sealed class UpdateAvailableQuantityCommandHandler(
         // ── 7. Create immutable price snapshot (FR-PRI-004) ───────────────────
         // Snapshot records state after every price OR quantity change so that
         // the price-history feed (UC-PRI-06) has a full audit trail.
-        var snapshot = new PriceSnapshot(
-            mp.Id, mp.CurrentPrice, mp.CurrentQuantity, request.AgentUserId);
-
+        // PriceSnapshot.For is the single source of truth for snapshot construction.
+        var snapshot = PriceSnapshot.For(mp, request.AgentUserId);
         await snapshotRepository.AddAsync(snapshot, cancellationToken);
 
         // ── 8. Persist (single unit-of-work; same AppDbContext) ───────────────
