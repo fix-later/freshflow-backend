@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Catalog.Application.Commands.Markets.Create;
@@ -9,6 +10,7 @@ using FreshFlow.Catalog.Application.Queries.Markets.GetMarkets;
 using FreshFlow.Pricing.Application.Commands.UpdateAvailableQuantity;
 using FreshFlow.Pricing.Application.Commands.UpdateProductPrice;
 using FreshFlow.Pricing.Application.Queries.GetMarketProducts;
+using FreshFlow.Pricing.Application.Queries.GetPriceChangeHistory;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -106,6 +108,54 @@ public sealed class MarketsController(ISender sender) : ControllerBase
 
         var page = result.Value;
         return Ok(ApiResponse.OkPaged(page.Items, page.PageSize, page.NextCursor));
+    }
+
+    /// <summary>
+    /// GET /api/v1/markets/{marketId}/products/{productId}/price-history
+    /// Returns the cursor-paginated price/quantity change history for a product at a market.
+    /// Any authenticated user (UC-PRI-10).
+    /// Optional date filters: <c>from</c> / <c>to</c> (ISO 8601, inclusive).
+    /// </summary>
+    [HttpGet("{marketId:guid}/products/{productId:guid}/price-history")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPriceHistoryAsync(
+        Guid marketId,
+        Guid productId,
+        [FromQuery] string? cursor = null,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? from = null,
+        [FromQuery] string? to = null,
+        CancellationToken ct = default)
+    {
+        // Parse optional date range — return 400 VALIDATION_ERROR for bad format.
+        DateTime? parsedFrom = null;
+        if (from is not null)
+        {
+            if (!DateTime.TryParse(from, null, DateTimeStyles.RoundtripKind, out var pf))
+                return BadRequest(ApiResponse.Err("VALIDATION_ERROR",
+                    $"'from' is not a valid ISO 8601 date: '{from}'."));
+            parsedFrom = DateTime.SpecifyKind(pf, DateTimeKind.Utc);
+        }
+
+        DateTime? parsedTo = null;
+        if (to is not null)
+        {
+            if (!DateTime.TryParse(to, null, DateTimeStyles.RoundtripKind, out var pt))
+                return BadRequest(ApiResponse.Err("VALIDATION_ERROR",
+                    $"'to' is not a valid ISO 8601 date: '{to}'."));
+            parsedTo = DateTime.SpecifyKind(pt, DateTimeKind.Utc);
+        }
+
+        var result = await sender.Send(
+            new GetPriceChangeHistoryQuery(marketId, productId, cursor, pageSize, parsedFrom, parsedTo),
+            ct);
+
+        return result.IsSuccess
+            ? Ok(ApiResponse.OkPaged(result.Value.Items, result.Value.PageSize, result.Value.NextCursor))
+            : result.Error.ToActionResult();
     }
 
     /// <summary>
