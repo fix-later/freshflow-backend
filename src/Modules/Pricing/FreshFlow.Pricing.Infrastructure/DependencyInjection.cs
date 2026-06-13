@@ -5,6 +5,7 @@ using FreshFlow.Pricing.Application.Abstractions;
 using FreshFlow.Pricing.Application.Behaviors;
 using FreshFlow.Pricing.Application.Options;
 using FreshFlow.Pricing.Infrastructure.CrossModule;
+using FreshFlow.Pricing.Infrastructure.Realtime;
 using FreshFlow.Pricing.Infrastructure.Repositories;
 using MediatR;
 using Microsoft.Extensions.Configuration;
@@ -52,6 +53,9 @@ public static class DependencyInjection
         // Cross-module read services
         services.AddScoped<IAssignedMarketReader, AssignedMarketReader>();
         services.AddScoped<IMarketProductReader, MarketProductReader>();
+
+        // Real-time broadcast (UC-PRI-08) — IHubContext<PricingHub> is registered by AddSignalR()
+        services.AddScoped<IPricingBroadcastService, PricingBroadcastService>();
 
         return services;
     }
