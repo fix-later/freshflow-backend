@@ -37,8 +37,10 @@ public static class DependencyInjection
                 options.MaxPriceVnd = max;
         });
 
-        // MediatR — scan Application assembly for handlers
-        var applicationAssembly = Assembly.Load("FreshFlow.Pricing.Application");
+        // MediatR — scan Application assembly for handlers.
+        // Use a real type from that assembly so the reference is verified at compile time
+        // (Assembly.Load with a string can fail silently at runtime if the name drifts).
+        var applicationAssembly = typeof(IMarketProductRepository).Assembly;
         services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssembly(applicationAssembly);

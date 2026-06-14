@@ -56,7 +56,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     [InlineData(0)]
     [InlineData(-1)]
     [InlineData(-100_000)]
-    public async Task Handle_InvalidPrice_ReturnsInvalidPriceError(decimal price)
+    public async Task Handle_InvalidPrice_ReturnsInvalidPriceErrorAsync(decimal price)
     {
         // Arrange — price ≤ 0 is a 422 business rule, not a 400 structural error
         var cmd = Cmd(price: price, quantity: null);
@@ -75,7 +75,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     [Theory]
     [InlineData(-1)]
     [InlineData(-100)]
-    public async Task Handle_InvalidQuantity_ReturnsInvalidQuantityError(int quantity)
+    public async Task Handle_InvalidQuantity_ReturnsInvalidQuantityErrorAsync(int quantity)
     {
         // Arrange — quantity < 0 is a 422 business rule
         var cmd = Cmd(price: null, quantity: quantity);
@@ -94,7 +94,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     // ── 404 Market not found ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_MarketNotFound_ReturnsMarketNotFound()
+    public async Task Handle_MarketNotFound_ReturnsMarketNotFoundAsync()
     {
         // Arrange — override default: market does not exist
         _marketProductReader.MarketExistsAsync(MarketId, Arg.Any<CancellationToken>())
@@ -113,7 +113,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     // ── 403 Assignment guard ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_AgentNotAssigned_ReturnsMarketAccessDenied()
+    public async Task Handle_AgentNotAssigned_ReturnsMarketAccessDeniedAsync()
     {
         // Arrange — agent has no assignments
         _reader.HasAssignmentAsync(AgentId, MarketId, default)
@@ -132,7 +132,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     // ── 404 Product not found ─────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_ProductNotFound_ReturnsProductNotFound()
+    public async Task Handle_ProductNotFound_ReturnsProductNotFoundAsync()
     {
         // Arrange
         _reader.HasAssignmentAsync(AgentId, MarketId, default).Returns(true);
@@ -150,7 +150,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     // ── 409 Optimistic concurrency ────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_ExpectedVersionMismatch_ReturnsConflict()
+    public async Task Handle_ExpectedVersionMismatch_ReturnsConflictAsync()
     {
         // Arrange
         var mp = MakeProduct();
@@ -170,7 +170,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_NoExpectedVersion_SkipsConcurrencyCheck()
+    public async Task Handle_NoExpectedVersion_SkipsConcurrencyCheckAsync()
     {
         // Arrange — cmd has no expectedVersion → should NOT conflict
         var mp = MakeProduct();
@@ -187,7 +187,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     // ── 200 Price update ──────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_PriceUpdateOnly_ReturnsCorrectDto()
+    public async Task Handle_PriceUpdateOnly_ReturnsCorrectDtoAsync()
     {
         // Arrange
         var mp = MakeProduct(initialPrice: 100_000m, initialQty: 200);
@@ -212,7 +212,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_PriceUpdate_TracksAndSavesMarketProduct()
+    public async Task Handle_PriceUpdate_TracksAndSavesMarketProductAsync()
     {
         // Arrange
         var mp = MakeProduct();
@@ -228,7 +228,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_PriceUpdate_PersistsSnapshotViaForFactory()
+    public async Task Handle_PriceUpdate_PersistsSnapshotViaForFactoryAsync()
     {
         // Arrange
         var mp = MakeProduct(initialPrice: 125_000m, initialQty: 500);
@@ -251,7 +251,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     // ── 200 Quantity-only update ──────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_QuantityOnlyUpdate_PriceUnchangedAndChangePercentZero()
+    public async Task Handle_QuantityOnlyUpdate_PriceUnchangedAndChangePercentZeroAsync()
     {
         // Arrange
         var mp = MakeProduct(initialPrice: 100_000m, initialQty: 200);
@@ -275,7 +275,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     // ── 200 Both price and quantity ───────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_BothPriceAndQuantity_UpdatesBothFields()
+    public async Task Handle_BothPriceAndQuantity_UpdatesBothFieldsAsync()
     {
         // Arrange
         var mp = MakeProduct(initialPrice: 100_000m, initialQty: 200);
@@ -298,7 +298,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     // ── SnapshotId in result ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_Success_SnapshotIdIsNonEmpty()
+    public async Task Handle_Success_SnapshotIdIsNonEmptyAsync()
     {
         // Arrange
         var mp = MakeProduct();
@@ -316,7 +316,7 @@ public sealed class UpdateProductPriceCommandHandlerTests
     // ── Optimistic concurrency happy path ─────────────────────────────────────
 
     [Fact]
-    public async Task Handle_ExpectedVersionMatches_Succeeds()
+    public async Task Handle_ExpectedVersionMatches_SucceedsAsync()
     {
         // Arrange
         var mp = MakeProduct();

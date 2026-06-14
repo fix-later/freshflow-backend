@@ -19,6 +19,7 @@ internal sealed class PriceSnapshotRepository(AppDbContext db) : IPriceSnapshotR
             .AsNoTracking()
             .Where(ps => ps.MarketProductId == marketProductId)
             .OrderByDescending(ps => ps.RecordedAt)
+            .ThenByDescending(ps => ps.Id)
             .ToListAsync(ct);
 
     public async Task<(IReadOnlyList<PriceSnapshot> Items, string? NextCursor)> GetPageAsync(
@@ -29,6 +30,11 @@ internal sealed class PriceSnapshotRepository(AppDbContext db) : IPriceSnapshotR
         DateTime? to,
         CancellationToken ct)
     {
+        // Guard: pageSize=0 causes Take(0) → empty page, then page[^1] throws
+        // IndexOutOfRangeException when building the next cursor.
+        if (pageSize <= 0)
+            throw new ArgumentException("pageSize must be greater than zero.", nameof(pageSize));
+
         var query = db.Set<PriceSnapshot>()
             .AsNoTracking()
             .Where(ps => ps.MarketProductId == marketProductId);

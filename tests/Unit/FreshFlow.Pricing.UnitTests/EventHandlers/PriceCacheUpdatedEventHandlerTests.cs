@@ -175,4 +175,23 @@ public sealed class PriceCacheUpdatedEventHandlerTests
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<int>(),
             Arg.Any<DateTime>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>());
     }
+
+    // ── Fix #5: OperationCanceledException rethrow ───────────────────────────
+
+    [Fact]
+    public async Task Handle_OperationCancelled_RethrowsOperationCanceledException()
+    {
+        // Arrange — WriteAsync throws OCE (e.g. request was cancelled)
+        var (handler, writer) = BuildSut();
+        writer.WriteAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<int>(),
+            Arg.Any<DateTime>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new OperationCanceledException("Request cancelled"));
+
+        // Act
+        var act = async () => await handler.Handle(BuildEvent(), CancellationToken.None);
+
+        // Assert — OCE must propagate (cooperative cancellation), not be swallowed
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
 }

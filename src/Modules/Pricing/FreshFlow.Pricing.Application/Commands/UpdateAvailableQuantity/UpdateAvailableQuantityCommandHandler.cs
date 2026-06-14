@@ -98,6 +98,19 @@ internal sealed class UpdateAvailableQuantityCommandHandler(
     private static bool IsVersionMatch(DateTime current, DateTime expected) =>
         Truncate(current) == Truncate(expected);
 
-    private static DateTime Truncate(DateTime dt) =>
-        new(dt.Ticks - dt.Ticks % TimeSpan.TicksPerMillisecond, dt.Kind);
+    private static DateTime Truncate(DateTime dt)
+    {
+        // Strip DateTimeKind and compare raw ticks.
+        //
+        // All UpdatedAt values in this system originate from DateTime.UtcNow (EF Core returns
+        // them with Kind=Utc). Clients may echo the value back with different Kind labels:
+        //   - Kind.Utc       → JSON with "Z" suffix (standard path)
+        //   - Kind.Unspecified → JSON without timezone suffix (common serialiser default)
+        //   - Kind.Local     → SpecifyKind relabeling (no tick shift, same instant)
+        //
+        // In all three cases the tick count represents the same UTC instant, so raw-tick
+        // comparison is correct and avoids timezone-offset shifts from ToUniversalTime().
+        var ticks = dt.Ticks;
+        return new DateTime(ticks - ticks % TimeSpan.TicksPerMillisecond, DateTimeKind.Utc);
+    }
 }

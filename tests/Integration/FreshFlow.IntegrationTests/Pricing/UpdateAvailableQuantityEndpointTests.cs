@@ -25,7 +25,7 @@ public sealed class UpdateAvailableQuantityEndpointTests(AuthWebAppFactory facto
     // ── Authentication / Authorization ───────────────────────────────────────
 
     [Fact]
-    public async Task PatchQuantity_Unauthenticated_Returns401()
+    public async Task PatchQuantity_Unauthenticated_Returns401Async()
     {
         _client.DefaultRequestHeaders.Authorization = null;
 
@@ -37,7 +37,7 @@ public sealed class UpdateAvailableQuantityEndpointTests(AuthWebAppFactory facto
     }
 
     [Fact]
-    public async Task PatchQuantity_AsAdmin_Returns403()
+    public async Task PatchQuantity_AsAdmin_Returns403Async()
     {
         // Arrange — admin role does not have market_agent permission
         var token = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -54,7 +54,7 @@ public sealed class UpdateAvailableQuantityEndpointTests(AuthWebAppFactory facto
     // ── Market assignment guard ───────────────────────────────────────────────
 
     [Fact]
-    public async Task PatchQuantity_AgentNotAssignedToMarket_Returns403WithMarketAccessDenied()
+    public async Task PatchQuantity_AgentNotAssignedToMarket_Returns403WithMarketAccessDeniedAsync()
     {
         // Arrange — agent assigned to market1 but calls market2
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -83,7 +83,7 @@ public sealed class UpdateAvailableQuantityEndpointTests(AuthWebAppFactory facto
     // ── 404 product not found ─────────────────────────────────────────────────
 
     [Fact]
-    public async Task PatchQuantity_ProductNotListedAtMarket_Returns404()
+    public async Task PatchQuantity_ProductNotListedAtMarket_Returns404Async()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -110,7 +110,7 @@ public sealed class UpdateAvailableQuantityEndpointTests(AuthWebAppFactory facto
     // ── 422 business-rule violation ───────────────────────────────────────────
 
     [Fact]
-    public async Task PatchQuantity_NegativeQuantity_Returns422WithInvalidQuantity()
+    public async Task PatchQuantity_NegativeQuantity_Returns422WithInvalidQuantityAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -141,7 +141,7 @@ public sealed class UpdateAvailableQuantityEndpointTests(AuthWebAppFactory facto
     // ── 200 successful update ─────────────────────────────────────────────────
 
     [Fact]
-    public async Task PatchQuantity_ValidQuantity_Returns200WithCorrectDto()
+    public async Task PatchQuantity_ValidQuantity_Returns200WithCorrectDtoAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -176,7 +176,7 @@ public sealed class UpdateAvailableQuantityEndpointTests(AuthWebAppFactory facto
     }
 
     [Fact]
-    public async Task PatchQuantity_ZeroQuantity_Returns200WithIsOutOfStockTrue()
+    public async Task PatchQuantity_ZeroQuantity_Returns200WithIsOutOfStockTrueAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -210,7 +210,7 @@ public sealed class UpdateAvailableQuantityEndpointTests(AuthWebAppFactory facto
     // ── 409 optimistic concurrency conflict ───────────────────────────────────
 
     [Fact]
-    public async Task PatchQuantity_StaleExpectedVersion_Returns409()
+    public async Task PatchQuantity_StaleExpectedVersion_Returns409Async()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");

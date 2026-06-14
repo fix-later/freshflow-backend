@@ -131,22 +131,26 @@ public sealed class MarketsController(ISender sender) : ControllerBase
         CancellationToken ct = default)
     {
         // Parse optional date range — return 400 VALIDATION_ERROR for bad format.
+        // DateTimeOffset.TryParse + .UtcDateTime correctly handles timezone-offset inputs
+        // (e.g. "2026-06-14T17:00:00+07:00" → UTC 2026-06-14T10:00:00Z).
+        // DateTime.SpecifyKind (the previous approach) merely relabelled the Kind flag
+        // without converting the offset, silently discarding timezone information.
         DateTime? parsedFrom = null;
         if (from is not null)
         {
-            if (!DateTime.TryParse(from, null, DateTimeStyles.RoundtripKind, out var pf))
+            if (!DateTimeOffset.TryParse(from, null, DateTimeStyles.RoundtripKind, out var pf))
                 return BadRequest(ApiResponse.Err("VALIDATION_ERROR",
                     $"'from' is not a valid ISO 8601 date: '{from}'."));
-            parsedFrom = DateTime.SpecifyKind(pf, DateTimeKind.Utc);
+            parsedFrom = pf.UtcDateTime;
         }
 
         DateTime? parsedTo = null;
         if (to is not null)
         {
-            if (!DateTime.TryParse(to, null, DateTimeStyles.RoundtripKind, out var pt))
+            if (!DateTimeOffset.TryParse(to, null, DateTimeStyles.RoundtripKind, out var pt))
                 return BadRequest(ApiResponse.Err("VALIDATION_ERROR",
                     $"'to' is not a valid ISO 8601 date: '{to}'."));
-            parsedTo = DateTime.SpecifyKind(pt, DateTimeKind.Utc);
+            parsedTo = pt.UtcDateTime;
         }
 
         var result = await sender.Send(

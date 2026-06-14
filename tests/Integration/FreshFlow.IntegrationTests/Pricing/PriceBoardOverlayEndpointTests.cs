@@ -41,7 +41,7 @@ public sealed class PriceBoardOverlayEndpointTests(AuthWebAppFactory factory)
     /// Seeds ReservedQuantity > 0 directly in the DB to prove the overlay takes effect.
     /// </summary>
     [Fact]
-    public async Task GetMarketProducts_WhenReservedQuantityNonZero_AvailableQuantityEqualsCurrentQuantity()
+    public async Task GetMarketProducts_WhenReservedQuantityNonZero_AvailableQuantityEqualsCurrentQuantityAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -80,7 +80,7 @@ public sealed class PriceBoardOverlayEndpointTests(AuthWebAppFactory factory)
     // ── Price overlay ─────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetMarketProducts_WithSeededProduct_ReturnsCurrentDbPrice()
+    public async Task GetMarketProducts_WithSeededProduct_ReturnsCurrentDbPriceAsync()
     {
         // Arrange — verifies v1 DB-direct reader returns the correct price
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");

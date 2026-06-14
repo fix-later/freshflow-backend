@@ -27,6 +27,11 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
         int pageSize,
         CancellationToken ct)
     {
+        // Guard: pageSize=0 would cause Take(1) to over-fetch, then rows[^1] on an empty list
+        // after RemoveAt causes IndexOutOfRangeException.
+        if (pageSize <= 0)
+            throw new ArgumentException("pageSize must be greater than zero.", nameof(pageSize));
+
         var decoded = Cursor.TryDecode(cursor);
 
         // ProductDetailRow already excludes deleted products via its SQL query.

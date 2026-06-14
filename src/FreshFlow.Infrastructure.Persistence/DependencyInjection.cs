@@ -19,7 +19,13 @@ public static class DependencyInjection
         services.AddScoped<DomainEventDispatchInterceptor>();
         services.AddDbContext<AppDbContext>((sp, opt) =>
         {
-            opt.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
+            var connectionString = configuration.GetConnectionString("DefaultConnection");
+            if (string.IsNullOrEmpty(connectionString))
+                throw new InvalidOperationException(
+                    "Missing required connection string 'DefaultConnection'. " +
+                    "Set ConnectionStrings__DefaultConnection in environment or appsettings.json.");
+
+            opt.UseNpgsql(connectionString);
             opt.AddInterceptors(sp.GetRequiredService<DomainEventDispatchInterceptor>());
         });
 

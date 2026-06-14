@@ -256,6 +256,50 @@ public sealed class MarketProductTests
         mp.DomainEvents.Should().BeEmpty();
     }
 
+    // ── Fix #6: no-op guard ──────────────────────────────────────────────────
+
+    [Fact]
+    public void ApplyUpdate_BothParamsNull_RaisesNoDomainEvent()
+    {
+        // Arrange — calling with both null is a no-op; no synthetic event should be raised
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, ActorId);
+
+        // Act
+        mp.ApplyUpdate(newPrice: null, newQuantity: null, actor: ActorId);
+
+        // Assert
+        mp.DomainEvents.Should().BeEmpty(
+            "a no-op ApplyUpdate must not synthesize a spurious PriceUpdatedDomainEvent");
+    }
+
+    [Fact]
+    public void ApplyUpdate_BothParamsNull_DoesNotUpdateUpdatedAt()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, ActorId);
+        var updatedAtBefore = mp.UpdatedAt;
+
+        // Act
+        mp.ApplyUpdate(newPrice: null, newQuantity: null, actor: ActorId);
+
+        // Assert — UpdatedAt must remain unchanged for a no-op
+        mp.UpdatedAt.Should().Be(updatedAtBefore);
+    }
+
+    [Fact]
+    public void ApplyUpdate_BothParamsNull_DoesNotUpdateUpdatedBy()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, null); // UpdatedBy = null
+        var newActor = Guid.NewGuid();
+
+        // Act
+        mp.ApplyUpdate(newPrice: null, newQuantity: null, actor: newActor);
+
+        // Assert — UpdatedBy must NOT be changed for a no-op call
+        mp.UpdatedBy.Should().BeNull();
+    }
+
     // ── AvailableQuantity ────────────────────────────────────────────────────
 
     [Fact]

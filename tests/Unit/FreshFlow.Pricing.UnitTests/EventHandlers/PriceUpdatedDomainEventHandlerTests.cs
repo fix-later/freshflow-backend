@@ -50,7 +50,7 @@ public sealed class PriceUpdatedDomainEventHandlerTests
     // ── Happy path ────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_ValidEvent_CallsBroadcastServiceOnce()
+    public async Task Handle_ValidEvent_CallsBroadcastServiceOnceAsync()
     {
         // Arrange
         var evt = BuildEvent();
@@ -64,7 +64,7 @@ public sealed class PriceUpdatedDomainEventHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidEvent_DtoHasCorrectMarketProductId()
+    public async Task Handle_ValidEvent_DtoHasCorrectMarketProductIdAsync()
     {
         // Arrange
         var evt = BuildEvent();
@@ -79,7 +79,7 @@ public sealed class PriceUpdatedDomainEventHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidEvent_DtoHasCorrectMarketId()
+    public async Task Handle_ValidEvent_DtoHasCorrectMarketIdAsync()
     {
         // Arrange
         var evt = BuildEvent();
@@ -94,7 +94,7 @@ public sealed class PriceUpdatedDomainEventHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidEvent_DtoHasCorrectPrices()
+    public async Task Handle_ValidEvent_DtoHasCorrectPricesAsync()
     {
         // Arrange
         var evt = BuildEvent(oldPrice: 100_000m, newPrice: 135_000m);
@@ -111,7 +111,7 @@ public sealed class PriceUpdatedDomainEventHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidEvent_DtoHasCorrectQuantity()
+    public async Task Handle_ValidEvent_DtoHasCorrectQuantityAsync()
     {
         // Arrange
         var evt = BuildEvent(quantity: 450);
@@ -126,7 +126,7 @@ public sealed class PriceUpdatedDomainEventHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidEvent_DtoHasCorrectProductId()
+    public async Task Handle_ValidEvent_DtoHasCorrectProductIdAsync()
     {
         // Arrange
         var evt = BuildEvent();
@@ -141,7 +141,7 @@ public sealed class PriceUpdatedDomainEventHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidEvent_DtoPreservesUpdatedBy()
+    public async Task Handle_ValidEvent_DtoPreservesUpdatedByAsync()
     {
         // Arrange
         var actor = Guid.NewGuid();
@@ -159,7 +159,7 @@ public sealed class PriceUpdatedDomainEventHandlerTests
     // ── Fault tolerance ───────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_BroadcastThrows_DoesNotPropagateException()
+    public async Task Handle_BroadcastThrows_DoesNotPropagateExceptionAsync()
     {
         // Arrange — simulate transient SignalR failure
         _broadcastService
@@ -176,7 +176,7 @@ public sealed class PriceUpdatedDomainEventHandlerTests
     }
 
     [Fact]
-    public async Task Handle_BroadcastThrows_LogsError()
+    public async Task Handle_BroadcastThrows_LogsErrorAsync()
     {
         // Arrange
         var exception = new InvalidOperationException("Hub disconnected");
@@ -196,5 +196,24 @@ public sealed class PriceUpdatedDomainEventHandlerTests
             Arg.Any<object>(),
             exception,
             Arg.Any<Func<object, Exception?, string>>());
+    }
+
+    // ── Fix #5: OperationCanceledException rethrow ───────────────────────────
+
+    [Fact]
+    public async Task Handle_OperationCancelled_RethrowsOperationCanceledExceptionAsync()
+    {
+        // Arrange — BroadcastPriceUpdateAsync throws OCE (e.g. request was cancelled)
+        _broadcastService
+            .BroadcastPriceUpdateAsync(Arg.Any<PriceUpdateBroadcastDto>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new OperationCanceledException("Request cancelled"));
+
+        var evt = BuildEvent();
+
+        // Act
+        var act = async () => await _sut.Handle(evt, default);
+
+        // Assert — OCE must propagate (cooperative cancellation), not be swallowed
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 }

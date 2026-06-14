@@ -29,14 +29,14 @@ public sealed class UpdateAvailableQuantityCommandValidatorTests
     // ── Happy paths ───────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Validate_ValidCommand_PassesValidation()
+    public async Task Validate_ValidCommand_PassesValidationAsync()
     {
         var result = await _sut.ValidateAsync(Valid(quantity: 100));
         result.IsValid.Should().BeTrue();
     }
 
     [Fact]
-    public async Task Validate_ZeroQuantity_PassesValidation()
+    public async Task Validate_ZeroQuantity_PassesValidationAsync()
     {
         // quantity=0 is valid → OUT_OF_STOCK
         var result = await _sut.ValidateAsync(Valid(quantity: 0));
@@ -50,7 +50,7 @@ public sealed class UpdateAvailableQuantityCommandValidatorTests
     [Theory]
     [InlineData(-1)]
     [InlineData(-100)]
-    public async Task Validate_NegativeQuantity_PassesValidator_BusinessRuleEnforcedByHandler(int quantity)
+    public async Task Validate_NegativeQuantity_PassesValidator_BusinessRuleEnforcedByHandlerAsync(int quantity)
     {
         var cmd = Valid(quantity: quantity);
         var result = await _sut.ValidateAsync(cmd);
@@ -60,7 +60,7 @@ public sealed class UpdateAvailableQuantityCommandValidatorTests
     }
 
     [Fact]
-    public async Task Validate_WithOptionalExpectedVersion_PassesValidation()
+    public async Task Validate_WithOptionalExpectedVersion_PassesValidationAsync()
     {
         var result = await _sut.ValidateAsync(Valid(quantity: 50, expectedVersion: DateTime.UtcNow));
         result.IsValid.Should().BeTrue();
@@ -69,7 +69,7 @@ public sealed class UpdateAvailableQuantityCommandValidatorTests
     // ── Identity guards ───────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Validate_EmptyMarketId_FailsValidation()
+    public async Task Validate_EmptyMarketId_FailsValidationAsync()
     {
         var cmd = new UpdateAvailableQuantityCommand(
             Guid.Empty, Guid.NewGuid(), Guid.NewGuid(), 100, null);
@@ -81,7 +81,7 @@ public sealed class UpdateAvailableQuantityCommandValidatorTests
     }
 
     [Fact]
-    public async Task Validate_EmptyProductId_FailsValidation()
+    public async Task Validate_EmptyProductId_FailsValidationAsync()
     {
         var cmd = new UpdateAvailableQuantityCommand(
             Guid.NewGuid(), Guid.Empty, Guid.NewGuid(), 100, null);
@@ -93,7 +93,7 @@ public sealed class UpdateAvailableQuantityCommandValidatorTests
     }
 
     [Fact]
-    public async Task Validate_EmptyAgentUserId_FailsValidation()
+    public async Task Validate_EmptyAgentUserId_FailsValidationAsync()
     {
         var cmd = new UpdateAvailableQuantityCommand(
             Guid.NewGuid(), Guid.NewGuid(), Guid.Empty, 100, null);

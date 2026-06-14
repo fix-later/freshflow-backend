@@ -27,7 +27,7 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
     // ── Authentication ────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetMarketProducts_Unauthenticated_Returns401()
+    public async Task GetMarketProducts_Unauthenticated_Returns401Async()
     {
         // Arrange
         _client.DefaultRequestHeaders.Authorization = null;
@@ -42,7 +42,7 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
     // ── 404 market not found ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetMarketProducts_MarketNotFound_Returns404()
+    public async Task GetMarketProducts_MarketNotFound_Returns404Async()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -62,7 +62,7 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
     // ── 200 empty list ────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetMarketProducts_ValidMarketNoProducts_Returns200EmptyList()
+    public async Task GetMarketProducts_ValidMarketNoProducts_Returns200EmptyListAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -90,7 +90,7 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
     // ── 200 with products ─────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetMarketProducts_WithSeededProducts_Returns200WithData()
+    public async Task GetMarketProducts_WithSeededProducts_Returns200WithDataAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -129,7 +129,7 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
     // ── Cursor pagination ─────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetMarketProducts_PageSizeOne_NextCursorPresent()
+    public async Task GetMarketProducts_PageSizeOne_NextCursorPresentAsync()
     {
         // Arrange — seed two products so page 1 has nextCursor
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -176,7 +176,7 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
     /// would compare CreatedAt against a future UpdatedAt, producing an empty page.
     /// </summary>
     [Fact]
-    public async Task GetMarketProducts_ProductWithUpdatedAtAfterCreatedAt_CursorPaginatesCorrectly()
+    public async Task GetMarketProducts_ProductWithUpdatedAtAfterCreatedAt_CursorPaginatesCorrectlyAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");

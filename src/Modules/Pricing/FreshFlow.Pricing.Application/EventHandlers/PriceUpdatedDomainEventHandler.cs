@@ -40,6 +40,11 @@ internal sealed class PriceUpdatedDomainEventHandler(
 
             await broadcastService.BroadcastPriceUpdateAsync(dto, cancellationToken);
         }
+        catch (OperationCanceledException)
+        {
+            // Cooperative cancellation: always propagate so the caller can honour the token.
+            throw;
+        }
         catch (Exception ex)
         {
             // Intentionally swallowed — broadcast failure must not fail the price update.

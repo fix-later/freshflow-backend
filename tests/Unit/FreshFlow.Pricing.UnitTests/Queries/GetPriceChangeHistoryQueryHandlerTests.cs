@@ -45,7 +45,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     // ── Market validation (404 MARKET_NOT_FOUND) ──────────────────────────────
 
     [Fact]
-    public async Task Handle_MarketNotFound_ReturnsMarketNotFoundError()
+    public async Task Handle_MarketNotFound_ReturnsMarketNotFoundErrorAsync()
     {
         // Arrange
         _marketReader.MarketExistsAsync(MarketId, default).Returns(false);
@@ -60,7 +60,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_MarketNotFound_DoesNotQueryMarketProduct()
+    public async Task Handle_MarketNotFound_DoesNotQueryMarketProductAsync()
     {
         // Arrange
         _marketReader.MarketExistsAsync(MarketId, default).Returns(false);
@@ -76,7 +76,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     // ── Product validation (404 PRODUCT_NOT_FOUND) ────────────────────────────
 
     [Fact]
-    public async Task Handle_ProductNotListedAtMarket_ReturnsProductNotFoundError()
+    public async Task Handle_ProductNotListedAtMarket_ReturnsProductNotFoundErrorAsync()
     {
         // Arrange
         _marketReader.MarketExistsAsync(MarketId, default).Returns(true);
@@ -94,7 +94,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ProductNotFound_DoesNotCallSnapshotRepo()
+    public async Task Handle_ProductNotFound_DoesNotCallSnapshotRepoAsync()
     {
         // Arrange
         _marketReader.MarketExistsAsync(MarketId, default).Returns(true);
@@ -119,7 +119,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     // ── Success path ──────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_ValidRequest_ReturnsSuccess()
+    public async Task Handle_ValidRequest_ReturnsSuccessAsync()
     {
         // Arrange
         SetupHappyPath();
@@ -133,7 +133,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_EmptyHistory_ReturnsEmptyPage()
+    public async Task Handle_EmptyHistory_ReturnsEmptyPageAsync()
     {
         // Arrange — default mock returns empty list
         SetupHappyPath();
@@ -148,7 +148,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_UsesMarketProductIdFromResolvedMarketProduct()
+    public async Task Handle_UsesMarketProductIdFromResolvedMarketProductAsync()
     {
         // Arrange — capture the auto-generated Id from the created MarketProduct
         var mp = SetupHappyPath();
@@ -168,7 +168,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WithCursor_ForwardsCursorToSnapshotRepo()
+    public async Task Handle_WithCursor_ForwardsCursorToSnapshotRepoAsync()
     {
         // Arrange
         SetupHappyPath();
@@ -190,7 +190,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WithCustomPageSize_ForwardsToSnapshotRepo()
+    public async Task Handle_WithCustomPageSize_ForwardsToSnapshotRepoAsync()
     {
         // Arrange
         SetupHappyPath();
@@ -212,7 +212,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WithDateRange_ForwardsFromAndToToSnapshotRepo()
+    public async Task Handle_WithDateRange_ForwardsFromAndToToSnapshotRepoAsync()
     {
         // Arrange
         SetupHappyPath();
@@ -235,7 +235,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_NextCursorFromRepo_IncludedInResult()
+    public async Task Handle_NextCursorFromRepo_IncludedInResultAsync()
     {
         // Arrange
         var mp = SetupHappyPath();
@@ -259,7 +259,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_PageSizePreservedInResult()
+    public async Task Handle_PageSizePreservedInResultAsync()
     {
         // Arrange
         SetupHappyPath();
@@ -274,7 +274,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ItemsMappedCorrectlyFromSnapshots()
+    public async Task Handle_ItemsMappedCorrectlyFromSnapshotsAsync()
     {
         // Arrange
         var mp = SetupHappyPath();
@@ -310,7 +310,7 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_NullRecordedBy_MappedToNull()
+    public async Task Handle_NullRecordedBy_MappedToNullAsync()
     {
         // Arrange — system-initiated update has no actor
         var mp = SetupHappyPath();

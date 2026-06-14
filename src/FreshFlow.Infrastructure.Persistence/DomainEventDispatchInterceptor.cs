@@ -2,6 +2,7 @@ using FreshFlow.SharedKernel.Domain;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 namespace FreshFlow.Infrastructure.Persistence;
 
@@ -20,10 +21,15 @@ namespace FreshFlow.Infrastructure.Persistence;
 ///     only persisted data; a broadcast failure CANNOT roll back the DB write.
 ///   - If DB save fails, <see cref="SavedChangesAsync"/> never fires so no events
 ///     are dispatched for uncommitted data.
+///   - Post-commit dispatch errors are logged but NOT re-thrown. The DB write already
+///     succeeded; propagating here would make callers believe the save failed and retry,
+///     risking duplicate writes. Full outbox pattern is out of scope for v1.
 ///   - Interceptor is scoped (one instance per request) — each handler in the dispatch
 ///     chain correctly resolves its own scoped dependencies (e.g., <c>IPricingBroadcastService</c>).
 /// </summary>
-internal sealed class DomainEventDispatchInterceptor(IPublisher publisher)
+internal sealed class DomainEventDispatchInterceptor(
+    IPublisher publisher,
+    ILogger<DomainEventDispatchInterceptor> logger)
     : SaveChangesInterceptor
 {
     public override async ValueTask<int> SavedChangesAsync(
@@ -47,9 +53,36 @@ internal sealed class DomainEventDispatchInterceptor(IPublisher publisher)
             foreach (var aggregate in aggregates)
                 aggregate.ClearDomainEvents();
 
-            // Dispatch post-commit — each handler is responsible for its own error handling.
+            // Dispatch post-commit — each event is wrapped individually so a single handler
+            // failure does not prevent the remaining events from being dispatched.
             foreach (var evt in domainEvents)
-                await publisher.Publish(evt, cancellationToken);
+            {
+                try
+                {
+                    await publisher.Publish(evt, cancellationToken);
+                }
+                catch (OperationCanceledException oce)
+                {
+                    // Cancellation after a committed write: log and stop dispatching
+                    // remaining events for this save, but do NOT re-throw — the caller
+                    // would interpret it as a save failure even though the DB committed.
+                    logger.LogWarning(
+                        oce,
+                        "Post-commit event dispatch cancelled for {EventType}. DB write succeeded.",
+                        evt.GetType().Name);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    // Non-cancellation failure: log at Error but continue to next event.
+                    // Failing here would incorrectly signal to the caller that SaveChangesAsync
+                    // failed, potentially causing a retry that double-writes data.
+                    logger.LogError(
+                        ex,
+                        "Post-commit event dispatch failed for {EventType}. DB write succeeded.",
+                        evt.GetType().Name);
+                }
+            }
         }
 
         return await base.SavedChangesAsync(eventData, result, cancellationToken);

@@ -33,7 +33,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     // ── Market validation ─────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_MarketNotFound_ReturnsNotFoundError()
+    public async Task Handle_MarketNotFound_ReturnsNotFoundErrorAsync()
     {
         // Arrange
         _reader.MarketExistsAsync(MarketId, default).Returns(false);
@@ -47,7 +47,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_MarketNotFound_DoesNotCallGetPage()
+    public async Task Handle_MarketNotFound_DoesNotCallGetPageAsync()
     {
         // Arrange
         _reader.MarketExistsAsync(MarketId, default).Returns(false);
@@ -64,7 +64,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     // ── Success path ──────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_ValidMarket_ReturnsProductPage()
+    public async Task Handle_ValidMarket_ReturnsProductPageAsync()
     {
         // Arrange
         SetupMarketExists();
@@ -82,7 +82,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidMarket_EmptyPage_ReturnsEmptyList()
+    public async Task Handle_ValidMarket_EmptyPage_ReturnsEmptyListAsync()
     {
         // Arrange
         SetupMarketExists();
@@ -98,7 +98,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WithCursor_ForwardsAllParametersToReader()
+    public async Task Handle_WithCursor_ForwardsAllParametersToReaderAsync()
     {
         // Arrange
         SetupMarketExists();
@@ -118,7 +118,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ReaderReturnsNextCursor_PageDtoHasCursor()
+    public async Task Handle_ReaderReturnsNextCursor_PageDtoHasCursorAsync()
     {
         // Arrange
         SetupMarketExists();
@@ -134,7 +134,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_PageSizeIsPreservedInResult()
+    public async Task Handle_PageSizeIsPreservedInResultAsync()
     {
         // Arrange
         SetupMarketExists();
@@ -151,7 +151,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     // ── UC-PRI-09: live price board overlay ───────────────────────────────────
 
     [Fact]
-    public async Task Handle_PriceBoardHit_OverridesPriceFromDb()
+    public async Task Handle_PriceBoardHit_OverridesPriceFromDbAsync()
     {
         // Arrange
         SetupMarketExists();
@@ -180,7 +180,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_PriceBoardMiss_KeepsDbPrice()
+    public async Task Handle_PriceBoardMiss_KeepsDbPriceAsync()
     {
         // Arrange — price board returns empty dict (all miss)
         SetupMarketExists();
@@ -201,7 +201,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_PartialPriceBoardHit_MixesLiveAndDbPrices()
+    public async Task Handle_PartialPriceBoardHit_MixesLiveAndDbPricesAsync()
     {
         // Arrange
         SetupMarketExists();
@@ -230,7 +230,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_PriceBoardThrows_DoesNotRethrow()
+    public async Task Handle_PriceBoardThrows_DoesNotRethrowAsync()
     {
         // Arrange
         SetupMarketExists();
@@ -248,7 +248,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_PriceBoardThrows_FallsBackToDbPrices()
+    public async Task Handle_PriceBoardThrows_FallsBackToDbPricesAsync()
     {
         // Arrange
         SetupMarketExists();
@@ -269,7 +269,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_EmptyPage_PriceBoardNotCalled()
+    public async Task Handle_EmptyPage_PriceBoardNotCalledAsync()
     {
         // Arrange
         SetupMarketExists();
@@ -285,7 +285,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_PriceBoardCalledWithCorrectMarketAndProductIds()
+    public async Task Handle_PriceBoardCalledWithCorrectMarketAndProductIdsAsync()
     {
         // Arrange
         SetupMarketExists();
@@ -308,7 +308,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_DbMetadataAlwaysPreserved_EvenOnCacheHit()
+    public async Task Handle_DbMetadataAlwaysPreserved_EvenOnCacheHitAsync()
     {
         // Arrange — price board provides live price but name/unit/category must stay from DB
         SetupMarketExists();

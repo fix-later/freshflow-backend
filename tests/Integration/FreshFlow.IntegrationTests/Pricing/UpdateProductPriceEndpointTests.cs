@@ -25,7 +25,7 @@ public sealed class UpdateProductPriceEndpointTests(AuthWebAppFactory factory)
     // ── Authentication / Authorization ───────────────────────────────────────
 
     [Fact]
-    public async Task PatchPrice_Unauthenticated_Returns401()
+    public async Task PatchPrice_Unauthenticated_Returns401Async()
     {
         // Arrange
         _client.DefaultRequestHeaders.Authorization = null;
@@ -40,7 +40,7 @@ public sealed class UpdateProductPriceEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task PatchPrice_AsAdmin_Returns403()
+    public async Task PatchPrice_AsAdmin_Returns403Async()
     {
         // Arrange — admin does not have market_agent role
         var token = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -59,7 +59,7 @@ public sealed class UpdateProductPriceEndpointTests(AuthWebAppFactory factory)
     // ── Market assignment guard ───────────────────────────────────────────────
 
     [Fact]
-    public async Task PatchPrice_AgentNotAssignedToMarket_Returns403WithMarketAccessDenied()
+    public async Task PatchPrice_AgentNotAssignedToMarket_Returns403WithMarketAccessDeniedAsync()
     {
         // Arrange — create two markets, agent is assigned to market1 but tries to update market2
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -90,7 +90,7 @@ public sealed class UpdateProductPriceEndpointTests(AuthWebAppFactory factory)
     // ── 404 product not found ─────────────────────────────────────────────────
 
     [Fact]
-    public async Task PatchPrice_ProductNotListedAtMarket_Returns404()
+    public async Task PatchPrice_ProductNotListedAtMarket_Returns404Async()
     {
         // Arrange — agent is assigned to market, but no market_product for productId
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -119,7 +119,7 @@ public sealed class UpdateProductPriceEndpointTests(AuthWebAppFactory factory)
     // ── 400 validation ────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task PatchPrice_NeitherPriceNorQuantity_Returns400()
+    public async Task PatchPrice_NeitherPriceNorQuantity_Returns400Async()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -146,7 +146,7 @@ public sealed class UpdateProductPriceEndpointTests(AuthWebAppFactory factory)
     // ── 200 successful price update ───────────────────────────────────────────
 
     [Fact]
-    public async Task PatchPrice_ValidPriceUpdate_Returns200WithCorrectDto()
+    public async Task PatchPrice_ValidPriceUpdate_Returns200WithCorrectDtoAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -187,7 +187,7 @@ public sealed class UpdateProductPriceEndpointTests(AuthWebAppFactory factory)
     // ── 409 optimistic concurrency conflict ───────────────────────────────────
 
     [Fact]
-    public async Task PatchPrice_StaleExpectedVersion_Returns409()
+    public async Task PatchPrice_StaleExpectedVersion_Returns409Async()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");

@@ -37,6 +37,11 @@ internal sealed class PriceCacheUpdatedEventHandler(
                 updatedBy: notification.UpdatedBy,
                 ct: cancellationToken);
         }
+        catch (OperationCanceledException)
+        {
+            // Cooperative cancellation: always propagate so the caller can honour the token.
+            throw;
+        }
         catch (Exception ex)
         {
             // Intentionally swallowed — Redis failure must not fail the price update.

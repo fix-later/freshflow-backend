@@ -4,7 +4,10 @@ using FreshFlow.Pricing.Domain.Events;
 using FreshFlow.SharedKernel.Domain;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 
 namespace FreshFlow.Pricing.UnitTests.Persistence;
 
@@ -45,6 +48,11 @@ public sealed class DomainEventDispatchInterceptorTests
             RaiseDomainEvent(domainEvent);
     }
 
+    private static DomainEventDispatchInterceptor BuildInterceptor(
+        IPublisher publisher,
+        ILogger<DomainEventDispatchInterceptor>? logger = null) =>
+        new(publisher, logger ?? NullLogger<DomainEventDispatchInterceptor>.Instance);
+
     private static DbContextOptions BuildOptions(
         DomainEventDispatchInterceptor interceptor,
         string dbName) =>
@@ -56,11 +64,11 @@ public sealed class DomainEventDispatchInterceptorTests
     // ── Tests ─────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task SaveChangesAsync_WithDomainEvent_PublishesEventPostCommit()
+    public async Task SaveChangesAsync_WithDomainEvent_PublishesEventPostCommitAsync()
     {
         // Arrange
         var publisher = Substitute.For<IPublisher>();
-        var interceptor = new DomainEventDispatchInterceptor(publisher);
+        var interceptor = BuildInterceptor(publisher);
         var options = BuildOptions(interceptor, $"db-{Guid.NewGuid()}");
 
         var evt = new PriceUpdatedDomainEvent(
@@ -82,11 +90,11 @@ public sealed class DomainEventDispatchInterceptorTests
     }
 
     [Fact]
-    public async Task SaveChangesAsync_TwoEventsOnOneAggregate_PublishesBoth()
+    public async Task SaveChangesAsync_TwoEventsOnOneAggregate_PublishesBothAsync()
     {
         // Arrange
         var publisher = Substitute.For<IPublisher>();
-        var interceptor = new DomainEventDispatchInterceptor(publisher);
+        var interceptor = BuildInterceptor(publisher);
         var options = BuildOptions(interceptor, $"db-{Guid.NewGuid()}");
 
         var id1 = Guid.NewGuid();
@@ -106,11 +114,11 @@ public sealed class DomainEventDispatchInterceptorTests
     }
 
     [Fact]
-    public async Task SaveChangesAsync_NoDomainEvents_PublishesNothing()
+    public async Task SaveChangesAsync_NoDomainEvents_PublishesNothingAsync()
     {
         // Arrange
         var publisher = Substitute.For<IPublisher>();
-        var interceptor = new DomainEventDispatchInterceptor(publisher);
+        var interceptor = BuildInterceptor(publisher);
         var options = BuildOptions(interceptor, $"db-{Guid.NewGuid()}");
 
         await using var ctx = new TestDbContext(options);
@@ -126,11 +134,11 @@ public sealed class DomainEventDispatchInterceptorTests
     }
 
     [Fact]
-    public async Task SaveChangesAsync_ClearsEventsFromAggregate()
+    public async Task SaveChangesAsync_ClearsEventsFromAggregateAsync()
     {
         // Arrange
         var publisher = Substitute.For<IPublisher>();
-        var interceptor = new DomainEventDispatchInterceptor(publisher);
+        var interceptor = BuildInterceptor(publisher);
         var options = BuildOptions(interceptor, $"db-{Guid.NewGuid()}");
 
         await using var ctx = new TestDbContext(options);
@@ -149,11 +157,11 @@ public sealed class DomainEventDispatchInterceptorTests
     }
 
     [Fact]
-    public async Task SaveChangesAsync_TwoSeparateSaves_EachPublishesOnce()
+    public async Task SaveChangesAsync_TwoSeparateSaves_EachPublishesOnceAsync()
     {
         // Arrange — verify events from first save don't bleed into second save
         var publisher = Substitute.For<IPublisher>();
-        var interceptor = new DomainEventDispatchInterceptor(publisher);
+        var interceptor = BuildInterceptor(publisher);
         var options = BuildOptions(interceptor, $"db-{Guid.NewGuid()}");
 
         var mpId1 = Guid.NewGuid();
@@ -180,5 +188,72 @@ public sealed class DomainEventDispatchInterceptorTests
             Arg.Any<CancellationToken>());
         await publisher.Received(2).Publish(
             Arg.Any<PriceUpdatedDomainEvent>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── Fix #3: post-commit exception isolation ───────────────────────────────
+
+    [Fact]
+    public async Task SaveChangesAsync_PostCommitPublishThrows_DoesNotPropagateExceptionAsync()
+    {
+        // Arrange — publisher throws for a domain event AFTER DB commit
+        var publisher = Substitute.For<IPublisher>();
+        publisher.Publish(Arg.Any<INotification>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new InvalidOperationException("SignalR unavailable"));
+
+        var interceptor = BuildInterceptor(publisher);
+        var options = BuildOptions(interceptor, $"db-{Guid.NewGuid()}");
+
+        await using var ctx = new TestDbContext(options);
+        var agg = new TestAggregate(Guid.NewGuid());
+        agg.RaiseEvent(new PriceUpdatedDomainEvent(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 100m, 120m, 50, null, DateTime.UtcNow));
+        await ctx.Aggregates.AddAsync(agg);
+
+        // Act — must NOT throw even though publisher fails post-commit
+        // (DB write already committed; re-throwing would confuse the caller into thinking save failed)
+        var act = async () => await ctx.SaveChangesAsync();
+
+        // Assert
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task SaveChangesAsync_PostCommitPublishThrows_LogsErrorAndContinuesToNextEventAsync()
+    {
+        // Arrange — publisher throws on the first event; second event should still be dispatched
+        var publisher = Substitute.For<IPublisher>();
+        var callCount = 0;
+        publisher.Publish(Arg.Any<INotification>(), Arg.Any<CancellationToken>())
+            .Returns(async _ =>
+            {
+                callCount++;
+                if (callCount == 1)
+                    throw new InvalidOperationException("transient failure on first event");
+                await Task.CompletedTask;
+            });
+
+        var logger = Substitute.For<ILogger<DomainEventDispatchInterceptor>>();
+        var interceptor = BuildInterceptor(publisher, logger);
+        var options = BuildOptions(interceptor, $"db-{Guid.NewGuid()}");
+
+        await using var ctx = new TestDbContext(options);
+        var agg = new TestAggregate(Guid.NewGuid());
+        agg.RaiseEvent(new PriceUpdatedDomainEvent(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 100m, 110m, 50, null, DateTime.UtcNow));
+        agg.RaiseEvent(new PriceUpdatedDomainEvent(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 110m, 130m, 50, null, DateTime.UtcNow));
+        await ctx.Aggregates.AddAsync(agg);
+
+        // Act
+        await ctx.SaveChangesAsync();
+
+        // Assert — both events attempted (second one succeeds), error was logged
+        await publisher.Received(2).Publish(Arg.Any<INotification>(), Arg.Any<CancellationToken>());
+        logger.Received().Log(
+            LogLevel.Error,
+            Arg.Any<EventId>(),
+            Arg.Any<object>(),
+            Arg.Any<InvalidOperationException>(),
+            Arg.Any<Func<object, Exception?, string>>());
     }
 }

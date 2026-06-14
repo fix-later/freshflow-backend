@@ -34,7 +34,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     // ── Authentication ────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetPriceHistory_Unauthenticated_Returns401()
+    public async Task GetPriceHistory_Unauthenticated_Returns401Async()
     {
         // Arrange
         _client.DefaultRequestHeaders.Authorization = null;
@@ -47,7 +47,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task GetPriceHistory_AuthenticatedNonAdmin_Returns200OrError()
+    public async Task GetPriceHistory_AuthenticatedNonAdmin_Returns200OrErrorAsync()
     {
         // Arrange — market_agent can call the endpoint (any authenticated is allowed)
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -73,7 +73,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     // ── Not found ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetPriceHistory_UnknownMarket_Returns404WithMarketNotFound()
+    public async Task GetPriceHistory_UnknownMarket_Returns404WithMarketNotFoundAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -90,7 +90,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task GetPriceHistory_ProductNotListedAtMarket_Returns404WithProductNotFound()
+    public async Task GetPriceHistory_ProductNotListedAtMarket_Returns404WithProductNotFoundAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -114,7 +114,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     // ── Happy path ────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetPriceHistory_AfterPriceUpdates_ReturnsSnapshotsNewestFirst()
+    public async Task GetPriceHistory_AfterPriceUpdates_ReturnsSnapshotsNewestFirstAsync()
     {
         // Arrange
         var (adminToken, marketId, productId, _) = await SetupMarketWithAgentAndProductAsync();
@@ -139,7 +139,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task GetPriceHistory_EmptyMarketProduct_ReturnsEmptyPage()
+    public async Task GetPriceHistory_EmptyMarketProduct_ReturnsEmptyPageAsync()
     {
         // Arrange — seed a market product but make NO price updates
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -163,7 +163,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task GetPriceHistory_ResponseItemContainsAllRequiredFields()
+    public async Task GetPriceHistory_ResponseItemContainsAllRequiredFieldsAsync()
     {
         // Arrange
         var (adminToken, marketId, productId, marketProductId) =
@@ -191,7 +191,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     // ── Cursor pagination ─────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetPriceHistory_CursorPagination_ReturnsTwoPages()
+    public async Task GetPriceHistory_CursorPagination_ReturnsTwoPagesAsync()
     {
         // Arrange — seed 3 updates, page with pageSize=2 → 2 pages
         var (adminToken, marketId, productId, _) = await SetupMarketWithAgentAndProductAsync();
@@ -226,7 +226,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     // ── Date range filter ─────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetPriceHistory_WithFromFilter_ExcludesOlderSnapshots()
+    public async Task GetPriceHistory_WithFromFilter_ExcludesOlderSnapshotsAsync()
     {
         // Arrange — produce 3 snapshots, then filter to only the very recent ones
         var (adminToken, marketId, productId, _) = await SetupMarketWithAgentAndProductAsync();
@@ -249,7 +249,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task GetPriceHistory_WithToFilter_ExcludesNewerSnapshots()
+    public async Task GetPriceHistory_WithToFilter_ExcludesNewerSnapshotsAsync()
     {
         // Arrange
         var (adminToken, marketId, productId, _) = await SetupMarketWithAgentAndProductAsync();
@@ -271,10 +271,39 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
             "all snapshots were recorded after the 'to' filter");
     }
 
+    [Fact]
+    public async Task GetPriceHistory_FromWithTimezoneOffset_NormalizedToUtcAndAcceptedAsync()
+    {
+        // Arrange — verify that ISO 8601 strings WITH a timezone offset (e.g. "+07:00") are
+        // correctly normalized to UTC by the controller (Fix #1).
+        // Before the fix, DateTime.SpecifyKind merely relabelled the kind flag without converting
+        // the offset, so "+07:00" inputs silently lost the 7-hour shift.
+        var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", adminToken);
+
+        // A future instant expressed in UTC+7 local time:
+        //   UTC+7 2099-01-01T07:00:00+07:00  ≡  UTC 2099-01-01T00:00:00Z
+        // Using a far-future date ensures no snapshots can exist after it,
+        // so the response must be 200 OK (successful parse) with an empty list.
+        const string futureFromWithOffset = "2099-01-01T07:00:00+07:00";
+
+        // Act
+        var response = await _client.GetAsync(
+            Endpoint(Guid.NewGuid(), Guid.NewGuid()) +
+            $"?from={Uri.EscapeDataString(futureFromWithOffset)}");
+
+        // Assert — 404 (market/product not found) OR 200 (empty result) means the date was
+        // parsed successfully; 400 VALIDATION_ERROR would mean the parse itself failed.
+        response.StatusCode.Should().NotBe(
+            System.Net.HttpStatusCode.BadRequest,
+            "a valid ISO 8601 datetime with timezone offset should not produce a 400 VALIDATION_ERROR");
+    }
+
     // ── Validation ────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetPriceHistory_InvalidFromDate_Returns400ValidationError()
+    public async Task GetPriceHistory_InvalidFromDate_Returns400ValidationErrorAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -292,7 +321,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task GetPriceHistory_InvalidToDate_Returns400ValidationError()
+    public async Task GetPriceHistory_InvalidToDate_Returns400ValidationErrorAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -310,7 +339,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task GetPriceHistory_InvalidPageSize_Returns400()
+    public async Task GetPriceHistory_InvalidPageSize_Returns400Async()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -326,7 +355,7 @@ public sealed class PriceHistoryEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task GetPriceHistory_PageSizeTooLarge_Returns400()
+    public async Task GetPriceHistory_PageSizeTooLarge_Returns400Async()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");

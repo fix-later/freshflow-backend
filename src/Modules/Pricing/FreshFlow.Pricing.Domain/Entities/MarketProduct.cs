@@ -67,6 +67,11 @@ public sealed class MarketProduct : AggregateRoot
     /// </summary>
     public void ApplyUpdate(decimal? newPrice, int? newQuantity, Guid? actor)
     {
+        // Guard: a call with neither field set is a no-op.
+        // Do NOT mutate UpdatedBy/UpdatedAt or raise a spurious domain event.
+        if (!newPrice.HasValue && !newQuantity.HasValue)
+            return;
+
         var previousPrice = CurrentPrice;
 
         if (newPrice.HasValue)

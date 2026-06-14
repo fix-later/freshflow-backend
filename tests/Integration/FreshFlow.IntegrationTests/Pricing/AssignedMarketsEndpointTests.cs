@@ -102,7 +102,7 @@ public sealed class AssignedMarketsEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task GetAssignedMarkets_AgentWithNoMarket_Returns200EmptyList()
+    public async Task GetAssignedMarkets_AgentSeesOnlyOwnMarket_Returns200()
     {
         // Arrange — create an agent but without a market assignment
         // (Note: CreateUser validator requires marketId for market_agent, so we use an existing market

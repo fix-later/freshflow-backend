@@ -152,10 +152,15 @@ public sealed class PricingBroadcastServiceTests
             "PriceUpdated", Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
         await groupB.Received(1).SendCoreAsync(
             "PriceUpdated", Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
-        // groupA must not have received marketB's broadcast (and vice versa via group isolation above)
+        // groupA must not have received marketB's broadcast
         await groupA.DidNotReceive().SendCoreAsync(
             Arg.Any<string>(),
             Arg.Is<object?[]>(a => a.Length == 1 && ReferenceEquals(a[0], dtoB)),
+            Arg.Any<CancellationToken>());
+        // symmetric: groupB must not have received marketA's broadcast
+        await groupB.DidNotReceive().SendCoreAsync(
+            Arg.Any<string>(),
+            Arg.Is<object?[]>(a => a.Length == 1 && ReferenceEquals(a[0], dtoA)),
             Arg.Any<CancellationToken>());
     }
 }

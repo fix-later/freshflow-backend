@@ -54,7 +54,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     [Theory]
     [InlineData(-1)]
     [InlineData(-100)]
-    public async Task Handle_NegativeQuantity_ReturnsInvalidQuantityError(int quantity)
+    public async Task Handle_NegativeQuantity_ReturnsInvalidQuantityErrorAsync(int quantity)
     {
         // Arrange — quantity < 0 is a 422 business rule
         var cmd = Cmd(quantity: quantity);
@@ -73,7 +73,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     // ── 404 Market not found ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_MarketNotFound_ReturnsMarketNotFound()
+    public async Task Handle_MarketNotFound_ReturnsMarketNotFoundAsync()
     {
         // Arrange — override default
         _marketProductReader.MarketExistsAsync(MarketId, Arg.Any<CancellationToken>())
@@ -92,7 +92,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     // ── 403 Assignment guard ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_AgentNotAssigned_ReturnsMarketAccessDenied()
+    public async Task Handle_AgentNotAssigned_ReturnsMarketAccessDeniedAsync()
     {
         // Arrange
         _reader.HasAssignmentAsync(AgentId, MarketId, default).Returns(false);
@@ -110,7 +110,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     // ── 404 Product not found ─────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_ProductNotFound_ReturnsProductNotFound()
+    public async Task Handle_ProductNotFound_ReturnsProductNotFoundAsync()
     {
         // Arrange
         _reader.HasAssignmentAsync(AgentId, MarketId, default).Returns(true);
@@ -127,7 +127,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     // ── 409 Optimistic concurrency ────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_ExpectedVersionMismatch_ReturnsConflict()
+    public async Task Handle_ExpectedVersionMismatch_ReturnsConflictAsync()
     {
         // Arrange
         var mp = MakeProduct();
@@ -145,7 +145,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_NoExpectedVersion_SkipsConcurrencyCheck()
+    public async Task Handle_NoExpectedVersion_SkipsConcurrencyCheckAsync()
     {
         // Arrange
         var mp = MakeProduct();
@@ -162,7 +162,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     // ── 200 Quantity update ───────────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_ValidQuantity_ReturnsCorrectDto()
+    public async Task Handle_ValidQuantity_ReturnsCorrectDtoAsync()
     {
         // Arrange
         var mp = MakeProduct(initialPrice: 100_000m, initialQty: 200);
@@ -184,7 +184,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ZeroQuantity_SetsIsOutOfStockTrue()
+    public async Task Handle_ZeroQuantity_SetsIsOutOfStockTrueAsync()
     {
         // Arrange
         var mp = MakeProduct(initialQty: 200);
@@ -201,7 +201,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidQuantity_PriceIsNotChanged()
+    public async Task Handle_ValidQuantity_PriceIsNotChangedAsync()
     {
         // Arrange — quantity-only endpoint must not alter price
         var mp = MakeProduct(initialPrice: 100_000m, initialQty: 50);
@@ -216,7 +216,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidQuantity_TracksAndSaves()
+    public async Task Handle_ValidQuantity_TracksAndSavesAsync()
     {
         // Arrange
         var mp = MakeProduct();
@@ -232,7 +232,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidQuantity_PersistsSnapshotViaForFactory()
+    public async Task Handle_ValidQuantity_PersistsSnapshotViaForFactoryAsync()
     {
         // Arrange — FR-PRI-004: snapshot is created on every price OR quantity change
         var mp = MakeProduct(initialPrice: 100_000m, initialQty: 50);
@@ -253,7 +253,7 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ExpectedVersionMatches_Succeeds()
+    public async Task Handle_ExpectedVersionMatches_SucceedsAsync()
     {
         // Arrange
         var mp = MakeProduct();
@@ -264,6 +264,48 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
 
         // Act
         var result = await _sut.Handle(Cmd(quantity: 300, expectedVersion: correctVersion), default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+    }
+
+    // ── Fix #4: DateTime kind normalization ───────────────────────────────────
+
+    [Fact]
+    public async Task Handle_ExpectedVersionMatchesButKindIsUnspecified_TreatsAsEquivalentToUtcAsync()
+    {
+        // Arrange — simulate the JSON deserialization bug: client sends "2026-06-14T07:00:00"
+        // without a timezone suffix, which System.Text.Json deserializes as DateTimeKind.Unspecified,
+        // while EF Core returns the same instant as DateTimeKind.Utc. Without normalization these
+        // two DateTimes would compare as unequal even though they represent the same moment.
+        var mp = MakeProduct();
+        var utcVersion = mp.UpdatedAt;                                        // DateTimeKind.Utc (EF)
+        var unspecifiedVersion = DateTime.SpecifyKind(utcVersion, DateTimeKind.Unspecified); // JSON kind
+
+        _reader.HasAssignmentAsync(AgentId, MarketId, default).Returns(true);
+        _mpRepo.FindByMarketAndProductAsync(MarketId, ProductId, default).Returns(mp);
+
+        // Act
+        var result = await _sut.Handle(Cmd(quantity: 300, expectedVersion: unspecifiedVersion), default);
+
+        // Assert — must succeed (no spurious 409 conflict)
+        result.IsSuccess.Should().BeTrue(
+            "Unspecified kind with the same ticks as a Utc datetime should be treated as equal");
+    }
+
+    [Fact]
+    public async Task Handle_ExpectedVersionWithLocalKindSameInstant_TreatsAsEquivalentToUtcAsync()
+    {
+        // Arrange — DateTimeKind.Local with the same UTC instant (on UTC servers ToUniversalTime is noop)
+        var mp = MakeProduct();
+        var utcVersion = mp.UpdatedAt;
+        var localVersion = DateTime.SpecifyKind(utcVersion, DateTimeKind.Local);
+
+        _reader.HasAssignmentAsync(AgentId, MarketId, default).Returns(true);
+        _mpRepo.FindByMarketAndProductAsync(MarketId, ProductId, default).Returns(mp);
+
+        // Act
+        var result = await _sut.Handle(Cmd(quantity: 300, expectedVersion: localVersion), default);
 
         // Assert
         result.IsSuccess.Should().BeTrue();

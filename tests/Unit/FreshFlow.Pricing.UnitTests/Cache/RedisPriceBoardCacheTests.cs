@@ -64,7 +64,7 @@ public sealed class RedisPriceBoardCacheTests
     // ── HSET calls ────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task WriteAsync_CallsHashSetWithCorrectKey()
+    public async Task WriteAsync_CallsHashSetWithCorrectKeyAsync()
     {
         // Arrange
         var (cache, db) = BuildSut();
@@ -80,7 +80,7 @@ public sealed class RedisPriceBoardCacheTests
     }
 
     [Fact]
-    public async Task WriteAsync_HashContainsFourFieldsNoReserved()
+    public async Task WriteAsync_HashContainsFourFieldsNoReservedAsync()
     {
         // Arrange
         var (cache, db) = BuildSut();
@@ -102,7 +102,7 @@ public sealed class RedisPriceBoardCacheTests
     }
 
     [Fact]
-    public async Task WriteAsync_PriceFormattedAsF2InvariantCulture()
+    public async Task WriteAsync_PriceFormattedAsF2InvariantCultureAsync()
     {
         // Arrange
         var (cache, db) = BuildSut();
@@ -121,7 +121,7 @@ public sealed class RedisPriceBoardCacheTests
     }
 
     [Fact]
-    public async Task WriteAsync_QuantityStoredAsIntString()
+    public async Task WriteAsync_QuantityStoredAsIntStringAsync()
     {
         // Arrange
         var (cache, db) = BuildSut();
@@ -140,7 +140,7 @@ public sealed class RedisPriceBoardCacheTests
     }
 
     [Fact]
-    public async Task WriteAsync_UpdatedAtStoredAsIso8601()
+    public async Task WriteAsync_UpdatedAtStoredAsIso8601Async()
     {
         // Arrange
         var (cache, db) = BuildSut();
@@ -160,7 +160,7 @@ public sealed class RedisPriceBoardCacheTests
     }
 
     [Fact]
-    public async Task WriteAsync_UpdatedByStoredAsGuidString()
+    public async Task WriteAsync_UpdatedByStoredAsGuidStringAsync()
     {
         // Arrange
         var (cache, db) = BuildSut();
@@ -179,7 +179,7 @@ public sealed class RedisPriceBoardCacheTests
     }
 
     [Fact]
-    public async Task WriteAsync_NullUpdatedByStoredAsEmptyString()
+    public async Task WriteAsync_NullUpdatedByStoredAsEmptyStringAsync()
     {
         // Arrange
         var (cache, db) = BuildSut();
@@ -200,7 +200,7 @@ public sealed class RedisPriceBoardCacheTests
     // ── TTL ───────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task WriteAsync_SetsKeyExpireToFiveMinutes()
+    public async Task WriteAsync_SetsKeyExpireToFiveMinutesAsync()
     {
         // Arrange
         var (cache, db) = BuildSut();
@@ -221,7 +221,7 @@ public sealed class RedisPriceBoardCacheTests
     }
 
     [Fact]
-    public async Task WriteAsync_HashSetCalledBeforeKeyExpire()
+    public async Task WriteAsync_HashSetCalledBeforeKeyExpireAsync()
     {
         // Arrange
         var (cache, db) = BuildSut();

@@ -9,7 +9,7 @@ public sealed class GetMarketProductsValidatorTests
     private readonly GetMarketProductsQueryValidator _sut = new();
 
     [Fact]
-    public async Task Validate_ValidQuery_PassesValidation()
+    public async Task Validate_ValidQuery_PassesValidationAsync()
     {
         // Arrange
         var query = new GetMarketProductsQuery(Guid.NewGuid(), PageSize: 20);
@@ -22,7 +22,7 @@ public sealed class GetMarketProductsValidatorTests
     }
 
     [Fact]
-    public async Task Validate_EmptyMarketId_FailsValidation()
+    public async Task Validate_EmptyMarketId_FailsValidationAsync()
     {
         // Arrange
         var query = new GetMarketProductsQuery(Guid.Empty);
@@ -40,7 +40,7 @@ public sealed class GetMarketProductsValidatorTests
     [InlineData(-1)]
     [InlineData(101)]
     [InlineData(200)]
-    public async Task Validate_PageSizeOutOfRange_FailsValidation(int pageSize)
+    public async Task Validate_PageSizeOutOfRange_FailsValidationAsync(int pageSize)
     {
         // Arrange
         var query = new GetMarketProductsQuery(Guid.NewGuid(), PageSize: pageSize);
@@ -58,7 +58,7 @@ public sealed class GetMarketProductsValidatorTests
     [InlineData(20)]
     [InlineData(50)]
     [InlineData(100)]
-    public async Task Validate_PageSizeInRange_PassesValidation(int pageSize)
+    public async Task Validate_PageSizeInRange_PassesValidationAsync(int pageSize)
     {
         // Arrange
         var query = new GetMarketProductsQuery(Guid.NewGuid(), PageSize: pageSize);
@@ -71,7 +71,7 @@ public sealed class GetMarketProductsValidatorTests
     }
 
     [Fact]
-    public async Task Validate_WithOptionalCursorAndCategory_PassesValidation()
+    public async Task Validate_WithOptionalCursorAndCategory_PassesValidationAsync()
     {
         // Arrange
         var query = new GetMarketProductsQuery(

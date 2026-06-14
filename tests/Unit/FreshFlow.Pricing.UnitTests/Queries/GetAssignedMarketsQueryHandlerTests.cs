@@ -18,7 +18,7 @@ public sealed class GetAssignedMarketsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_AgentWithAssignedMarkets_ReturnsMarketList()
+    public async Task Handle_AgentWithAssignedMarkets_ReturnsMarketListAsync()
     {
         // Arrange
         var agentId = Guid.NewGuid();
@@ -44,7 +44,7 @@ public sealed class GetAssignedMarketsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_AgentWithNoAssignedMarkets_ReturnsEmptyList()
+    public async Task Handle_AgentWithNoAssignedMarkets_ReturnsEmptyListAsync()
     {
         // Arrange
         var agentId = Guid.NewGuid();
@@ -59,7 +59,7 @@ public sealed class GetAssignedMarketsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_DelegatesToReader_WithCorrectUserId()
+    public async Task Handle_DelegatesToReader_WithCorrectUserIdAsync()
     {
         // Arrange
         var agentId = Guid.NewGuid();
@@ -73,7 +73,7 @@ public sealed class GetAssignedMarketsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_DtoFields_AreMappedCorrectly()
+    public async Task Handle_DtoFields_AreMappedCorrectlyAsync()
     {
         // Arrange
         var agentId = Guid.NewGuid();

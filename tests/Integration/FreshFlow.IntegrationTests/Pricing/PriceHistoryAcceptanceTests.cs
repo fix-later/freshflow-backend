@@ -31,8 +31,13 @@ public sealed class PriceHistoryAcceptanceTests(AuthWebAppFactory factory)
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
-    public async Task MultipleUpdates_CreateDistinctOrderedSnapshots()
+    public async Task MultipleUpdates_CreateDistinctOrderedSnapshotsAsync()
     {
+        // Capture time BEFORE any arrange/act work so the assertion in #4e uses a stable
+        // lower bound instead of re-evaluating UtcNow at assertion time (which would be
+        // flaky on slow CI where the test takes > 1 minute to run).
+        var testStartedAt = DateTime.UtcNow;
+
         // ── Arrange: market, agent, product, market_product ───────────────────
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
         _client.DefaultRequestHeaders.Authorization =
@@ -96,9 +101,11 @@ public sealed class PriceHistoryAcceptanceTests(AuthWebAppFactory factory)
         distinctTimestamps.Should().Be(snapshots.Count,
             "each snapshot must have a unique RecordedAt timestamp");
 
-        // FR-PRI-004 #4e: snapshots are recent (within the last minute)
+        // FR-PRI-004 #4e: snapshots were created after this test started.
+        // Using the pre-captured testStartedAt (not UtcNow.AddMinutes(-1)) avoids
+        // a race on slow CI where the test itself takes longer than 1 minute.
         snapshots.Should().OnlyContain(s =>
-            s.RecordedAt > DateTime.UtcNow.AddMinutes(-1),
+            s.RecordedAt >= testStartedAt,
             "all snapshots must have been recorded during this test run");
     }
 
