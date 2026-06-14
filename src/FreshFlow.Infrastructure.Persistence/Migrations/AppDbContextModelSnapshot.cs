@@ -589,6 +589,164 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("units_of_measurement", (string)null);
                 });
 
+            modelBuilder.Entity("FreshFlow.Pricing.Domain.Entities.MarketProduct", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("CurrentPrice")
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<int>("CurrentQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid>("MarketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ReservedQuantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("IX_market_products_deleted_at");
+
+                    b.HasIndex("MarketId")
+                        .HasDatabaseName("idx_market_products_market_id");
+
+                    b.HasIndex("MarketId", "ProductId")
+                        .IsUnique()
+                        .HasDatabaseName("idx_market_products_market_product_unique")
+                        .HasFilter("\"deleted_at\" IS NULL");
+
+                    b.ToTable("market_products", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Pricing.Domain.Entities.PriceSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MarketProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("RecordedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MarketProductId")
+                        .HasDatabaseName("idx_price_snapshots_market_product_id");
+
+                    b.HasIndex("RecordedAt")
+                        .HasDatabaseName("idx_price_snapshots_recorded_at");
+
+                    b.ToTable("price_snapshots", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Pricing.Infrastructure.CrossModule.MarketRow", b =>
+                {
+                    b.Property<string>("Address")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Location")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT \"Id\", \"Name\", \"Location\", \"Address\", \"IsActive\" FROM markets WHERE \"DeletedAt\" IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Pricing.Infrastructure.CrossModule.ProductDetailRow", b =>
+                {
+                    b.Property<string>("Category")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    p.\"Id\",\n    p.\"Name\",\n    u.\"Name\"  AS \"Unit\",\n    c.\"Name\"  AS \"Category\"\nFROM products p\nINNER JOIN units_of_measurement u ON p.\"UnitId\" = u.\"Id\"\nLEFT  JOIN product_categories   c ON p.\"CategoryId\" = c.\"Id\"\nWHERE p.\"DeletedAt\" IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Pricing.Infrastructure.CrossModule.ProductRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT \"Id\", \"Name\", \"IsActive\" FROM products WHERE \"DeletedAt\" IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Pricing.Infrastructure.CrossModule.UserMarketAssignmentRow", b =>
+                {
+                    b.Property<Guid>("MarketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT \"UserId\", \"MarketId\" FROM user_market_assignments WHERE deleted_at IS NULL");
+                });
+
             modelBuilder.Entity("FreshFlow.Auth.Domain.Aggregates.User", b =>
                 {
                     b.HasOne("FreshFlow.Auth.Domain.Entities.Role", "Role")
@@ -662,6 +820,16 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UnitId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("FreshFlow.Pricing.Domain.Entities.PriceSnapshot", b =>
+                {
+                    b.HasOne("FreshFlow.Pricing.Domain.Entities.MarketProduct", null)
+                        .WithMany()
+                        .HasForeignKey("MarketProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_price_snapshots_market_product");
                 });
 #pragma warning restore 612, 618
         }

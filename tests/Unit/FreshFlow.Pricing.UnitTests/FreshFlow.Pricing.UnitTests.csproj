@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="StackExchange.Redis" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Provides IHubContext<T>, IHubClients, IClientProxy for PricingBroadcastService tests -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Modules\Pricing\FreshFlow.Pricing.Application\FreshFlow.Pricing.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Pricing\FreshFlow.Pricing.Domain\FreshFlow.Pricing.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Pricing\FreshFlow.Pricing.Infrastructure\FreshFlow.Pricing.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\FreshFlow.Infrastructure.Persistence\FreshFlow.Infrastructure.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

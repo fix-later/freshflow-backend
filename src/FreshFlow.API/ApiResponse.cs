@@ -13,6 +13,12 @@ public static class ApiResponse
     /// <summary>Success envelope with null data (e.g. reset-password, verify).</summary>
     public static object OkEmpty() => new { success = true, data = (object?)null };
 
+    /// <summary>
+    /// Wraps a cursor-paginated response: { success, data, meta: { pageSize, nextCursor } }.
+    /// </summary>
+    public static object OkPaged<T>(IReadOnlyList<T> data, int pageSize, string? nextCursor) =>
+        new { success = true, data, meta = new { pageSize, nextCursor } };
+
     /// <summary>Error envelope for inline controller returns (not via ErrorExtensions).</summary>
     internal static object Err(string code, string message) =>
         new { success = false, error = new { code, message } };

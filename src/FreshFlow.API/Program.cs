@@ -3,6 +3,8 @@ using FluentValidation;
 using FreshFlow.Auth.Infrastructure;
 using FreshFlow.Catalog.Infrastructure;
 using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Pricing.Infrastructure;
+using FreshFlow.Pricing.Infrastructure.Realtime;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
@@ -51,8 +53,8 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 // ── Database ──────────────────────────────────────────────────
-builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Registers AppDbContext + DomainEventDispatchInterceptor (post-save domain event dispatch).
+builder.Services.AddPersistence(builder.Configuration);
 
 // ── CORS ─────────────────────────────────────────────────────
 builder.Services.AddCors(options =>
@@ -120,10 +122,15 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
+// ── SignalR ───────────────────────────────────────────────────
+// Must be registered before modules so IHubContext<PricingHub> is available
+// when PricingBroadcastService is resolved.
+builder.Services.AddSignalR();
+
 // ── Module registrations ──────────────────────────────────────
 builder.Services.AddAuthModule(builder.Configuration);
 builder.Services.AddCatalogModule(builder.Configuration);
-// builder.Services.AddPricingModule(builder.Configuration);
+builder.Services.AddPricingModule(builder.Configuration);
 // builder.Services.AddOrdersModule(builder.Configuration);
 
 // ── Health Checks ─────────────────────────────────────────────
@@ -214,6 +221,7 @@ app.UseAuthorization();
 app.UseRateLimiter();
 app.MapControllers();
 app.MapHealthChecks("/health");
+app.MapHub<PricingHub>("/hubs/pricing");
 
 app.Run();
 

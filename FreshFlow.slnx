@@ -55,5 +55,6 @@
   <Folder Name="/tests/Unit/">
     <Project Path="tests/Unit/FreshFlow.Auth.UnitTests/FreshFlow.Auth.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Catalog.UnitTests/FreshFlow.Catalog.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Pricing.UnitTests/FreshFlow.Pricing.UnitTests.csproj" />
   </Folder>
 </Solution>

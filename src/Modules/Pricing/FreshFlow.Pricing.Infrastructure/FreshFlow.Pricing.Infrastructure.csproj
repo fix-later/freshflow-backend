@@ -1,13 +1,28 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <ItemGroup>
-    <ProjectReference Include="..\FreshFlow.Pricing.Application\FreshFlow.Pricing.Application.csproj" />
-  </ItemGroup>
-
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Provides Microsoft.AspNetCore.SignalR.Hub / IHubContext<T> without the Web SDK -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="StackExchange.Redis" />
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FreshFlow.Pricing.Application\FreshFlow.Pricing.Application.csproj" />
+    <ProjectReference Include="..\..\..\FreshFlow.Infrastructure.Persistence\FreshFlow.Infrastructure.Persistence.csproj" />
+  </ItemGroup>
 
 </Project>
