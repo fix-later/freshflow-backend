@@ -15,6 +15,31 @@ public sealed class GetProductsQueryValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
+    // ── Null page / pageSize are optional (docs: default 1 / default 20) ─────
+
+    [Fact]
+    public void Validate_NullPage_Passes()
+    {
+        var result = _sut.Validate(new GetProductsQuery(null, null, false, null, 20));
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Validate_NullPageSize_Passes()
+    {
+        var result = _sut.Validate(new GetProductsQuery(null, null, false, 1, null));
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Validate_BothNull_Passes()
+    {
+        var result = _sut.Validate(new GetProductsQuery(null, null, false, null, null));
+        result.IsValid.Should().BeTrue();
+    }
+
+    // ── Explicit invalid values are still rejected ────────────────────────────
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
