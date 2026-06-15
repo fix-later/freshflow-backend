@@ -7,6 +7,6 @@ public record GetProductsQuery(
     string? Search,
     string? Category,
     bool IncludeInactive,
-    int Page,
-    int PageSize)
+    int? Page,
+    int? PageSize)
     : IRequest<Result<GetProductsResponse>>;
