@@ -20,6 +20,10 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
         db.Set<MarketRow>()
             .AnyAsync(m => m.Id == marketId && m.IsActive, ct);
 
+    public Task<bool> ProductExistsAsync(Guid productId, CancellationToken ct) =>
+        db.Set<ProductRow>()
+            .AnyAsync(p => p.Id == productId, ct);
+
     public async Task<(IReadOnlyList<MarketProductItemDto> Items, string? NextCursor)> GetPageAsync(
         Guid marketId,
         string? category,
