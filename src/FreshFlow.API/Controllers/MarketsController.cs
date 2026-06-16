@@ -7,6 +7,7 @@ using FreshFlow.Catalog.Application.Commands.Markets.Delete;
 using FreshFlow.Catalog.Application.Commands.Markets.Update;
 using FreshFlow.Catalog.Application.Queries.Markets.GetMarketById;
 using FreshFlow.Catalog.Application.Queries.Markets.GetMarkets;
+using FreshFlow.Pricing.Application.Commands.CreateMarketProduct;
 using FreshFlow.Pricing.Application.Commands.UpdateAvailableQuantity;
 using FreshFlow.Pricing.Application.Commands.UpdateProductPrice;
 using FreshFlow.Pricing.Application.Queries.GetMarketProducts;
@@ -108,6 +109,38 @@ public sealed class MarketsController(ISender sender) : ControllerBase
 
         var page = result.Value;
         return Ok(ApiResponse.OkPaged(page.Items, page.PageSize, page.NextCursor));
+    }
+
+    /// <summary>
+    /// POST /api/v1/markets/{marketId}/products
+    /// Lists a catalog product at a market with an initial price and quantity. Admin only.
+    /// </summary>
+    [HttpPost("{marketId:guid}/products")]
+    [Authorize(Roles = "admin")]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> CreateMarketProductAsync(
+        Guid marketId,
+        [FromBody] CreateMarketProductRequest body,
+        CancellationToken ct)
+    {
+        if (!TryResolveAgentId(out var adminUserId))
+            return Unauthorized(ApiResponse.Err("UNAUTHORIZED", "User ID claim is missing."));
+
+        var command = new CreateMarketProductCommand(
+            marketId, body.ProductId, body.InitialPrice, body.InitialQuantity, adminUserId);
+
+        var result = await sender.Send(command, ct);
+
+        return result.IsSuccess
+            ? Created(
+                $"/api/v1/markets/{marketId}/products/{body.ProductId}", ApiResponse.Ok(result.Value))
+            : result.Error.ToActionResult();
     }
 
     /// <summary>
@@ -257,3 +290,8 @@ public sealed record UpdateProductPriceRequest(
 public sealed record UpdateAvailableQuantityRequest(
     int Quantity,
     DateTime? ExpectedVersion);
+
+public sealed record CreateMarketProductRequest(
+    Guid ProductId,
+    decimal InitialPrice,
+    int InitialQuantity);

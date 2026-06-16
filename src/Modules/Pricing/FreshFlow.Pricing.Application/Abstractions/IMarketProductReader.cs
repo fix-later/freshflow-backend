@@ -12,6 +12,9 @@ public interface IMarketProductReader
     /// <summary>Returns true if the market exists and is active.</summary>
     public Task<bool> MarketExistsAsync(Guid marketId, CancellationToken ct);
 
+    /// <summary>Returns true if the product exists and is active.</summary>
+    public Task<bool> ProductExistsAsync(Guid productId, CancellationToken ct);
+
     /// <summary>
     /// Returns a cursor-paginated page of active market products,
     /// enriched with productName, unit, and category from the Catalog tables.
