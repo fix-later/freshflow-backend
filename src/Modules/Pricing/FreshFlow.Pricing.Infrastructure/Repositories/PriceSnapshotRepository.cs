@@ -13,6 +13,11 @@ internal sealed class PriceSnapshotRepository(AppDbContext db) : IPriceSnapshotR
     public async Task AddAsync(PriceSnapshot snapshot, CancellationToken ct) =>
         await db.Set<PriceSnapshot>().AddAsync(snapshot, ct);
 
+    // Bounded to 100 rows to prevent unbounded table scans on high-volume products.
+    // Used by integration tests (PriceHistoryAcceptanceTests) to verify snapshot
+    // ordering; production read-side uses the paginated GetPageAsync instead.
+    private const int GetByMarketProductIdLimit = 100;
+
     public async Task<IReadOnlyList<PriceSnapshot>> GetByMarketProductIdAsync(
         Guid marketProductId, CancellationToken ct) =>
         await db.Set<PriceSnapshot>()
@@ -20,6 +25,7 @@ internal sealed class PriceSnapshotRepository(AppDbContext db) : IPriceSnapshotR
             .Where(ps => ps.MarketProductId == marketProductId)
             .OrderByDescending(ps => ps.RecordedAt)
             .ThenByDescending(ps => ps.Id)
+            .Take(GetByMarketProductIdLimit)
             .ToListAsync(ct);
 
     public async Task<(IReadOnlyList<PriceSnapshot> Items, string? NextCursor)> GetPageAsync(

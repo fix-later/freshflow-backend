@@ -14,8 +14,8 @@ public sealed class GetProductsQueryValidator : AbstractValidator<GetProductsQue
             .When(q => q.Page is not null);
 
         RuleFor(q => q.PageSize)
-            .InclusiveBetween(1, 100)
-            .WithMessage("PageSize must be between 1 and 100.")
+            .InclusiveBetween(1, 200)
+            .WithMessage("PageSize must be between 1 and 200.")
             .When(q => q.PageSize is not null);
     }
 }

@@ -333,6 +333,38 @@ public sealed class GetPriceChangeHistoryQueryHandlerTests
         result.Value.Items[0].RecordedBy.Should().BeNull();
     }
 
+    // ── Date range + result mapping (regression) ──────────────────────────────
+
+    [Fact]
+    public async Task Handle_WithDateRange_ItemsAndNextCursorMappedThroughAsync()
+    {
+        // Arrange — verifies that when both From and To are set, the items returned
+        // by the repo are mapped correctly AND the NextCursor is forwarded to the caller.
+        var mp = SetupHappyPath();
+        var from = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+        var to = new DateTime(2026, 6, 30, 0, 0, 0, DateTimeKind.Utc);
+        const string expectedCursor = "eyJpZCI6IjEyMzQ1Njc4LTEyMzQtMTIzNC0xMjM0LTEyMzQ1Njc4OTAxMiIsInJlY29yZGVkQXQiOiIyMDI2LTA2LTMwVDEwOjAwOjAwWiJ9";
+        var actorId = Guid.NewGuid();
+        var snapshot = new PriceSnapshot(mp.Id, 115_000m, 250, actorId);
+
+        _snapshotRepo
+            .GetPageAsync(mp.Id, Arg.Any<string?>(), Arg.Any<int>(), from, to, Arg.Any<CancellationToken>())
+            .Returns((new[] { snapshot } as IReadOnlyList<PriceSnapshot>, expectedCursor));
+
+        // Act
+        var result = await _sut.Handle(
+            new GetPriceChangeHistoryQuery(MarketId, ProductId, From: from, To: to), default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Items.Should().HaveCount(1);
+        var item = result.Value.Items[0];
+        item.Price.Should().Be(115_000m);
+        item.Quantity.Should().Be(250);
+        item.RecordedBy.Should().Be(actorId);
+        result.Value.NextCursor.Should().Be(expectedCursor);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>

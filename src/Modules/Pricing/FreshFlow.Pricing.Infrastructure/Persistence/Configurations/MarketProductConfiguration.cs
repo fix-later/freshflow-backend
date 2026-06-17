@@ -20,7 +20,7 @@ internal sealed class MarketProductConfiguration : IEntityTypeConfiguration<Mark
         builder.Property(mp => mp.ReservedQuantity).IsRequired().HasDefaultValue(0);
         builder.Property(mp => mp.UpdatedBy);
         builder.Property(mp => mp.CreatedAt).IsRequired();
-        builder.Property(mp => mp.UpdatedAt).IsRequired();
+        builder.Property(mp => mp.UpdatedAt).IsRequired().IsConcurrencyToken();
 
         // Map to snake_case column name so the partial unique index filter ("deleted_at" IS NULL)
         // and the soft-delete query filter reference the correct DB column name.

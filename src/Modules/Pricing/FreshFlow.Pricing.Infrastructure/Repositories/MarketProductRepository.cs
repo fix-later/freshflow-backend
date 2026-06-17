@@ -2,6 +2,7 @@ using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Pricing.Application.Abstractions;
 using FreshFlow.Pricing.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FreshFlow.Pricing.Infrastructure.Repositories;
 
@@ -33,7 +34,34 @@ internal sealed class MarketProductRepository(AppDbContext db) : IMarketProductR
     public async Task AddAsync(MarketProduct marketProduct, CancellationToken ct) =>
         await db.Set<MarketProduct>().AddAsync(marketProduct, ct);
 
+    public async Task AddAndSaveAsync(MarketProduct marketProduct, CancellationToken ct)
+    {
+        await db.Set<MarketProduct>().AddAsync(marketProduct, ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex)
+            when (ex.InnerException is PostgresException pg && pg.SqlState == "23505")
+        {
+            throw new DuplicateMarketProductException(
+                "This product is already listed at this market.", ex);
+        }
+    }
+
     public void Track(MarketProduct marketProduct) => db.Update(marketProduct);
 
-    public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
+    public async Task SaveChangesAsync(CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException(
+                "The record was updated by another user. Please refresh and retry.", ex);
+        }
+    }
+
 }
