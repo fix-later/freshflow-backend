@@ -97,8 +97,8 @@ public sealed class MarketProduct : AggregateRoot
 
     private static void ValidatePrice(decimal price)
     {
-        if (price < 0)
-            throw new ArgumentOutOfRangeException(nameof(price), price, "Price must be non-negative.");
+        if (price <= 0)
+            throw new ArgumentOutOfRangeException(nameof(price), price, "Price must be greater than zero.");
     }
 
     private static void ValidateQuantity(int quantity)

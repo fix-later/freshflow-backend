@@ -28,11 +28,13 @@ public sealed class MarketProductTests
         mp.UpdatedBy.Should().Be(ActorId);
     }
 
-    [Fact]
-    public void Constructor_NegativePrice_ThrowsArgumentOutOfRangeException()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Constructor_ZeroOrNegativePrice_ThrowsArgumentOutOfRangeException(decimal price)
     {
         // Act
-        var act = () => new MarketProduct(MarketId, ProductId, -1m, 10, ActorId);
+        var act = () => new MarketProduct(MarketId, ProductId, price, 10, ActorId);
 
         // Assert
         act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("price");
@@ -127,14 +129,16 @@ public sealed class MarketProductTests
             .Which.Should().BeOfType<PriceUpdatedDomainEvent>();
     }
 
-    [Fact]
-    public void UpdatePrice_NegativePrice_ThrowsArgumentOutOfRangeException()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void UpdatePrice_ZeroOrNegativePrice_ThrowsArgumentOutOfRangeException(decimal price)
     {
         // Arrange
         var mp = new MarketProduct(MarketId, ProductId, 100m, 10, ActorId);
 
         // Act
-        var act = () => mp.UpdatePrice(-1m, ActorId);
+        var act = () => mp.UpdatePrice(price, ActorId);
 
         // Assert
         act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("price");
@@ -228,14 +232,16 @@ public sealed class MarketProductTests
         evt.CurrentQuantity.Should().Be(200);
     }
 
-    [Fact]
-    public void ApplyUpdate_NegativePrice_ThrowsArgumentOutOfRangeException()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void ApplyUpdate_ZeroOrNegativePrice_ThrowsArgumentOutOfRangeException(decimal price)
     {
         // Arrange — handler pre-validates, domain guards as defence-in-depth
         var mp = new MarketProduct(MarketId, ProductId, 100m, 10, ActorId);
 
         // Act
-        var act = () => mp.ApplyUpdate(newPrice: -1m, newQuantity: null, actor: ActorId);
+        var act = () => mp.ApplyUpdate(newPrice: price, newQuantity: null, actor: ActorId);
 
         // Assert
         act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("price");
