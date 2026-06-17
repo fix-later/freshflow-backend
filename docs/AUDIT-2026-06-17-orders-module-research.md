@@ -196,4 +196,4 @@ Coder/reviewer được phép code, test, để thay đổi ở working tree, nh
 |---|---|---|
 | 2026-06-17 | Task #1 (Phase 0 — Domain foundation + module wiring) | **completed** — reviewer pass sau 1 vòng fix (HIGH finding: thiếu FK constraint, đã sửa qua migration `migrationBuilder.Sql`) |
 | 2026-06-17 | Jira key đã có cho toàn bộ 21 UC (xem §0) | Áp dụng — commit theo UC, không còn giữ ở working tree vô thời hạn |
-| 2026-06-17 | Task #2 (Phase 1 — Draft/Cart UC-ORD-01..05) | **in_progress** |
+| 2026-06-17 | Task #2 (Phase 1 — Draft/Cart UC-ORD-01..05) | **completed** — reviewer pass sau 1 vòng fix (HIGH: EF tracking khi add item vào order đã tồn tại; HIGH: duplicate `marketProductId` vượt tồn kho trong cùng order; MEDIUM: Orders DTO status/paymentStatus trả `snake_case` string). `dotnet test tests/Unit/FreshFlow.Orders.UnitTests/FreshFlow.Orders.UnitTests.csproj --no-restore` pass 95/95; `dotnet test --no-restore` pass toàn repo |

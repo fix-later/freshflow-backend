@@ -1,7 +1,11 @@
 using FluentAssertions;
 using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Domain.Entities;
+using FreshFlow.Orders.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FreshFlow.Orders.UnitTests.Persistence;
 
@@ -106,5 +110,56 @@ public sealed class PersistenceConfigurationTests
         // Assert
         prop.Should().NotBeNull();
         prop!.IsNullable.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AddOrdersModule_RegistersCrossModuleReaders()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase($"test-{Guid.NewGuid()}"));
+
+        // Act
+        services.AddOrdersModule(new ConfigurationBuilder().Build());
+        using var provider = services.BuildServiceProvider();
+
+        // Assert
+        provider.GetRequiredService<IMarketProductReader>().Should().NotBeNull();
+        provider.GetRequiredService<IRestaurantReader>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task OrderRepository_AddItemToExistingOrder_PersistsNewOrderItemAsync()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase($"test-{Guid.NewGuid()}"));
+        services.AddOrdersModule(new ConfigurationBuilder().Build());
+
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
+        var order = new Order(Guid.NewGuid(), scheduledFor: null, notes: null);
+
+        await repository.AddAsync(order, CancellationToken.None);
+        await repository.SaveChangesAsync(CancellationToken.None);
+
+        // Act
+        var loaded = await repository.FindByIdAsync(order.Id, CancellationToken.None);
+        loaded.Should().NotBeNull();
+        loaded!.AddItem(Guid.NewGuid(), "Cà chua", 3, 20_000m);
+        var newItem = loaded.Items.Single();
+
+        repository.TrackNewItem(newItem);
+        repository.Track(loaded);
+        await repository.SaveChangesAsync(CancellationToken.None);
+
+        // Assert
+        var saved = await repository.FindByIdAsync(order.Id, CancellationToken.None);
+        saved!.Items.Should().ContainSingle();
+        saved.Items.Single().Quantity.Should().Be(3);
+        saved.TotalAmount.Should().Be(60_000m);
     }
 }

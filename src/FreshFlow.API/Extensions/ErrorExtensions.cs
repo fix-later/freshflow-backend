@@ -40,8 +40,13 @@ public static class ErrorExtensions
         if (error.Code is "CHANNEL_NOT_SUPPORTED" or "CANNOT_DEACTIVATE_SELF" or "INVALID_MARKET"
                         or "INVALID_ASSIGNMENT_TARGET" or "INVALID_UNIT" or "INVALID_CATEGORY"
                         or "INVALID_PRICE" or "INVALID_QUANTITY"
+                        or "RESTAURANT_NOT_APPROVED" or "INVALID_PRODUCT" or "INSUFFICIENT_STOCK"
+                        or "ORDER_EMPTY"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
+
+        if (error.Code is "ORDER_NOT_DRAFT" or "ORDER_CANNOT_CANCEL" or "ORDER_INVALID_TRANSITION")
+            return new ConflictObjectResult(body);
 
         if (error.Code is "ROLE_NOT_CONFIGURED")
             return new ObjectResult(body) { StatusCode = 500 };

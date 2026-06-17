@@ -69,6 +69,44 @@ public sealed class Order : AggregateRoot
     }
 
     /// <summary>
+    /// Updates a line item while the order is still a draft (cart).
+    /// </summary>
+    public Result UpdateItem(Guid itemId, int quantity)
+    {
+        if (Status != OrderStatus.Draft)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_DRAFT", "Items can only be updated while the order is in draft status."));
+
+        var item = _items.FirstOrDefault(i => i.Id == itemId);
+        if (item is null)
+            return Result.Failure(Error.NotFound("ORDER_ITEM", itemId));
+
+        item.UpdateQuantity(quantity);
+        RecalculateTotal();
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Removes a line item while the order is still a draft (cart).
+    /// </summary>
+    public Result RemoveItem(Guid itemId)
+    {
+        if (Status != OrderStatus.Draft)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_DRAFT", "Items can only be removed while the order is in draft status."));
+
+        var item = _items.FirstOrDefault(i => i.Id == itemId);
+        if (item is null)
+            return Result.Failure(Error.NotFound("ORDER_ITEM", itemId));
+
+        _items.Remove(item);
+        RecalculateTotal();
+
+        return Result.Success();
+    }
+
+    /// <summary>
     /// Transitions the order from Draft to Confirmed, locking item prices and accruing
     /// the total as outstanding debt (B2B credit model).
     /// </summary>

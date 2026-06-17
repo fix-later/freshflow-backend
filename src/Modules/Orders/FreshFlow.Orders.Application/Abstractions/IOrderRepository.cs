@@ -12,5 +12,7 @@ public interface IOrderRepository
 
     public void Track(Order order);
 
+    public void TrackNewItem(OrderItem item);
+
     public Task SaveChangesAsync(CancellationToken ct);
 }

@@ -30,6 +30,15 @@ public sealed class OrderItem : BaseEntity
     public decimal Subtotal => Quantity * UnitPrice;
 
     /// <summary>
+    /// Updates the requested quantity while the parent order is still a draft.
+    /// </summary>
+    public void UpdateQuantity(int quantity)
+    {
+        ValidateQuantity(quantity);
+        Quantity = quantity;
+    }
+
+    /// <summary>
     /// Locks the unit price at order-confirm time, immune to subsequent market price changes.
     /// </summary>
     public void LockPrice(decimal lockedUnitPrice)

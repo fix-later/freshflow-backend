@@ -163,6 +163,7 @@ public sealed class OrderTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_NOT_DRAFT");
         order.Items.Single().Quantity.Should().Be(5);
     }
 
@@ -232,6 +233,7 @@ public sealed class OrderTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_NOT_DRAFT");
         order.Items.Should().ContainSingle();
     }
 
