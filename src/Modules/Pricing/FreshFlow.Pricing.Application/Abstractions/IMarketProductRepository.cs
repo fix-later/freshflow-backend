@@ -15,6 +15,13 @@ public interface IMarketProductRepository
     public Task AddAsync(MarketProduct marketProduct, CancellationToken ct);
 
     /// <summary>
+    /// Atomically inserts <paramref name="marketProduct"/> and saves changes.
+    /// Throws <see cref="DuplicateMarketProductException"/> if a concurrent insert
+    /// races the pre-check and violates the (market_id, product_id) unique index.
+    /// </summary>
+    public Task AddAndSaveAsync(MarketProduct marketProduct, CancellationToken ct);
+
+    /// <summary>
     /// Re-attaches a detached entity to the change tracker so mutations are persisted.
     /// </summary>
     public void Track(MarketProduct marketProduct);

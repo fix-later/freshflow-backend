@@ -67,8 +67,17 @@ internal sealed class CreateMarketProductCommandHandler(
             request.InitialQuantity,
             request.CreatedBy);
 
-        await marketProductRepository.AddAsync(marketProduct, cancellationToken);
-        await marketProductRepository.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await marketProductRepository.AddAndSaveAsync(marketProduct, cancellationToken);
+        }
+        catch (DuplicateMarketProductException)
+        {
+            return Result<CreateMarketProductResultDto>.Failure(
+                Error.Conflict(
+                    "MARKET_PRODUCT_ALREADY_EXISTS",
+                    "This product is already listed at this market."));
+        }
 
         // ── 6. Build result ─────────────────────────────────────────────────────
         return Result<CreateMarketProductResultDto>.Success(new CreateMarketProductResultDto(

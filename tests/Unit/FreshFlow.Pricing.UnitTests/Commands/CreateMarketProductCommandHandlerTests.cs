@@ -3,6 +3,7 @@ using FreshFlow.Pricing.Application.Abstractions;
 using FreshFlow.Pricing.Application.Commands.CreateMarketProduct;
 using FreshFlow.Pricing.Domain.Entities;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using NSubstitute.ReturnsExtensions;
 
 namespace FreshFlow.Pricing.UnitTests.Commands;
@@ -149,7 +150,7 @@ public sealed class CreateMarketProductCommandHandlerTests
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("MARKET_PRODUCT_ALREADY_EXISTS");
-        await _mpRepo.DidNotReceive().AddAsync(
+        await _mpRepo.DidNotReceive().AddAndSaveAsync(
             Arg.Any<MarketProduct>(), Arg.Any<CancellationToken>());
     }
 
@@ -179,13 +180,29 @@ public sealed class CreateMarketProductCommandHandlerTests
         await _sut.Handle(Cmd(), default);
 
         // Assert
-        await _mpRepo.Received(1).AddAsync(
+        await _mpRepo.Received(1).AddAndSaveAsync(
             Arg.Is<MarketProduct>(mp =>
                 mp.MarketId == MarketId &&
                 mp.ProductId == ProductId &&
                 mp.CurrentPrice == 25_000m &&
                 mp.CurrentQuantity == 100),
             Arg.Any<CancellationToken>());
-        await _mpRepo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    // ── 409 Concurrent duplicate (race past pre-check) ────────────────────────
+
+    [Fact]
+    public async Task Handle_ConcurrentDuplicate_ReturnsConflictAsync()
+    {
+        // Arrange — race: pre-check passes but insert hits unique index
+        _mpRepo.AddAndSaveAsync(Arg.Any<MarketProduct>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new DuplicateMarketProductException());
+
+        // Act
+        var result = await _sut.Handle(Cmd(), default);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("MARKET_PRODUCT_ALREADY_EXISTS");
     }
 }
