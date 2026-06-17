@@ -14,10 +14,18 @@ internal sealed class RestaurantReader(AppDbContext db) : IRestaurantReader
             .AsNoTracking()
             .FirstOrDefaultAsync(r => r.UserId == userId, ct);
 
-        return row is null
-            ? null
-            : new RestaurantSnapshotDto(
-                row.Id,
-                string.Equals(row.Status, ActiveStatus, StringComparison.OrdinalIgnoreCase));
+        return row is null ? null : ToDto(row);
     }
+
+    public async Task<RestaurantSnapshotDto?> FindByIdAsync(Guid restaurantId, CancellationToken ct)
+    {
+        var row = await db.Set<RestaurantRow>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == restaurantId, ct);
+
+        return row is null ? null : ToDto(row);
+    }
+
+    private static RestaurantSnapshotDto ToDto(RestaurantRow row) =>
+        new(row.Id, string.Equals(row.Status, ActiveStatus, StringComparison.OrdinalIgnoreCase));
 }

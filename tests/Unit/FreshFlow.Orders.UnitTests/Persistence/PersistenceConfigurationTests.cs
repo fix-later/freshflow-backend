@@ -2,8 +2,10 @@ using FluentAssertions;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Domain.Entities;
+using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Orders.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -64,6 +66,32 @@ public sealed class PersistenceConfigurationTests
 
         // Assert
         entity.Should().NotBeNull("ScheduledOrder should be registered in the EF model");
+    }
+
+    [Fact]
+    public void Model_RegistersRestaurantCreditEntity()
+    {
+        // Arrange
+        using var ctx = CreateInMemoryContext();
+
+        // Act
+        var entity = ctx.Model.FindEntityType(typeof(RestaurantCredit));
+
+        // Assert
+        entity.Should().NotBeNull("RestaurantCredit should be registered in the EF model");
+    }
+
+    [Fact]
+    public void Model_RegistersCreditTransactionEntity()
+    {
+        // Arrange
+        using var ctx = CreateInMemoryContext();
+
+        // Act
+        var entity = ctx.Model.FindEntityType(typeof(CreditTransaction));
+
+        // Assert
+        entity.Should().NotBeNull("CreditTransaction should be registered in the EF model");
     }
 
     [Fact]
@@ -130,6 +158,53 @@ public sealed class PersistenceConfigurationTests
     }
 
     [Fact]
+    public void AddOrdersModule_RegistersCreditServices()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase($"test-{Guid.NewGuid()}"));
+
+        // Act
+        services.AddOrdersModule(new ConfigurationBuilder().Build());
+        using var provider = services.BuildServiceProvider();
+
+        // Assert
+        provider.GetRequiredService<ICreditRepository>().Should().NotBeNull();
+        provider.GetRequiredService<ICreditService>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public void RestaurantCreditConfiguration_UsesRestaurantIdPrimaryKey()
+    {
+        // Arrange
+        using var ctx = CreateInMemoryContext();
+
+        // Act
+        var entity = ctx.Model.FindEntityType(typeof(RestaurantCredit));
+        var key = entity!.FindPrimaryKey();
+
+        // Assert
+        key.Should().NotBeNull();
+        key!.Properties.Should().ContainSingle(p => p.Name == nameof(RestaurantCredit.RestaurantId));
+        key.Properties.Single().ValueGenerated.Should().Be(ValueGenerated.Never);
+    }
+
+    [Fact]
+    public void CreditTransactionConfiguration_DoesNotMapDeletedAt()
+    {
+        // Arrange
+        using var ctx = CreateInMemoryContext();
+
+        // Act
+        var entity = ctx.Model.FindEntityType(typeof(CreditTransaction));
+        var prop = entity!.FindProperty("DeletedAt");
+
+        // Assert
+        prop.Should().BeNull("credit_transactions is append-only and has no deleted_at column");
+    }
+
+    [Fact]
     public async Task OrderRepository_AddItemToExistingOrder_PersistsNewOrderItemAsync()
     {
         // Arrange
@@ -161,5 +236,42 @@ public sealed class PersistenceConfigurationTests
         saved!.Items.Should().ContainSingle();
         saved.Items.Single().Quantity.Should().Be(3);
         saved.TotalAmount.Should().Be(60_000m);
+    }
+
+    [Fact]
+    public async Task CreditRepository_PersistsAccountAndTransactionsAsync()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase($"test-{Guid.NewGuid()}"));
+        services.AddOrdersModule(new ConfigurationBuilder().Build());
+
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<ICreditRepository>();
+        var restaurantId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var account = new RestaurantCredit(restaurantId, creditLimit: 1_000m);
+        account.Charge(300m);
+
+        // Act
+        await repository.AddAccountAsync(account, CancellationToken.None);
+        repository.AddTransaction(new CreditTransaction(
+            restaurantId,
+            orderId,
+            CreditTransactionType.Charge,
+            amount: 300m,
+            balanceAfter: 300m,
+            note: "Order confirmed"));
+        await repository.SaveChangesAsync(CancellationToken.None);
+
+        // Assert
+        var savedAccount = await repository.FindAccountAsync(restaurantId, CancellationToken.None);
+        var savedTransactions = await repository.GetTransactionsAsync(restaurantId, CancellationToken.None);
+        savedAccount.Should().NotBeNull();
+        savedAccount!.OutstandingBalance.Should().Be(300m);
+        savedTransactions.Should().ContainSingle();
+        savedTransactions.Single().Type.Should().Be(CreditTransactionType.Charge);
     }
 }

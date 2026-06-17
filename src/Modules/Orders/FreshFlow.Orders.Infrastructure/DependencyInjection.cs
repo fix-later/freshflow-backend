@@ -3,6 +3,7 @@ using FluentValidation;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Behaviors;
+using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Infrastructure.CrossModule;
 using FreshFlow.Orders.Infrastructure.Repositories;
 using MediatR;
@@ -34,6 +35,10 @@ public static class DependencyInjection
         // Repositories
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<IScheduledOrderRepository, ScheduledOrderRepository>();
+        services.AddScoped<ICreditRepository, CreditRepository>();
+
+        // Application services
+        services.AddScoped<ICreditService, CreditService>();
 
         // Cross-module read projections used by Orders without project references to Auth/Catalog/Pricing.
         services.AddScoped<IMarketProductReader, MarketProductReader>();
