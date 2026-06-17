@@ -1,0 +1,199 @@
+# Báo cáo nghiên cứu & kế hoạch triển khai: Orders Module
+
+| | |
+|---|---|
+| **Ngày nghiên cứu** | 2026-06-17 |
+| **Branch** | `SCRUM-150-PRI-Real-time-Pricing-Price-Alerts` |
+| **Phạm vi** | Order & Cart Management — UC-ORD-01 → UC-ORD-21 |
+| **Tác giả** | Leader agent (team `backend-dev`), điều phối qua supervisor |
+| **Mục đích tài liệu** | Cung cấp cho AI coding agent đủ ngữ cảnh để implement Orders module theo đúng quyết định đã chốt với product owner — không cần hỏi lại các câu đã trả lời ở đây |
+| **Trạng thái** | Quyết định đã chốt, Jira key đã có cho toàn bộ 21 UC (xem §0). Implement theo thứ tự task; commit theo UC dùng key tương ứng |
+
+> **Quy ước cập nhật tài liệu:** mỗi khi một task hoàn thành (reviewer pass) hoặc có thay đổi/quyết định mới phát sinh trong quá trình implement, phải cập nhật lại file này (đặc biệt §4 Task breakdown và §7 Nhật ký tiến độ) — đây là nguồn tham chiếu chính cho AI agent, không phải chỉ TaskList.
+
+---
+
+## 0. Bảng Jira key theo UC-ORD (commit theo từng UC, KHÔNG dùng 1 key chung cho cả phase)
+
+| UC | Jira Key | UC | Jira Key | UC | Jira Key |
+|---|---|---|---|---|---|
+| UC-ORD-01 | SCRUM-180 | UC-ORD-08 | SCRUM-197 | UC-ORD-15 | SCRUM-214 |
+| UC-ORD-02 | SCRUM-183 | UC-ORD-09 | SCRUM-198 | UC-ORD-16 | SCRUM-217 |
+| UC-ORD-03 | SCRUM-186 | UC-ORD-10 | SCRUM-201 | UC-ORD-17 | SCRUM-220 |
+| UC-ORD-04 | SCRUM-189 | UC-ORD-11 | SCRUM-204 | UC-ORD-18 | SCRUM-222 |
+| UC-ORD-05 | SCRUM-192 | UC-ORD-12 | SCRUM-205 | UC-ORD-19 | SCRUM-225 |
+| UC-ORD-06 | SCRUM-193 | UC-ORD-13 | SCRUM-208 | UC-ORD-20 | SCRUM-228 |
+| UC-ORD-07 | SCRUM-196 | UC-ORD-14 | SCRUM-211 | UC-ORD-21 | SCRUM-231 |
+
+**Quy ước commit:** format `feat(orders): SCRUM-XXX <description>`, một commit (hoặc nhóm commit nhỏ) ứng với một UC, dùng đúng key của UC đó — KHÔNG gộp nhiều UC khác Jira key vào 1 commit.
+
+**Task #1 (Phase 0 — Domain foundation) không map 1:1 với một UC cụ thể** (đây là nền tảng cho toàn bộ module). Quy ước: dùng key của UC đầu tiên mà nó phục vụ trực tiếp — **SCRUM-180 (UC-ORD-01 — Create Draft Order)** — vì `Order`/`OrderItem` aggregate là điều kiện tiên quyết để tạo draft order. Ghi rõ trong commit body là phần nền tảng dùng chung cho cả module.
+
+---
+
+## 1. Hiện trạng repo tại thời điểm nghiên cứu
+
+- `src/Modules/Orders/*` chỉ có **scaffold rỗng**: 3 `.csproj` (`Orders.Domain` → `SharedKernel`; `Orders.Application` → `Domain + Contracts + SharedKernel`; `Orders.Infrastructure` → `Application`). Không có file `.cs` nào.
+- Chưa có `tests/Unit/FreshFlow.Orders.UnitTests`.
+- Chưa có `OrderHub` trong `FreshFlow.API/SignalR/`.
+- `FreshFlow.Contracts` chưa có integration event nào cho Orders.
+- Pattern tham chiếu ổn định cần theo (xem code Pricing/Auth/Catalog đã implement):
+  - `Result<T>` — không throw exception cho business rule.
+  - MediatR command/query + `FluentValidation` validator co-located (`Commands/{Name}/{Name}Validator.cs`).
+  - `ValidationBehavior` pipeline.
+  - Repository qua interface định nghĩa ở `{Module}.Application/Abstractions`.
+  - EF configuration ở `{Module}.Infrastructure/Persistence/Configurations`.
+  - Đọc dữ liệu cross-module qua reader riêng (ví dụ `MarketProductReader` — Orders sẽ dùng pattern này để đọc `market_products` từ Pricing/Catalog).
+
+### Schema đã có sẵn (docs/03-database-schema.md)
+
+Bảng: `orders`, `order_items`, `scheduled_orders`, `order_groups`.
+Enum: `order_status` (`draft, payment_pending, confirmed, batched, picked_up, at_hub, delivering, delivered, cancelled`), `payment_status`, `order_group_status`.
+
+`Order` là aggregate root; `order_items` là entity nội bộ (không có `deleted_at` riêng — xoá item nghĩa là hủy cả đơn).
+
+### Schema gaps đã verify trực tiếp trong docs/03
+
+| Gap | Ghi chú |
+|---|---|
+| `restaurants` không có cột credit | Cần bổ sung cho mô hình B2B credit (xem §2, Q1) |
+| `market_products.reserved_quantity` đã tồn tại | Thuộc về Pricing — reservation logic nên nằm ở Pricing, Orders chỉ gọi qua interface |
+| Chưa có interface reservation/credit nào trong code Pricing | Phải tạo mới (`IPricingReservationService`, `ICreditService`) |
+| Chưa có bảng cho issue-report của restaurant (UC-19) | Cần bảng mới `order_issues` |
+
+---
+
+## 2. Quyết định đã chốt với product owner (KHÔNG hỏi lại)
+
+### Q1 — Payment model: **B2B Credit/công nợ**
+Đơn KHÔNG đi qua payment gateway per-order (VNPay/MoMo/ZaloPay) dù docs/01 + docs/04 còn mô tả luồng `PAYMENT_PENDING` + webhook. Quyết định: bỏ `PAYMENT_PENDING` khỏi luồng confirm ở application layer; `DRAFT → CONFIRMED` trực tiếp nếu nhà hàng còn hạn mức tín dụng; vượt hạn mức → lỗi `422 CREDIT_LIMIT_EXCEEDED`.
+
+> Quyết định gốc của product owner ghi nhận ngày 2026-06-04 (xem memory `project_payment_model`), được xác nhận lại ngày 2026-06-17 khi lập plan Orders module.
+
+### Q2 — Scope: **21 UC-ORD làm chuẩn** (không bám số FR-ORD hẹp hơn trong docs/01)
+UC-18 (Confirm Receipt), UC-19 (Report Order Issue), UC-21 (ReOrder from History) đều **trong scope v1**, dù DB schema hiện tại chưa có bảng/cột tương ứng — cần bổ sung schema (xem §3).
+
+### Q3 — Ranh giới module cho stock/reservation: **Orders gọi qua interface của Pricing**
+Orders KHÔNG tự ghi Redis. Phải định nghĩa `IPricingReservationService` trong `Pricing.Application/Abstractions`, implement ở `Pricing.Infrastructure` (Redis + `market_products.reserved_quantity`). Orders chỉ inject và gọi interface này.
+
+### Q4 — Hạ tầng job cho cutoff/recurring: **default = hosted service**
+Dùng pattern hosted service hiện có (giống `PartitionMaintenanceJob`) cho auto-batch / generate-from-schedule / release-reservation, trừ khi có chỉ đạo khác (Hangfire/Quartz) trước khi vào Phase 5.
+
+### Q5 — Real-time: **REST trước, real-time sau**
+`OrderHub` + `IOrderBroadcastService` (UC-14) tách thành phase riêng, làm SAU khi REST ổn định. Không nằm trong đợt implement đầu.
+
+### Quyết định bổ sung (2026-06-17, sau khi lập task list): **Đợt đầu chỉ implement thuần DB, KHÔNG implement Redis**
+Toàn bộ phần phụ thuộc Redis (soft-reservation qua `IPricingReservationService`, job release 30 phút, reconciliation) bị tách ra khỏi mọi task DB-only và gom vào task riêng (#10, Phase 8 — DEFERRED). Hệ quả được chấp nhận: có khả năng over-allocation tồn kho (2 đơn cùng giành 1 sản phẩm) trong đợt đầu vì không giữ chỗ — đây là trade-off đã biết, KHÔNG coi là bug, sẽ giải quyết khi làm Phase 8.
+
+### Quyết định về commit: **Không tự động commit nếu chưa có Jira/SCRUM key**
+Coder/reviewer được phép code, test, để thay đổi ở working tree, nhưng KHÔNG được tự `git commit`. Chỉ commit khi supervisor cung cấp Jira key cho task cụ thể, theo format `feat(orders): SCRUM-XXX ...`.
+
+---
+
+## 3. Đề xuất schema/API bổ sung (đã được chấp thuận ngầm theo Q1/Q2 — chỉ cần hỏi lại nếu phát sinh thay đổi NGOÀI phạm vi dưới đây)
+
+### A) Credit/công nợ (cho task #3, dùng ở #4 và #6)
+
+- Bảng mới `restaurant_credit`: `restaurant_id` (PK/FK), `credit_limit`, `outstanding_balance`, `updated_at`.
+- Bảng mới `credit_transactions` (append-only ledger): `id`, `restaurant_id`, `order_id?`, `type` (`charge | settlement | refund | adjustment`), `amount`, `balance_after`, `note`, `created_at`.
+- API mới: `GET /restaurants/{id}/credit`, `GET /restaurants/{id}/credit/transactions`, `POST /admin/restaurants/{id}/credit/settle`.
+- `ICreditService`: `CanChargeAsync` / `ChargeAsync` / `RefundAsync` / `SettleAsync` (tất cả trả `Result`).
+
+### B) Receipt/Issue (cho task #8)
+
+- Bảng mới `order_issues`: `id`, `order_id`, `order_item_id?`, `reported_by`, `issue_type` (`missing | wrong | damaged`), `affected_quantity`, `description`, `status` (`open | resolved`), `created_at`, `resolved_at?`, `deleted_at`.
+- Cột mới `confirmed_receipt_at` trên `orders` (cho UC-18).
+
+### C) Reservation interface (cho task #10 — DEFERRED, chưa code đợt này)
+
+`IPricingReservationService` (`Pricing.Application/Abstractions`): `ReserveAsync` / `ReleaseAsync` / `ConfirmAsync` + đọc availability. Implementation ở `Pricing.Infrastructure` dùng Redis kết hợp `market_products.reserved_quantity`.
+
+---
+
+## 4. Task breakdown (đã tạo qua TaskCreate, theo dõi tiến độ ở đó — đây là bản mô tả đầy đủ cho AI agent)
+
+### DB-ONLY — implement đợt này, theo đúng thứ tự ID (dependency)
+
+**#1 — Phase 0: Domain foundation + module wiring** *(nền, block tất cả)*
+- `Order` (aggregate root) + `OrderItem` (entity nội bộ) + `ScheduledOrder` + enums (KHÔNG có `payment_pending` ở application layer theo Q1).
+- State machine cho `order_status`.
+- Domain events: `OrderCreated`, `OrderConfirmed`, `OrderCancelled`, `OrderStatusChanged`.
+- Integration events tương ứng trong `FreshFlow.Contracts`.
+- EF configurations (`Orders.Infrastructure/Persistence/Configurations`).
+- `AddOrdersModule` extension method, đăng ký trong `Program.cs`.
+- Tạo `tests/Unit/FreshFlow.Orders.UnitTests`.
+
+**#2 — Phase 1: Draft/Cart (UC-ORD-01..05)** *(blockedBy #1)*
+- `CreateDraftOrder`, `AddItem`, `UpdateItem`, `RemoveItem`.
+- **DB-ONLY pass — KHÔNG soft-reservation Redis vòng này.**
+- UC-05 (Validate Order Items): kiểm tra product active + quantity hợp lệ + đủ tồn kho **bằng DB query thuần** đọc `market_products` qua cross-module reader hiện có (pattern `MarketProductReader`), so `requestedQty` với available quantity trong DB. Trả lỗi `INVALID_PRODUCT` / `INSUFFICIENT_STOCK`. Lấy `unit_price` + `product_name_snapshot` từ cùng read.
+- **DEFERRED (cần Redis — KHÔNG làm vòng này):** reserve/release qua `IPricingReservationService` → theo dõi ở task #10.
+- REST endpoints: `POST /api/v1/orders`, các mutation cho item.
+
+**#3 — Phase 2a: Credit schema + AR endpoints** *(blockedBy #1)*
+- Schema + API + `ICreditService` theo §3.A.
+
+**#4 — Phase 2b: Confirm order + cutoff + price snapshot (UC-ORD-06,07,08)** *(blockedBy #2, #3)*
+- Confirm thuần DB: check credit (`ICreditService.CanChargeAsync`) → `DRAFT → CONFIRMED` → lock giá (price snapshot) → charge công nợ → publish domain/integration event.
+- Cutoff 22:00: đơn confirm sau cutoff chuyển `scheduledFor` sang chu kỳ giao tiếp theo.
+- **DEFERRED:** confirm reservation qua Redis → task #10.
+
+**#5 — Phase 3: Order viewing + history (UC-ORD-12,13,20)** *(blockedBy #2)*
+- `GET` list (phân trang, lọc theo ngày/trạng thái), `GET` detail, order history (UC-20 dùng chung filter với UC-12). REST only — không real-time ở phase này.
+
+**#6 — Phase 4: Cancellation + adjustment (UC-ORD-15,16,17)** *(blockedBy #4)*
+- Cancel: chỉ cho phép khi đơn còn ở `DRAFT`/`CONFIRMED` trước khi `BATCHED`. Lưu `cancellation_reason`. Hoàn công nợ qua `ICreditService.RefundAsync` nếu đơn đã `CONFIRMED`.
+- Adjustment (Operations Manager): cập nhật `actual_quantity` khi thiếu hàng/hư hỏng.
+- **DEFERRED:** release reservation Redis → task #10.
+
+**#7 — Phase 5: Recurring orders + generation job (UC-ORD-09,10,11)** *(blockedBy #2)*
+- `CreateRecurringOrder`, quản lý (xem/sửa/pause/cancel).
+- Background job sinh order instance từ `scheduled_orders` (hosted service pattern, theo Q4 default) + xử lý missed-execution recovery. Thuần DB.
+- **DEFERRED:** job release-reservation 30 phút → task #10.
+
+**#8 — Phase 6: Receipt + issue report + reorder (UC-ORD-18,19,21)** *(blockedBy #5)*
+- `ConfirmReceipt` (chuyển trạng thái khi đã `DELIVERED`, set `confirmed_receipt_at`).
+- `ReportOrderIssue` (tạo bản ghi `order_issues`).
+- `ReOrderFromHistory` (tạo draft order mới từ đơn cũ).
+- **Cần schema mới** theo §3.B — chạy migration tương ứng.
+
+### CẦN HẠ TẦNG NGOÀI DB — để sau, chỉ làm khi có yêu cầu riêng
+
+**#9 — Phase 7: Real-time OrderHub (UC-ORD-14)** *(blockedBy #5, DEFERRED theo Q5)*
+- `OrderHub` + `IOrderBroadcastService` (pattern giống `PricingHub`/`IPricingBroadcastService`), broadcast `OrderStatusChanged` tới group `restaurant:{restaurantId}`.
+
+**#10 — Phase 8: Redis soft-reservation (DEFERRED — cần Redis)**
+- Gom toàn bộ phần Redis đã gỡ khỏi #2/#4/#6/#7: `IPricingReservationService` (Reserve/Release/Confirm + đọc availability backed by Redis), hook vào lại Phase 1/2b/4, job release 30 phút, reconciliation job 5 phút.
+- Chưa có `blockedBy` cố định — kích hoạt khi user yêu cầu tiếp.
+
+---
+
+## 5. Rủi ro & lưu ý cho AI agent khi implement
+
+1. **Auto-batch (UC-07) giao thoa với Logistics module** (`order_groups` + delivery routes). Scope đợt này CHỈ làm phần cutoff/`scheduledFor` ở Orders; auto-batch service đầy đủ để Logistics/Admin xử lý riêng, tránh phình scope. Nếu cần đổi, phải hỏi lại trước khi code.
+2. **Over-allocation tồn kho là chấp nhận được trong đợt DB-only** (xem §2) — reviewer KHÔNG được coi đây là bug khi review task #2/#4/#6/#7.
+3. **Schema mới ở #3 và #8 sẽ phát sinh EF migration** — chạy `dotnet ef migrations add` theo đúng convention dự án (xem CLAUDE.md root), nhưng KHÔNG migrate database thật nếu chưa được xác nhận; tạo migration file là đủ trừ khi được yêu cầu apply.
+4. **Commit theo UC, dùng đúng Jira key tương ứng** (xem bảng §0) — KHÔNG còn ở trạng thái "chưa có key nên không commit" nữa (đã chốt 2026-06-17), nhưng vẫn KHÔNG gộp nhiều UC khác key vào 1 commit. Xem memory `feedback_no_commit_without_jira` cho lý do quy tắc gốc.
+5. Tuân thủ dependency rule của repo: `Domain → SharedKernel` only; `Application → Domain + SharedKernel + Contracts`; `Infrastructure → Application + EF/Redis`; không có project Orders nào được reference trực tiếp project khác ngoài Contracts.
+6. Mọi task: TDD (RED → GREEN → REFACTOR), coverage ≥ 80%, `Result<T>` pattern (không throw cho business rule), FluentValidation validator co-located, DTO là `record`, method async có suffix `Async`, interface có prefix `I`.
+
+---
+
+## 6. Tham chiếu
+
+- `CLAUDE.md` (root repo) — coding convention, module registration pattern, dependency rules.
+- `docs/01-requirements-spec.md` — FR-ORD-001 → FR-ORD-0xx (lưu ý: đánh số khác với UC-ORD trong yêu cầu gốc, xem Q2).
+- `docs/02-system-architecture.md` — SignalR design, caching strategy.
+- `docs/03-database-schema.md` — DDL `orders`, `order_items`, `scheduled_orders`, `order_groups`; cần đối chiếu khi thêm bảng mới ở §3.
+- `docs/04-api-design.md` — endpoint spec gốc (có phần đã lệch theo Q1, lấy quyết định trong tài liệu này làm chuẩn).
+- Memory: `project_payment_model`, `feedback_no_commit_without_jira`, `feedback_commit_format`.
+
+---
+
+## 7. Nhật ký tiến độ
+
+| Ngày | Việc | Trạng thái |
+|---|---|---|
+| 2026-06-17 | Task #1 (Phase 0 — Domain foundation + module wiring) | **completed** — reviewer pass sau 1 vòng fix (HIGH finding: thiếu FK constraint, đã sửa qua migration `migrationBuilder.Sql`) |
+| 2026-06-17 | Jira key đã có cho toàn bộ 21 UC (xem §0) | Áp dụng — commit theo UC, không còn giữ ở working tree vô thời hạn |
+| 2026-06-17 | Task #2 (Phase 1 — Draft/Cart UC-ORD-01..05) | **in_progress** |

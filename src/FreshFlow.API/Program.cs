@@ -3,6 +3,7 @@ using FluentValidation;
 using FreshFlow.Auth.Infrastructure;
 using FreshFlow.Catalog.Infrastructure;
 using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Orders.Infrastructure;
 using FreshFlow.Pricing.Infrastructure;
 using FreshFlow.Pricing.Infrastructure.Realtime;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -132,7 +133,7 @@ builder.Services.AddSignalR();
 builder.Services.AddAuthModule(builder.Configuration);
 builder.Services.AddCatalogModule(builder.Configuration);
 builder.Services.AddPricingModule(builder.Configuration);
-// builder.Services.AddOrdersModule(builder.Configuration);
+builder.Services.AddOrdersModule(builder.Configuration);
 
 // ── Health Checks ─────────────────────────────────────────────
 builder.Services.AddHealthChecks();

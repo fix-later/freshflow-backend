@@ -1,0 +1,39 @@
+using System.Reflection;
+using FluentValidation;
+using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Orders.Application.Abstractions;
+using FreshFlow.Orders.Application.Behaviors;
+using FreshFlow.Orders.Infrastructure.Repositories;
+using MediatR;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace FreshFlow.Orders.Infrastructure;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddOrdersModule(
+        this IServiceCollection services,
+        IConfiguration config)
+    {
+        // Register this assembly so AppDbContext discovers Orders EF configurations.
+        EfAssemblyRegistry.Register(Assembly.GetExecutingAssembly());
+
+        // MediatR — scan Application assembly for handlers.
+        var applicationAssembly = typeof(IOrderRepository).Assembly;
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssembly(applicationAssembly);
+            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+        });
+
+        // FluentValidation — auto-register all validators from Application
+        services.AddValidatorsFromAssembly(applicationAssembly, includeInternalTypes: true);
+
+        // Repositories
+        services.AddScoped<IOrderRepository, OrderRepository>();
+        services.AddScoped<IScheduledOrderRepository, ScheduledOrderRepository>();
+
+        return services;
+    }
+}
