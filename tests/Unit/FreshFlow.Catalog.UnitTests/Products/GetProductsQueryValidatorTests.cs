@@ -63,7 +63,8 @@ public sealed class GetProductsQueryValidatorTests
     [Fact]
     public void Validate_PageSizeExceedsMax_Fails()
     {
-        var result = _sut.Validate(new GetProductsQuery(null, null, false, 1, 101));
+        // Max was raised to 200 (SCRUM-126); 201 must still be rejected.
+        var result = _sut.Validate(new GetProductsQuery(null, null, false, 1, 201));
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == "PageSize");
     }
@@ -71,7 +72,8 @@ public sealed class GetProductsQueryValidatorTests
     [Fact]
     public void Validate_MaxPageSize_Passes()
     {
-        var result = _sut.Validate(new GetProductsQuery(null, null, false, 1, 100));
+        // Max is 200 (SCRUM-126).
+        var result = _sut.Validate(new GetProductsQuery(null, null, false, 1, 200));
         result.IsValid.Should().BeTrue();
     }
 }
