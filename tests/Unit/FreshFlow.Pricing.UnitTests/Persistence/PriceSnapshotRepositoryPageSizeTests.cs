@@ -67,4 +67,24 @@ public sealed class PriceSnapshotRepositoryPageSizeTests
         // Assert
         await act.Should().NotThrowAsync<ArgumentException>();
     }
+
+    // ── Cursor resilience (regression) ───────────────────────────────────────
+
+    [Theory]
+    [InlineData("not-valid-base64!@#$")]
+    [InlineData("aGVsbG8=")] // valid base64 but not a valid SnapshotCursor JSON
+    [InlineData("")]
+    public async Task GetPageAsync_InvalidOrTamperedCursor_TreatedAsStartOfListAsync(string cursor)
+    {
+        // Arrange — a corrupt/tampered cursor must never throw; it should silently
+        // fall back to the start of the list (same behaviour as cursor=null).
+        var sut = BuildSut($"db-{Guid.NewGuid()}");
+
+        // Act — empty DB, so first page = empty list regardless of cursor
+        var act = async () => await sut.GetPageAsync(
+            Guid.NewGuid(), cursor, 10, null, null, CancellationToken.None);
+
+        // Assert
+        await act.Should().NotThrowAsync();
+    }
 }

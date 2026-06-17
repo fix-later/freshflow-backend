@@ -3,6 +3,7 @@ using FreshFlow.Pricing.Application.Abstractions;
 using FreshFlow.Pricing.Application.Commands.UpdateProductPrice;
 using FreshFlow.Pricing.Domain.Entities;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using NSubstitute.ReturnsExtensions;
 
 namespace FreshFlow.Pricing.UnitTests.Commands;
@@ -332,5 +333,26 @@ public sealed class UpdateProductPriceCommandHandlerTests
 
         // Assert
         result.IsSuccess.Should().BeTrue();
+    }
+
+    // ── 409 DB-level concurrency (EF token fires at SaveChanges) ─────────────
+
+    [Fact]
+    public async Task Handle_SaveChangesThrowsConcurrencyConflict_Returns409ConflictAsync()
+    {
+        // Arrange — pre-check passes, but the DB's concurrency token fires on SaveChanges
+        // (simulates two agents submitting the same product update concurrently).
+        var mp = MakeProduct();
+        _reader.HasAssignmentAsync(AgentId, MarketId, default).Returns(true);
+        _mpRepo.FindByMarketAndProductAsync(MarketId, ProductId, default).Returns(mp);
+        _mpRepo.SaveChangesAsync(Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ConcurrencyConflictException());
+
+        // Act
+        var result = await _sut.Handle(Cmd(price: 135_000m), default);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("OPTIMISTIC_CONCURRENCY_CONFLICT");
     }
 }
