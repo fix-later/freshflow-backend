@@ -78,7 +78,17 @@ internal sealed class UpdateAvailableQuantityCommandHandler(
         await snapshotRepository.AddAsync(snapshot, cancellationToken);
 
         // ── 8. Persist (single unit-of-work; same AppDbContext) ───────────────
-        await marketProductRepository.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await marketProductRepository.SaveChangesAsync(cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            return Result<UpdateAvailableQuantityResultDto>.Failure(
+                Error.Conflict(
+                    "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                    "The record was updated by another user. Please refresh and retry."));
+        }
 
         // ── 9. Build result ───────────────────────────────────────────────────
         return Result<UpdateAvailableQuantityResultDto>.Success(

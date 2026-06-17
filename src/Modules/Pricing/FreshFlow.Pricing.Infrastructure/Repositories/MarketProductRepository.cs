@@ -35,5 +35,16 @@ internal sealed class MarketProductRepository(AppDbContext db) : IMarketProductR
 
     public void Track(MarketProduct marketProduct) => db.Update(marketProduct);
 
-    public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
+    public async Task SaveChangesAsync(CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException(
+                "The record was updated by another user. Please refresh and retry.", ex);
+        }
+    }
 }
