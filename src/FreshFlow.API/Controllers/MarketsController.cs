@@ -173,7 +173,7 @@ public sealed class MarketsController(ISender sender) : ControllerBase
         {
             if (!DateTimeOffset.TryParse(from, null, DateTimeStyles.RoundtripKind, out var pf))
                 return BadRequest(ApiResponse.Err("VALIDATION_ERROR",
-                    $"'from' is not a valid ISO 8601 date: '{from}'."));
+                    "'from' is not a valid ISO 8601 date."));
             parsedFrom = pf.UtcDateTime;
         }
 
@@ -182,7 +182,7 @@ public sealed class MarketsController(ISender sender) : ControllerBase
         {
             if (!DateTimeOffset.TryParse(to, null, DateTimeStyles.RoundtripKind, out var pt))
                 return BadRequest(ApiResponse.Err("VALIDATION_ERROR",
-                    $"'to' is not a valid ISO 8601 date: '{to}'."));
+                    "'to' is not a valid ISO 8601 date."));
             parsedTo = pt.UtcDateTime;
         }
 
