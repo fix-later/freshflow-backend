@@ -12,7 +12,7 @@ public sealed class Order : AggregateRoot
     {
         [OrderStatus.Draft] = [OrderStatus.Confirmed, OrderStatus.Cancelled],
         [OrderStatus.Confirmed] = [OrderStatus.Batched, OrderStatus.Cancelled],
-        [OrderStatus.Batched] = [OrderStatus.PickedUp, OrderStatus.Cancelled],
+        [OrderStatus.Batched] = [OrderStatus.PickedUp],
         [OrderStatus.PickedUp] = [OrderStatus.AtHub],
         [OrderStatus.AtHub] = [OrderStatus.Delivering],
         [OrderStatus.Delivering] = [OrderStatus.Delivered],
@@ -166,7 +166,7 @@ public sealed class Order : AggregateRoot
     {
         if (!AllowedTransitions.TryGetValue(Status, out var next) || !next.Contains(OrderStatus.Cancelled))
             return Result.Failure(Error.Conflict(
-                "ORDER_CANNOT_CANCEL", $"An order in status '{Status}' cannot be cancelled."));
+                "ORDER_NOT_CANCELLABLE", $"An order in status '{Status}' cannot be cancelled."));
 
         TransitionTo(OrderStatus.Cancelled);
         CancelledAt = DateTime.UtcNow;
@@ -176,6 +176,29 @@ public sealed class Order : AggregateRoot
             PaymentStatus = OrderPaymentStatus.Waived;
 
         RaiseDomainEvent(new OrderCancelledDomainEvent(Id, RestaurantId, reason, DateTime.UtcNow));
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Records the fulfilled quantity for an order item when operations flags a shortage or damage.
+    /// </summary>
+    public Result RecordActualQuantity(Guid itemId, decimal actualQuantity)
+    {
+        if (Status is OrderStatus.Draft or OrderStatus.Cancelled)
+            return Result.Failure(Error.Conflict(
+                "ORDER_CANNOT_ADJUST", $"An order in status '{Status}' cannot be adjusted."));
+
+        var item = _items.FirstOrDefault(i => i.Id == itemId);
+        if (item is null)
+            return Result.Failure(Error.NotFound("ORDER_ITEM", itemId));
+
+        if (actualQuantity < 0m || actualQuantity > item.Quantity)
+            return Result.Failure(Error.Validation(
+                "INVALID_ACTUAL_QUANTITY",
+                "Actual quantity must be non-negative and cannot exceed ordered quantity."));
+
+        item.RecordActualQuantity(actualQuantity);
 
         return Result.Success();
     }

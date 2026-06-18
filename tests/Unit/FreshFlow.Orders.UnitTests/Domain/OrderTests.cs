@@ -417,9 +417,13 @@ public sealed class OrderTests
     }
 
     [Theory]
+    [InlineData(OrderStatus.Batched)]
+    [InlineData(OrderStatus.PickedUp)]
+    [InlineData(OrderStatus.AtHub)]
+    [InlineData(OrderStatus.Delivering)]
     [InlineData(OrderStatus.Delivered)]
     [InlineData(OrderStatus.Cancelled)]
-    public void Cancel_FromTerminalState_ReturnsFailure(OrderStatus terminalStatus)
+    public void Cancel_FromBatchedOrLaterOrTerminalState_ReturnsOrderNotCancellable(OrderStatus terminalStatus)
     {
         // Arrange
         var order = new Order(RestaurantId, scheduledFor: null, notes: null);
@@ -431,6 +435,7 @@ public sealed class OrderTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_NOT_CANCELLABLE");
     }
 
     [Fact]
@@ -447,6 +452,93 @@ public sealed class OrderTests
         order.DomainEvents.OfType<OrderCancelledDomainEvent>().Should().ContainSingle();
         order.DomainEvents.OfType<OrderStatusChangedDomainEvent>().Should().ContainSingle()
             .Which.NewStatus.Should().Be(OrderStatus.Cancelled);
+    }
+
+    // ── RecordActualQuantity ────────────────────────────────────────────────
+
+    [Fact]
+    public void RecordActualQuantity_ConfirmedOrder_UpdatesItemActualQuantity()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 5, unitPrice: 20_000m);
+        order.Confirm();
+        var itemId = order.Items.Single().Id;
+
+        // Act
+        var result = order.RecordActualQuantity(itemId, 4.5m);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        order.Items.Single().ActualQuantity.Should().Be(4.5m);
+    }
+
+    [Fact]
+    public void RecordActualQuantity_DraftOrder_ReturnsOrderCannotAdjust()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 5, unitPrice: 20_000m);
+        var itemId = order.Items.Single().Id;
+
+        // Act
+        var result = order.RecordActualQuantity(itemId, 4m);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_CANNOT_ADJUST");
+    }
+
+    [Fact]
+    public void RecordActualQuantity_CancelledOrder_ReturnsOrderCannotAdjust()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 5, unitPrice: 20_000m);
+        order.Cancel("test");
+        var itemId = order.Items.Single().Id;
+
+        // Act
+        var result = order.RecordActualQuantity(itemId, 4m);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_CANNOT_ADJUST");
+    }
+
+    [Fact]
+    public void RecordActualQuantity_ItemNotFound_ReturnsOrderItemNotFound()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 5, unitPrice: 20_000m);
+        order.Confirm();
+
+        // Act
+        var result = order.RecordActualQuantity(Guid.NewGuid(), 4m);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_ITEM_NOT_FOUND");
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(6)]
+    public void RecordActualQuantity_InvalidQuantity_ReturnsInvalidActualQuantity(decimal actualQuantity)
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 5, unitPrice: 20_000m);
+        order.Confirm();
+        var itemId = order.Items.Single().Id;
+
+        // Act
+        var result = order.RecordActualQuantity(itemId, actualQuantity);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INVALID_ACTUAL_QUANTITY");
     }
 
     // ── AdvanceStatus (logistics state machine) ─────────────────────────────

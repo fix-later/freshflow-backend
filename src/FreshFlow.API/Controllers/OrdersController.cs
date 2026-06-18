@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Orders.Application.Commands.AddOrderItem;
+using FreshFlow.Orders.Application.Commands.CancelOrder;
 using FreshFlow.Orders.Application.Commands.ConfirmOrder;
 using FreshFlow.Orders.Application.Commands.CreateDraftOrder;
+using FreshFlow.Orders.Application.Commands.RecordOrderItemActualQuantity;
 using FreshFlow.Orders.Application.Commands.RemoveOrderItem;
 using FreshFlow.Orders.Application.Commands.UpdateOrderItem;
 using FreshFlow.Orders.Application.Dtos;
@@ -17,7 +19,7 @@ namespace FreshFlow.API.Controllers;
 
 [ApiController]
 [Route("api/v1/orders")]
-[Authorize(Roles = "admin,restaurant")]
+[Authorize(Roles = "admin,operations_manager,restaurant")]
 [EnableRateLimiting("orders")]
 public sealed class OrdersController(ISender sender) : ControllerBase
 {
@@ -60,7 +62,7 @@ public sealed class OrdersController(ISender sender) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetOrderAsync(Guid orderId, CancellationToken ct)
     {
-        var result = await sender.Send(new GetOrderQuery(ResolveUserId(), User.IsInRole("admin"), orderId), ct);
+        var result = await sender.Send(new GetOrderQuery(ResolveUserId(), CanReadAllOrders(), orderId), ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -146,6 +148,42 @@ public sealed class OrdersController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    /// <summary>PATCH /api/v1/orders/{orderId}/cancel — UC-ORD-15: cancels a draft/confirmed order.</summary>
+    [HttpPatch("{orderId:guid}/cancel")]
+    [Authorize(Roles = "admin,restaurant")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> CancelOrderAsync(
+        Guid orderId, [FromBody] CancelOrderRequest? body, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new CancelOrderCommand(ResolveUserId(), User.IsInRole("admin"), orderId, body?.Reason), ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>
+    /// PATCH /api/v1/orders/{orderId}/items/{itemId}/actual-quantity — UC-ORD-16/17:
+    /// records fulfilled quantity after shortage/damage adjustment.
+    /// </summary>
+    [HttpPatch("{orderId:guid}/items/{itemId:guid}/actual-quantity")]
+    [Authorize(Roles = "admin,operations_manager")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> RecordOrderItemActualQuantityAsync(
+        Guid orderId, Guid itemId, [FromBody] RecordActualQuantityRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new RecordOrderItemActualQuantityCommand(ResolveUserId(), orderId, itemId, body.ActualQuantity), ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private async Task<IActionResult> ListOrdersInternalAsync(
@@ -161,7 +199,7 @@ public sealed class OrdersController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new ListOrdersQuery(
                 ResolveUserId(),
-                User.IsInRole("admin"),
+                CanReadAllOrders(),
                 restaurantId,
                 status,
                 from,
@@ -173,6 +211,9 @@ public sealed class OrdersController(ISender sender) : ControllerBase
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
+
+    private bool CanReadAllOrders() =>
+        User.IsInRole("admin") || User.IsInRole("operations_manager");
 
     private Guid ResolveUserId()
     {
@@ -195,3 +236,7 @@ public sealed record CreateDraftOrderRequest(
 public sealed record AddOrderItemRequest(Guid MarketProductId, int Quantity);
 
 public sealed record UpdateOrderItemRequest(int Quantity);
+
+public sealed record CancelOrderRequest(string? Reason);
+
+public sealed record RecordActualQuantityRequest(decimal ActualQuantity);

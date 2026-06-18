@@ -14,7 +14,14 @@ internal static class OrderDtoMapper
         order.TotalAmount,
         order.Notes,
         order.Items
-            .Select(i => new OrderItemDto(i.Id, i.MarketProductId, i.ProductNameSnapshot, i.Quantity, i.UnitPrice, i.Subtotal))
+            .Select(i => new OrderItemDto(
+                i.Id,
+                i.MarketProductId,
+                i.ProductNameSnapshot,
+                i.Quantity,
+                i.UnitPrice,
+                i.Subtotal,
+                i.ActualQuantity))
             .ToList(),
         order.OrderGroupId,
         order.ScheduledOrderId,

@@ -76,6 +76,7 @@ public sealed class ErrorExtensionsTests
     [InlineData("INVALID_CREDIT_LIMIT")]
     [InlineData("CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE")]
     [InlineData("DELIVERY_DATE_OUT_OF_WINDOW")]
+    [InlineData("INVALID_ACTUAL_QUANTITY")]
     public void ToActionResult_CreditLimitValidationCodes_Returns422(string code)
     {
         var error = new Error(code, "validation error");
@@ -85,10 +86,13 @@ public sealed class ErrorExtensionsTests
         result.Should().BeOfType<UnprocessableEntityObjectResult>();
     }
 
-    [Fact]
-    public void ToActionResult_OrderCannotReschedule_Returns409()
+    [Theory]
+    [InlineData("ORDER_CANNOT_RESCHEDULE")]
+    [InlineData("ORDER_NOT_CANCELLABLE")]
+    [InlineData("ORDER_CANNOT_ADJUST")]
+    public void ToActionResult_OrderConflictCodes_Returns409(string code)
     {
-        var error = new Error("ORDER_CANNOT_RESCHEDULE", "conflict message");
+        var error = new Error(code, "conflict message");
 
         var result = error.ToActionResult();
 

@@ -6,4 +6,5 @@ public sealed record OrderItemDto(
     string ProductNameSnapshot,
     int Quantity,
     decimal UnitPrice,
-    decimal Subtotal);
+    decimal Subtotal,
+    decimal? ActualQuantity);
