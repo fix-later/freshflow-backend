@@ -49,6 +49,7 @@ public sealed class Order : AggregateRoot
     public string? Notes { get; private set; }
     public DateTime? CancelledAt { get; private set; }
     public string? CancellationReason { get; private set; }
+    public DateTime? ConfirmedReceiptAt { get; private set; }
 
     public IReadOnlyCollection<OrderItem> Items => _items.AsReadOnly();
 
@@ -199,6 +200,25 @@ public sealed class Order : AggregateRoot
                 "Actual quantity must be non-negative and cannot exceed ordered quantity."));
 
         item.RecordActualQuantity(actualQuantity);
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Confirms that the restaurant has received an already-delivered order.
+    /// </summary>
+    public Result ConfirmReceipt(DateTime? confirmedAtUtc = null)
+    {
+        if (Status != OrderStatus.Delivered)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_DELIVERED", "Receipt can only be confirmed after the order is delivered."));
+
+        if (ConfirmedReceiptAt.HasValue)
+            return Result.Failure(Error.Conflict(
+                "ORDER_RECEIPT_ALREADY_CONFIRMED", "Receipt has already been confirmed for this order."));
+
+        ConfirmedReceiptAt = confirmedAtUtc ?? DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
 
         return Result.Success();
     }

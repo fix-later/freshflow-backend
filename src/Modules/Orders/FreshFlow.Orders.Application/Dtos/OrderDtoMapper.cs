@@ -27,6 +27,7 @@ internal static class OrderDtoMapper
         order.ScheduledOrderId,
         order.CancelledAt,
         order.CancellationReason,
+        order.ConfirmedReceiptAt,
         order.CreatedAt,
         order.UpdatedAt);
 

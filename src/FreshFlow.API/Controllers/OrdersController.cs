@@ -4,10 +4,13 @@ using FreshFlow.Orders.Application.Commands.AddOrderItem;
 using FreshFlow.Orders.Application.Commands.CancelOrder;
 using FreshFlow.Orders.Application.Commands.CancelScheduledOrder;
 using FreshFlow.Orders.Application.Commands.ConfirmOrder;
+using FreshFlow.Orders.Application.Commands.ConfirmOrderReceipt;
 using FreshFlow.Orders.Application.Commands.CreateDraftOrder;
 using FreshFlow.Orders.Application.Commands.CreateScheduledOrder;
 using FreshFlow.Orders.Application.Commands.RecordOrderItemActualQuantity;
 using FreshFlow.Orders.Application.Commands.RemoveOrderItem;
+using FreshFlow.Orders.Application.Commands.ReorderFromHistory;
+using FreshFlow.Orders.Application.Commands.ReportOrderIssue;
 using FreshFlow.Orders.Application.Commands.UpdateOrderItem;
 using FreshFlow.Orders.Application.Commands.UpdateScheduledOrder;
 using FreshFlow.Orders.Application.Dtos;
@@ -283,6 +286,69 @@ public sealed class OrdersController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    /// <summary>PATCH /api/v1/orders/{orderId}/receipt — UC-ORD-18: confirms receipt of a delivered order.</summary>
+    [HttpPatch("{orderId:guid}/receipt")]
+    [Authorize(Roles = "restaurant")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ConfirmOrderReceiptAsync(Guid orderId, CancellationToken ct)
+    {
+        var result = await sender.Send(new ConfirmOrderReceiptCommand(ResolveUserId(), orderId), ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>POST /api/v1/orders/{orderId}/issues — UC-ORD-19: reports an issue for a delivered order.</summary>
+    [HttpPost("{orderId:guid}/issues")]
+    [Authorize(Roles = "restaurant")]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> ReportOrderIssueAsync(
+        Guid orderId, [FromBody] ReportOrderIssueRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new ReportOrderIssueCommand(
+                ResolveUserId(),
+                orderId,
+                body.OrderItemId,
+                body.IssueType,
+                body.AffectedQuantity,
+                body.Description),
+            ct);
+
+        return result.IsSuccess
+            ? CreatedAtAction(nameof(GetOrderAsync), new { orderId }, ApiResponse.Ok(result.Value))
+            : result.Error.ToActionResult();
+    }
+
+    /// <summary>POST /api/v1/orders/{orderId}/reorder — UC-ORD-21: creates a draft order from order history.</summary>
+    [HttpPost("{orderId:guid}/reorder")]
+    [Authorize(Roles = "restaurant")]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> ReorderFromHistoryAsync(
+        Guid orderId, [FromBody] ReorderFromHistoryRequest? body, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new ReorderFromHistoryCommand(ResolveUserId(), orderId, body?.ScheduledFor, body?.Notes), ct);
+
+        return result.IsSuccess
+            ? CreatedAtAction(
+                nameof(GetOrderAsync),
+                new { orderId = result.Value.OrderId },
+                ApiResponse.Ok(result.Value))
+            : result.Error.ToActionResult();
+    }
+
     /// <summary>PATCH /api/v1/orders/scheduled/{scheduledOrderId} — UC-ORD-10: updates a recurring schedule.</summary>
     [HttpPatch("scheduled/{scheduledOrderId:guid}")]
     [Authorize(Roles = "admin,restaurant")]
@@ -379,6 +445,16 @@ public sealed record UpdateOrderItemRequest(int Quantity);
 public sealed record CancelOrderRequest(string? Reason);
 
 public sealed record RecordActualQuantityRequest(decimal ActualQuantity);
+
+public sealed record ReportOrderIssueRequest(
+    Guid? OrderItemId,
+    string IssueType,
+    decimal AffectedQuantity,
+    string Description);
+
+public sealed record ReorderFromHistoryRequest(
+    DateTime? ScheduledFor,
+    string? Notes);
 
 public sealed record CreateScheduledOrderRequest(
     string RecurrenceType,

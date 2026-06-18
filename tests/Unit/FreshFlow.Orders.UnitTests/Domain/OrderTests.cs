@@ -27,6 +27,7 @@ public sealed class OrderTests
         order.Notes.Should().Be("Giao trước 6h sáng");
         order.CancelledAt.Should().BeNull();
         order.CancellationReason.Should().BeNull();
+        order.ConfirmedReceiptAt.Should().BeNull();
         order.OrderGroupId.Should().BeNull();
         order.ScheduledOrderId.Should().BeNull();
         order.Items.Should().BeEmpty();
@@ -597,6 +598,64 @@ public sealed class OrderTests
 
         // Assert
         order.PaymentStatus.Should().Be(OrderPaymentStatus.Outstanding);
+    }
+
+    // ── ConfirmReceipt ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void ConfirmReceipt_DeliveredOrder_SetsConfirmedReceiptAt()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 1, unitPrice: 20_000m);
+        SetStatusForTest(order, OrderStatus.Delivered);
+        var confirmedAt = new DateTime(2026, 6, 18, 7, 0, 0, DateTimeKind.Utc);
+
+        // Act
+        var result = order.ConfirmReceipt(confirmedAt);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        order.Status.Should().Be(OrderStatus.Delivered);
+        order.ConfirmedReceiptAt.Should().Be(confirmedAt);
+    }
+
+    [Theory]
+    [InlineData(OrderStatus.Draft)]
+    [InlineData(OrderStatus.Confirmed)]
+    [InlineData(OrderStatus.Delivering)]
+    [InlineData(OrderStatus.Cancelled)]
+    public void ConfirmReceipt_WhenOrderNotDelivered_ReturnsOrderNotDelivered(OrderStatus status)
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 1, unitPrice: 20_000m);
+        SetStatusForTest(order, status);
+
+        // Act
+        var result = order.ConfirmReceipt();
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_NOT_DELIVERED");
+        order.ConfirmedReceiptAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void ConfirmReceipt_WhenAlreadyConfirmed_ReturnsReceiptAlreadyConfirmed()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 1, unitPrice: 20_000m);
+        SetStatusForTest(order, OrderStatus.Delivered);
+        order.ConfirmReceipt();
+
+        // Act
+        var result = order.ConfirmReceipt();
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_RECEIPT_ALREADY_CONFIRMED");
     }
 
     // ── Test helper — drives the aggregate through valid transitions to reach

@@ -13,6 +13,7 @@ public sealed record OrderDto(
     Guid? ScheduledOrderId,
     DateTime? CancelledAt,
     string? CancellationReason,
+    DateTime? ConfirmedReceiptAt,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 

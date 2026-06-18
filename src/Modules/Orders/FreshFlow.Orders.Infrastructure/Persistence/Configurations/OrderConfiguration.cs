@@ -36,6 +36,8 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.Notes);
         builder.Property(o => o.CancelledAt);
         builder.Property(o => o.CancellationReason);
+        builder.Property(o => o.ConfirmedReceiptAt)
+            .HasColumnName("confirmed_receipt_at");
 
         builder.Property(o => o.CreatedAt).IsRequired();
         builder.Property(o => o.UpdatedAt).IsRequired().IsConcurrencyToken();

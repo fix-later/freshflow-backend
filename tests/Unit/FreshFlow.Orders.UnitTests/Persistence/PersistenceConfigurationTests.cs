@@ -97,6 +97,19 @@ public sealed class PersistenceConfigurationTests
     }
 
     [Fact]
+    public void Model_RegistersOrderIssueEntity()
+    {
+        // Arrange
+        using var ctx = CreateInMemoryContext();
+
+        // Act
+        var entity = ctx.Model.FindEntityType(typeof(OrderIssue));
+
+        // Assert
+        entity.Should().NotBeNull("OrderIssue should be registered in the EF model");
+    }
+
+    [Fact]
     public void OrderItemConfiguration_HasForeignKeyToOrder()
     {
         // Arrange
@@ -143,6 +156,48 @@ public sealed class PersistenceConfigurationTests
     }
 
     [Fact]
+    public void OrderConfiguration_ConfirmedReceiptAtUsesSnakeCaseColumn()
+    {
+        // Arrange
+        using var ctx = CreateInMemoryContext();
+
+        // Act
+        var orderEntity = ctx.Model.FindEntityType(typeof(Order));
+        var prop = orderEntity!.FindProperty(nameof(Order.ConfirmedReceiptAt));
+
+        // Assert
+        prop.Should().NotBeNull();
+        prop!.GetColumnName(StoreObjectIdentifier.Table("orders", null))
+            .Should().Be("confirmed_receipt_at");
+    }
+
+    [Fact]
+    public void OrderIssueConfiguration_UsesSnakeCaseTableAndColumns()
+    {
+        // Arrange
+        using var ctx = CreateInMemoryContext();
+
+        // Act
+        var issueEntity = ctx.Model.FindEntityType(typeof(OrderIssue));
+
+        // Assert
+        issueEntity.Should().NotBeNull();
+        issueEntity!.GetTableName().Should().Be("order_issues");
+        issueEntity.FindProperty(nameof(OrderIssue.OrderId))!
+            .GetColumnName(StoreObjectIdentifier.Table("order_issues", null))
+            .Should().Be("order_id");
+        issueEntity.FindProperty(nameof(OrderIssue.OrderItemId))!
+            .GetColumnName(StoreObjectIdentifier.Table("order_issues", null))
+            .Should().Be("order_item_id");
+        issueEntity.FindProperty(nameof(OrderIssue.ReportedBy))!
+            .GetColumnName(StoreObjectIdentifier.Table("order_issues", null))
+            .Should().Be("reported_by");
+        issueEntity.FindProperty(nameof(OrderIssue.AffectedQuantity))!
+            .GetColumnName(StoreObjectIdentifier.Table("order_issues", null))
+            .Should().Be("affected_quantity");
+    }
+
+    [Fact]
     public void AddOrdersModule_RegistersCrossModuleReaders()
     {
         // Arrange
@@ -174,6 +229,22 @@ public sealed class PersistenceConfigurationTests
         // Assert
         provider.GetRequiredService<ICreditRepository>().Should().NotBeNull();
         provider.GetRequiredService<ICreditService>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public void AddOrdersModule_RegistersOrderIssueRepository()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase($"test-{Guid.NewGuid()}"));
+
+        // Act
+        services.AddOrdersModule(new ConfigurationBuilder().Build());
+        using var provider = services.BuildServiceProvider();
+
+        // Assert
+        provider.GetRequiredService<IOrderIssueRepository>().Should().NotBeNull();
     }
 
     [Fact]
@@ -380,6 +451,38 @@ public sealed class PersistenceConfigurationTests
         total.Should().Be(2);
         scheduledOrders.Should().ContainSingle();
         scheduledOrders.Single().Id.Should().Be(activeNew.Id);
+    }
+
+    [Fact]
+    public async Task OrderIssueRepository_PersistsIssueAsync()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase($"test-{Guid.NewGuid()}"));
+        services.AddOrdersModule(new ConfigurationBuilder().Build());
+
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IOrderIssueRepository>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var issue = new OrderIssue(
+            Guid.NewGuid(),
+            orderItemId: null,
+            reportedBy: Guid.NewGuid(),
+            OrderIssueType.Missing,
+            affectedQuantity: 1m,
+            description: "missing item");
+
+        // Act
+        await repository.AddAsync(issue, CancellationToken.None);
+        await repository.SaveChangesAsync(CancellationToken.None);
+
+        // Assert
+        var saved = await db.Set<OrderIssue>().SingleAsync();
+        saved.Id.Should().Be(issue.Id);
+        saved.IssueType.Should().Be(OrderIssueType.Missing);
+        saved.Status.Should().Be(OrderIssueStatus.Open);
     }
 
     [Fact]
