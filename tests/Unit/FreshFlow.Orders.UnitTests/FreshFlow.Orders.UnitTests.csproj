@@ -22,6 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Provides IHubContext<T>, IHubClients, IClientProxy for OrderHub tests -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\src\Modules\Orders\FreshFlow.Orders.Application\FreshFlow.Orders.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Orders\FreshFlow.Orders.Domain\FreshFlow.Orders.Domain.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Orders\FreshFlow.Orders.Infrastructure\FreshFlow.Orders.Infrastructure.csproj" />

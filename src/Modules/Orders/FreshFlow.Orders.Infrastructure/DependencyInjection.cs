@@ -6,6 +6,7 @@ using FreshFlow.Orders.Application.Behaviors;
 using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Infrastructure.CrossModule;
 using FreshFlow.Orders.Infrastructure.Jobs;
+using FreshFlow.Orders.Infrastructure.Realtime;
 using FreshFlow.Orders.Infrastructure.Repositories;
 using MediatR;
 using Microsoft.Extensions.Configuration;
@@ -44,6 +45,7 @@ public static class DependencyInjection
         // Application services
         services.AddScoped<ICreditService, CreditService>();
         services.AddScoped<IScheduledOrderGenerationService, ScheduledOrderGenerationService>();
+        services.AddScoped<IOrderBroadcastService, OrderBroadcastService>();
         services.AddHostedService<ScheduledOrderGenerationHostedService>();
 
         // Cross-module read projections used by Orders without project references to Auth/Catalog/Pricing.

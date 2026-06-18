@@ -43,7 +43,7 @@ internal static class OrderDtoMapper
         order.ScheduledFor,
         order.CreatedAt);
 
-    private static string ToApiStatus(OrderStatus status) => status switch
+    public static string ToApiStatus(OrderStatus status) => status switch
     {
         OrderStatus.Draft => "draft",
         OrderStatus.Confirmed => "confirmed",

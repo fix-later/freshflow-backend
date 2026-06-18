@@ -4,6 +4,7 @@ using FreshFlow.Auth.Infrastructure;
 using FreshFlow.Catalog.Infrastructure;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Orders.Infrastructure;
+using FreshFlow.Orders.Infrastructure.Realtime;
 using FreshFlow.Pricing.Infrastructure;
 using FreshFlow.Pricing.Infrastructure.Realtime;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -247,6 +248,7 @@ app.UseRateLimiter();
 app.MapControllers();
 app.MapHealthChecks("/health");
 app.MapHub<PricingHub>("/hubs/pricing");
+app.MapHub<OrderHub>("/hubs/orders");
 
 app.Run();
 

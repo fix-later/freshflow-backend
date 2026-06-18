@@ -248,6 +248,22 @@ public sealed class PersistenceConfigurationTests
     }
 
     [Fact]
+    public void AddOrdersModule_RegistersOrderBroadcastService()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSignalR();
+
+        // Act
+        services.AddOrdersModule(new ConfigurationBuilder().Build());
+        using var provider = services.BuildServiceProvider();
+
+        // Assert
+        provider.GetRequiredService<IOrderBroadcastService>().Should().NotBeNull();
+    }
+
+    [Fact]
     public void AddOrdersModule_RegistersScheduledOrderGenerationServices()
     {
         // Arrange
