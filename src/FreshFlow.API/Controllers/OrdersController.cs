@@ -6,6 +6,8 @@ using FreshFlow.Orders.Application.Commands.CreateDraftOrder;
 using FreshFlow.Orders.Application.Commands.RemoveOrderItem;
 using FreshFlow.Orders.Application.Commands.UpdateOrderItem;
 using FreshFlow.Orders.Application.Dtos;
+using FreshFlow.Orders.Application.Queries.GetOrder;
+using FreshFlow.Orders.Application.Queries.ListOrders;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,12 +17,57 @@ namespace FreshFlow.API.Controllers;
 
 [ApiController]
 [Route("api/v1/orders")]
-[Authorize(Roles = "restaurant")]
+[Authorize(Roles = "admin,restaurant")]
 [EnableRateLimiting("orders")]
 public sealed class OrdersController(ISender sender) : ControllerBase
 {
+    /// <summary>GET /api/v1/orders — UC-ORD-12/20: lists orders/history with pagination and filters.</summary>
+    [HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public Task<IActionResult> ListOrdersAsync(
+        [FromQuery] Guid? restaurantId,
+        [FromQuery] string? status,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] string? sort = "createdAt:desc",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default) =>
+        ListOrdersInternalAsync(restaurantId, status, from, to, sort, page, pageSize, ct);
+
+    /// <summary>GET /api/v1/orders/history — UC-ORD-20 alias over the same order-list filters.</summary>
+    [HttpGet("history")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public Task<IActionResult> GetOrderHistoryAsync(
+        [FromQuery] Guid? restaurantId,
+        [FromQuery] string? status,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] string? sort = "createdAt:desc",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default) =>
+        ListOrdersInternalAsync(restaurantId, status, from, to, sort, page, pageSize, ct);
+
+    /// <summary>GET /api/v1/orders/{orderId} — UC-ORD-13: returns an order with line items.</summary>
+    [HttpGet("{orderId:guid}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetOrderAsync(Guid orderId, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetOrderQuery(ResolveUserId(), User.IsInRole("admin"), orderId), ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     /// <summary>POST /api/v1/orders — UC-ORD-01: creates a draft order with one or more line items.</summary>
     [HttpPost]
+    [Authorize(Roles = "restaurant")]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -38,6 +85,7 @@ public sealed class OrdersController(ISender sender) : ControllerBase
 
     /// <summary>POST /api/v1/orders/{orderId}/items — UC-ORD-02: adds an item to a draft order.</summary>
     [HttpPost("{orderId:guid}/items")]
+    [Authorize(Roles = "restaurant")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -53,6 +101,7 @@ public sealed class OrdersController(ISender sender) : ControllerBase
 
     /// <summary>PUT /api/v1/orders/{orderId}/items/{itemId} — UC-ORD-03: updates a draft order item's quantity.</summary>
     [HttpPut("{orderId:guid}/items/{itemId:guid}")]
+    [Authorize(Roles = "restaurant")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -68,6 +117,7 @@ public sealed class OrdersController(ISender sender) : ControllerBase
 
     /// <summary>DELETE /api/v1/orders/{orderId}/items/{itemId} — UC-ORD-04: removes an item from a draft order.</summary>
     [HttpDelete("{orderId:guid}/items/{itemId:guid}")]
+    [Authorize(Roles = "restaurant")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -83,6 +133,7 @@ public sealed class OrdersController(ISender sender) : ControllerBase
     /// checks B2B credit, locks item prices, applies the 22:00 cutoff, and charges credit.
     /// </summary>
     [HttpPost("{orderId:guid}/confirm")]
+    [Authorize(Roles = "restaurant")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -96,6 +147,32 @@ public sealed class OrdersController(ISender sender) : ControllerBase
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private async Task<IActionResult> ListOrdersInternalAsync(
+        Guid? restaurantId,
+        string? status,
+        DateTime? from,
+        DateTime? to,
+        string? sort,
+        int page,
+        int pageSize,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new ListOrdersQuery(
+                ResolveUserId(),
+                User.IsInRole("admin"),
+                restaurantId,
+                status,
+                from,
+                to,
+                sort,
+                page,
+                pageSize),
+            ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
 
     private Guid ResolveUserId()
     {

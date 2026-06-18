@@ -4,6 +4,7 @@ using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Orders.Infrastructure;
+using FreshFlow.SharedKernel.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Configuration;
@@ -239,6 +240,52 @@ public sealed class PersistenceConfigurationTests
     }
 
     [Fact]
+    public async Task OrderRepository_SearchAsync_FiltersSortsAndPaginatesAsync()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase($"test-{Guid.NewGuid()}"));
+        services.AddOrdersModule(new ConfigurationBuilder().Build());
+
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
+        var restaurantId = Guid.NewGuid();
+        var otherRestaurantId = Guid.NewGuid();
+
+        var excludedOld = NewConfirmedOrder(restaurantId, new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var firstMatch = NewConfirmedOrder(restaurantId, new DateTime(2026, 6, 12, 0, 0, 0, DateTimeKind.Utc));
+        var secondMatch = NewConfirmedOrder(restaurantId, new DateTime(2026, 6, 13, 0, 0, 0, DateTimeKind.Utc));
+        var excludedDraft = new Order(restaurantId, scheduledFor: null, notes: null);
+        SetCreatedAt(excludedDraft, new DateTime(2026, 6, 12, 12, 0, 0, DateTimeKind.Utc));
+        var excludedOtherRestaurant =
+            NewConfirmedOrder(otherRestaurantId, new DateTime(2026, 6, 12, 0, 0, 0, DateTimeKind.Utc));
+
+        foreach (var order in new[] { excludedOld, firstMatch, secondMatch, excludedDraft, excludedOtherRestaurant })
+            await repository.AddAsync(order, CancellationToken.None);
+        await repository.SaveChangesAsync(CancellationToken.None);
+
+        var criteria = new OrderSearchCriteria(
+            restaurantId,
+            OrderStatus.Confirmed,
+            new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 6, 13, 23, 59, 59, DateTimeKind.Utc),
+            SortAscending: true,
+            Page: 1,
+            PageSize: 1);
+
+        // Act
+        var (orders, total) = await repository.SearchAsync(criteria, CancellationToken.None);
+
+        // Assert
+        total.Should().Be(2);
+        orders.Should().ContainSingle();
+        orders.Single().Id.Should().Be(firstMatch.Id);
+        orders.Single().Items.Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task CreditRepository_PersistsAccountAndTransactionsAsync()
     {
         // Arrange
@@ -273,5 +320,22 @@ public sealed class PersistenceConfigurationTests
         savedAccount!.OutstandingBalance.Should().Be(300m);
         savedTransactions.Should().ContainSingle();
         savedTransactions.Single().Type.Should().Be(CreditTransactionType.Charge);
+    }
+
+    private static Order NewConfirmedOrder(Guid restaurantId, DateTime createdAt)
+    {
+        var order = new Order(restaurantId, scheduledFor: null, notes: null);
+        order.AddItem(Guid.NewGuid(), "Cà chua", 3, 20_000m);
+        order.Confirm();
+        SetCreatedAt(order, createdAt);
+        return order;
+    }
+
+    private static void SetCreatedAt(BaseEntity entity, DateTime createdAt)
+    {
+        typeof(BaseEntity)
+            .GetField($"<{nameof(BaseEntity.CreatedAt)}>k__BackingField",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(entity, createdAt);
     }
 }

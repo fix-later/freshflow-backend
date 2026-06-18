@@ -15,7 +15,25 @@ internal static class OrderDtoMapper
         order.Notes,
         order.Items
             .Select(i => new OrderItemDto(i.Id, i.MarketProductId, i.ProductNameSnapshot, i.Quantity, i.UnitPrice, i.Subtotal))
-            .ToList());
+            .ToList(),
+        order.OrderGroupId,
+        order.ScheduledOrderId,
+        order.CancelledAt,
+        order.CancellationReason,
+        order.CreatedAt,
+        order.UpdatedAt);
+
+    public static OrderListItemDto ToListItemDto(Order order) => new(
+        order.Id,
+        order.RestaurantId,
+        order.OrderGroupId,
+        order.ScheduledOrderId,
+        ToApiStatus(order.Status),
+        ToApiPaymentStatus(order.PaymentStatus),
+        order.TotalAmount,
+        order.Items.Count,
+        order.ScheduledFor,
+        order.CreatedAt);
 
     private static string ToApiStatus(OrderStatus status) => status switch
     {
