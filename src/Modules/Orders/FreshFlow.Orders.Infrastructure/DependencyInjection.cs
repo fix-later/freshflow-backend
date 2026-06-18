@@ -5,10 +5,12 @@ using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Behaviors;
 using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Infrastructure.CrossModule;
+using FreshFlow.Orders.Infrastructure.Jobs;
 using FreshFlow.Orders.Infrastructure.Repositories;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace FreshFlow.Orders.Infrastructure;
 
@@ -20,6 +22,7 @@ public static class DependencyInjection
     {
         // Register this assembly so AppDbContext discovers Orders EF configurations.
         EfAssemblyRegistry.Register(Assembly.GetExecutingAssembly());
+        services.TryAddSingleton(config);
 
         // MediatR — scan Application assembly for handlers.
         var applicationAssembly = typeof(IOrderRepository).Assembly;
@@ -39,6 +42,8 @@ public static class DependencyInjection
 
         // Application services
         services.AddScoped<ICreditService, CreditService>();
+        services.AddScoped<IScheduledOrderGenerationService, ScheduledOrderGenerationService>();
+        services.AddHostedService<ScheduledOrderGenerationHostedService>();
 
         // Cross-module read projections used by Orders without project references to Auth/Catalog/Pricing.
         services.AddScoped<IMarketProductReader, MarketProductReader>();

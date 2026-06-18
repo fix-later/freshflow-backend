@@ -23,6 +23,30 @@ internal sealed class ScheduledOrderRepository(AppDbContext db) : IScheduledOrde
             .Where(s => s.CancelledAt == null && s.DeletedAt == null)
             .ToListAsync(ct);
 
+    public async Task<(IReadOnlyList<ScheduledOrder> ScheduledOrders, int Total)> SearchAsync(
+        ScheduledOrderSearchCriteria criteria, CancellationToken ct)
+    {
+        var query = db.Set<ScheduledOrder>()
+            .AsNoTracking()
+            .Where(s => s.DeletedAt == null);
+
+        if (criteria.RestaurantId.HasValue)
+            query = query.Where(s => s.RestaurantId == criteria.RestaurantId.Value);
+
+        if (!criteria.IncludeCancelled)
+            query = query.Where(s => s.CancelledAt == null);
+
+        var total = await query.CountAsync(ct);
+        var scheduledOrders = await query
+            .OrderByDescending(s => s.CreatedAt)
+            .ThenByDescending(s => s.Id)
+            .Skip((criteria.Page - 1) * criteria.PageSize)
+            .Take(criteria.PageSize)
+            .ToListAsync(ct);
+
+        return (scheduledOrders.AsReadOnly(), total);
+    }
+
     public async Task AddAsync(ScheduledOrder scheduledOrder, CancellationToken ct) =>
         await db.Set<ScheduledOrder>().AddAsync(scheduledOrder, ct);
 

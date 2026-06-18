@@ -53,6 +53,25 @@ internal sealed class OrderRepository(AppDbContext db) : IOrderRepository
         return (orders.AsReadOnly(), total);
     }
 
+    public async Task<(IReadOnlyList<Order> Orders, int Total)> GetByScheduledOrderIdAsync(
+        Guid scheduledOrderId, int page, int pageSize, CancellationToken ct)
+    {
+        var query = db.Set<Order>()
+            .AsNoTracking()
+            .Include(o => o.Items)
+            .Where(o => o.ScheduledOrderId == scheduledOrderId && o.DeletedAt == null);
+
+        var total = await query.CountAsync(ct);
+        var orders = await query
+            .OrderByDescending(o => o.CreatedAt)
+            .ThenByDescending(o => o.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (orders.AsReadOnly(), total);
+    }
+
     public async Task AddAsync(Order order, CancellationToken ct) =>
         await db.Set<Order>().AddAsync(order, ct);
 

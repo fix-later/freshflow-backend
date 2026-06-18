@@ -77,6 +77,7 @@ public sealed class ErrorExtensionsTests
     [InlineData("CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE")]
     [InlineData("DELIVERY_DATE_OUT_OF_WINDOW")]
     [InlineData("INVALID_ACTUAL_QUANTITY")]
+    [InlineData("SCHEDULED_ORDER_FIRST_RUN_IN_PAST")]
     public void ToActionResult_CreditLimitValidationCodes_Returns422(string code)
     {
         var error = new Error(code, "validation error");
@@ -90,6 +91,8 @@ public sealed class ErrorExtensionsTests
     [InlineData("ORDER_CANNOT_RESCHEDULE")]
     [InlineData("ORDER_NOT_CANCELLABLE")]
     [InlineData("ORDER_CANNOT_ADJUST")]
+    [InlineData("SCHEDULED_ORDER_NOT_ACTIVE")]
+    [InlineData("SCHEDULED_ORDER_ALREADY_CANCELLED")]
     public void ToActionResult_OrderConflictCodes_Returns409(string code)
     {
         var error = new Error(code, "conflict message");

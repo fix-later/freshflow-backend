@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace FreshFlow.Orders.UnitTests.Persistence;
 
@@ -176,6 +177,24 @@ public sealed class PersistenceConfigurationTests
     }
 
     [Fact]
+    public void AddOrdersModule_RegistersScheduledOrderGenerationServices()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase($"test-{Guid.NewGuid()}"));
+        services.AddLogging();
+
+        // Act
+        services.AddOrdersModule(new ConfigurationBuilder().Build());
+        using var provider = services.BuildServiceProvider();
+
+        // Assert
+        provider.GetRequiredService<IScheduledOrderGenerationService>().Should().NotBeNull();
+        provider.GetServices<IHostedService>().Should().ContainSingle();
+    }
+
+    [Fact]
     public void RestaurantCreditConfiguration_UsesRestaurantIdPrimaryKey()
     {
         // Arrange
@@ -286,6 +305,84 @@ public sealed class PersistenceConfigurationTests
     }
 
     [Fact]
+    public async Task OrderRepository_GetByScheduledOrderIdAsync_FiltersAndPaginatesAsync()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase($"test-{Guid.NewGuid()}"));
+        services.AddOrdersModule(new ConfigurationBuilder().Build());
+
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
+        var restaurantId = Guid.NewGuid();
+        var scheduledOrderId = Guid.NewGuid();
+        var otherScheduledOrderId = Guid.NewGuid();
+
+        var firstMatch = NewScheduledOrderInstance(
+            restaurantId, scheduledOrderId, new DateTime(2026, 6, 12, 0, 0, 0, DateTimeKind.Utc));
+        var secondMatch = NewScheduledOrderInstance(
+            restaurantId, scheduledOrderId, new DateTime(2026, 6, 13, 0, 0, 0, DateTimeKind.Utc));
+        var excludedOtherSchedule = NewScheduledOrderInstance(
+            restaurantId, otherScheduledOrderId, new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Utc));
+
+        foreach (var order in new[] { firstMatch, secondMatch, excludedOtherSchedule })
+            await repository.AddAsync(order, CancellationToken.None);
+        await repository.SaveChangesAsync(CancellationToken.None);
+
+        // Act
+        var (orders, total) = await repository.GetByScheduledOrderIdAsync(
+            scheduledOrderId, page: 1, pageSize: 1, CancellationToken.None);
+
+        // Assert
+        total.Should().Be(2);
+        orders.Should().ContainSingle();
+        orders.Single().Id.Should().Be(secondMatch.Id);
+    }
+
+    [Fact]
+    public async Task ScheduledOrderRepository_SearchAsync_FiltersActiveAndPaginatesAsync()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase($"test-{Guid.NewGuid()}"));
+        services.AddOrdersModule(new ConfigurationBuilder().Build());
+
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IScheduledOrderRepository>();
+        var restaurantId = Guid.NewGuid();
+        var otherRestaurantId = Guid.NewGuid();
+
+        var activeOld = NewScheduledOrder(restaurantId, new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var activeNew = NewScheduledOrder(restaurantId, new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc));
+        var cancelled = NewScheduledOrder(restaurantId, new DateTime(2026, 6, 12, 0, 0, 0, DateTimeKind.Utc));
+        cancelled.Cancel();
+        var otherRestaurant = NewScheduledOrder(
+            otherRestaurantId, new DateTime(2026, 6, 13, 0, 0, 0, DateTimeKind.Utc));
+
+        foreach (var scheduledOrder in new[] { activeOld, activeNew, cancelled, otherRestaurant })
+            await repository.AddAsync(scheduledOrder, CancellationToken.None);
+        await repository.SaveChangesAsync(CancellationToken.None);
+
+        var criteria = new ScheduledOrderSearchCriteria(
+            restaurantId,
+            IncludeCancelled: false,
+            Page: 1,
+            PageSize: 1);
+
+        // Act
+        var (scheduledOrders, total) = await repository.SearchAsync(criteria, CancellationToken.None);
+
+        // Assert
+        total.Should().Be(2);
+        scheduledOrders.Should().ContainSingle();
+        scheduledOrders.Single().Id.Should().Be(activeNew.Id);
+    }
+
+    [Fact]
     public async Task CreditRepository_PersistsAccountAndTransactionsAsync()
     {
         // Arrange
@@ -337,5 +434,23 @@ public sealed class PersistenceConfigurationTests
             .GetField($"<{nameof(BaseEntity.CreatedAt)}>k__BackingField",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .SetValue(entity, createdAt);
+    }
+
+    private static Order NewScheduledOrderInstance(Guid restaurantId, Guid scheduledOrderId, DateTime createdAt)
+    {
+        var order = new Order(restaurantId, scheduledFor: null, notes: null, scheduledOrderId: scheduledOrderId);
+        SetCreatedAt(order, createdAt);
+        return order;
+    }
+
+    private static ScheduledOrder NewScheduledOrder(Guid restaurantId, DateTime createdAt)
+    {
+        var scheduledOrder = new ScheduledOrder(
+            restaurantId,
+            RecurrenceType.Daily,
+            firstRunAt: createdAt.AddDays(1),
+            notes: null);
+        SetCreatedAt(scheduledOrder, createdAt);
+        return scheduledOrder;
     }
 }

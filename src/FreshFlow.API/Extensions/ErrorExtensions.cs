@@ -45,11 +45,13 @@ public static class ErrorExtensions
                         or "CREDIT_SETTLEMENT_EXCEEDS_BALANCE" or "CREDIT_REFUND_EXCEEDS_BALANCE"
                         or "INVALID_CREDIT_LIMIT" or "CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE"
                         or "DELIVERY_DATE_OUT_OF_WINDOW" or "INVALID_ACTUAL_QUANTITY"
+                        or "SCHEDULED_ORDER_FIRST_RUN_IN_PAST"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 
         if (error.Code is "ORDER_NOT_DRAFT" or "ORDER_CANNOT_CANCEL" or "ORDER_INVALID_TRANSITION"
-                        or "ORDER_CANNOT_RESCHEDULE" or "ORDER_NOT_CANCELLABLE" or "ORDER_CANNOT_ADJUST")
+                        or "ORDER_CANNOT_RESCHEDULE" or "ORDER_NOT_CANCELLABLE" or "ORDER_CANNOT_ADJUST"
+                        or "SCHEDULED_ORDER_NOT_ACTIVE" or "SCHEDULED_ORDER_ALREADY_CANCELLED")
             return new ConflictObjectResult(body);
 
         if (error.Code is "ROLE_NOT_CONFIGURED")

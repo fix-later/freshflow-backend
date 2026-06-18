@@ -29,15 +29,35 @@ public sealed class ScheduledOrder : BaseEntity
     /// Records that a concrete order instance was generated from this template at <paramref name="executedAt"/>.
     /// Used by the background generation job to enforce idempotency.
     /// </summary>
-    public void RecordExecution(DateTime executedAt) => LastExecutedAt = executedAt;
+    public void RecordExecution(DateTime executedAt)
+    {
+        LastExecutedAt = executedAt;
+        UpdatedAt = DateTime.UtcNow;
+    }
 
-    public Result Cancel()
+    public Result UpdateSchedule(RecurrenceType recurrenceType, DateTime firstRunAt, string? notes)
+    {
+        if (!IsActive)
+            return Result.Failure(Error.Conflict(
+                "SCHEDULED_ORDER_NOT_ACTIVE", "This recurring schedule is not active."));
+
+        RecurrenceType = recurrenceType;
+        FirstRunAt = firstRunAt;
+        Notes = notes;
+        UpdatedAt = DateTime.UtcNow;
+
+        return Result.Success();
+    }
+
+    public Result Cancel(DateTime? cancelledAtUtc = null)
     {
         if (!IsActive)
             return Result.Failure(Error.Conflict(
                 "SCHEDULED_ORDER_ALREADY_CANCELLED", "This recurring schedule is already cancelled."));
 
-        CancelledAt = DateTime.UtcNow;
+        CancelledAt = cancelledAtUtc ?? DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
+
         return Result.Success();
     }
 }

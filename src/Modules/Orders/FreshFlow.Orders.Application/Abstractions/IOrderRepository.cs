@@ -12,6 +12,9 @@ public interface IOrderRepository
     public Task<(IReadOnlyList<Order> Orders, int Total)> SearchAsync(
         OrderSearchCriteria criteria, CancellationToken ct);
 
+    public Task<(IReadOnlyList<Order> Orders, int Total)> GetByScheduledOrderIdAsync(
+        Guid scheduledOrderId, int page, int pageSize, CancellationToken ct);
+
     public Task AddAsync(Order order, CancellationToken ct);
 
     public void Track(Order order);
