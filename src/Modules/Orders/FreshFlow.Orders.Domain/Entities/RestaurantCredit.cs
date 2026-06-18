@@ -61,6 +61,18 @@ public sealed class RestaurantCredit
         Touch();
     }
 
+    public void SetCreditLimit(decimal newLimit)
+    {
+        if (newLimit < 0m)
+            throw new ArgumentOutOfRangeException(nameof(newLimit), newLimit, "Credit limit must be non-negative.");
+
+        if (newLimit < OutstandingBalance)
+            throw new InvalidOperationException("Credit limit cannot be set below the outstanding balance.");
+
+        CreditLimit = newLimit;
+        Touch();
+    }
+
     private static void EnsurePositive(decimal amount)
     {
         if (amount <= 0m)

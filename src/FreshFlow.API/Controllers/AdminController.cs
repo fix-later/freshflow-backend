@@ -9,6 +9,7 @@ using FreshFlow.Auth.Application.Commands.Admin.UnlockUser;
 using FreshFlow.Auth.Application.Queries.GetMarketAssignments;
 using FreshFlow.Auth.Application.Queries.GetRoles;
 using FreshFlow.Auth.Application.Queries.GetUsers;
+using FreshFlow.Orders.Application.Commands.SetRestaurantCreditLimit;
 using FreshFlow.Orders.Application.Commands.SettleRestaurantCredit;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -103,6 +104,19 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    [HttpPut("restaurants/{restaurantId:guid}/credit/limit")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> SetRestaurantCreditLimitAsync(
+        Guid restaurantId,
+        [FromBody] SetCreditLimitRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new SetRestaurantCreditLimitCommand(restaurantId, body.CreditLimit, body.Note), ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     // ── Market Assignments (Admin + Operations Manager) ───────────────────────
 
     /// <summary>
@@ -146,3 +160,4 @@ public sealed record ActivateRequest(bool IsActive);
 public sealed record AssignRoleRequest(string RoleName);
 public sealed record ReplaceMarketAssignmentsRequest(IReadOnlyList<Guid> MarketIds);
 public sealed record SettleCreditRequest(decimal Amount, string? Note);
+public sealed record SetCreditLimitRequest(decimal CreditLimit, string? Note);

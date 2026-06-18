@@ -70,4 +70,46 @@ public sealed class RestaurantCreditTests
 
         credit.OutstandingBalance.Should().Be(45m);
     }
+
+    [Fact]
+    public void SetCreditLimit_NonNegativeValue_UpdatesLimit()
+    {
+        var credit = new RestaurantCredit(Guid.NewGuid());
+
+        credit.SetCreditLimit(500m);
+
+        credit.CreditLimit.Should().Be(500m);
+    }
+
+    [Fact]
+    public void SetCreditLimit_Zero_AllowsRevokingCredit()
+    {
+        var credit = new RestaurantCredit(Guid.NewGuid(), creditLimit: 500m);
+
+        credit.SetCreditLimit(0m);
+
+        credit.CreditLimit.Should().Be(0m);
+    }
+
+    [Fact]
+    public void SetCreditLimit_NegativeValue_Throws()
+    {
+        var credit = new RestaurantCredit(Guid.NewGuid());
+
+        var act = () => credit.SetCreditLimit(-1m);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void SetCreditLimit_BelowOutstandingBalance_Throws()
+    {
+        var credit = new RestaurantCredit(Guid.NewGuid(), creditLimit: 100m);
+        credit.Charge(80m);
+
+        var act = () => credit.SetCreditLimit(50m);
+
+        act.Should().Throw<InvalidOperationException>();
+        credit.CreditLimit.Should().Be(100m);
+    }
 }

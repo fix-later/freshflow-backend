@@ -130,6 +130,46 @@ public sealed class CreditService(
         return await SaveAndReturnAsync(account, ct);
     }
 
+    public async Task<Result<RestaurantCreditDto>> SetCreditLimitAsync(
+        Guid restaurantId,
+        decimal newLimit,
+        string? note,
+        CancellationToken ct)
+    {
+        if (newLimit < 0m)
+            return Result<RestaurantCreditDto>.Failure(InvalidCreditLimit());
+
+        var accountResult = await GetAccountOrDefaultAsync(restaurantId, ct);
+        if (accountResult.IsFailure)
+            return Result<RestaurantCreditDto>.Failure(accountResult.Error);
+
+        var account = accountResult.Value;
+        var previousLimit = account.CreditLimit;
+        if (previousLimit == newLimit)
+            return Result<RestaurantCreditDto>.Success(CreditDtoMapper.ToDto(account));
+
+        try
+        {
+            account.SetCreditLimit(newLimit);
+        }
+        catch (InvalidOperationException)
+        {
+            return Result<RestaurantCreditDto>.Failure(CreditLimitBelowOutstandingBalance(account, newLimit));
+        }
+
+        await EnsureTrackedAccountAsync(account, ct);
+        creditRepository.Track(account);
+        creditRepository.AddTransaction(new CreditTransaction(
+            restaurantId,
+            orderId: null,
+            CreditTransactionType.Adjustment,
+            Math.Abs(newLimit - previousLimit),
+            account.OutstandingBalance,
+            note));
+
+        return await SaveAndReturnAsync(account, ct);
+    }
+
     private async Task<Result<RestaurantCredit>> GetAccountOrDefaultAsync(Guid restaurantId, CancellationToken ct)
     {
         var restaurant = await restaurantReader.FindByIdAsync(restaurantId, ct);
@@ -181,4 +221,12 @@ public sealed class CreditService(
         Error.Validation(
             code,
             $"{message} Requested amount {amount}; outstanding balance {account.OutstandingBalance}.");
+
+    private static Error InvalidCreditLimit() =>
+        Error.Validation("INVALID_CREDIT_LIMIT", "Credit limit must be non-negative.");
+
+    private static Error CreditLimitBelowOutstandingBalance(RestaurantCredit account, decimal newLimit) =>
+        Error.Validation(
+            "CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE",
+            $"New limit {newLimit} cannot be below the outstanding balance {account.OutstandingBalance}.");
 }

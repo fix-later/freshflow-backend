@@ -26,4 +26,10 @@ public interface ICreditService
         decimal amount,
         string? note,
         CancellationToken ct);
+
+    public Task<Result<RestaurantCreditDto>> SetCreditLimitAsync(
+        Guid restaurantId,
+        decimal newLimit,
+        string? note,
+        CancellationToken ct);
 }
