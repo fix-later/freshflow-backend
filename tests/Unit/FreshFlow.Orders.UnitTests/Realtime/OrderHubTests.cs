@@ -1,7 +1,9 @@
+using System.Reflection;
 using System.Security.Claims;
 using FluentAssertions;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Infrastructure.Realtime;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using NSubstitute;
 using NSubstitute.ReturnsExtensions;
@@ -126,5 +128,16 @@ public sealed class OrderHubTests
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         await _restaurantReader.DidNotReceive().FindByUserIdAsync(
             Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void OrderHub_RestrictsConnectionToAccessMatrixRoles()
+    {
+        var attr = typeof(OrderHub).GetCustomAttribute<AuthorizeAttribute>();
+
+        attr.Should().NotBeNull("the /hubs/orders connection must require authorization");
+        attr!.Roles.Should().Be(
+            "admin,operations_manager,restaurant",
+            "out-of-matrix roles (market_agent, hub_staff, driver) must be rejected at connect time, matching OrdersController's role scoping");
     }
 }

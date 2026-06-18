@@ -11,7 +11,7 @@ namespace FreshFlow.Orders.Infrastructure.Realtime;
 /// based on their JWT subject and restaurant profile. Admin and operations manager users
 /// are automatically joined to <c>admin:orders</c> for monitoring.
 /// </summary>
-[Authorize]
+[Authorize(Roles = "admin,operations_manager,restaurant")]
 public sealed class OrderHub(IRestaurantReader restaurantReader) : Hub
 {
     private const string AdminRole = "admin";
