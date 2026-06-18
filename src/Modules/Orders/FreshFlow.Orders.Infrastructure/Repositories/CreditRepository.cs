@@ -2,6 +2,7 @@ using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FreshFlow.Orders.Infrastructure.Repositories;
 
@@ -49,5 +50,13 @@ internal sealed class CreditRepository(AppDbContext db) : ICreditRepository
             throw new CreditConcurrencyException(
                 "The credit account was updated by another request. Please refresh and retry.", ex);
         }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            throw new CreditConcurrencyException(
+                "The credit account was created by another request. Please refresh and retry.", ex);
+        }
     }
+
+    internal static bool IsUniqueViolation(DbUpdateException ex) =>
+        ex.InnerException is PostgresException pg && pg.SqlState == PostgresErrorCodes.UniqueViolation;
 }
