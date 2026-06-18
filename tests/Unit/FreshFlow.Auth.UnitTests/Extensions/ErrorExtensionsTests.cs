@@ -71,4 +71,27 @@ public sealed class ErrorExtensionsTests
 
         result.Should().BeOfType<UnauthorizedObjectResult>();
     }
+
+    [Theory]
+    [InlineData("INVALID_CREDIT_LIMIT")]
+    [InlineData("CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE")]
+    [InlineData("DELIVERY_DATE_OUT_OF_WINDOW")]
+    public void ToActionResult_CreditLimitValidationCodes_Returns422(string code)
+    {
+        var error = new Error(code, "validation error");
+
+        var result = error.ToActionResult();
+
+        result.Should().BeOfType<UnprocessableEntityObjectResult>();
+    }
+
+    [Fact]
+    public void ToActionResult_OrderCannotReschedule_Returns409()
+    {
+        var error = new Error("ORDER_CANNOT_RESCHEDULE", "conflict message");
+
+        var result = error.ToActionResult();
+
+        result.Should().BeOfType<ConflictObjectResult>();
+    }
 }

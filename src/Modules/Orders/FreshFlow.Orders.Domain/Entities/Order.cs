@@ -110,7 +110,7 @@ public sealed class Order : AggregateRoot
     /// Transitions the order from Draft to Confirmed, locking item prices and accruing
     /// the total as outstanding debt (B2B credit model).
     /// </summary>
-    public Result Confirm()
+    public Result CanConfirm()
     {
         if (Status != OrderStatus.Draft)
             return Result.Failure(Error.Conflict(
@@ -120,6 +120,19 @@ public sealed class Order : AggregateRoot
             return Result.Failure(Error.Validation(
                 "ORDER_EMPTY", "Cannot confirm an order with no items."));
 
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Transitions the order from Draft to Confirmed, locking item prices and accruing
+    /// the total as outstanding debt (B2B credit model).
+    /// </summary>
+    public Result Confirm()
+    {
+        var canConfirm = CanConfirm();
+        if (canConfirm.IsFailure)
+            return canConfirm;
+
         foreach (var item in _items)
             item.LockPrice(item.UnitPrice);
 
@@ -127,6 +140,21 @@ public sealed class Order : AggregateRoot
         PaymentStatus = OrderPaymentStatus.Outstanding;
 
         RaiseDomainEvent(new OrderConfirmedDomainEvent(Id, RestaurantId, TotalAmount, DateTime.UtcNow));
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Pushes <see cref="ScheduledFor"/> to a later delivery cycle, e.g. when confirmation
+    /// happens after the daily cutoff time.
+    /// </summary>
+    public Result RescheduleFor(DateTime newScheduledFor)
+    {
+        if (Status is OrderStatus.Cancelled or OrderStatus.Delivered)
+            return Result.Failure(Error.Conflict(
+                "ORDER_CANNOT_RESCHEDULE", $"An order in status '{Status}' cannot be rescheduled."));
+
+        ScheduledFor = newScheduledFor;
 
         return Result.Success();
     }

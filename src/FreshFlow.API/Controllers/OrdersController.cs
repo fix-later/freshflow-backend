@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Orders.Application.Commands.AddOrderItem;
+using FreshFlow.Orders.Application.Commands.ConfirmOrder;
 using FreshFlow.Orders.Application.Commands.CreateDraftOrder;
 using FreshFlow.Orders.Application.Commands.RemoveOrderItem;
 using FreshFlow.Orders.Application.Commands.UpdateOrderItem;
@@ -73,6 +74,23 @@ public sealed class OrdersController(ISender sender) : ControllerBase
     public async Task<IActionResult> RemoveOrderItemAsync(Guid orderId, Guid itemId, CancellationToken ct)
     {
         var result = await sender.Send(new RemoveOrderItemCommand(ResolveUserId(), orderId, itemId), ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>
+    /// POST /api/v1/orders/{orderId}/confirm — UC-ORD-06/07/08: confirms a draft order,
+    /// checks B2B credit, locks item prices, applies the 22:00 cutoff, and charges credit.
+    /// </summary>
+    [HttpPost("{orderId:guid}/confirm")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> ConfirmOrderAsync(Guid orderId, CancellationToken ct)
+    {
+        var result = await sender.Send(new ConfirmOrderCommand(ResolveUserId(), orderId), ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }

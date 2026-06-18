@@ -71,7 +71,7 @@ public sealed class CreateDraftOrderCommandValidatorTests
     {
         // Arrange
         var cmd = new CreateDraftOrderCommand(
-            Guid.NewGuid(), [new DraftOrderItemRequest(Guid.NewGuid(), 5)], DateTime.UtcNow, "notes");
+            Guid.NewGuid(), [new DraftOrderItemRequest(Guid.NewGuid(), 5)], DateTime.UtcNow.AddDays(3), "notes");
 
         // Act
         var result = _sut.Validate(cmd);
@@ -79,4 +79,5 @@ public sealed class CreateDraftOrderCommandValidatorTests
         // Assert
         result.IsValid.Should().BeTrue();
     }
+
 }

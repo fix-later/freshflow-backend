@@ -271,6 +271,23 @@ public sealed class OrderTests
     }
 
     [Fact]
+    public void CanConfirm_FromDraftWithItems_ReturnsSuccessWithoutMutatingOrder()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 5, unitPrice: 20_000m);
+
+        // Act
+        var result = order.CanConfirm();
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        order.Status.Should().Be(OrderStatus.Draft);
+        order.PaymentStatus.Should().Be(OrderPaymentStatus.NotApplicable);
+        order.Items.Single().LockedUnitPrice.Should().BeNull();
+    }
+
+    [Fact]
     public void Confirm_WithoutItems_ReturnsFailure()
     {
         // Arrange
@@ -281,6 +298,21 @@ public sealed class OrderTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
+        order.Status.Should().Be(OrderStatus.Draft);
+    }
+
+    [Fact]
+    public void CanConfirm_WithoutItems_ReturnsOrderEmpty()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+
+        // Act
+        var result = order.CanConfirm();
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_EMPTY");
         order.Status.Should().Be(OrderStatus.Draft);
     }
 
@@ -316,6 +348,37 @@ public sealed class OrderTests
         order.DomainEvents.OfType<OrderConfirmedDomainEvent>().Should().ContainSingle();
         order.DomainEvents.OfType<OrderStatusChangedDomainEvent>().Should().ContainSingle()
             .Which.NewStatus.Should().Be(OrderStatus.Confirmed);
+    }
+
+    [Fact]
+    public void RescheduleFor_DraftOrder_UpdatesScheduledFor()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        var newDate = new DateTime(2026, 6, 19, 8, 0, 0, DateTimeKind.Utc);
+
+        // Act
+        var result = order.RescheduleFor(newDate);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        order.ScheduledFor.Should().Be(newDate);
+    }
+
+    [Fact]
+    public void RescheduleFor_CancelledOrder_ReturnsFailure()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.Cancel("test");
+        var newDate = new DateTime(2026, 6, 19, 8, 0, 0, DateTimeKind.Utc);
+
+        // Act
+        var result = order.RescheduleFor(newDate);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_CANNOT_RESCHEDULE");
     }
 
     // ── Cancel ───────────────────────────────────────────────────────────────

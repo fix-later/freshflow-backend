@@ -7,7 +7,8 @@ namespace FreshFlow.Orders.Application.Commands.CreateDraftOrder;
 ///
 /// Responsibility split:
 /// • 400 (this validator) — missing UserId, missing/empty item list, malformed item fields.
-/// • 422 (handler)        — restaurant not approved, invalid product, insufficient stock.
+/// • 422 (handler)        — restaurant not approved, invalid product, insufficient stock,
+///   ScheduledFor outside the D..D+7 delivery window (DELIVERY_DATE_OUT_OF_WINDOW, SCRUM-196).
 /// </summary>
 internal sealed class CreateDraftOrderCommandValidator : AbstractValidator<CreateDraftOrderCommand>
 {

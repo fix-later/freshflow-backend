@@ -1,5 +1,6 @@
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Dtos;
+using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
@@ -12,6 +13,7 @@ namespace FreshFlow.Orders.Application.Commands.CreateDraftOrder;
 /// Error precedence (cheapest/most authoritative first):
 /// 403 restaurant missing      → JWT user has no restaurant record
 /// 422 restaurant not approved → RESTAURANT_NOT_APPROVED
+/// 422 delivery date invalid   → DELIVERY_DATE_OUT_OF_WINDOW (SCRUM-196)
 /// 422 invalid product         → INVALID_PRODUCT (per item)
 /// 422 insufficient stock      → INSUFFICIENT_STOCK (per item)
 /// 201 success
@@ -35,6 +37,15 @@ internal sealed class CreateDraftOrderCommandHandler(
         if (!restaurant.IsApproved)
             return Result<OrderDto>.Failure(Error.Validation(
                 "RESTAURANT_NOT_APPROVED", "This restaurant has not been approved to place orders."));
+
+        // ── 2b. Delivery date window check (422, SCRUM-196) ────────────────────
+        if (request.ScheduledFor is not null
+            && !OrderCutoffScheduler.IsWithinDeliveryWindow(DateTime.UtcNow, request.ScheduledFor.Value))
+        {
+            return Result<OrderDto>.Failure(Error.Validation(
+                "DELIVERY_DATE_OUT_OF_WINDOW",
+                "Delivery date must be within the next 7 days and not in the past."));
+        }
 
         // ── 3. Validate items against live market product data (422) ─────────
         var order = new Order(restaurant.RestaurantId, request.ScheduledFor, request.Notes);

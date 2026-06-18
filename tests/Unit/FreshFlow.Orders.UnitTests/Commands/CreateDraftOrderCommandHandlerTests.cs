@@ -125,6 +125,60 @@ public sealed class CreateDraftOrderCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ScheduledForInThePast_ReturnsDeliveryDateOutOfWindowAsync()
+    {
+        // Arrange
+        var command = new CreateDraftOrderCommand(
+            UserId,
+            [new DraftOrderItemRequest(MarketProductId, 5)],
+            ScheduledFor: DateTime.UtcNow.AddDays(-1),
+            Notes: null);
+
+        // Act
+        var result = await _sut.Handle(command, default);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("DELIVERY_DATE_OUT_OF_WINDOW");
+        await _orderRepository.DidNotReceive().AddAsync(Arg.Any<Order>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ScheduledForBeyondDPlus7_ReturnsDeliveryDateOutOfWindowAsync()
+    {
+        // Arrange
+        var command = new CreateDraftOrderCommand(
+            UserId,
+            [new DraftOrderItemRequest(MarketProductId, 5)],
+            ScheduledFor: DateTime.UtcNow.AddDays(8),
+            Notes: null);
+
+        // Act
+        var result = await _sut.Handle(command, default);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("DELIVERY_DATE_OUT_OF_WINDOW");
+    }
+
+    [Fact]
+    public async Task Handle_ScheduledForWithinWindow_SucceedsAsync()
+    {
+        // Arrange
+        var command = new CreateDraftOrderCommand(
+            UserId,
+            [new DraftOrderItemRequest(MarketProductId, 5)],
+            ScheduledFor: DateTime.UtcNow.AddDays(3),
+            Notes: null);
+
+        // Act
+        var result = await _sut.Handle(command, default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Handle_Success_CreatesOrderWithCorrectTotalAsync()
     {
         // Act
