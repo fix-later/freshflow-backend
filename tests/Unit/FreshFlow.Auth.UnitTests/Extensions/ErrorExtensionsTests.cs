@@ -71,4 +71,38 @@ public sealed class ErrorExtensionsTests
 
         result.Should().BeOfType<UnauthorizedObjectResult>();
     }
+
+    [Theory]
+    [InlineData("INVALID_CREDIT_LIMIT")]
+    [InlineData("CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE")]
+    [InlineData("DELIVERY_DATE_OUT_OF_WINDOW")]
+    [InlineData("INVALID_ACTUAL_QUANTITY")]
+    [InlineData("SCHEDULED_ORDER_FIRST_RUN_IN_PAST")]
+    [InlineData("INVALID_ISSUE_QUANTITY")]
+    public void ToActionResult_CreditLimitValidationCodes_Returns422(string code)
+    {
+        var error = new Error(code, "validation error");
+
+        var result = error.ToActionResult();
+
+        result.Should().BeOfType<UnprocessableEntityObjectResult>();
+    }
+
+    [Theory]
+    [InlineData("ORDER_CANNOT_RESCHEDULE")]
+    [InlineData("ORDER_NOT_CANCELLABLE")]
+    [InlineData("ORDER_CANNOT_ADJUST")]
+    [InlineData("SCHEDULED_ORDER_NOT_ACTIVE")]
+    [InlineData("SCHEDULED_ORDER_ALREADY_CANCELLED")]
+    [InlineData("ORDER_NOT_DELIVERED")]
+    [InlineData("ORDER_RECEIPT_ALREADY_CONFIRMED")]
+    [InlineData("ORDER_ISSUE_NOT_ALLOWED")]
+    public void ToActionResult_OrderConflictCodes_Returns409(string code)
+    {
+        var error = new Error(code, "conflict message");
+
+        var result = error.ToActionResult();
+
+        result.Should().BeOfType<ConflictObjectResult>();
+    }
 }

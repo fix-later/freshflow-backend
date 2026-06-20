@@ -3,6 +3,8 @@ using FluentValidation;
 using FreshFlow.Auth.Infrastructure;
 using FreshFlow.Catalog.Infrastructure;
 using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Orders.Infrastructure;
+using FreshFlow.Orders.Infrastructure.Realtime;
 using FreshFlow.Pricing.Infrastructure;
 using FreshFlow.Pricing.Infrastructure.Realtime;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -105,6 +107,27 @@ builder.Services.AddRateLimiter(options =>
                 AutoReplenishment = true
             });
     });
+    // "orders" policy: fixed window per authenticated restaurant (JWT NameIdentifier claim).
+    // Falls back to remote IP if unauthenticated (defence in depth — endpoints require auth).
+    options.AddPolicy("orders", context =>
+    {
+        var cfg = context.RequestServices.GetRequiredService<IConfiguration>();
+        var limit = cfg.GetValue("RateLimiting:Orders:PermitLimit", 30);
+        var window = cfg.GetValue("RateLimiting:Orders:WindowMinutes", 1);
+        var partitionKey = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? context.Connection.RemoteIpAddress?.ToString()
+            ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: partitionKey,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(window),
+                PermitLimit = limit,
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
+
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     // Return the standard API error envelope so all 429 responses are machine-readable.
     options.OnRejected = async (ctx, ct) =>
@@ -132,7 +155,7 @@ builder.Services.AddSignalR();
 builder.Services.AddAuthModule(builder.Configuration);
 builder.Services.AddCatalogModule(builder.Configuration);
 builder.Services.AddPricingModule(builder.Configuration);
-// builder.Services.AddOrdersModule(builder.Configuration);
+builder.Services.AddOrdersModule(builder.Configuration);
 
 // ── Health Checks ─────────────────────────────────────────────
 builder.Services.AddHealthChecks();
@@ -190,8 +213,10 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-// ── HTTPS redirect — no-op when no HTTPS port is configured (e.g. tests) ──
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 // ── API docs (Development only) ──────────────────────────────
 if (app.Environment.IsDevelopment())
@@ -223,6 +248,7 @@ app.UseRateLimiter();
 app.MapControllers();
 app.MapHealthChecks("/health");
 app.MapHub<PricingHub>("/hubs/pricing");
+app.MapHub<OrderHub>("/hubs/orders");
 
 app.Run();
 

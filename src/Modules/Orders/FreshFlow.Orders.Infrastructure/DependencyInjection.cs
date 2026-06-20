@@ -1,0 +1,57 @@
+using System.Reflection;
+using FluentValidation;
+using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Orders.Application.Abstractions;
+using FreshFlow.Orders.Application.Behaviors;
+using FreshFlow.Orders.Application.Services;
+using FreshFlow.Orders.Infrastructure.CrossModule;
+using FreshFlow.Orders.Infrastructure.Jobs;
+using FreshFlow.Orders.Infrastructure.Realtime;
+using FreshFlow.Orders.Infrastructure.Repositories;
+using MediatR;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace FreshFlow.Orders.Infrastructure;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddOrdersModule(
+        this IServiceCollection services,
+        IConfiguration config)
+    {
+        // Register this assembly so AppDbContext discovers Orders EF configurations.
+        EfAssemblyRegistry.Register(Assembly.GetExecutingAssembly());
+        services.TryAddSingleton(config);
+
+        // MediatR — scan Application assembly for handlers.
+        var applicationAssembly = typeof(IOrderRepository).Assembly;
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssembly(applicationAssembly);
+            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+        });
+
+        // FluentValidation — auto-register all validators from Application
+        services.AddValidatorsFromAssembly(applicationAssembly, includeInternalTypes: true);
+
+        // Repositories
+        services.AddScoped<IOrderRepository, OrderRepository>();
+        services.AddScoped<IOrderIssueRepository, OrderIssueRepository>();
+        services.AddScoped<IScheduledOrderRepository, ScheduledOrderRepository>();
+        services.AddScoped<ICreditRepository, CreditRepository>();
+
+        // Application services
+        services.AddScoped<ICreditService, CreditService>();
+        services.AddScoped<IScheduledOrderGenerationService, ScheduledOrderGenerationService>();
+        services.AddScoped<IOrderBroadcastService, OrderBroadcastService>();
+        services.AddHostedService<ScheduledOrderGenerationHostedService>();
+
+        // Cross-module read projections used by Orders without project references to Auth/Catalog/Pricing.
+        services.AddScoped<IMarketProductReader, MarketProductReader>();
+        services.AddScoped<IRestaurantReader, RestaurantReader>();
+
+        return services;
+    }
+}

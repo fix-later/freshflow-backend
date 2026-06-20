@@ -1,0 +1,252 @@
+using FluentAssertions;
+using FreshFlow.Orders.Application.Abstractions;
+using FreshFlow.Orders.Application.Services;
+using FreshFlow.Orders.Domain.Entities;
+using FreshFlow.Orders.Domain.Enums;
+using NSubstitute;
+
+namespace FreshFlow.Orders.UnitTests.Services;
+
+[Trait("Category", "Unit")]
+public sealed class CreditServiceTests
+{
+    private readonly ICreditRepository _creditRepository = Substitute.For<ICreditRepository>();
+    private readonly IRestaurantReader _restaurantReader = Substitute.For<IRestaurantReader>();
+    private readonly CreditService _sut;
+
+    private static readonly Guid RestaurantId = Guid.NewGuid();
+    private static readonly Guid OrderId = Guid.NewGuid();
+
+    public CreditServiceTests()
+    {
+        _restaurantReader.FindByIdAsync(RestaurantId, default)
+            .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
+        _sut = new CreditService(_creditRepository, _restaurantReader);
+    }
+
+    [Fact]
+    public async Task CanCharge_InvalidAmount_ReturnsInvalidAmountWithoutReadingRestaurantAsync()
+    {
+        var result = await _sut.CanChargeAsync(RestaurantId, 0m, default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INVALID_AMOUNT");
+        await _restaurantReader.DidNotReceive().FindByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CanCharge_RestaurantMissing_ReturnsNotFoundAsync()
+    {
+        _restaurantReader.FindByIdAsync(RestaurantId, default)
+            .Returns((RestaurantSnapshotDto?)null);
+
+        var result = await _sut.CanChargeAsync(RestaurantId, 10m, default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("RESTAURANT_NOT_FOUND");
+    }
+
+    [Fact]
+    public async Task CanCharge_AmountExceedsAvailableCredit_ReturnsCreditLimitExceededAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        account.Charge(80m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+
+        var result = await _sut.CanChargeAsync(RestaurantId, 25m, default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("CREDIT_LIMIT_EXCEEDED");
+        await _creditRepository.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CanCharge_WithinLimit_ReturnsCreditCheckAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        account.Charge(20m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+
+        var result = await _sut.CanChargeAsync(RestaurantId, 50m, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.CanCharge.Should().BeTrue();
+        result.Value.AvailableCredit.Should().Be(80m);
+        result.Value.RequestedAmount.Should().Be(50m);
+    }
+
+    [Fact]
+    public async Task Charge_WithinLimit_UpdatesBalanceAndWritesLedgerAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+
+        var result = await _sut.ChargeAsync(RestaurantId, OrderId, 40m, "Order confirmed", default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.OutstandingBalance.Should().Be(40m);
+        _creditRepository.Received(1).Track(account);
+        _creditRepository.Received(1).AddTransaction(Arg.Is<CreditTransaction>(t =>
+            t.RestaurantId == RestaurantId
+            && t.OrderId == OrderId
+            && t.Type == CreditTransactionType.Charge
+            && t.Amount == 40m
+            && t.BalanceAfter == 40m));
+        await _creditRepository.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Charge_SaveConcurrencyConflict_ReturnsOptimisticConcurrencyConflictAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+        _creditRepository.SaveChangesAsync(default).Returns(Task.FromException(new CreditConcurrencyException()));
+
+        var result = await _sut.ChargeAsync(RestaurantId, OrderId, 40m, "Order confirmed", default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("OPTIMISTIC_CONCURRENCY_CONFLICT");
+    }
+
+    [Fact]
+    public async Task Settle_ExceedingOutstandingBalance_ReturnsSettlementExceededAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        account.Charge(30m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+
+        var result = await _sut.SettleAsync(RestaurantId, 31m, "Bank transfer", default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("CREDIT_SETTLEMENT_EXCEEDS_BALANCE");
+        await _creditRepository.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Settle_WithinOutstandingBalance_DecreasesBalanceAndWritesLedgerAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        account.Charge(70m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+
+        var result = await _sut.SettleAsync(RestaurantId, 25m, "Bank transfer", default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.OutstandingBalance.Should().Be(45m);
+        _creditRepository.Received(1).AddTransaction(Arg.Is<CreditTransaction>(t =>
+            t.RestaurantId == RestaurantId
+            && t.OrderId == null
+            && t.Type == CreditTransactionType.Settlement
+            && t.Amount == 25m
+            && t.BalanceAfter == 45m));
+        await _creditRepository.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Refund_WithinOutstandingBalance_DecreasesBalanceAndWritesLedgerAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        account.Charge(60m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+
+        var result = await _sut.RefundAsync(RestaurantId, OrderId, 10m, "Order cancelled", default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.OutstandingBalance.Should().Be(50m);
+        _creditRepository.Received(1).AddTransaction(Arg.Is<CreditTransaction>(t =>
+            t.RestaurantId == RestaurantId
+            && t.OrderId == OrderId
+            && t.Type == CreditTransactionType.Refund
+            && t.Amount == 10m
+            && t.BalanceAfter == 50m));
+        await _creditRepository.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task SetCreditLimit_NewRestaurant_CreatesAccountAndWritesAdjustmentLedgerAsync()
+    {
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns((RestaurantCredit?)null);
+
+        var result = await _sut.SetCreditLimitAsync(RestaurantId, 1000m, "Initial limit", default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.CreditLimit.Should().Be(1000m);
+        await _creditRepository.Received(1).AddAccountAsync(
+            Arg.Is<RestaurantCredit>(a => a.RestaurantId == RestaurantId), default);
+        _creditRepository.Received(1).AddTransaction(Arg.Is<CreditTransaction>(t =>
+            t.RestaurantId == RestaurantId
+            && t.OrderId == null
+            && t.Type == CreditTransactionType.Adjustment
+            && t.Amount == 1000m
+            && t.BalanceAfter == 0m));
+        await _creditRepository.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task SetCreditLimit_ExistingAccountIncreaseLimit_UpdatesLimitAndWritesAdjustmentDeltaAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        account.Charge(40m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+
+        var result = await _sut.SetCreditLimitAsync(RestaurantId, 300m, "Trusted partner", default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.CreditLimit.Should().Be(300m);
+        _creditRepository.Received(1).AddTransaction(Arg.Is<CreditTransaction>(t =>
+            t.RestaurantId == RestaurantId
+            && t.Type == CreditTransactionType.Adjustment
+            && t.Amount == 200m
+            && t.BalanceAfter == 40m));
+        await _creditRepository.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task SetCreditLimit_NoChangeFromCurrentLimit_SkipsLedgerAndSaveAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+
+        var result = await _sut.SetCreditLimitAsync(RestaurantId, 100m, null, default);
+
+        result.IsSuccess.Should().BeTrue();
+        _creditRepository.DidNotReceive().AddTransaction(Arg.Any<CreditTransaction>());
+        await _creditRepository.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetCreditLimit_BelowOutstandingBalance_ReturnsValidationErrorAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        account.Charge(80m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+
+        var result = await _sut.SetCreditLimitAsync(RestaurantId, 50m, null, default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE");
+        await _creditRepository.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetCreditLimit_NegativeValue_ReturnsValidationErrorAsync()
+    {
+        var result = await _sut.SetCreditLimitAsync(RestaurantId, -1m, null, default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INVALID_CREDIT_LIMIT");
+        await _restaurantReader.DidNotReceive().FindByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetCreditLimit_RestaurantMissing_ReturnsNotFoundAsync()
+    {
+        _restaurantReader.FindByIdAsync(RestaurantId, default)
+            .Returns((RestaurantSnapshotDto?)null);
+
+        var result = await _sut.SetCreditLimitAsync(RestaurantId, 500m, null, default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("RESTAURANT_NOT_FOUND");
+    }
+}

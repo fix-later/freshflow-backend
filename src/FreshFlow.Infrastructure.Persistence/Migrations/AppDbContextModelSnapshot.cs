@@ -589,6 +589,370 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("units_of_measurement", (string)null);
                 });
 
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.CreditTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("balance_after");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("restaurant_id");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("idx_credit_transactions_created_at");
+
+                    b.HasIndex("OrderId")
+                        .HasDatabaseName("idx_credit_transactions_order_id");
+
+                    b.HasIndex("RestaurantId")
+                        .HasDatabaseName("idx_credit_transactions_restaurant_id");
+
+                    b.ToTable("credit_transactions", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.Order", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CancellationReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ConfirmedReceiptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_receipt_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("OrderGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ScheduledFor")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ScheduledOrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("IX_orders_deleted_at");
+
+                    b.HasIndex("OrderGroupId")
+                        .HasDatabaseName("idx_orders_order_group_id");
+
+                    b.HasIndex("ScheduledFor")
+                        .HasDatabaseName("idx_orders_scheduled_for");
+
+                    b.HasIndex("ScheduledOrderId")
+                        .HasDatabaseName("idx_orders_scheduled_order_id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("idx_orders_status");
+
+                    b.HasIndex("RestaurantId", "Status")
+                        .HasDatabaseName("idx_orders_restaurant_id_status");
+
+                    b.ToTable("orders", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.OrderIssue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("AffectedQuantity")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("affected_quantity");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("IssueType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("issue_type");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<Guid?>("OrderItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_item_id");
+
+                    b.Property<Guid>("ReportedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reported_by");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("idx_order_issues_deleted_at");
+
+                    b.HasIndex("OrderId")
+                        .HasDatabaseName("idx_order_issues_order_id");
+
+                    b.HasIndex("OrderItemId")
+                        .HasDatabaseName("idx_order_issues_order_item_id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("idx_order_issues_status");
+
+                    b.ToTable("order_issues", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.OrderItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("ActualQuantity")
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("LockedTotal")
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<decimal?>("LockedUnitPrice")
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<Guid>("MarketProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProductNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MarketProductId")
+                        .HasDatabaseName("idx_order_items_market_product_id");
+
+                    b.HasIndex("OrderId")
+                        .HasDatabaseName("idx_order_items_order_id");
+
+                    b.ToTable("order_items", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.RestaurantCredit", b =>
+                {
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("restaurant_id");
+
+                    b.Property<decimal>("CreditLimit")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("credit_limit");
+
+                    b.Property<decimal>("OutstandingBalance")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("outstanding_balance");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("RestaurantId");
+
+                    b.ToTable("restaurant_credit", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.ScheduledOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<DateTime>("FirstRunAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastExecutedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RecurrenceType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("IX_scheduled_orders_deleted_at");
+
+                    b.HasIndex("RestaurantId")
+                        .HasDatabaseName("idx_scheduled_orders_restaurant_id");
+
+                    b.ToTable("scheduled_orders", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.MarketProductRow", b =>
+                {
+                    b.Property<decimal>("CurrentPrice")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("CurrentQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("ReservedQuantity")
+                        .HasColumnType("integer");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    mp.\"Id\",\n    p.\"Name\" AS \"ProductName\",\n    mp.\"CurrentPrice\",\n    mp.\"CurrentQuantity\",\n    mp.\"ReservedQuantity\"\nFROM market_products mp\nINNER JOIN products p ON mp.\"ProductId\" = p.\"Id\"\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.RestaurantRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT \"Id\", \"UserId\", status AS \"Status\" FROM restaurants");
+                });
+
             modelBuilder.Entity("FreshFlow.Pricing.Domain.Entities.MarketProduct", b =>
                 {
                     b.Property<Guid>("Id")
@@ -620,6 +984,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(0);
 
                     b.Property<DateTime>("UpdatedAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("UpdatedBy")
@@ -722,16 +1087,13 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT \"Id\", \"Name\", \"IsActive\" FROM products WHERE \"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT \"Id\", \"Name\" FROM products WHERE \"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Pricing.Infrastructure.CrossModule.UserMarketAssignmentRow", b =>
@@ -744,7 +1106,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT \"UserId\", \"MarketId\" FROM user_market_assignments WHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT \"UserId\", \"MarketId\" FROM user_market_assignments");
                 });
 
             modelBuilder.Entity("FreshFlow.Auth.Domain.Aggregates.User", b =>
@@ -822,6 +1184,32 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.OrderIssue", b =>
+                {
+                    b.HasOne("FreshFlow.Orders.Domain.Entities.Order", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_issues_order");
+
+                    b.HasOne("FreshFlow.Orders.Domain.Entities.OrderItem", null)
+                        .WithMany()
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_order_issues_order_item");
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.OrderItem", b =>
+                {
+                    b.HasOne("FreshFlow.Orders.Domain.Entities.Order", null)
+                        .WithMany("Items")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_items_order");
+                });
+
             modelBuilder.Entity("FreshFlow.Pricing.Domain.Entities.PriceSnapshot", b =>
                 {
                     b.HasOne("FreshFlow.Pricing.Domain.Entities.MarketProduct", null)
@@ -830,6 +1218,11 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_price_snapshots_market_product");
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.Order", b =>
+                {
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }
