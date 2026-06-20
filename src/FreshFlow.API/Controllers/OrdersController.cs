@@ -19,6 +19,7 @@ using FreshFlow.Orders.Application.Queries.GetScheduledOrder;
 using FreshFlow.Orders.Application.Queries.ListOrders;
 using FreshFlow.Orders.Application.Queries.ListScheduledOrderInstances;
 using FreshFlow.Orders.Application.Queries.ListScheduledOrders;
+using FreshFlow.Orders.Application.Queries.PreviewOrderConfirmation;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -246,6 +247,22 @@ public sealed class OrdersController(ISender sender) : ControllerBase
     public async Task<IActionResult> ConfirmOrderAsync(Guid orderId, CancellationToken ct)
     {
         var result = await sender.Send(new ConfirmOrderCommand(ResolveUserId(), orderId), ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>
+    /// GET /api/v1/orders/{orderId}/confirm-preview — ASSIST-E3: dry-run of confirm that surfaces
+    /// every blocking issue (credit limit, delivery window, draft state) without mutating the order.
+    /// </summary>
+    [HttpGet("{orderId:guid}/confirm-preview")]
+    [Authorize(Roles = "restaurant")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PreviewOrderConfirmationAsync(Guid orderId, CancellationToken ct)
+    {
+        var result = await sender.Send(new PreviewOrderConfirmationQuery(ResolveUserId(), orderId), ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
