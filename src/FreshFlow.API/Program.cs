@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using FluentValidation;
+using FreshFlow.API.Assistant;
 using FreshFlow.Auth.Infrastructure;
 using FreshFlow.Catalog.Infrastructure;
 using FreshFlow.Infrastructure.Persistence;
@@ -128,6 +129,28 @@ builder.Services.AddRateLimiter(options =>
             });
     });
 
+    // "assistant" policy: fixed window per authenticated user (JWT NameIdentifier claim). The AI
+    // assistant fans out to the LLM + several MediatR calls per request, so it gets its own, tighter
+    // budget than the plain order endpoints. Falls back to remote IP if unauthenticated.
+    options.AddPolicy("assistant", context =>
+    {
+        var cfg = context.RequestServices.GetRequiredService<IConfiguration>();
+        var limit = cfg.GetValue("RateLimiting:Assistant:PermitLimit", 15);
+        var window = cfg.GetValue("RateLimiting:Assistant:WindowMinutes", 1);
+        var partitionKey = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? context.Connection.RemoteIpAddress?.ToString()
+            ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: partitionKey,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(window),
+                PermitLimit = limit,
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
+
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     // Return the standard API error envelope so all 429 responses are machine-readable.
     options.OnRejected = async (ctx, ct) =>
@@ -156,6 +179,9 @@ builder.Services.AddAuthModule(builder.Configuration);
 builder.Services.AddCatalogModule(builder.Configuration);
 builder.Services.AddPricingModule(builder.Configuration);
 builder.Services.AddOrdersModule(builder.Configuration);
+
+// ── AI Shopping Assistant (Tầng 2 — host-layer orchestration) ──
+builder.Services.AddAssistant(builder.Configuration);
 
 // ── Health Checks ─────────────────────────────────────────────
 builder.Services.AddHealthChecks();
