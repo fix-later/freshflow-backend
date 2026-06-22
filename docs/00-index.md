@@ -19,6 +19,8 @@
 | 05 | [05-implementation-plan.md](./05-implementation-plan.md) | 50-task breakdown, critical path, MVP scope, folder structure, coding standards | 912 | Complete |
 | — | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | Cross-reference gaps, inconsistencies, readiness assessment | — | Complete |
 
+> **Feature working docs** (survey/audit/context/design/tasks per feature) sống ở [`features/`](./features/README.md) — tách khỏi bộ spec core này để dễ tracking.
+
 ---
 
 ## Quick Start for Developers
