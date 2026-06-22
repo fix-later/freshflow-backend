@@ -14,6 +14,30 @@ FreshFlow – Nền tảng trung gian thu mua và tối ưu vận chuyển thự
 
 ---
 
+> **Implementation alignment note (updated 2026-06-19).** This registration is the original
+> proposal. The following business-model decisions were made during design/implementation and now
+> govern the actual project (see `docs/06-context-decisions.md`):
+> - **Market Agents are internal FreshFlow employees**, not external market vendors. There is no
+>   public/vendor self-registration. (DEC-001)
+> - **Roles** are: Admin, Market Agent, Restaurant, Hub Staff, Driver (Operations Manager is merged
+>   into Admin). The original "Kiosk Staff" is retained only as a legacy alias of Market Agent.
+>   (DEC-003/004/005)
+> - **Payment uses a B2B credit / công nợ model**, not an online payment gateway. Confirming an order
+>   draws down the restaurant's Admin-set credit limit; debt is settled out-of-band. (DEC-002)
+> - A dedicated **product Catalog** capability (products, categories, units, markets) underpins
+>   Pricing and Orders.
+> - Market Agents may optionally update price/quantity by **voice (speech-to-text)** with a mandatory
+>   read-back confirmation before persisting; this reuses the existing price/quantity commands and
+>   per-market authorization (see Functional Requirement §1).
+> - The AI direction changed from **AI Price Prediction** (forecasting prices) to an **AI Shopping
+>   Assistant** — a natural-language chat layer that orchestrates existing backend functions. See
+>   `docs/SURVEY-2026-06-18-ai-shopping-assistant-feasibility.md`. Price forecasting is no longer in
+>   scope.
+> - Modules currently implemented: **Auth, Catalog, Pricing, Orders (incl. Credit)**. Logistics
+>   Optimization (VRP), Hub Management, Analytics, and the AI Shopping Assistant remain proposed/future scope.
+
+---
+
 # **Context**
 
 In wholesale food markets such as Ho Chi Minh City’s major hubs (Hoc Mon, Binh Dien, Thu Duc), pricing and supply fluctuate continuously throughout the day. Restaurants and small food businesses often face significant challenges in procurement and logistics management.
@@ -35,16 +59,16 @@ This project proposes **FreshFlow**, a real-time B2B procurement and logistics o
 
 Key components include:
 
-- **Market Kiosk System:**
-Enable vendors or staff at wholesale markets to update product prices and quantities in real time.
+- **Market Agent System:**
+Enable internal FreshFlow Market Agents stationed at wholesale markets to update product prices and quantities in real time. (Market Agents are FreshFlow employees, not external vendors — DEC-001.)
 - **Restaurant Procurement Platform:**
 Allow restaurants to view real-time prices, place bulk orders, and schedule recurring purchases.
 - **Hub-based Distribution System:**
 Aggregate goods from markets, support cross-docking, and redistribute to restaurants efficiently.
 - **Logistics Optimization Engine:**
 Optimize routes, schedules, and vehicle allocation to reduce delivery costs.
-- **AI-based Price Prediction (Optional Advanced):**
-Forecast price trends to support better procurement decisions.
+- **AI Shopping Assistant (Optional Advanced):**
+A natural-language chat assistant that helps restaurants search products, build and edit orders, and reorder from history by orchestrating existing backend functions. The AI performs intent recognition and conversation only — it never accesses the database directly and never auto-confirms; the user must explicitly confirm before any order is placed.
 
 ---
 
@@ -52,9 +76,11 @@ Forecast price trends to support better procurement decisions.
 
 ---
 
-## **1. Real-Time Pricing Management**
+## **1. Product Catalog & Real-Time Pricing Management**
 
-- The system shall allow kiosk users to update product prices and available quantities.
+- The system shall maintain a system-wide product catalog (products, categories, units) and the set of wholesale markets. Admin manages catalog definitions; Market Agents may only update price and quantity for existing catalog products.
+- The system shall allow internal Market Agents (FreshFlow employees) to update product prices and available quantities at their assigned market.
+- The system should allow Market Agents to update prices and quantities by **voice** (speech-to-text) for hands-free, fast updates in the noisy market environment. The system shall read back the parsed product, price, and quantity and require explicit confirmation before persisting; voice updates reuse the same price/quantity commands and authorization (an Agent can only update their assigned market).
 - The system shall synchronize price updates in real time to all connected clients.
 - The system shall maintain historical pricing data for analysis.
 - The system shall notify users when significant price changes occur.
@@ -66,7 +92,8 @@ Forecast price trends to support better procurement decisions.
 - The system shall allow restaurants to create and manage bulk orders.
 - The system shall support scheduled orders (daily/weekly).
 - The system shall allow users to track order status in real time.
-- The system shall support order grouping for logistics optimization.
+- The system shall support order grouping (auto-batching at the daily cutoff) for logistics optimization.
+- The system shall settle orders via a **B2B credit / công nợ** model: each restaurant has an Admin-set credit limit; confirming an order draws down available credit, and outstanding debt is settled out-of-band and recorded by Admin. (No online payment gateway — DEC-002.)
 
 ---
 
@@ -97,12 +124,12 @@ Forecast price trends to support better procurement decisions.
 
 ---
 
-## **6. AI Price Prediction (Advanced)**
+## **6. AI Shopping Assistant (Advanced)**
 
-- The system shall analyze historical price data to predict future trends.
-- The system shall provide recommendations such as:
-    - “Buy now” or “Wait for price drop”
-- The system shall visualize price trends for users.
+- The system shall provide a natural-language chat interface where restaurant users can search products, check real-time price and stock, build and edit a draft order, and reorder from history.
+- The AI shall perform intent recognition and conversation only, orchestrating existing backend commands/queries; it shall never access the database directly and shall never fabricate product or price data (every reference grounded in a real query result).
+- The AI shall never auto-confirm an order: a hard, non-AI confirmation step is required before placement, and all server-side business rules (credit limit, cutoff/delivery window, ownership) continue to apply.
+- The assistant shall run under the authenticated user's own identity (JWT) and inherit the same role-based access control.
 
 ---
 
@@ -118,7 +145,7 @@ Forecast price trends to support better procurement decisions.
 
 ## **8. Authentication & Notification System**
 
-- The system shall support user authentication (Admin, Kiosk Staff, Restaurant).
+- The system shall support user authentication and RBAC across roles: Admin, Market Agent, Restaurant, Hub Staff, and Driver (Operations Manager is merged into Admin; "Kiosk Staff" is a legacy alias of Market Agent).
 - The system shall send real-time notifications for:
     - Price updates
     - Order status
@@ -188,7 +215,7 @@ Forecast price trends to support better procurement decisions.
 - Research on **Supply Chain Optimization Models**, including routing and distribution strategies.
 - Research on **Vehicle Routing Problem (VRP)** for logistics optimization.
 - Research on **B2B Procurement Systems** and digital transformation in wholesale markets.
-- Research on **AI-based Price Prediction Models** using historical data.
+- Research on **LLM-based conversational agents and tool/function calling** for orchestrating backend operations from natural language (AI Shopping Assistant), including prompt-injection containment, response grounding, and human-in-the-loop confirmation.
 - Research on **Hub-and-Spoke Distribution Models** in logistics systems.
 
 ---
@@ -201,7 +228,7 @@ Forecast price trends to support better procurement decisions.
 
 ### **FreshFlow Platform (For Market, Hub, Restaurant)**
 
-- **Market Kiosk App:**
+- **Market Agent App:** (internal FreshFlow employees)
     - Real-time price and inventory updates
 - **Restaurant App/Web:**
     - Order management
@@ -219,7 +246,7 @@ Forecast price trends to support better procurement decisions.
 
 ## **Management Dashboard (Admin)**
 
-- User management (kiosk, restaurant, admin)
+- User management (market agent, restaurant, hub staff, driver, admin) + restaurant credit limits
 - Pricing and data monitoring
 - Logistics performance tracking
 - System configuration
@@ -230,9 +257,10 @@ Forecast price trends to support better procurement decisions.
 
 ---
 
-### **Task package 1: Real-Time Pricing & Kiosk System**
+### **Task package 1: Product Catalog, Real-Time Pricing & Market Agent System**
 
-- Develop kiosk interface for price updates
+- Develop the product catalog (products, categories, units, markets)
+- Develop the Market Agent interface for price/quantity updates (incl. optional voice / speech-to-text input with read-back confirmation)
 - Implement real-time synchronization using SignalR/WebSocket
 
 ---
@@ -241,6 +269,7 @@ Forecast price trends to support better procurement decisions.
 
 - Develop restaurant ordering system
 - Implement scheduling and bulk order features
+- Implement B2B credit / công nợ settlement (credit limits, charge on confirm, settlement, refunds)
 
 ---
 
@@ -258,9 +287,9 @@ Forecast price trends to support better procurement decisions.
 
 ---
 
-### **Task package 5: AI & Analytics Module (Optional Advanced)**
+### **Task package 5: AI Shopping Assistant & Analytics Module (Optional Advanced)**
 
-- Implement price prediction model
+- Implement the AI Shopping Assistant (natural-language chat → host-layer orchestration over existing commands/queries; grounding + hard human-gated order confirmation)
 - Develop analytics dashboards
 
 ---

@@ -26,20 +26,43 @@
 
 ---
 
-### DEC-002: Payment IN Scope (per-order at confirmation time)
+### DEC-002: Payment via B2B Credit / Công nợ (NOT a per-order gateway)
 
-**Decision:** Restaurants pay for each order at confirmation time via a Vietnamese payment gateway.
+**Decision:** Restaurants do **not** pay through an online payment gateway per order. Instead, each
+restaurant has a **credit account (công nợ)** with a credit limit set by Admin. Confirming an order
+draws down the available credit; outstanding debt is settled out-of-band (bank transfer / cash) and
+recorded by Admin.
+
+> **Supersedes the earlier gateway decision.** An earlier revision of this document specified a
+> per-order Vietnamese payment gateway (VNPay/MoMo/ZaloPay). That approach was reversed during the
+> Orders module implementation in favour of the B2B credit model, which matches how F&B wholesale
+> procurement actually settles in Vietnam. `FR-ORD-008` in `01-requirements-spec.md` still describes
+> the legacy gateway flow and is superseded by this decision.
 
 **Rationale:**
-- More realistic B2B model at this procurement scale
-- Enables the automatic refund flow when Hub Staff flags missing goods (creates a coherent financial story)
-- Strengthens the end-to-end business logic for Capstone demonstration
+- Matches real B2B procurement: restaurants buy daily on credit and settle periodically, rather than
+  paying a gateway fee on every order.
+- No dependency on third-party gateway sandbox/credentials for the Capstone demo.
+- The discrepancy refund flow (Hub Staff flags missing goods) becomes a **credit refund** — the
+  outstanding balance is reduced — which is simpler and gateway-independent.
 
-**Payment timing:** At order CONFIRMATION — restaurant calls `POST /api/orders/{orderId}/confirm`, which triggers a payment request.
+**Payment timing:** At order CONFIRMATION — restaurant calls `POST /api/orders/{orderId}/confirm`.
+The handler checks `CanChargeAsync` (available credit ≥ order total) and, on success, charges the
+order total against the restaurant's outstanding balance.
 
-**Gateways:** VNPay (primary), MoMo, ZaloPay.
+**Model (as implemented in `Modules/Orders`):**
+- `RestaurantCredit` aggregate: `CreditLimit`, `OutstandingBalance`, `AvailableCredit = CreditLimit − OutstandingBalance`.
+  Operations: `Charge`, `Settle`, `Refund`, `SetCreditLimit` (limit may not drop below outstanding balance).
+- `CreditTransaction` ledger records every charge/settlement/refund.
+- `OrderPaymentStatus` enum (independent of `OrderStatus`): `NotApplicable → Outstanding → Settled` (or `Waived` on cancel).
+- Admin endpoints: set credit limit, settle credit; restaurant/admin can read balance and transactions.
 
-**Price Band:** If actual purchase price differs ≤ 10% from `locked_unit_price` → auto-adjust final charge, no user action. If > 10% → notify restaurant, wait 30 minutes, then auto-confirm to keep delivery schedule. If actual price is LOWER → restaurant pays the lower price automatically.
+**Confirmation fails** with a domain error if the order total would exceed the restaurant's available
+credit — there is no gateway redirect, payment token, or webhook.
+
+**Price Band:** If actual purchase price differs ≤ 10% from `locked_unit_price` → auto-adjust the
+charged amount, no user action. If > 10% → notify restaurant, wait 30 minutes, then auto-confirm to
+keep delivery schedule. If actual price is LOWER → restaurant is charged the lower price automatically.
 
 ---
 
@@ -148,7 +171,7 @@ These features will NOT be built in v1 under any circumstances:
 | Kiosk Staff | **Market Agent** | Internal FreshFlow employee, not external vendor. `KIOSK_STAFF` enum retained as alias. |
 | Order Group (Admin-created) | **Procurement Batch** (auto-generated) | System creates at 22:00 cutoff, Admin can adjust. |
 | `PENDING` status | `DRAFT` | Order lifecycle starts at DRAFT. |
-| "Payment out of scope" | **Payment IN SCOPE** | Per-order via VNPay/MoMo/ZaloPay. Decision reversed from original spec. |
+| "Payment out of scope" / "per-order gateway" | **Payment via B2B credit (công nợ)** | Restaurant credit account with Admin-set limit; confirm draws down credit, settled out-of-band. Supersedes the per-order VNPay/MoMo/ZaloPay flow (see DEC-002). |
 | Logistics Operator | **Admin** | No separate Logistics Operator role; Admin handles logistics scheduling. |
 
 ---
