@@ -7,7 +7,9 @@
 | **Branch** | `SCRUM-234-ai-shopping-assistant-query-foundations` (hoặc branch mới khi có epic key) |
 | **Scope v1** | **MVP 5 tool**, **non-streaming**, provider **GLM 5.2 (Free) / ZenMux**, store **DB (Postgres)** — Redis hoãn |
 | **Depends on** | Tầng 1 (3 thin query) — ✅ DONE (SCRUM-235…246) |
-| **Status** | ⏳ Chờ SCRUM key — **KHÔNG commit khi chưa có Jira key của supervisor** |
+| **Status** | ✅ **T1–T7 CODE XONG trên working tree** (1280/1280 test GREEN, format gate PASS) — ⏳ Chờ SCRUM key để commit. **KHÔNG commit khi chưa có Jira key của supervisor** |
+
+> **Tiến độ (2026-06-22):** T1 (LLM client) ✅ · T2 (tool registry) ✅ · T3 (DB store + migration `AddAssistantConversations`) ✅ · T4 (ConfirmationGate, 10 test) ✅ · T5 (orchestrator + `POST /api/v1/assistant/chat` + DTO + system prompt + wiring, 5 test) ✅ · T6 (rate-limit policy `assistant` + config + fail-fast validation) ✅ · T7 (format gate PASS, full suite 1280 GREEN, không regression Tầng 1) ✅. Assistant unit tests: **57**. Còn lại (tùy chọn, có thể đưa vào T7+ hoặc giai đoạn sau): integration test HTTP `POST /chat` qua `WebApplicationFactory` với fake `IAssistantChatClient`, và test 429 cho policy `assistant`.
 
 > Code prefix tạm: `ASSIST2-*` (đổi sang SCRUM key thật khi supervisor cấp). Commit format: `type(scope): SCRUM-XXX description`. Format gate qua `FreshFlow.slnx`.
 
@@ -137,14 +139,16 @@ T8 (độc lập, bất kỳ lúc nào / hoãn)
 
 | Task | Type/scope | SCRUM key |
 |---|---|---|
-| T1 | feat(assistant) | _chờ_ |
-| T2 | feat(assistant) | _chờ_ |
-| T3 | feat(assistant) | _chờ_ |
-| T4 | feat(assistant) | _chờ_ |
-| T5 | feat(assistant) | _chờ_ |
-| T6 | feat(assistant) | _chờ_ |
-| T7 | test(assistant) | _chờ_ |
+| T1 | feat(assistant) | SCRUM-247 |
+| T2 | feat(assistant) | SCRUM-248 |
+| T3 | feat(assistant) | SCRUM-249 |
+| T4 | feat(assistant) | SCRUM-250 |
+| T5 | feat(assistant) | SCRUM-251 |
+| T6 | feat(assistant) | SCRUM-252 |
+| T7 | test(assistant) | SCRUM-253 |
 | T8 | perf(pricing) | SCRUM-239 (optional) |
+
+> **T7 (SCRUM-253) integration tests DONE (2026-06-23):** `tests/Integration/FreshFlow.IntegrationTests/Assistant/` — `AssistantChatEndpointTests` (3: 401 chưa auth, text-reply 200, confirm-bị-chặn → pendingConfirmation) + `AssistantRateLimitTests` (429 khi vượt policy `assistant`). Dùng `AssistantWebAppFactory` + `ScriptedAssistantChatClient` (fake LLM, không gọi GLM). 4/4 GREEN qua Testcontainers Postgres.
 
 ---
 
