@@ -1,10 +1,48 @@
 # FreshFlow (FFX) — Database Schema
 
-**Version:** 1.0  
-**Date:** 2026-05-09  
+**Version:** 1.1  
+**Date:** 2026-05-09 (design) · **Reconciled with code:** 2026-06-29  
 **Project:** FreshFlow – Intermediary Platform for Food Procurement and Logistics Optimization  
-**Status:** Approved for Implementation  
+**Status:** Partially implemented — see Sync Status below  
 **Based on:** Requirements Specification v1.0 + System Architecture v1.0
+
+---
+
+## ⚙️ Sync Status (2026-06-29)
+
+> **Source of truth:** the EF Core model snapshot at
+> `src/FreshFlow.Infrastructure.Persistence/Migrations/AppDbContextModelSnapshot.cs`.
+> The companion ER diagram `docs/03-database-schema.dbml` has been fully reconciled with
+> that snapshot and is the authoritative ERD. This markdown is annotated to match.
+
+**Implemented today** (Auth, Catalog, Pricing, Orders, Assistant):
+`roles`, `users`, `refresh_tokens`, `password_reset_tokens`, `verification_codes`,
+`user_market_assignments`, `driver_profiles`, `restaurants`, `delivery_addresses`,
+`product_categories`, `units_of_measurement`, `products`, `markets`, `market_products`,
+`price_snapshots`, `orders`, `order_items`, `scheduled_orders`, `order_issues`,
+`restaurant_credit`, `credit_transactions`, `assistant_conversations`.
+
+**Planned — NOT yet in the database** (kept below for roadmap, marked `[PLANNED]`):
+`system_config`, `order_groups`, `order_status_history`, `restaurant_members`,
+`price_alert_subscriptions`, `invoices`, `invoice_orders`, `payments`, `refunds`,
+`procurement_*`, `hubs`, `hub_*`, `cross_dock_transfers`, `vehicles`, `delivery_routes`,
+`route_stops`, `deliveries`, `notifications`, `notification_templates`,
+`analytics_aggregations`, `export_jobs`.
+
+**Key deltas vs the original design (now reflected in the implemented DDL below):**
+- Status columns on implemented tables are stored as **`varchar`** via EF string conversion,
+  not native PostgreSQL `ENUM` types.
+- Catalog was normalized: `categories` → **`product_categories`**, and a new
+  **`units_of_measurement`** table replaces free-text `products.unit_of_measure`.
+  `products` keeps legacy `category`/`unit` text columns during transition and adds
+  `category_id` / `unit_id` FKs.
+- The Payment & Billing context (`invoices`/`payments`/`refunds`) is superseded by a
+  **B2B credit / công nợ** model: **`restaurant_credit`** + **`credit_transactions`**.
+- `restaurants` is **1:1 with a user** (no `restaurant_members`); it carries
+  `contact_person` + `pickup_start`/`pickup_end` + `status` and has **no** `latitude`,
+  `longitude`, `phone`, `is_approved`, or `deleted_at`.
+- New tables: `delivery_addresses`, `units_of_measurement`, `product_categories`,
+  `restaurant_credit`, `credit_transactions`, `order_issues`, `assistant_conversations`.
 
 ---
 
@@ -22,6 +60,9 @@
 ## 1. Entity Relationship Overview
 
 ### 1.1 Entity Summary Table
+
+> _This table reflects the full design. See **Sync Status** above for which entities are
+> implemented vs `[PLANNED]`. Newly added implemented entities are listed at the end._
 
 | Entity | Aggregate Root | Owned By Module | Relationship Summary |
 |--------|---------------|-----------------|----------------------|
@@ -51,8 +92,18 @@
 | `refunds` | No | Payment | Partial/full refund records. Many-to-one with `payments`. |
 | `driver_profiles` | No | Auth/Logistics | Extended profile for `driver` role users. One-to-one with `users`. |
 | `notifications` | No | Notifications | Append-only notification log. Many-to-one with `users`. |
-| `analytics_aggregations` | No | Analytics | Pre-computed analytics rows. Read by Analytics module only. |
-| `export_jobs` | No | Analytics | Async CSV export job tracking. |
+| `analytics_aggregations` | No | Analytics | `[PLANNED]` Pre-computed analytics rows. Read by Analytics module only. |
+| `export_jobs` | No | Analytics | `[PLANNED]` Async CSV export job tracking. |
+| `password_reset_tokens` | No | Auth | _(implemented)_ Append-only password-reset tokens. Many-to-one with `users`. |
+| `verification_codes` | No | Auth | _(implemented)_ Email/phone verification codes. Many-to-one with `users`. |
+| `driver_profiles` | No | Auth | _(implemented)_ 1:1 with `users` for the `driver` role (`license_plate`, `phone_number`). |
+| `delivery_addresses` | No | Auth | _(implemented, NEW)_ Per-restaurant delivery addresses. Many-to-one with `restaurants`. |
+| `product_categories` | No | Catalog | _(implemented, NEW)_ Product category lookup (renamed from `categories`). |
+| `units_of_measurement` | No | Catalog | _(implemented, NEW)_ Unit lookup; referenced by `products.unit_id`. |
+| `order_issues` | No | Orders | _(implemented, NEW)_ Receipt/discrepancy reports. Many-to-one with `orders`/`order_items`. |
+| `restaurant_credit` | No | Orders | _(implemented, NEW)_ 1:1 B2B credit account per `restaurant`. |
+| `credit_transactions` | No | Orders | _(implemented, NEW)_ Append-only credit ledger. Many-to-one with `restaurants`/`orders`. |
+| `assistant_conversations` | No | Assistant | _(implemented, NEW)_ DB-backed AI assistant session store (TTL via `expires_at`). |
 
 ### 1.2 Key Relationships
 
@@ -158,17 +209,23 @@ CREATE TABLE users (
     email                VARCHAR(255)    NOT NULL,
     phone                VARCHAR(20),
     password_hash        TEXT            NOT NULL,
+    full_name            VARCHAR(255),
+    avatar_url           VARCHAR(512),
     role_id              UUID            NOT NULL,
     is_active            BOOLEAN         NOT NULL DEFAULT true,
     failed_login_count   INT             NOT NULL DEFAULT 0,   -- FR-AUTH-009: lockout counter
     locked_until         TIMESTAMPTZ,                          -- FR-AUTH-009: NULL = not locked
+    email_verified_at    TIMESTAMPTZ,
     created_at           TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     updated_at           TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     deleted_at           TIMESTAMPTZ,
-    CONSTRAINT users_email_unique UNIQUE (email),
+    -- email is unique among non-deleted rows (partial index ON DeletedAt IS NULL);
+    -- phone is unique among non-null values (partial index).
     CONSTRAINT fk_users_role
         FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE RESTRICT
 );
+-- NOTE: no `status` enum (modeled by is_active + deleted_at), no phone_verified_at,
+--       no last_login_at in the implemented model.
 
 -- refresh_tokens
 -- Append-only — no updated_at or deleted_at.
@@ -213,6 +270,36 @@ CREATE TABLE user_market_assignments (
         FOREIGN KEY (assigned_by) REFERENCES users (id) ON DELETE SET NULL
 );
 
+-- password_reset_tokens
+-- Append-only. token_hash stores a hash of the raw reset token.
+CREATE TABLE password_reset_tokens (
+    id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID         NOT NULL,
+    token_hash  VARCHAR(128) NOT NULL,
+    expires_at  TIMESTAMPTZ  NOT NULL,
+    used_at     TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    CONSTRAINT password_reset_tokens_token_hash_unique UNIQUE (token_hash),
+    CONSTRAINT fk_password_reset_tokens_user
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+-- NOTE: no channel / target / requested_ip_hash columns in the implemented model.
+
+-- verification_codes
+-- Email/phone verification codes. code_hash stores a hash of the raw code.
+CREATE TABLE verification_codes (
+    id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID         NOT NULL,
+    channel     VARCHAR(10)  NOT NULL,  -- email | phone
+    code_hash   VARCHAR(128) NOT NULL,
+    expires_at  TIMESTAMPTZ  NOT NULL,
+    used_at     TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_verification_codes_user
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+-- NOTE: no `target` column in the implemented model.
+
 -- ============================================================
 -- PRICING MODULE TABLES
 -- ============================================================
@@ -232,21 +319,51 @@ CREATE TABLE markets (
     deleted_at  TIMESTAMPTZ
 );
 
+-- product_categories  (NEW — Catalog module; renamed from the planned `categories`)
+-- name is unique among non-deleted rows (partial index). No display_order column.
+CREATE TABLE product_categories (
+    id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        VARCHAR(200) NOT NULL,
+    is_active   BOOLEAN      NOT NULL DEFAULT true,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    deleted_at  TIMESTAMPTZ
+);
+
+-- units_of_measurement  (NEW — Catalog module)
+-- Replaces the free-text products.unit_of_measure. name unique among non-deleted rows.
+CREATE TABLE units_of_measurement (
+    id           UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    name         VARCHAR(100) NOT NULL,
+    abbreviation VARCHAR(20),
+    is_active    BOOLEAN      NOT NULL DEFAULT true,
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    deleted_at   TIMESTAMPTZ
+);
+
 -- products
 -- System-wide product catalog. Only Admin can create/deactivate products (FR-PRI-006, GA-007).
 -- Soft delete: deleted_at IS NOT NULL means the product is inactive (removed from active listings).
+-- NOTE: normalized to category_id (-> product_categories, SET NULL) and unit_id
+--       (-> units_of_measurement, RESTRICT). Legacy `category`/`unit` text columns are kept
+--       during the transition. `created_by` has no DB-level FK. No image_url / is_active columns.
 CREATE TABLE products (
-    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        TEXT        NOT NULL,
-    category    TEXT,
-    unit        TEXT        NOT NULL,
-    description TEXT,
+    id          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    category_id UUID,                                  -- nullable
+    unit_id     UUID          NOT NULL,
+    name        VARCHAR(200)  NOT NULL,
+    description VARCHAR(1000),
+    category    TEXT,                                  -- LEGACY (transition)
+    unit        TEXT,                                  -- LEGACY (transition)
     created_by  UUID,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     deleted_at  TIMESTAMPTZ,
-    CONSTRAINT fk_products_created_by
-        FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL
+    CONSTRAINT fk_products_category
+        FOREIGN KEY (category_id) REFERENCES product_categories (id) ON DELETE SET NULL,
+    CONSTRAINT fk_products_unit
+        FOREIGN KEY (unit_id) REFERENCES units_of_measurement (id) ON DELETE RESTRICT
 );
 
 -- market_products
@@ -297,7 +414,7 @@ CREATE TABLE price_snapshots (
         FOREIGN KEY (recorded_by) REFERENCES users (id) ON DELETE SET NULL
 ) PARTITION BY RANGE (recorded_at);
 
--- system_config
+-- system_config  [PLANNED — not yet implemented]
 -- Key-value store for Admin-configurable runtime parameters.
 -- Example keys: 'daily_order_cutoff_time' = '22:00', 'price_band_tolerance_percent' = '10.00'
 -- No soft delete — config rows are overwritten in place; audit is covered by updated_at + updated_by.
@@ -318,28 +435,49 @@ CREATE TABLE system_config (
 -- ORDERS MODULE TABLES
 -- ============================================================
 
--- restaurants
+-- restaurants  (owned by Auth module; read by Orders)
 -- One restaurant account per user (UNIQUE on user_id).
--- is_approved: false = PENDING_APPROVAL state (GA-009). Restaurant cannot place orders until approved.
+-- status: 'pending' = cannot place orders until approved (GA-009). Stored lowercase via EF.
+-- NOTE: the implemented table replaced is_approved with `status`, dropped latitude/longitude/
+--       phone/deleted_at, and added contact_person + pickup_start/pickup_end.
+--       Per-restaurant delivery locations now live in `delivery_addresses`.
 CREATE TABLE restaurants (
-    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID        NOT NULL,
-    name        TEXT        NOT NULL,
-    address     TEXT,
-    latitude    NUMERIC(9, 6),
-    longitude   NUMERIC(9, 6),
-    phone       TEXT,
-    is_approved BOOLEAN     NOT NULL DEFAULT false,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at  TIMESTAMPTZ,
+    id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id        UUID         NOT NULL,
+    name           VARCHAR(200) NOT NULL,
+    address        VARCHAR(500),
+    contact_person VARCHAR(200),
+    pickup_start   TIME,
+    pickup_end     TIME,
+    status         VARCHAR(20)  NOT NULL DEFAULT 'pending',  -- pending | active | suspended
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     CONSTRAINT restaurants_user_id_unique UNIQUE (user_id),
     CONSTRAINT fk_restaurants_user
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
--- order_groups
+-- delivery_addresses  (NEW — Auth module)
+-- Per-restaurant delivery destinations. is_default marks the primary address.
+CREATE TABLE delivery_addresses (
+    id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    restaurant_id  UUID         NOT NULL,
+    recipient_name TEXT,
+    phone          VARCHAR(20),
+    address_line   TEXT         NOT NULL,
+    latitude       NUMERIC(9, 6),
+    longitude      NUMERIC(9, 6),
+    is_default     BOOLEAN      NOT NULL DEFAULT false,
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    deleted_at     TIMESTAMPTZ,
+    CONSTRAINT fk_delivery_addresses_restaurant
+        FOREIGN KEY (restaurant_id) REFERENCES restaurants (id) ON DELETE CASCADE
+);
+
+-- order_groups  [PLANNED — not yet implemented]
 -- Administrative grouping of confirmed orders for batch logistics dispatch.
+-- orders.order_group_id already exists as a nullable column reserved for this (no FK yet).
 -- total_orders: denormalized count, updated by the application when orders are added/removed.
 -- Design decision: grouped_by references the admin user who created the group.
 CREATE TABLE order_groups (
@@ -365,25 +503,31 @@ CREATE TABLE order_groups (
 -- Design decision: ON DELETE RESTRICT on restaurant_id to prevent accidental deletion of a restaurant
 --   with active orders. Use soft delete on restaurant instead.
 -- Design decision: order_group_id uses ON DELETE SET NULL — an order is ungrouped if its group is deleted.
+-- NOTE: status/payment_status are stored as VARCHAR via EF (PascalCase), not PG enums.
+--   status: Draft | Confirmed | Batched | PickedUp | AtHub | Delivering | Delivered | Cancelled
+--   payment_status: NotApplicable | Outstanding | Settled | Waived
+--   order_group_id is a nullable column reserved for the PLANNED order_groups table (no FK yet).
+--   `updated_at` is a concurrency token. confirmed_receipt_at: set when the restaurant confirms receipt.
+--   Not implemented: order_number, created_by/confirmed_by/cancelled_by, delivery_address_snapshot,
+--   order_date, target_delivery_date, subtotal_amount, cutoff_at.
 CREATE TABLE orders (
-    id                  UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
-    restaurant_id       UUID            NOT NULL,
-    order_group_id      UUID,
-    scheduled_order_id  UUID,
-    status              order_status    NOT NULL DEFAULT 'draft',
-    payment_status      payment_status  NOT NULL DEFAULT 'pending',
-    scheduled_for       TIMESTAMPTZ,
-    total_amount        NUMERIC(14, 2)  NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
-    notes               TEXT,
-    cancelled_at        TIMESTAMPTZ,
-    cancellation_reason TEXT,
-    created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    deleted_at          TIMESTAMPTZ,
+    id                   UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    restaurant_id        UUID            NOT NULL,
+    order_group_id       UUID,
+    scheduled_order_id   UUID,
+    status               VARCHAR(20)     NOT NULL,
+    payment_status       VARCHAR(20)     NOT NULL,
+    scheduled_for        TIMESTAMPTZ,
+    confirmed_receipt_at TIMESTAMPTZ,
+    total_amount         NUMERIC(14, 2)  NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
+    notes                TEXT,
+    cancelled_at         TIMESTAMPTZ,
+    cancellation_reason  TEXT,
+    created_at           TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    deleted_at           TIMESTAMPTZ,
     CONSTRAINT fk_orders_restaurant
         FOREIGN KEY (restaurant_id) REFERENCES restaurants (id) ON DELETE RESTRICT,
-    CONSTRAINT fk_orders_order_group
-        FOREIGN KEY (order_group_id) REFERENCES order_groups (id) ON DELETE SET NULL,
     CONSTRAINT fk_orders_scheduled_order
         FOREIGN KEY (scheduled_order_id) REFERENCES scheduled_orders (id) ON DELETE SET NULL
 );
@@ -407,7 +551,6 @@ CREATE TABLE order_items (
     product_name_snapshot   VARCHAR(200)    NOT NULL,
     quantity                INTEGER         NOT NULL CHECK (quantity > 0),
     unit_price              NUMERIC(12, 2)  NOT NULL CHECK (unit_price >= 0),
-    subtotal                NUMERIC(14, 2)  GENERATED ALWAYS AS (quantity * unit_price) STORED,
     locked_unit_price       NUMERIC(12, 2),
     locked_total            NUMERIC(14, 2),
     actual_quantity         NUMERIC(10, 2),
@@ -440,9 +583,84 @@ CREATE TABLE scheduled_orders (
     CONSTRAINT fk_scheduled_orders_restaurant
         FOREIGN KEY (restaurant_id) REFERENCES restaurants (id) ON DELETE RESTRICT
 );
+-- NOTE: not implemented — created_by_user_id, name, weekdays, items_json, next_run_at,
+--       timezone, is_active.
+
+-- order_issues  (NEW — Orders module)
+-- Receipt/discrepancy reports raised against delivered orders.
+CREATE TABLE order_issues (
+    id                UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id          UUID          NOT NULL,
+    order_item_id     UUID,                                  -- nullable
+    issue_type        VARCHAR(20)   NOT NULL,   -- missing | wrong | damaged (lowercase via EF)
+    affected_quantity NUMERIC(10,2) NOT NULL,
+    description       VARCHAR(1000) NOT NULL,
+    status            VARCHAR(20)   NOT NULL,   -- open | resolved (lowercase via EF)
+    reported_by       UUID          NOT NULL,
+    resolved_at       TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    deleted_at        TIMESTAMPTZ,
+    CONSTRAINT fk_order_issues_order
+        FOREIGN KEY (order_id) REFERENCES orders (id) ON DELETE CASCADE,
+    CONSTRAINT fk_order_issues_order_item
+        FOREIGN KEY (order_item_id) REFERENCES order_items (id) ON DELETE SET NULL
+);
 
 -- ============================================================
--- HUB MODULE TABLES
+-- B2B CREDIT / CÔNG NỢ TABLES  (Orders module)
+-- Supersedes the planned invoices/payments/refunds gateway model in v1.
+-- ============================================================
+
+-- restaurant_credit
+-- 1:1 credit account per restaurant. updated_at is a concurrency token.
+CREATE TABLE restaurant_credit (
+    restaurant_id       UUID          PRIMARY KEY,
+    credit_limit        NUMERIC(14,2) NOT NULL,
+    outstanding_balance NUMERIC(14,2) NOT NULL,
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_restaurant_credit_restaurant
+        FOREIGN KEY (restaurant_id) REFERENCES restaurants (id)
+);
+
+-- credit_transactions
+-- Append-only ledger of credit movements.
+CREATE TABLE credit_transactions (
+    id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    restaurant_id UUID          NOT NULL,
+    order_id      UUID,                                   -- nullable
+    type          VARCHAR(20)   NOT NULL,  -- charge | settlement | refund | adjustment (lowercase via EF)
+    amount        NUMERIC(14,2) NOT NULL,
+    balance_after NUMERIC(14,2) NOT NULL,
+    note          VARCHAR(500),
+    created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_credit_transactions_restaurant
+        FOREIGN KEY (restaurant_id) REFERENCES restaurants (id),
+    CONSTRAINT fk_credit_transactions_order
+        FOREIGN KEY (order_id) REFERENCES orders (id) ON DELETE SET NULL
+);
+
+-- ============================================================
+-- AI SHOPPING ASSISTANT  (API host)
+-- ============================================================
+
+-- assistant_conversations
+-- DB-backed conversation store for the AI assistant. state holds serialized session
+-- context; rows expire via expires_at (TTL cleanup).
+CREATE TABLE assistant_conversations (
+    id          UUID         PRIMARY KEY,
+    user_id     UUID         NOT NULL,
+    market_id   UUID,                                    -- nullable
+    session_id  VARCHAR(128) NOT NULL,
+    state       JSONB        NOT NULL,
+    expires_at  TIMESTAMPTZ  NOT NULL,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    CONSTRAINT assistant_conversations_session_id_unique UNIQUE (session_id)
+);
+
+-- ============================================================
+-- HUB MODULE TABLES   [PLANNED — none of the tables below are implemented yet]
 -- ============================================================
 
 -- hubs
@@ -569,10 +787,12 @@ CREATE TABLE cross_dock_transfers (
 );
 
 -- ============================================================
--- PAYMENT MODULE TABLES
+-- PAYMENT MODULE TABLES   [PLANNED — payments & refunds not implemented;
+--   the v1 billing model is restaurant_credit + credit_transactions above.
+--   (driver_profiles below IS implemented.)]
 -- ============================================================
 
--- payments
+-- payments  [PLANNED]
 -- Tracks per-order payment transactions via external payment gateway.
 -- order_id: no FK constraint — cross-context reference by ID only (DDD rule).
 -- gateway_transaction_id: the gateway's reference ID for reconciliation.
@@ -597,7 +817,7 @@ CREATE INDEX idx_payments_order_id ON payments (order_id);
 CREATE INDEX idx_payments_restaurant_id ON payments (restaurant_id);
 CREATE INDEX idx_payments_status ON payments (status) WHERE status = 'PENDING';
 
--- refunds
+-- refunds  [PLANNED]
 -- Tracks partial or full refunds issued against a payment.
 -- Triggered by: hub discrepancy flags, order cancellation after payment.
 -- reason: 'hub_shortage', 'hub_damage', 'customer_cancel', 'system'
@@ -620,27 +840,23 @@ CREATE TABLE refunds (
 CREATE INDEX idx_refunds_payment_id ON refunds (payment_id);
 CREATE INDEX idx_refunds_order_id ON refunds (order_id);
 
--- driver_profiles
--- Extended profile for users with role 'driver'.
--- current_vehicle_id: the vehicle currently assigned to this driver (nullable).
--- status: operational status for dispatch planning.
+-- driver_profiles  (implemented — Auth module)
+-- Extended profile for users with role 'driver'. 1:1 with users.
+-- NOTE: the implemented table carries license_plate + phone_number only; it has no
+--       current_vehicle_id or status column (those belonged to the planned Logistics design).
 CREATE TABLE driver_profiles (
-    id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id             UUID        UNIQUE NOT NULL,
-    license_number      VARCHAR(50),
-    current_vehicle_id  UUID,
-    status              VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE'
-                            CHECK (status IN ('AVAILABLE', 'ON_DUTY', 'OFF_DUTY')),
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id       UUID        UNIQUE NOT NULL,
+    license_plate VARCHAR(20),
+    phone_number  VARCHAR(20),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_driver_profiles_user
-        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-    CONSTRAINT fk_driver_profiles_vehicle
-        FOREIGN KEY (current_vehicle_id) REFERENCES vehicles (id) ON DELETE SET NULL
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
 -- ============================================================
--- LOGISTICS MODULE TABLES
+-- LOGISTICS MODULE TABLES   [PLANNED — vehicles, delivery_routes, deliveries not implemented]
 -- ============================================================
 
 -- vehicles
@@ -717,7 +933,7 @@ CREATE TABLE deliveries (
 );
 
 -- ============================================================
--- NOTIFICATIONS MODULE TABLES
+-- NOTIFICATIONS MODULE TABLES   [PLANNED — not implemented]
 -- ============================================================
 
 -- notifications
@@ -740,7 +956,7 @@ CREATE TABLE notifications (
 );
 
 -- ============================================================
--- ANALYTICS MODULE TABLES
+-- ANALYTICS MODULE TABLES   [PLANNED — not implemented]
 -- ============================================================
 
 -- analytics_aggregations
