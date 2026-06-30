@@ -200,14 +200,14 @@ public static class ToolDefinitions
             return false;
         }
 
-        if (args!.OrderId is null)
+        if (args!.OrderId is not { } parsedOrderId)
         {
             orderId = Guid.Empty;
             error = ToolResultJson.Error("INVALID_TOOL_ARGS", "Tool arguments must include orderId.");
             return false;
         }
 
-        orderId = args.OrderId.Value;
+        orderId = parsedOrderId;
         return true;
     }
 

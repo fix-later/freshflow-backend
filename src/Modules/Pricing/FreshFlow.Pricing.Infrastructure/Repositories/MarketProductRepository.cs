@@ -163,9 +163,13 @@ internal sealed class MarketProductRepository(AppDbContext db) : IMarketProductR
                 var json = Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
                 return JsonSerializer.Deserialize<SearchCursor>(json, Options);
             }
-            catch
+            catch (FormatException)
             {
-                return null; // invalid cursor treated as start of list
+                return null; // invalid Base64 — treat as start of list
+            }
+            catch (JsonException)
+            {
+                return null; // invalid JSON payload — treat as start of list
             }
         }
 

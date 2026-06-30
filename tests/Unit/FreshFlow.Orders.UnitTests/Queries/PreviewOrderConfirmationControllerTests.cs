@@ -80,7 +80,9 @@ public sealed class PreviewOrderConfirmationControllerTests
         response.Should().BeOfType<OkObjectResult>();
         var ok = (OkObjectResult)response;
         ok.Value.Should().NotBeNull();
-        var data = ok.Value!.GetType().GetProperty("data")?.GetValue(ok.Value);
+        var dataProperty = ok.Value!.GetType().GetProperty("data");
+        dataProperty.Should().NotBeNull();
+        var data = dataProperty!.GetValue(ok.Value);
         data.Should().Be(dto);
 
         await _sender.Received(1).Send(
@@ -112,9 +114,10 @@ public sealed class PreviewOrderConfirmationControllerTests
         // Assert
         response.Should().BeOfType<OkObjectResult>();
         var ok = (OkObjectResult)response;
-        var data = ok.Value!.GetType().GetProperty("data")?.GetValue(ok.Value) as OrderConfirmationPreviewDto;
-        data.Should().NotBeNull();
-        data!.WouldSucceed.Should().BeFalse();
+        var dataProperty = ok.Value!.GetType().GetProperty("data");
+        dataProperty.Should().NotBeNull();
+        var data = dataProperty!.GetValue(ok.Value).Should().BeOfType<OrderConfirmationPreviewDto>().Subject;
+        data.WouldSucceed.Should().BeFalse();
         data.Issues.Should().HaveCount(2);
     }
 
