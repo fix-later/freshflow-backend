@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Ngày** | 2026-06-29 |
-| **Phạm vi** | Vòng đời trạng thái của các entity chính (toàn bộ thiết kế; phần chưa code đánh dấu `[PLANNED]`) |
+| **Phạm vi** | Vòng đời trạng thái của các entity chính (toàn bộ thiết kế) |
 | **Nguồn sự thật** | Các enum domain trong `src/Modules/**/Domain/Enums` + ERD `03-database-schema.dbml` |
 | **Draw.io source** | [`02B-state-machine-diagrams.drawio`](./02B-state-machine-diagrams.drawio) (mỗi entity là 1 page) |
 
@@ -11,33 +11,33 @@
 > Đây là góc nhìn **hành vi của dữ liệu**, bổ sung cho ERD (cấu trúc) và Activity diagrams (luồng nghiệp vụ).
 
 **Quy ước màu (draw.io):** xanh dương = trạng thái thường · xanh lá = trạng thái kết thúc thành công ·
-đỏ = hủy/thất bại · xám + chữ nghiêng = `[PLANNED]` (chưa implement).
+đỏ = hủy/thất bại.
 
 ---
 
 ## Tổng hợp các page
 
-| # | Entity | Trạng thái | Trạng thái |
-|---|--------|-----------|-----------|
-| 01 | **Order** (`orders.status`) | Draft, Confirmed, `[PLANNED]` Batched, PickedUp, AtHub, Delivering, Delivered, Cancelled | Implemented (lõi) |
-| 02 | **Order Payment** (`orders.payment_status`) | NotApplicable, Outstanding, Settled, Waived | Implemented |
-| 03 | **Restaurant** (`restaurants.status`) | Pending, Active, Suspended | Implemented |
-| 04 | **User account** (suy ra từ cờ) | Active, Locked, Inactive, Deleted | Implemented |
-| 05 | **RefreshToken** | Active, Rotated, Revoked, Expired | Implemented |
-| 06 | **ScheduledOrder** | Active, Cancelled/Deleted | Implemented |
-| 07 | **OrderIssue** (`order_issues.status`) | Open, Resolved | Implemented |
-| 08 | **AssistantConversation** | Active, Expired (TTL) | Implemented |
-| 09 | **Payment** `[PLANNED]` | Pending, Succeeded, Failed, Cancelled | Planned |
-| 10 | **Delivery** `[PLANNED]` | Pending, InTransit, Delivered, Failed | Planned |
-| 11 | **DeliveryRoute** `[PLANNED]` | Planned, Dispatched, Completed, Cancelled | Planned |
-| 12 | **ProcurementOrder** `[PLANNED]` | Assigned, InProgress, Completed, Cancelled | Planned |
+| # | Entity | Trạng thái |
+|---|--------|-----------|
+| 01 | **Order** (`orders.status`) | Draft, Confirmed, Batched, PickedUp, AtHub, Delivering, Delivered, Cancelled |
+| 02 | **Order Payment** (`orders.payment_status`) | NotApplicable, Outstanding, Settled, Waived |
+| 03 | **Restaurant** (`restaurants.status`) | Pending, Active, Suspended |
+| 04 | **User account** (suy ra từ cờ) | Active, Locked, Inactive, Deleted |
+| 05 | **RefreshToken** | Active, Rotated, Revoked, Expired |
+| 06 | **ScheduledOrder** | Active, Cancelled/Deleted |
+| 07 | **OrderIssue** (`order_issues.status`) | Open, Resolved |
+| 08 | **AssistantConversation** | Active, Expired (TTL) |
+| 09 | **Payment** | Pending, Succeeded, Failed, Cancelled |
+| 10 | **Delivery** | Pending, InTransit, Delivered, Failed |
+| 11 | **DeliveryRoute** | Planned, Dispatched, Completed, Cancelled |
+| 12 | **ProcurementOrder** | Assigned, InProgress, Completed, Cancelled |
 
 ---
 
 ## 01 — Order
 
-Lõi đã implement là **Draft → Confirmed**. Các trạng thái `Batched → PickedUp → AtHub → Delivering → Delivered`
-đã khai báo trong `enum OrderStatus` nhưng **luồng chuyển tiếp thuộc phần fulfillment chưa code** (`[PLANNED]`).
+Vòng đời đầy đủ theo `enum OrderStatus`: **Draft → Confirmed → Batched → PickedUp → AtHub → Delivering → Delivered**,
+với nhánh **Cancelled** từ Draft/Confirmed.
 
 | Từ | Đến | Kích hoạt |
 |---|---|---|
@@ -45,9 +45,9 @@ Lõi đã implement là **Draft → Confirmed**. Các trạng thái `Batched →
 | Draft | Confirmed | Xác nhận đơn, còn đủ hạn mức công nợ |
 | Draft | Cancelled | Hủy / bỏ giỏ |
 | Confirmed | Cancelled | Hủy trước cutoff |
-| Confirmed | Batched `[PLANNED]` | Cutoff hằng ngày + gom đơn |
-| Batched → … → Delivering `[PLANNED]` | | Thu mua → về hub → điều phối giao |
-| Delivering | Delivered `[PLANNED]` | Nhà hàng xác nhận nhận hàng |
+| Confirmed | Batched | Cutoff hằng ngày + gom đơn |
+| Batched → … → Delivering | | Thu mua → về hub → điều phối giao |
+| Delivering | Delivered | Nhà hàng xác nhận nhận hàng |
 
 ## 02 — Order Payment Status (công nợ)
 
@@ -117,8 +117,7 @@ Append-only, xoay vòng theo `family_id`; phát hiện reuse → thu hồi **c�
 | Active | Active (self) | Mỗi lượt chat → cập nhật `state` |
 | Active | Expired | Quá `expires_at` (TTL) |
 
-## 09–12 — `[PLANNED]`
+## 09–12 — Payment, Delivery, DeliveryRoute, ProcurementOrder
 
 `Payment`, `Delivery`, `DeliveryRoute`, `ProcurementOrder` là vòng đời thuộc các module
-**Payment / Logistics / Hub / Procurement chưa được implement**. Giữ ở đây làm thiết kế tham chiếu;
-các enum trạng thái lấy từ `03-database-schema.dbml` (Part B — Planned).
+Payment / Logistics / Hub / Procurement. Các enum trạng thái lấy từ `03-database-schema.dbml`.
