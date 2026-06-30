@@ -13,8 +13,11 @@
 |---|---|---|---|---|
 | 01 | [01-requirements-spec.md](./01-requirements-spec.md) | Functional & non-functional requirements, gaps, glossary | 283 | Complete |
 | 02 | [02-system-architecture.md](./02-system-architecture.md) | Architecture pattern, component diagrams, module breakdown, caching, deployment | 713 | Complete |
-| 03 | [03-database-schema.md](./03-database-schema.md) | PostgreSQL DDL, index strategy, Redis key design, migration strategy | 1,260 | Complete |
-| 03A | [03-database-schema.dbml](./03-database-schema.dbml) | Unified DBML for dbdiagram.io visualization | 1,049 | Draft |
+| 02A | [02A-system-overview-diagrams.md](./02A-system-overview-diagrams.md) | Current backend system overview diagrams, runtime wiring, flows, deployment view, Draw.io source | — | Current |
+| 02B | [02B-state-machine-diagrams.md](./02B-state-machine-diagrams.md) | State machine cho các entity chính (Order, Restaurant, User, RefreshToken…); Draw.io source | — | Current |
+| 02C | [02C-activity-diagrams.md](./02C-activity-diagrams.md) | Activity/flowchart các luồng nghiệp vụ chính (có Actor, swimlane); Draw.io source | — | Current |
+| 03 | [03-database-schema.md](./03-database-schema.md) | PostgreSQL DDL, index strategy, Redis key design, migration strategy (reconciled w/ code 2026-06-29) | — | Current |
+| 03A | [03-database-schema.dbml](./03-database-schema.dbml) | Unified DBML for dbdiagram.io: Part A implemented + Part B planned (reconciled 2026-06-29) | — | Current |
 | 04 | [04-api-design.md](./04-api-design.md) | REST endpoints, SignalR hubs, validation rules, RBAC matrix | 2,641 | Complete |
 | 05 | [05-implementation-plan.md](./05-implementation-plan.md) | 50-task breakdown, critical path, MVP scope, folder structure, coding standards | 912 | Complete |
 | — | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | Cross-reference gaps, inconsistencies, readiness assessment | — | Complete |
