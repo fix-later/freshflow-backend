@@ -18,7 +18,7 @@
 | 02C | [02C-activity-diagrams.md](./02C-activity-diagrams.md) | Activity/flowchart các luồng nghiệp vụ chính (có Actor, swimlane); Draw.io source | — | Current |
 | 03 | [03-database-schema.md](./03-database-schema.md) | PostgreSQL DDL, index strategy, Redis key design, migration strategy (reconciled w/ code 2026-06-29) | — | Current |
 | 03A | [03-database-schema.dbml](./03-database-schema.dbml) | Unified DBML for dbdiagram.io: Part A implemented + Part B planned (reconciled 2026-06-29) | — | Current |
-| 04 | [04-api-design.md](./04-api-design.md) | REST endpoints, SignalR hubs, validation rules, RBAC matrix | 2,641 | Complete |
+| 04 | [04-api-design.md](./04-api-design.md) | REST endpoints, SignalR hubs, validation rules, RBAC matrix; Part A implemented surface + Part B planned (reconciled w/ code 2026-06-30) | — | Current |
 | 05 | [05-implementation-plan.md](./05-implementation-plan.md) | 50-task breakdown, critical path, MVP scope, folder structure, coding standards | 912 | Complete |
 | — | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | Cross-reference gaps, inconsistencies, readiness assessment | — | Complete |
 
