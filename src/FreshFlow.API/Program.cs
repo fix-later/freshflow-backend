@@ -10,7 +10,9 @@ using FreshFlow.Pricing.Infrastructure;
 using FreshFlow.Pricing.Infrastructure.Realtime;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
+using MicroElements.Swashbuckle.FluentValidation.AspNetCore;
+using FreshFlow.API.Swagger;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -43,17 +45,19 @@ builder.Services.AddSwaggerGen(options =>
     };
 
     options.AddSecurityDefinition("Bearer", bearerScheme);
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    options.AddSecurityRequirement(_ => new OpenApiSecurityRequirement
     {
         {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
-            },
-            Array.Empty<string>()
+            new OpenApiSecuritySchemeReference("Bearer"),
+            new List<string>()
         }
     });
 });
+
+// Reflect FluentValidation rules (MinimumLength, MaximumLength, NotEmpty, Matches, etc.)
+// into the generated OpenAPI schema so the FE can read field constraints directly.
+// Must run after AddSwaggerGen and after the module validators are registered in DI.
+builder.Services.AddFluentValidationRulesToSwagger();
 
 // ── Database ──────────────────────────────────────────────────
 // Registers AppDbContext + DomainEventDispatchInterceptor (post-save domain event dispatch).
@@ -182,6 +186,10 @@ builder.Services.AddOrdersModule(builder.Configuration);
 
 // ── AI Shopping Assistant (Tầng 2 — host-layer orchestration) ──
 builder.Services.AddAssistant(builder.Configuration);
+
+// Reflect Command/Query FluentValidation rules onto the matching *Request DTO schemas in OpenAPI.
+// Must run after all modules have registered their validators.
+builder.Services.AddRequestValidationSchemaBridge();
 
 // ── Health Checks ─────────────────────────────────────────────
 builder.Services.AddHealthChecks();
