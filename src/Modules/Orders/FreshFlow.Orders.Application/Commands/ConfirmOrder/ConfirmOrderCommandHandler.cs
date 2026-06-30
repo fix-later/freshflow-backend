@@ -36,15 +36,11 @@ internal sealed class ConfirmOrderCommandHandler(
         if (canChargeResult.IsFailure)
             return Result<OrderDto>.Failure(canChargeResult.Error);
 
-        var rescheduledFor = OrderCutoffScheduler.ResolveScheduledFor(confirmedAtUtc, order.ScheduledFor);
-        if (rescheduledFor is not null
-            && !OrderCutoffScheduler.IsWithinDeliveryWindow(confirmedAtUtc, rescheduledFor.Value))
-        {
-            return Result<OrderDto>.Failure(Error.Validation(
-                "DELIVERY_DATE_OUT_OF_WINDOW",
-                "Delivery date must be within the next 7 days and not in the past."));
-        }
+        var evaluation = OrderConfirmationEvaluator.Evaluate(order, canChargeResult.Value, confirmedAtUtc);
+        if (evaluation.Issues.Count > 0)
+            return Result<OrderDto>.Failure(evaluation.Issues[0]);
 
+        var rescheduledFor = evaluation.ResolvedScheduledFor;
         if (rescheduledFor != order.ScheduledFor && rescheduledFor is not null)
         {
             var rescheduleResult = order.RescheduleFor(rescheduledFor.Value);

@@ -1,27 +1,62 @@
 # FreshFlow (FFX) — API Design Document
 
-**Version:** 1.0  
-**Date:** 2026-05-09  
+**Version:** 1.1  
+**Date:** 2026-05-09 (design) · **Reconciled with code:** 2026-06-30  
 **Project:** FreshFlow – Intermediary Platform for Food Procurement and Logistics Optimization  
-**Status:** Approved for Implementation  
+**Status:** Partially implemented — see Sync Status below  
 **Based on:** Requirements Specification v1.0 + System Architecture v1.0 + Database Schema v1.0
+
+---
+
+## ⚙️ Sync Status (reviewed 2026-06-30)
+
+> **Physical source of truth:** the ASP.NET Core controllers under
+> `src/FreshFlow.API/Controllers/` and the SignalR hub mappings in
+> `src/FreshFlow.API/Program.cs`. This document is split into two parts, mirroring
+> `docs/03-database-schema.dbml`:
+>
+> - **[Part A — Implemented API Surface](#2-implemented-api-surface-part-a--authoritative)**
+>   is the authoritative inventory of every route that physically exists today
+>   (method, path, auth/roles). It matches the controllers 1:1.
+> - **Part B** is the remaining original v1.0 design detail (Sections 3–6 below).
+>   Sections/endpoints that are **not yet implemented** are marked `[PLANNED]`;
+>   request/response examples for implemented endpoints are illustrative — the
+>   binding contract is the code (and the generated Swagger/OpenAPI document).
+
+**Implemented modules:** Auth, Profile, Admin, Restaurant Profile, Restaurant Credit (B2B công nợ),
+Catalog (Categories, Units, Products, Markets/Market-Products), Pricing, Orders (+ Scheduled Orders),
+AI Assistant, and the `PricingHub` / `OrderHub` real-time hubs.
+
+**Not yet implemented (`[PLANNED]`):** Logistics (routes/vehicles), Hub operations,
+Analytics, `order-groups` + auto-batch, `system-config`, `DeliveryHub`, and the generic
+`PATCH /orders/{orderId}/status` (superseded by explicit lifecycle actions).
+
+**Key deltas vs the v1.0 design:**
+- The Payment/Billing gateway endpoints are superseded by a **B2B credit / công nợ** model
+  (`/restaurants/{id}/credit`, `/admin/.../credit/settle|limit`).
+- Catalog was normalized — new `/categories` and `/units` endpoints; `/products` and
+  `/markets` gained full CRUD beyond the original read-only design.
+- The order lifecycle is modeled with explicit actions (draft → items → confirm → receipt →
+  issues / reorder) instead of a single `PATCH .../status`.
+- `PATCH /admin/users/{id}/status` was implemented as `PATCH /admin/users/{id}/activate`.
 
 ---
 
 ## Table of Contents
 
 1. [API Conventions](#1-api-conventions)
-2. [Authentication Endpoints](#2-authentication-endpoints)
-3. [Domain Endpoints](#3-domain-endpoints)
-   - 3.1 [Pricing Domain](#31-pricing-domain)
-   - 3.2 [Orders Domain](#32-orders-domain)
-   - 3.3 [Logistics Domain](#33-logistics-domain)
-   - 3.4 [Hub Domain](#34-hub-domain)
-   - 3.5 [Analytics Domain](#35-analytics-domain)
-   - 3.6 [Admin Domain](#36-admin-domain)
-4. [SignalR Hubs](#4-signalr-hubs)
-5. [Validation Rules](#5-validation-rules)
-6. [API Security](#6-api-security)
+2. [Implemented API Surface (Part A — authoritative)](#2-implemented-api-surface-part-a--authoritative)
+3. [Authentication Endpoints](#3-authentication-endpoints)
+4. [Domain Endpoints](#4-domain-endpoints)
+   - 4.1 [Pricing Domain](#41-pricing-domain)
+   - 4.2 [Orders Domain](#42-orders-domain)
+   - 4.3 [Logistics Domain `[PLANNED]`](#43-logistics-domain-planned)
+   - 4.4 [Hub Domain `[PLANNED]`](#44-hub-domain-planned)
+   - 4.5 [Analytics Domain `[PLANNED]`](#45-analytics-domain-planned)
+   - 4.6 [Admin Domain](#46-admin-domain)
+5. [SignalR Hubs](#5-signalr-hubs)
+6. [Validation Rules](#6-validation-rules)
+7. [API Security](#7-api-security)
 
 ---
 
@@ -161,7 +196,170 @@ Role values exposed by the API are lowercase `roles.name` values. Seeded values 
 
 ---
 
-## 2. Authentication Endpoints
+## 2. Implemented API Surface (Part A — authoritative)
+
+This is the complete list of routes that exist in code today, grouped by controller.
+All paths are prefixed with the base URL (`/api/v1`). "Auth" = any authenticated user;
+otherwise the listed roles are required (`[Authorize(Roles = …)]`). Detailed
+request/response shapes for these routes live in Sections 3–4 (where present) and in the
+generated Swagger document.
+
+### A1. Authentication — `AuthController` (`/auth`)
+
+| Method | Path | Auth |
+|--------|------|------|
+| POST | `/auth/register` | Anonymous |
+| POST | `/auth/login` | Anonymous |
+| POST | `/auth/refresh` | Anonymous |
+| POST | `/auth/logout` | Auth |
+| POST | `/auth/forgot-password` | Anonymous |
+| POST | `/auth/reset-password` | Anonymous |
+| POST | `/auth/verify/request` | Anonymous |
+| POST | `/auth/verify` | Anonymous |
+| POST | `/auth/change-password` | Auth |
+
+### A2. Profile — `ProfileController` (`/profile`)
+
+| Method | Path | Auth |
+|--------|------|------|
+| GET | `/profile/me` | Auth |
+| PUT | `/profile/me` | Auth |
+
+### A3. Admin — `AdminController` (`/admin`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| POST | `/admin/users` | admin |
+| GET | `/admin/users` | admin |
+| PATCH | `/admin/users/{userId}/activate` | admin |
+| POST | `/admin/users/{userId}/unlock` | admin |
+| GET | `/admin/roles` | admin |
+| PATCH | `/admin/users/{userId}/role` | admin |
+| PATCH | `/admin/restaurants/{restaurantId}/approve` | admin |
+| POST | `/admin/restaurants/{restaurantId}/credit/settle` | admin |
+| PUT | `/admin/restaurants/{restaurantId}/credit/limit` | admin |
+| GET | `/admin/users/{userId}/market-assignments` | admin, operations_manager |
+| PUT | `/admin/users/{userId}/market-assignments` | admin, operations_manager |
+
+### A4. Restaurant Profile — `RestaurantProfileController` (`/restaurants`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/restaurants/me/approval-status` | restaurant |
+| GET | `/restaurants/me/profile` | restaurant |
+| PUT | `/restaurants/me/profile` | restaurant |
+| GET | `/restaurants/me/delivery-addresses` | restaurant |
+| POST | `/restaurants/me/delivery-addresses` | restaurant |
+| PUT | `/restaurants/me/delivery-addresses/{id}` | restaurant |
+| DELETE | `/restaurants/me/delivery-addresses/{id}` | restaurant |
+
+### A5. Restaurant Credit (B2B công nợ) — `RestaurantCreditController` (`/restaurants/{restaurantId}/credit`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/restaurants/{restaurantId}/credit` | admin, restaurant |
+| GET | `/restaurants/{restaurantId}/credit/transactions` | admin, restaurant |
+
+### A6. Catalog — Categories — `CategoriesController` (`/categories`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/categories` | Auth |
+| GET | `/categories/{id}` | Auth |
+| POST | `/categories` | admin |
+| PUT | `/categories/{id}` | admin |
+| PATCH | `/categories/{id}/deactivate` | admin |
+
+### A7. Catalog — Units — `UnitsController` (`/units`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/units` | Auth |
+| GET | `/units/{id}` | Auth |
+| POST | `/units` | admin |
+| PUT | `/units/{id}` | admin |
+| PATCH | `/units/{id}/deactivate` | admin |
+
+### A8. Catalog — Products — `ProductsController` (`/products`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/products` | admin, operations_manager, market_agent, hub_staff, restaurant |
+| GET | `/products/{id}` | admin, operations_manager, market_agent, hub_staff, restaurant |
+| POST | `/products` | admin |
+| PUT | `/products/{id}` | admin |
+| PATCH | `/products/{id}/deactivate` | admin |
+
+### A9. Markets & Market Products — `MarketsController` (`/markets`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/markets` | Auth |
+| GET | `/markets/{id}` | Auth |
+| POST | `/markets` | admin |
+| PUT | `/markets/{id}` | admin |
+| PATCH | `/markets/{id}/deactivate` | admin |
+| DELETE | `/markets/{id}` | admin |
+| GET | `/markets/{marketId}/products` | Auth |
+| POST | `/markets/{marketId}/products` | admin |
+| GET | `/markets/{marketId}/products/{productId}/price-history` | Auth |
+| PATCH | `/markets/{marketId}/products/{productId}/price` | market_agent |
+| PATCH | `/markets/{marketId}/products/{productId}/quantity` | market_agent |
+
+### A10. Pricing — `PricingController` (`/pricing`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/pricing/assigned-markets` | market_agent |
+
+### A11. Orders — `OrdersController` (`/orders`)
+
+Base roles for the controller: `admin, operations_manager, restaurant` (overridden per action).
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/orders` | admin, operations_manager, restaurant |
+| GET | `/orders/history` | admin, operations_manager, restaurant |
+| GET | `/orders/{orderId}` | admin, operations_manager, restaurant |
+| POST | `/orders` | restaurant |
+| POST | `/orders/{orderId}/items` | restaurant |
+| PUT | `/orders/{orderId}/items/{itemId}` | restaurant |
+| DELETE | `/orders/{orderId}/items/{itemId}` | restaurant |
+| GET | `/orders/{orderId}/confirm-preview` | restaurant |
+| POST | `/orders/{orderId}/confirm` | restaurant |
+| PATCH | `/orders/{orderId}/cancel` | admin, restaurant |
+| PATCH | `/orders/{orderId}/items/{itemId}/actual-quantity` | admin, operations_manager |
+| PATCH | `/orders/{orderId}/receipt` | restaurant |
+| POST | `/orders/{orderId}/issues` | restaurant |
+| POST | `/orders/{orderId}/reorder` | restaurant |
+
+### A12. Scheduled Orders — `OrdersController` (`/orders/scheduled`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/orders/scheduled` | admin, restaurant |
+| GET | `/orders/scheduled/{scheduledOrderId}` | admin, restaurant |
+| GET | `/orders/scheduled/{scheduledOrderId}/instances` | admin, restaurant |
+| POST | `/orders/scheduled` | restaurant |
+| PATCH | `/orders/scheduled/{scheduledOrderId}` | admin, restaurant |
+| PATCH | `/orders/scheduled/{scheduledOrderId}/cancel` | admin, restaurant |
+
+### A13. AI Shopping Assistant — `AssistantController` (`/assistant`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| POST | `/assistant/chat` | restaurant |
+
+### A14. Real-time Hubs — `Program.cs`
+
+| Hub | Path | Notes |
+|-----|------|-------|
+| `PricingHub` | `/hubs/pricing` | JWT via `?access_token=` on negotiate |
+| `OrderHub` | `/hubs/orders` | JWT via `?access_token=` on negotiate |
+
+---
+
+## 3. Authentication Endpoints
 
 #### Endpoint Summary
 
@@ -556,9 +754,19 @@ Admin-managed user creation, role assignment, account status, and account unlock
 
 ---
 
-## 3. Domain Endpoints
+## 4. Domain Endpoints
 
-### 3.1 Pricing Domain
+> **Reconciliation note:** the sections below are the original v1.0 design detail (Part B).
+> For the authoritative list of what is actually deployed, see [Part A](#2-implemented-api-surface-part-a--authoritative).
+> **Pricing (4.1), Orders (4.2), and Admin (4.6)** are implemented but have evolved — the
+> live routes, paths, and roles are those in Part A; individual endpoints here that were
+> dropped or changed are tagged `[PLANNED]`, `[SUPERSEDED]`, or `[CHANGED]`.
+> **Logistics (4.3), Hub (4.4), and Analytics (4.5)** are entirely `[PLANNED]` (no controllers
+> exist yet). Catalog endpoints (`/categories`, `/units`, `/products`, `/markets`),
+> Profile, Restaurant Profile, Restaurant Credit, and the AI Assistant are implemented but
+> were added after v1.0 — they are catalogued in Part A (detailed bodies live in Swagger).
+
+### 4.1 Pricing Domain
 
 #### Endpoint Summary
 
@@ -912,7 +1120,7 @@ Creates a new product in the system-wide catalog. The product is then available 
 
 ---
 
-### 3.2 Orders Domain
+### 4.2 Orders Domain
 
 #### Endpoint Summary
 
@@ -1184,7 +1392,11 @@ Cancels an order. Transitions status to `cancelled` and releases soft-reservatio
 
 ---
 
-#### PATCH /api/v1/orders/{orderId}/status
+#### PATCH /api/v1/orders/{orderId}/status `[SUPERSEDED]`
+
+> `[SUPERSEDED]` Not implemented as a generic status patch. The lifecycle uses explicit
+> actions instead: `POST .../confirm`, `PATCH .../cancel`, `PATCH .../receipt`, and
+> `PATCH .../items/{itemId}/actual-quantity` (see Part A §A11).
 
 **Role:** Admin only
 
@@ -1234,7 +1446,7 @@ Advances or updates the status of an order according to the order state machine.
 
 ---
 
-#### GET /api/v1/order-groups
+#### GET /api/v1/order-groups `[PLANNED]`
 
 **Role:** Admin only
 
@@ -1280,7 +1492,7 @@ Returns a paginated list of all order groups with summary information.
 
 ---
 
-#### POST /api/v1/order-groups
+#### POST /api/v1/order-groups `[PLANNED]`
 
 **Role:** Admin only
 
@@ -1337,7 +1549,7 @@ Creates a new order group and associates the specified orders with it. All order
 
 ---
 
-#### POST /api/v1/admin/order-groups/auto-batch
+#### POST /api/v1/admin/order-groups/auto-batch `[PLANNED]`
 
 **Role:** Admin only
 
@@ -1452,7 +1664,7 @@ Returns the list of active scheduled orders (recurring order templates) for the 
 
 ---
 
-### 3.3 Logistics Domain
+### 4.3 Logistics Domain `[PLANNED]`
 
 #### Endpoint Summary
 
@@ -1729,7 +1941,7 @@ Returns a paginated list of all registered vehicles.
 
 ---
 
-### 3.4 Hub Domain
+### 4.4 Hub Domain `[PLANNED]`
 
 #### Endpoint Summary
 
@@ -2042,7 +2254,7 @@ Returns the current inventory state for a specific hub — all products with the
 
 ---
 
-### 3.5 Analytics Domain
+### 4.5 Analytics Domain `[PLANNED]`
 
 #### Endpoint Summary
 
@@ -2312,7 +2524,7 @@ Polls the status of an async export job. When `status` is `ready`, a `downloadUr
 
 ---
 
-### 3.6 Admin Domain
+### 4.6 Admin Domain
 
 #### Endpoint Summary
 
@@ -2491,7 +2703,9 @@ Returns a paginated list of all user accounts (active and inactive, all roles).
 
 ---
 
-#### PATCH /api/v1/admin/users/{userId}/status
+#### PATCH /api/v1/admin/users/{userId}/status `[CHANGED]`
+
+> `[CHANGED]` Implemented as `PATCH /api/v1/admin/users/{userId}/activate` (see Part A §A3).
 
 **Role:** Admin only
 
@@ -2704,7 +2918,7 @@ Approves a restaurant profile by changing `restaurants.status` from `PENDING_APP
 
 ---
 
-#### GET /api/v1/admin/system-config
+#### GET /api/v1/admin/system-config `[PLANNED]`
 
 **Role:** Admin only
 
@@ -2734,7 +2948,7 @@ Returns all system-wide configurable parameters.
 
 ---
 
-#### PATCH /api/v1/admin/system-config
+#### PATCH /api/v1/admin/system-config `[PLANNED]`
 
 **Role:** Admin only
 
@@ -2780,9 +2994,9 @@ Updates one or more system configuration values. Only the provided fields are up
 
 ---
 
-## 4. SignalR Hubs
+## 5. SignalR Hubs
 
-### 4.1 Overview and Authentication
+### 5.1 Overview and Authentication
 
 All three SignalR hubs require JWT authentication. Because the HTTP `Authorization` header is not accessible during the WebSocket upgrade handshake in browsers, the JWT is passed as a query string parameter during the SignalR negotiate request:
 
@@ -2798,7 +3012,7 @@ The server validates the JWT at the negotiate step. If the token is invalid or e
 
 ---
 
-### 4.2 PricingHub
+### 5.2 PricingHub
 
 **Route:** `/hubs/pricing`
 
@@ -2852,7 +3066,7 @@ Broadcast to the `market:{marketId}` group after any price or quantity update by
 
 ---
 
-### 4.3 OrderHub
+### 5.3 OrderHub
 
 **Route:** `/hubs/orders`
 
@@ -2910,7 +3124,7 @@ Broadcast to `restaurant:{restaurantId}` when one of the restaurant's orders is 
 
 ---
 
-### 4.4 DeliveryHub
+### 5.4 DeliveryHub `[PLANNED]`
 
 **Route:** `/hubs/delivery`
 
@@ -2970,7 +3184,7 @@ Broadcast to the `admin:delivery` group when a new route is calculated and persi
 
 ---
 
-## 5. Validation Rules
+## 6. Validation Rules
 
 The following table defines all validation rules enforced by the API. Validation errors return HTTP 400 or HTTP 422 with the specified error code and field-level details.
 
@@ -3005,9 +3219,9 @@ The following table defines all validation rules enforced by the API. Validation
 
 ---
 
-## 6. API Security
+## 7. API Security
 
-### 6.1 RBAC Matrix
+### 7.1 RBAC Matrix
 
 The following table shows which roles can access each endpoint group. A checkmark (✓) means the role has access; a cross (✗) means access is denied with HTTP 403. The legacy request value `kiosk_staff` is treated as an alias of `market_agent` wherever Market Agent access is listed.
 
@@ -3064,7 +3278,7 @@ Role columns: `Admin` = `admin`, `Ops` = `operations_manager`, `Agent` = `market
 | SignalR `/hubs/orders` | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ |
 | SignalR `/hubs/delivery` | ✓ | ✓ | ✗ | ✗ | ✓ | ✓ | ✓ | ✗ |
 
-### 6.2 Rate Limiting Rules
+### 7.2 Rate Limiting Rules
 
 All rate limits are enforced via Redis counters (`rate_limit:{userId}:{endpoint}` for authenticated endpoints, `rate_limit:ip:{hashedIp}:{endpoint}` for unauthenticated endpoints). When a limit is exceeded, the server returns **HTTP 429 Too Many Requests** with a `Retry-After` header indicating the number of seconds until the window resets.
 
@@ -3101,7 +3315,7 @@ X-RateLimit-Remaining: 0
 X-RateLimit-Reset: 1746768000
 ```
 
-### 6.3 Resource-Level Authorization
+### 7.3 Resource-Level Authorization
 
 Resource-level authorization is enforced in the application service layer, not solely at the controller level.
 

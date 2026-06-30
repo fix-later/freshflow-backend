@@ -53,6 +53,7 @@
     <Project Path="tests/Integration/FreshFlow.IntegrationTests/FreshFlow.IntegrationTests.csproj" />
   </Folder>
   <Folder Name="/tests/Unit/">
+    <Project Path="tests/Unit/FreshFlow.Assistant.UnitTests/FreshFlow.Assistant.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Auth.UnitTests/FreshFlow.Auth.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Catalog.UnitTests/FreshFlow.Catalog.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Orders.UnitTests/FreshFlow.Orders.UnitTests.csproj" />

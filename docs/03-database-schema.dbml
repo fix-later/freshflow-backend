@@ -1,66 +1,479 @@
 // FreshFlow unified database schema for dbdiagram.io
-// Source merge:
-// - docs/03-database-schema.md: current project schema and requirements alignment
-// - User DBML v2.1: roles table, global user role, multi-user restaurant profile,
-//   B2B billing, procurement, route stops, and operational audit tables
 //
-// Design decision:
-// - Each user has exactly one global role through users.role_id.
-// - Restaurant-specific membership is modeled by restaurant_members, but role remains global.
-// - Role seed values should include:
-//   ADMIN, OPERATIONS_MANAGER, MARKET_AGENT, KIOSK_STAFF (legacy alias),
-//   HUB_STAFF, DRIVER, RESTAURANT_MANAGER, RESTAURANT_STAFF.
+// SYNC STATUS — reviewed against implementation on 2026-06-30
+// Physical source of truth: EF Core migrations + model snapshot
+//   src/FreshFlow.Infrastructure.Persistence/Migrations/AppDbContextModelSnapshot.cs
+//
+// This file is split into two parts:
+//   [A] IMPLEMENTED — tables that physically exist in the database today
+//       (Auth, Catalog, Pricing, Orders, Assistant). Column names are logical
+//       snake_case for diagram readability; the actual EF physical schema is mixed
+//       PascalCase/snake_case unless a configuration explicitly maps a column.
+//       DB-level defaults are shown only when EF/migrations actually create them.
+//   [B] PLANNED     — tables from the original design suite that are NOT yet
+//       implemented. Kept here as forward-looking design; each is marked
+//       "[PLANNED]". Do not assume these exist in the running DB.
+//
+// Key implementation deltas vs the original v2.1 design:
+//   - Status columns on IMPLEMENTED tables are stored as varchar (EF string
+//     conversion), NOT native PostgreSQL enum types. Allowed values are noted inline.
+//   - IDs and CreatedAt/UpdatedAt are mostly assigned by the application/domain model,
+//     not by PostgreSQL gen_random_uuid()/now() defaults.
+//   - Catalog was normalized: `categories` -> `product_categories`, and a new
+//     `units_of_measurement` table replaces the free-text `products.unit_of_measure`.
+//     `products` still carries legacy `category`/`unit` text columns during transition.
+//   - The Payment & Billing context (invoices/payments/refunds + gateway enums) is
+//     superseded by a B2B credit / công nợ model: `restaurant_credit` + `credit_transactions`.
+//   - `restaurants` is 1:1 with a user (no `restaurant_members`); profile fields differ.
+//   - New tables not in the original design: `delivery_addresses`, `units_of_measurement`,
+//     `product_categories`, `restaurant_credit`, `credit_transactions`, `order_issues`,
+//     `assistant_conversations`.
 
 Project FreshFlow {
   database_type: 'PostgreSQL'
-  Note: 'Unified FreshFlow DBML for dbdiagram.io. One global role per user; restaurant access through membership rows.'
+  Note: 'FreshFlow logical ERD. Part A = implemented tables and enforced DB FKs where present. Part B = planned design, not yet in DB. Not a physical migration script.'
+}
+
+// ============================================================
+// PART A — IMPLEMENTED TABLES (logical ERD for the running database)
+// ============================================================
+
+// ---------- Identity & Access (Auth module) ----------
+
+Table roles {
+  id          uuid          [pk]
+  name        varchar(50)   [unique, not null]
+  description varchar(255)  [not null]
+  created_at  timestamp     [not null]
+
+  Note: 'Global role lookup. One role per user via users.role_id. No is_active column in v1.'
+}
+
+Table users {
+  id                 uuid          [pk]
+  email              varchar(255)  [not null, note: 'Unique among non-deleted rows (partial index on DeletedAt IS NULL).']
+  phone              varchar(20)   [note: 'Unique among non-null values (partial index). Optional login identifier.']
+  password_hash      text          [not null]
+  full_name          varchar(255)
+  avatar_url         varchar(512)
+  role_id            uuid          [not null]
+  is_active          boolean       [not null, default: true]
+  failed_login_count int           [not null, default: 0]
+  locked_until       timestamp
+  email_verified_at  timestamp
+  created_at         timestamp     [not null]
+  updated_at         timestamp     [not null]
+  deleted_at         timestamp
+
+  Indexes {
+    role_id [name: 'IX_users_RoleId']
+  }
+  Note: 'Status is modeled by is_active + deleted_at (no user_status enum). No phone_verified_at / last_login_at in v1.'
+}
+
+Table refresh_tokens {
+  id                   uuid        [pk]
+  user_id              uuid        [not null]
+  token_hash           text        [unique, not null]
+  family_id            uuid        [not null, note: 'Token family for rotation + reuse detection.']
+  replaced_by_token_id uuid
+  revoked_at           timestamp
+  revoked_reason       varchar(50)
+  expires_at           timestamp   [not null]
+  created_at           timestamp   [not null]
+
+  Indexes {
+    family_id
+    replaced_by_token_id
+    user_id
+  }
+  Note: 'Append-only. No created_by_ip_hash / user_agent columns in v1.'
+}
+
+Table password_reset_tokens {
+  id          uuid          [pk]
+  user_id     uuid          [not null]
+  token_hash  varchar(128)  [unique, not null]
+  expires_at  timestamp     [not null]
+  used_at     timestamp
+  created_at  timestamp     [not null]
+
+  Indexes {
+    user_id
+  }
+}
+
+Table verification_codes {
+  id          uuid          [pk]
+  user_id     uuid          [not null]
+  channel     varchar(10)   [not null, note: 'email | phone']
+  code_hash   varchar(128)  [not null]
+  expires_at  timestamp     [not null]
+  used_at     timestamp
+  created_at  timestamp     [not null]
+
+  Indexes {
+    code_hash
+    user_id
+  }
+}
+
+Table user_market_assignments {
+  id          uuid        [pk]
+  user_id     uuid        [not null]
+  market_id   uuid        [not null]
+  assigned_by uuid
+  created_at  timestamp   [not null]
+  updated_at  timestamp   [not null]
+
+  Indexes {
+    (user_id, market_id) [unique]
+    market_id [name: 'IX_user_market_assignments_MarketId']
+  }
+}
+
+Table driver_profiles {
+  id            uuid          [pk]
+  user_id       uuid          [unique, not null]
+  license_plate varchar(20)
+  phone_number  varchar(20)
+  created_at    timestamp     [not null]
+  updated_at    timestamp     [not null]
+}
+
+// ---------- Restaurant Profile (Auth module) ----------
+
+Table restaurants {
+  id             uuid          [pk]
+  user_id        uuid          [unique, not null]
+  name           varchar(200)  [not null]
+  address        varchar(500)
+  contact_person varchar(200)
+  pickup_start   time
+  pickup_end     time
+  status         varchar(20)   [not null, default: 'pending', note: 'pending | active | suspended (stored lowercase via EF conversion).']
+  created_at     timestamp     [not null]
+  updated_at     timestamp     [not null]
+
+  Note: '1:1 with users. No restaurant_members, business_registration, district, delivery_zone, lat/long, or approved_by in the implemented model.'
+}
+
+Table delivery_addresses {
+  id             uuid          [pk]
+  restaurant_id  uuid          [not null]
+  recipient_name text
+  phone          varchar(20)
+  address_line   text          [not null]
+  latitude       decimal(9,6)
+  longitude      decimal(9,6)
+  is_default     boolean       [not null, default: false]
+  created_at     timestamp     [not null]
+  updated_at     timestamp     [not null]
+  deleted_at     timestamp
+
+  Indexes {
+    restaurant_id
+  }
+  Note: 'NEW vs original design. Per-restaurant delivery addresses.'
+}
+
+// ---------- Catalog (Catalog module) ----------
+
+Table product_categories {
+  id          uuid          [pk]
+  name        varchar(200)  [not null, note: 'Unique among non-deleted rows (partial index).']
+  is_active   boolean       [not null, default: true]
+  created_at  timestamp     [not null]
+  updated_at  timestamp     [not null]
+  deleted_at  timestamp
+
+  Indexes {
+    is_active
+    name
+  }
+  Note: 'Renamed from `categories`. No display_order column.'
+}
+
+Table units_of_measurement {
+  id           uuid          [pk]
+  name         varchar(100)  [not null, note: 'Unique among non-deleted rows (partial index).']
+  abbreviation varchar(20)
+  is_active    boolean       [not null, default: true]
+  created_at   timestamp     [not null]
+  updated_at   timestamp     [not null]
+  deleted_at   timestamp
+
+  Indexes {
+    is_active
+    name
+  }
+  Note: 'NEW vs original design. Replaces free-text products.unit_of_measure.'
+}
+
+Table products {
+  id          uuid          [pk]
+  category_id uuid          [note: 'Nullable. FK -> product_categories (ON DELETE SET NULL).']
+  unit_id     uuid          [not null, note: 'FK -> units_of_measurement (ON DELETE RESTRICT).']
+  name        varchar(200)  [not null]
+  description varchar(1000)
+  category    text          [note: 'LEGACY free-text column kept during normalization transition.']
+  unit        text          [note: 'LEGACY free-text column kept during normalization transition.']
+  created_by  uuid          [note: 'No DB-level FK.']
+  created_at  timestamp     [not null]
+  updated_at  timestamp     [not null]
+  deleted_at  timestamp
+
+  Indexes {
+    category_id
+    unit_id
+    name
+    deleted_at
+  }
+  Note: 'No image_url / is_active in the implemented model.'
+}
+
+// ---------- Market Registry (Catalog module) + Pricing ----------
+
+Table markets {
+  id          uuid          [pk]
+  name        varchar(200)  [not null]
+  location    varchar(200)
+  address     varchar(500)
+  latitude    decimal(9,6)
+  longitude   decimal(9,6)
+  is_active   boolean       [not null, default: true]
+  created_at  timestamp     [not null]
+  updated_at  timestamp     [not null]
+  deleted_at  timestamp
+
+  Indexes {
+    is_active [name: 'idx_markets_is_active']
+    deleted_at
+  }
+  Note: 'No `code` or operating_hours_* columns in the implemented model.'
+}
+
+Table market_products {
+  id                uuid            [pk]
+  market_id         uuid            [not null]
+  product_id        uuid            [not null]
+  current_price     decimal(12,2)   [not null]
+  current_quantity  integer         [not null, note: 'Integer in the implemented model (design used decimal).']
+  reserved_quantity integer         [not null, default: 0]
+  updated_by        uuid
+  created_at        timestamp       [not null]
+  updated_at        timestamp       [not null, note: 'Concurrency token.']
+  deleted_at        timestamp
+
+  Indexes {
+    (market_id, product_id) [unique, name: 'idx_market_products_market_product_unique']
+    market_id [name: 'idx_market_products_market_id']
+    deleted_at
+  }
+}
+
+Table price_snapshots {
+  id                uuid          [pk]
+  market_product_id uuid          [not null]
+  price             decimal(12,2) [not null]
+  quantity          integer       [not null]
+  recorded_by       uuid          [note: 'Market Agent user. No DB-level FK.']
+  recorded_at       timestamp     [not null]
+
+  Indexes {
+    market_product_id [name: 'idx_price_snapshots_market_product_id']
+    recorded_at [name: 'idx_price_snapshots_recorded_at']
+  }
+  Note: 'Append-only. Current migrations create a normal table, not a partitioned table. recorded_by has no DB-level FK.'
+}
+
+// ---------- Orders (Orders module) ----------
+
+Table orders {
+  id                  uuid          [pk]
+  restaurant_id       uuid          [not null]
+  order_group_id      uuid          [note: 'Nullable. Reserved for the PLANNED order_groups table; no FK yet.']
+  scheduled_order_id  uuid          [note: 'Nullable correlation to scheduled_orders. Indexed, but no DB-level FK in current migrations.']
+  status              varchar(20)   [not null, note: 'Draft | Confirmed | Batched | PickedUp | AtHub | Delivering | Delivered | Cancelled (stored verbatim via EF HasConversion<string>()).']
+  payment_status      varchar(20)   [not null, note: 'NotApplicable | Outstanding | Settled | Waived (stored verbatim via EF HasConversion<string>()).']
+  scheduled_for       timestamp
+  confirmed_receipt_at timestamp
+  total_amount        decimal(14,2) [not null]
+  notes               text
+  cancelled_at        timestamp
+  cancellation_reason text
+  created_at          timestamp     [not null]
+  updated_at          timestamp     [not null, note: 'Concurrency token.']
+  deleted_at          timestamp
+
+  Indexes {
+    (restaurant_id, status) [name: 'idx_orders_restaurant_id_status']
+    status [name: 'idx_orders_status']
+    order_group_id [name: 'idx_orders_order_group_id']
+    scheduled_order_id [name: 'idx_orders_scheduled_order_id']
+    scheduled_for [name: 'idx_orders_scheduled_for']
+    deleted_at [name: 'IX_orders_deleted_at']
+  }
+  Note: 'Simplified vs original design — no order_number, created_by/confirmed_by/cancelled_by, delivery_address_snapshot, order_date, target_delivery_date, subtotal_amount, or cutoff_at.'
+}
+
+Table order_items {
+  id                    uuid          [pk]
+  order_id              uuid          [not null]
+  market_product_id     uuid          [not null]
+  product_name_snapshot varchar(200)  [not null]
+  quantity              integer       [not null]
+  unit_price            decimal(12,2) [not null]
+  locked_unit_price     decimal(12,2) [note: 'Set when order is confirmed.']
+  locked_total          decimal(14,2)
+  actual_quantity       decimal(10,2)
+  created_at            timestamp     [not null]
+  updated_at            timestamp     [not null]
+
+  Indexes {
+    order_id [name: 'idx_order_items_order_id']
+    market_product_id [name: 'idx_order_items_market_product_id']
+  }
+  Note: 'No product_unit_snapshot, market_name_snapshot, actual_unit_price, or special_notes in the implemented model.'
+}
+
+Table scheduled_orders {
+  id               uuid          [pk]
+  restaurant_id    uuid          [not null]
+  recurrence_type  varchar(20)   [not null, note: 'Daily | Weekly (stored verbatim via EF HasConversion<string>(); no DB CHECK).']
+  first_run_at     timestamp     [not null]
+  last_executed_at timestamp
+  cancelled_at     timestamp
+  notes            text
+  created_at       timestamp     [not null]
+  updated_at       timestamp     [not null]
+  deleted_at       timestamp
+
+  Indexes {
+    restaurant_id [name: 'idx_scheduled_orders_restaurant_id']
+    deleted_at [name: 'IX_scheduled_orders_deleted_at']
+  }
+  Note: 'No created_by_user_id, name, weekdays, items_json, next_run_at, timezone, or is_active in the implemented model.'
+}
+
+// ---------- B2B Credit / Công nợ (Orders module) ----------
+// Replaces the original Payment & Billing context (invoices/payments/refunds).
+
+Table restaurant_credit {
+  restaurant_id       uuid          [pk]
+  credit_limit        decimal(14,2) [not null]
+  outstanding_balance decimal(14,2) [not null]
+  updated_at          timestamp     [not null, note: 'Concurrency token.']
+
+  Note: '1:1 credit account per restaurant.'
+}
+
+Table credit_transactions {
+  id            uuid          [pk]
+  restaurant_id uuid          [not null]
+  order_id      uuid          [note: 'Nullable.']
+  type          varchar(20)   [not null, note: 'charge | settlement | refund | adjustment (stored lowercase via EF).']
+  amount        decimal(14,2) [not null]
+  balance_after decimal(14,2) [not null]
+  note          varchar(500)
+  created_at    timestamp     [not null]
+
+  Indexes {
+    restaurant_id [name: 'idx_credit_transactions_restaurant_id']
+    order_id [name: 'idx_credit_transactions_order_id']
+    created_at [name: 'idx_credit_transactions_created_at']
+  }
+  Note: 'Append-only ledger of credit movements.'
+}
+
+Table order_issues {
+  id                uuid          [pk]
+  order_id          uuid          [not null]
+  order_item_id     uuid          [note: 'Nullable. FK -> order_items (ON DELETE SET NULL).']
+  issue_type        varchar(20)   [not null, note: 'missing | wrong | damaged (stored lowercase via EF).']
+  affected_quantity decimal(10,2) [not null]
+  description       varchar(1000) [not null]
+  status            varchar(20)   [not null, note: 'open | resolved (stored lowercase via EF).']
+  reported_by       uuid          [not null]
+  resolved_at       timestamp
+  created_at        timestamp     [not null]
+  updated_at        timestamp     [not null]
+  deleted_at        timestamp
+
+  Indexes {
+    order_id [name: 'idx_order_issues_order_id']
+    order_item_id [name: 'idx_order_issues_order_item_id']
+    status [name: 'idx_order_issues_status']
+    deleted_at [name: 'idx_order_issues_deleted_at']
+  }
+  Note: 'NEW vs original design. Receipt/discrepancy reports against delivered orders.'
+}
+
+// ---------- AI Shopping Assistant (API host) ----------
+
+Table assistant_conversations {
+  id          uuid          [pk]
+  user_id     uuid          [not null]
+  market_id   uuid          [note: 'Nullable.']
+  session_id  varchar(128)  [unique, not null]
+  state       jsonb         [not null]
+  expires_at  timestamp     [not null]
+  created_at  timestamp     [not null]
+  updated_at  timestamp     [not null]
+
+  Indexes {
+    expires_at
+  }
+  Note: 'NEW. DB-backed conversation store for the AI assistant (TTL via expires_at). user_id/market_id are logical IDs only; no DB-level FK.'
 }
 
 // ======================
-// ENUMS
+// PART A — REFERENCES
+// Only enforced DB FKs are modeled as Ref lines below, except the two documented
+// logical 1:1 Auth profile links. Keep non-enforced logical IDs in column notes.
 // ======================
 
-Enum user_status {
-  ACTIVE
-  SUSPENDED
-  DELETED
-}
+Ref: users.role_id > roles.id
+Ref: refresh_tokens.user_id > users.id [delete: cascade]
+Ref: refresh_tokens.replaced_by_token_id > refresh_tokens.id [delete: set null]
+Ref: password_reset_tokens.user_id > users.id [delete: cascade]
+Ref: verification_codes.user_id > users.id [delete: cascade]
+Ref: user_market_assignments.user_id > users.id [delete: cascade]
+Ref: user_market_assignments.market_id > markets.id [delete: cascade]
+Ref: driver_profiles.user_id - users.id [note: 'Logical 1:1 (unique user_id); no DB-level FK.']
+Ref: restaurants.user_id - users.id [note: 'Logical 1:1 (unique user_id); no DB-level FK enforced.']
+Ref: delivery_addresses.restaurant_id > restaurants.id [delete: cascade]
 
-Enum restaurant_status {
-  PENDING_APPROVAL
-  ACTIVE
-  SUSPENDED
-  DELETED
-}
+Ref: products.category_id > product_categories.id [delete: set null]
+Ref: products.unit_id > units_of_measurement.id [delete: restrict]
+Ref: price_snapshots.market_product_id > market_products.id [delete: cascade]
 
-Enum verification_channel {
-  EMAIL
-  PHONE
-}
+Ref: orders.restaurant_id > restaurants.id [delete: restrict]
+Ref: order_items.order_id > orders.id [delete: cascade]
+Ref: order_items.market_product_id > market_products.id [delete: restrict]
+Ref: scheduled_orders.restaurant_id > restaurants.id [delete: restrict]
 
-Enum order_status {
-  DRAFT
-  PAYMENT_PENDING
-  CONFIRMED
-  BATCHED
-  ASSIGNED_TO_AGENT
-  PICKED_UP
-  AT_HUB
-  SORTED
-  LOADED
-  DELIVERING
-  DELIVERED
-  PARTIALLY_DELIVERED
+Ref: order_issues.order_id > orders.id [delete: cascade]
+Ref: order_issues.order_item_id > order_items.id [delete: set null]
+Ref: order_issues.reported_by > users.id [delete: restrict]
+
+Ref: restaurant_credit.restaurant_id - restaurants.id [delete: restrict]
+Ref: credit_transactions.restaurant_id > restaurants.id [delete: restrict]
+Ref: credit_transactions.order_id > orders.id [delete: restrict]
+
+// ============================================================
+// PART B — PLANNED TABLES (design only — NOT yet in the database)
+// ============================================================
+// Retained from the original design suite for roadmap reference. Each table
+// below is [PLANNED]. Status columns are shown as their intended PostgreSQL
+// enum types; the actual implementation may instead use varchar like Part A.
+
+Enum order_group_status {
+  OPEN
+  LOCKED
+  DISPATCHED
+  COMPLETED
   CANCELLED
-}
-
-Enum payment_status {
-  UNBILLED
-  INVOICED
-  PARTIALLY_PAID
-  PAID
-  OVERDUE
-  REFUNDED
 }
 
 Enum invoice_status {
@@ -91,19 +504,6 @@ Enum refund_status {
   PENDING
   COMPLETED
   FAILED
-}
-
-Enum order_group_status {
-  OPEN
-  LOCKED
-  DISPATCHED
-  COMPLETED
-  CANCELLED
-}
-
-Enum recurring_frequency {
-  DAILY
-  WEEKLY
 }
 
 Enum procurement_status {
@@ -194,736 +594,394 @@ Enum export_job_status {
   FAILED
 }
 
-// ============================================================
-// CONTEXT 1: IDENTITY & ACCESS
-// ============================================================
-
-Table roles {
-  id uuid [pk, default: `gen_random_uuid()`]
-  name varchar(50) [unique, not null]
-  description text
-  is_active boolean [not null, default: true]
-  created_at timestamp [not null, default: `now()`]
-
-  Note: 'Simple role lookup table. No permissions table in v1. Each user has exactly one global role.'
-}
-
-Table users {
-  id uuid [pk, default: `gen_random_uuid()`]
-  email varchar(255) [unique, not null]
-  phone varchar(20) [unique, note: 'Nullable. PostgreSQL UNIQUE still allows multiple NULL values. Used for phone login when present.']
-  password_hash varchar(255) [not null]
-  full_name varchar(100) [not null]
-  role_id uuid [not null]
-  status user_status [not null, default: 'ACTIVE']
-  failed_login_count int [not null, default: 0]
-  locked_until timestamp
-  email_verified_at timestamp
-  phone_verified_at timestamp
-  last_login_at timestamp
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-  deleted_at timestamp
-
-  Indexes {
-    (role_id, status) [name: 'idx_users_role_status']
-    locked_until [name: 'idx_users_locked_until']
-  }
-}
-
-Table refresh_tokens {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null]
-  token_hash varchar(255) [unique, not null]
-  family_id uuid [not null, note: 'Token family for refresh-token rotation and reuse detection.']
-  expires_at timestamp [not null]
-  revoked_at timestamp
-  replaced_by_token_id uuid
-  created_at timestamp [not null, default: `now()`]
-  created_by_ip_hash varchar(255)
-  user_agent text
-
-  Indexes {
-    (user_id, revoked_at) [name: 'idx_refresh_tokens_user_revoked']
-    family_id [name: 'idx_refresh_tokens_family']
-    expires_at [name: 'idx_refresh_tokens_expires']
-  }
-}
-
-Table password_reset_tokens {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null]
-  channel verification_channel [not null]
-  target varchar(255) [not null, note: 'Email address or phone number used for the reset request.']
-  token_hash varchar(255) [unique, not null]
-  expires_at timestamp [not null]
-  used_at timestamp
-  created_at timestamp [not null, default: `now()`]
-  requested_ip_hash varchar(255)
-
-  Indexes {
-    (user_id, expires_at) [name: 'idx_password_reset_user_expires']
-    (target, channel) [name: 'idx_password_reset_target_channel']
-  }
-}
-
-Table verification_codes {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null]
-  channel verification_channel [not null]
-  target varchar(255) [not null, note: 'Email address or phone number being verified.']
-  code_hash varchar(255) [not null]
-  expires_at timestamp [not null]
-  used_at timestamp
-  created_at timestamp [not null, default: `now()`]
-
-  Indexes {
-    (user_id, channel, used_at) [name: 'idx_verification_user_channel']
-    (target, channel, used_at) [name: 'idx_verification_target_channel']
-  }
-}
-
-Table user_market_assignments {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null, note: 'User must have MARKET_AGENT or KIOSK_STAFF role at application level.']
-  market_id uuid [not null]
-  assigned_by uuid
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-
-  Indexes {
-    (user_id, market_id) [unique, name: 'uq_user_market_assignment']
-    user_id [name: 'idx_uma_user']
-    market_id [name: 'idx_uma_market']
-  }
-}
-
-// ============================================================
-// CONTEXT 2: RESTAURANT PROFILE
-// ============================================================
-
-Table restaurants {
-  id uuid [pk, default: `gen_random_uuid()`]
-  name varchar(200) [not null]
-  business_registration varchar(50)
-  address_line varchar(255) [not null]
-  district varchar(50) [not null]
-  delivery_zone varchar(50) [not null, note: 'Used for order grouping and route planning.']
-  latitude decimal(10,7)
-  longitude decimal(10,7)
-  contact_phone varchar(20)
-  preferred_delivery_window_start time
-  preferred_delivery_window_end time
-  status restaurant_status [not null, default: 'PENDING_APPROVAL']
-  approved_at timestamp
-  approved_by uuid
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-  deleted_at timestamp
-
-  Indexes {
-    status [name: 'idx_restaurants_status']
-    delivery_zone [name: 'idx_restaurants_delivery_zone']
-  }
-
-  Note: 'A restaurant can have many users through restaurant_members. User role remains global.'
-}
-
 Table restaurant_members {
-  id uuid [pk, default: `gen_random_uuid()`]
-  restaurant_id uuid [not null]
-  user_id uuid [not null, note: 'User role is stored in users.role_id. No per-restaurant role in v1.']
-  is_active boolean [not null, default: true]
-  joined_at timestamp [not null, default: `now()`]
-  left_at timestamp
-  invited_by uuid
+  id            uuid      [pk, default: `gen_random_uuid()`]
+  restaurant_id uuid      [not null]
+  user_id       uuid      [not null]
+  is_active     boolean   [not null, default: true]
+  joined_at     timestamp [not null, default: `now()`]
+  left_at       timestamp
+  invited_by    uuid
 
   Indexes {
     (restaurant_id, user_id) [unique, name: 'uq_restaurant_user']
     user_id [name: 'idx_restaurant_members_user']
-    (restaurant_id, is_active) [name: 'idx_restaurant_members_active']
   }
-}
-
-// ============================================================
-// CONTEXT 3: CATALOG & PRICING
-// ============================================================
-
-Table categories {
-  id uuid [pk, default: `gen_random_uuid()`]
-  name varchar(100) [unique, not null]
-  display_order int [not null, default: 0]
-  is_active boolean [not null, default: true]
-}
-
-Table products {
-  id uuid [pk, default: `gen_random_uuid()`]
-  category_id uuid [not null]
-  name varchar(200) [not null]
-  unit_of_measure varchar(20) [not null, note: 'kg, bunch, piece, box, etc.']
-  description text
-  image_url varchar(500)
-  is_active boolean [not null, default: true]
-  created_by uuid
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-  deleted_at timestamp
-
-  Indexes {
-    category_id [name: 'idx_products_category']
-    is_active [name: 'idx_products_active']
-  }
-}
-
-Table markets {
-  id uuid [pk, default: `gen_random_uuid()`]
-  code varchar(20) [unique, not null, note: 'HM, BD, TD']
-  name varchar(100) [not null]
-  address varchar(255)
-  latitude decimal(10,7)
-  longitude decimal(10,7)
-  operating_hours_start time
-  operating_hours_end time
-  is_active boolean [not null, default: true]
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-  deleted_at timestamp
-}
-
-Table market_products {
-  id uuid [pk, default: `gen_random_uuid()`]
-  market_id uuid [not null]
-  product_id uuid [not null]
-  current_price decimal(12,2) [not null, note: 'VND. Must be >= 0.']
-  current_quantity decimal(10,2) [not null, default: 0]
-  reserved_quantity decimal(10,2) [not null, default: 0, note: 'Soft reservation. Available quantity is computed by application.']
-  updated_by uuid
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-
-  Indexes {
-    (market_id, product_id) [unique, name: 'uq_market_product']
-    market_id [name: 'idx_market_products_market']
-    product_id [name: 'idx_market_products_product']
-  }
-}
-
-Table price_snapshots {
-  id uuid [pk, default: `gen_random_uuid()`]
-  market_product_id uuid [not null]
-  price decimal(12,2) [not null]
-  quantity decimal(10,2) [not null]
-  recorded_by_user_id uuid [note: 'Market Agent user. Nullable only if user is deleted and history is preserved.']
-  recorded_at timestamp [not null, default: `now()`]
-
-  Indexes {
-    (market_product_id, recorded_at) [name: 'idx_price_snapshots_lookup']
-    recorded_by_user_id [name: 'idx_price_snapshots_actor']
-  }
-
-  Note: 'Append-only price history. Prefer monthly partitioning on recorded_at in PostgreSQL.'
+  Note: '[PLANNED] Multi-user restaurants. Conflicts with the current 1:1 restaurants↔users model.'
 }
 
 Table price_alert_subscriptions {
-  id uuid [pk, default: `gen_random_uuid()`]
-  restaurant_id uuid [not null]
-  product_id uuid [not null]
-  threshold_percentage decimal(5,2) [not null]
-  is_active boolean [not null, default: true]
-  created_at timestamp [not null, default: `now()`]
+  id                   uuid          [pk, default: `gen_random_uuid()`]
+  restaurant_id        uuid          [not null]
+  product_id           uuid          [not null]
+  threshold_percentage decimal(5,2)  [not null]
+  is_active            boolean       [not null, default: true]
+  created_at           timestamp     [not null, default: `now()`]
+
+  Note: '[PLANNED]'
 }
 
 Table system_config {
-  id uuid [pk, default: `gen_random_uuid()`]
-  key varchar(100) [unique, not null]
-  value text [not null]
+  id          uuid         [pk, default: `gen_random_uuid()`]
+  key         varchar(100) [unique, not null]
+  value       text         [not null]
   description text
-  updated_by uuid
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-}
+  updated_by  uuid
+  created_at  timestamp    [not null, default: `now()`]
+  updated_at  timestamp    [not null, default: `now()`]
 
-// ============================================================
-// CONTEXT 4: ORDER
-// ============================================================
+  Note: '[PLANNED]'
+}
 
 Table order_groups {
-  id uuid [pk, default: `gen_random_uuid()`]
-  name varchar(200)
-  status order_group_status [not null, default: 'OPEN']
-  grouped_by uuid
-  total_orders int [not null, default: 0]
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-  deleted_at timestamp
-}
+  id           uuid               [pk, default: `gen_random_uuid()`]
+  name         varchar(200)
+  status       order_group_status [not null, default: 'OPEN']
+  grouped_by   uuid
+  total_orders int                [not null, default: 0]
+  created_at   timestamp          [not null, default: `now()`]
+  updated_at   timestamp          [not null, default: `now()`]
+  deleted_at   timestamp
 
-Table scheduled_orders {
-  id uuid [pk, default: `gen_random_uuid()`]
-  restaurant_id uuid [not null]
-  created_by_user_id uuid [not null]
-  name varchar(200) [not null]
-  frequency recurring_frequency [not null]
-  weekdays "int[]" [note: 'For weekly recurrence, e.g. [1,3,5] = Mon/Wed/Fri.']
-  items_json jsonb [not null]
-  first_run_at timestamp [not null]
-  next_run_at timestamp [not null]
-  last_executed_at timestamp
-  timezone varchar(64) [not null, default: 'Asia/Ho_Chi_Minh']
-  is_active boolean [not null, default: true]
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-
-  Indexes {
-    (restaurant_id, is_active) [name: 'idx_scheduled_orders_restaurant_active']
-    next_run_at [name: 'idx_scheduled_orders_next_run']
-  }
-}
-
-Table orders {
-  id uuid [pk, default: `gen_random_uuid()`]
-  order_number varchar(50) [unique, not null, note: 'Example: FF-20260601-0001']
-  restaurant_id uuid [not null]
-  order_group_id uuid
-  scheduled_order_id uuid
-  created_by_user_id uuid [not null, note: 'Restaurant staff or manager who created the order.']
-  confirmed_by_user_id uuid [note: 'Usually RESTAURANT_MANAGER.']
-  cancelled_by_user_id uuid
-  delivery_address_snapshot jsonb [not null]
-  order_date date [not null]
-  target_delivery_date date [not null]
-  status order_status [not null, default: 'DRAFT']
-  payment_status payment_status [not null, default: 'UNBILLED']
-  subtotal_amount decimal(14,2) [not null, default: 0]
-  total_amount decimal(14,2) [not null, default: 0]
-  cutoff_at timestamp [not null, note: 'Daily order cutoff, usually 22:00 local time.']
-  notes text
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-  confirmed_at timestamp
-  delivered_at timestamp
-  cancelled_at timestamp
-  deleted_at timestamp
-
-  Indexes {
-    restaurant_id [name: 'idx_orders_restaurant']
-    order_group_id [name: 'idx_orders_group']
-    scheduled_order_id [name: 'idx_orders_scheduled']
-    status [name: 'idx_orders_status']
-    payment_status [name: 'idx_orders_payment_status']
-    target_delivery_date [name: 'idx_orders_target_date']
-    created_by_user_id [name: 'idx_orders_creator']
-  }
-}
-
-Table order_items {
-  id uuid [pk, default: `gen_random_uuid()`]
-  order_id uuid [not null]
-  market_product_id uuid [not null]
-  product_name_snapshot varchar(200) [not null]
-  product_unit_snapshot varchar(20) [not null]
-  market_name_snapshot varchar(100)
-  quantity decimal(10,2) [not null]
-  unit_price decimal(12,2) [not null, note: 'Current price at DRAFT/order creation time.']
-  locked_unit_price decimal(12,2) [note: 'Set when order is confirmed.']
-  locked_total decimal(14,2)
-  actual_quantity decimal(10,2)
-  actual_unit_price decimal(12,2)
-  special_notes text
+  Note: '[PLANNED] orders.order_group_id already exists as a nullable column reserved for this.'
 }
 
 Table order_status_history {
-  id uuid [pk, default: `gen_random_uuid()`]
-  order_id uuid [not null]
-  from_status order_status
-  to_status order_status [not null]
-  changed_by_user_id uuid [note: 'Null if changed by system job.']
-  reason text
-  changed_at timestamp [not null, default: `now()`]
+  id                 uuid         [pk, default: `gen_random_uuid()`]
+  order_id           uuid         [not null]
+  from_status        varchar(20)
+  to_status          varchar(20)  [not null]
+  changed_by_user_id uuid
+  reason             text
+  changed_at         timestamp    [not null, default: `now()`]
 
-  Indexes {
-    order_id [name: 'idx_status_history_order']
-  }
+  Note: '[PLANNED]'
 }
 
-// ============================================================
-// CONTEXT 5: PAYMENT & BILLING
-// ============================================================
-
 Table invoices {
-  id uuid [pk, default: `gen_random_uuid()`]
-  invoice_number varchar(50) [unique, not null]
-  restaurant_id uuid [not null]
+  id                  uuid          [pk, default: `gen_random_uuid()`]
+  invoice_number      varchar(50)   [unique, not null]
+  restaurant_id       uuid          [not null]
   billing_period_start date
-  billing_period_end date
-  subtotal_amount decimal(14,2) [not null]
-  tax_amount decimal(14,2) [not null, default: 0]
-  total_amount decimal(14,2) [not null]
-  status invoice_status [not null, default: 'DRAFT']
-  due_date date
-  pdf_url varchar(500)
-  issued_at timestamp
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+  billing_period_end  date
+  subtotal_amount     decimal(14,2) [not null]
+  tax_amount          decimal(14,2) [not null, default: 0]
+  total_amount        decimal(14,2) [not null]
+  status              invoice_status [not null, default: 'DRAFT']
+  due_date            date
+  pdf_url             varchar(500)
+  issued_at           timestamp
+  created_at          timestamp     [not null, default: `now()`]
+  updated_at          timestamp     [not null, default: `now()`]
 
-  Note: 'Supports both one-order invoices and periodic B2B billing invoices.'
+  Note: '[PLANNED] Superseded for now by restaurant_credit + credit_transactions.'
 }
 
 Table invoice_orders {
-  invoice_id uuid [not null]
-  order_id uuid [not null]
-  amount decimal(14,2) [not null]
+  invoice_id uuid          [not null]
+  order_id   uuid          [not null]
+  amount     decimal(14,2) [not null]
 
   Indexes {
     (invoice_id, order_id) [pk]
-    order_id [name: 'idx_invoice_orders_order']
   }
+  Note: '[PLANNED]'
 }
 
 Table payments {
-  id uuid [pk, default: `gen_random_uuid()`]
-  invoice_id uuid [not null]
-  restaurant_id uuid [not null, note: 'Denormalized for query speed.']
-  amount decimal(14,2) [not null]
-  payment_method payment_method_enum [not null]
+  id                     uuid             [pk, default: `gen_random_uuid()`]
+  invoice_id             uuid             [not null]
+  restaurant_id          uuid             [not null]
+  amount                 decimal(14,2)    [not null]
+  payment_method         payment_method_enum [not null]
   gateway_transaction_id varchar(255)
-  status payment_txn_state [not null, default: 'PENDING']
-  gateway_response jsonb
-  paid_at timestamp
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+  status                 payment_txn_state [not null, default: 'PENDING']
+  gateway_response       jsonb
+  paid_at                timestamp
+  created_at             timestamp        [not null, default: `now()`]
+  updated_at             timestamp        [not null, default: `now()`]
 
-  Indexes {
-    invoice_id [name: 'idx_payments_invoice']
-    restaurant_id [name: 'idx_payments_restaurant']
-    status [name: 'idx_payments_status']
-  }
+  Note: '[PLANNED] Per-gateway payment design; superseded by B2B credit model in v1.'
 }
 
 Table refunds {
-  id uuid [pk, default: `gen_random_uuid()`]
-  payment_id uuid [not null]
-  order_id uuid [not null]
-  reason varchar(255) [not null, note: 'hub_shortage, hub_damage, customer_cancel, system']
-  amount decimal(14,2) [not null]
-  status refund_status [not null, default: 'PENDING']
+  id         uuid          [pk, default: `gen_random_uuid()`]
+  payment_id uuid          [not null]
+  order_id   uuid          [not null]
+  reason     varchar(255)  [not null]
+  amount     decimal(14,2) [not null]
+  status     refund_status [not null, default: 'PENDING']
   refunded_at timestamp
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+  created_at timestamp     [not null, default: `now()`]
+  updated_at timestamp     [not null, default: `now()`]
 
-  Indexes {
-    payment_id [name: 'idx_refunds_payment']
-    order_id [name: 'idx_refunds_order']
-  }
+  Note: '[PLANNED]'
 }
 
-// ============================================================
-// CONTEXT 6: PROCUREMENT
-// ============================================================
-
 Table procurement_batches {
-  id uuid [pk, default: `gen_random_uuid()`]
+  id             uuid               [pk, default: `gen_random_uuid()`]
   order_group_id uuid
-  batch_date date [not null]
-  status procurement_status [not null, default: 'PLANNING']
-  total_orders int [not null, default: 0]
-  created_at timestamp [not null, default: `now()`]
-  completed_at timestamp
+  batch_date     date               [not null]
+  status         procurement_status [not null, default: 'PLANNING']
+  total_orders   int                [not null, default: 0]
+  created_at     timestamp          [not null, default: `now()`]
+  completed_at   timestamp
+
+  Note: '[PLANNED]'
 }
 
 Table procurement_orders {
-  id uuid [pk, default: `gen_random_uuid()`]
-  batch_id uuid [not null]
-  agent_user_id uuid [not null]
-  market_id uuid [not null]
-  status proc_order_status [not null, default: 'ASSIGNED']
-  started_at timestamp
+  id           uuid             [pk, default: `gen_random_uuid()`]
+  batch_id     uuid             [not null]
+  agent_user_id uuid            [not null]
+  market_id    uuid             [not null]
+  status       proc_order_status [not null, default: 'ASSIGNED']
+  started_at   timestamp
   completed_at timestamp
-  created_at timestamp [not null, default: `now()`]
+  created_at   timestamp        [not null, default: `now()`]
 
-  Indexes {
-    agent_user_id [name: 'idx_procurement_orders_agent']
-    market_id [name: 'idx_procurement_orders_market']
-  }
+  Note: '[PLANNED]'
 }
 
 Table procurement_items {
-  id uuid [pk, default: `gen_random_uuid()`]
-  procurement_order_id uuid [not null]
-  market_product_id uuid [not null]
-  target_quantity decimal(10,2) [not null]
-  actual_quantity decimal(10,2)
-  actual_unit_price decimal(12,2)
-  source_order_ids "uuid[]" [not null, note: 'Order IDs served by this procurement item.']
+  id                  uuid          [pk, default: `gen_random_uuid()`]
+  procurement_order_id uuid         [not null]
+  market_product_id   uuid          [not null]
+  target_quantity     decimal(10,2) [not null]
+  actual_quantity     decimal(10,2)
+  actual_unit_price   decimal(12,2)
+  source_order_ids    "uuid[]"      [not null]
+
+  Note: '[PLANNED]'
 }
 
-// ============================================================
-// CONTEXT 7: HUB OPERATIONS
-// ============================================================
-
 Table hubs {
-  id uuid [pk, default: `gen_random_uuid()`]
-  code varchar(20) [unique, not null]
-  name varchar(100) [not null]
-  address varchar(255)
-  latitude decimal(10,7)
-  longitude decimal(10,7)
-  status hub_status [not null, default: 'ACTIVE']
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-  deleted_at timestamp
+  id          uuid         [pk, default: `gen_random_uuid()`]
+  code        varchar(20)  [unique, not null]
+  name        varchar(100) [not null]
+  address     varchar(255)
+  latitude    decimal(10,7)
+  longitude   decimal(10,7)
+  status      hub_status   [not null, default: 'ACTIVE']
+  created_at  timestamp    [not null, default: `now()`]
+  updated_at  timestamp    [not null, default: `now()`]
+  deleted_at  timestamp
+
+  Note: '[PLANNED]'
 }
 
 Table hub_inventory {
-  id uuid [pk, default: `gen_random_uuid()`]
-  hub_id uuid [not null]
-  market_product_id uuid [not null]
-  quantity_in decimal(10,2) [not null, default: 0]
-  quantity_out decimal(10,2) [not null, default: 0]
-  quantity_available decimal(10,2) [not null, default: 0, note: 'Maintained by application or generated column in PostgreSQL.']
-  updated_at timestamp [not null, default: `now()`]
+  id                 uuid          [pk, default: `gen_random_uuid()`]
+  hub_id             uuid          [not null]
+  market_product_id  uuid          [not null]
+  quantity_in        decimal(10,2) [not null, default: 0]
+  quantity_out       decimal(10,2) [not null, default: 0]
+  quantity_available decimal(10,2) [not null, default: 0]
+  updated_at         timestamp     [not null, default: `now()`]
 
   Indexes {
     (hub_id, market_product_id) [unique, name: 'uq_hub_inventory_item']
   }
+  Note: '[PLANNED]'
 }
 
 Table hub_receivings {
-  id uuid [pk, default: `gen_random_uuid()`]
-  hub_id uuid [not null]
-  procurement_order_id uuid [not null]
-  received_at timestamp [not null, default: `now()`]
-  hub_staff_user_id uuid [not null]
-  status hub_receiving_status [not null, default: 'IN_PROGRESS']
+  id                  uuid                 [pk, default: `gen_random_uuid()`]
+  hub_id              uuid                 [not null]
+  procurement_order_id uuid                [not null]
+  received_at         timestamp            [not null, default: `now()`]
+  hub_staff_user_id   uuid                 [not null]
+  status              hub_receiving_status [not null, default: 'IN_PROGRESS']
+
+  Note: '[PLANNED]'
 }
 
 Table hub_receiving_items {
-  id uuid [pk, default: `gen_random_uuid()`]
-  hub_receiving_id uuid [not null]
-  market_product_id uuid [not null]
-  expected_quantity decimal(10,2) [not null]
-  received_quantity decimal(10,2) [not null]
-  condition_status item_condition [not null, default: 'OK']
-  notes text
+  id                uuid           [pk, default: `gen_random_uuid()`]
+  hub_receiving_id  uuid           [not null]
+  market_product_id uuid           [not null]
+  expected_quantity decimal(10,2)  [not null]
+  received_quantity decimal(10,2)  [not null]
+  condition_status  item_condition [not null, default: 'OK']
+  notes             text
+
+  Note: '[PLANNED]'
 }
 
 Table hub_outbound_events {
-  id uuid [pk, default: `gen_random_uuid()`]
-  hub_id uuid [not null]
+  id                  uuid          [pk, default: `gen_random_uuid()`]
+  hub_id              uuid          [not null]
   destination_route_id uuid
-  items jsonb [not null, default: `[]`]
-  total_quantity_kg decimal(10,2)
-  dispatched_at timestamp [not null, default: `now()`]
-  recorded_by uuid
-  created_at timestamp [not null, default: `now()`]
+  items               jsonb         [not null, default: `[]`]
+  total_quantity_kg   decimal(10,2)
+  dispatched_at       timestamp     [not null, default: `now()`]
+  recorded_by         uuid
+  created_at          timestamp     [not null, default: `now()`]
+
+  Note: '[PLANNED]'
 }
 
 Table cross_dock_transfers {
-  id uuid [pk, default: `gen_random_uuid()`]
-  hub_id uuid [not null]
-  hub_receiving_id uuid [not null]
-  outbound_route_id uuid [not null]
-  status varchar(20) [not null, default: 'PENDING']
-  notes text
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+  id               uuid         [pk, default: `gen_random_uuid()`]
+  hub_id           uuid         [not null]
+  hub_receiving_id uuid         [not null]
+  outbound_route_id uuid        [not null]
+  status           varchar(20)  [not null, default: 'PENDING']
+  notes            text
+  created_at       timestamp    [not null, default: `now()`]
+  updated_at       timestamp    [not null, default: `now()`]
+
+  Note: '[PLANNED]'
 }
 
-// ============================================================
-// CONTEXT 8: LOGISTICS & DELIVERY
-// ============================================================
-
 Table vehicles {
-  id uuid [pk, default: `gen_random_uuid()`]
-  license_plate varchar(20) [unique, not null]
-  capacity_kg decimal(8,2) [not null]
+  id           uuid           [pk, default: `gen_random_uuid()`]
+  license_plate varchar(20)   [unique, not null]
+  capacity_kg  decimal(8,2)   [not null]
   vehicle_type varchar(50)
-  status vehicle_status [not null, default: 'AVAILABLE']
+  status       vehicle_status [not null, default: 'AVAILABLE']
   registered_by uuid
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-  deleted_at timestamp
+  created_at   timestamp      [not null, default: `now()`]
+  updated_at   timestamp      [not null, default: `now()`]
+  deleted_at   timestamp
+
+  Note: '[PLANNED]'
 }
 
 Table delivery_routes {
-  id uuid [pk, default: `gen_random_uuid()`]
+  id                  uuid          [pk, default: `gen_random_uuid()`]
   procurement_batch_id uuid
-  order_group_id uuid
-  route_date date [not null]
-  driver_user_id uuid
-  vehicle_id uuid
-  total_stops int [not null, default: 0]
+  order_group_id      uuid
+  route_date          date          [not null]
+  driver_user_id      uuid
+  vehicle_id          uuid
+  total_stops         int           [not null, default: 0]
   estimated_duration_minutes int
   estimated_distance_km decimal(8,2)
   optimization_metadata jsonb
-  status route_status [not null, default: 'PLANNED']
-  dispatched_at timestamp
-  completed_at timestamp
-  created_by uuid
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
-  deleted_at timestamp
+  status              route_status  [not null, default: 'PLANNED']
+  dispatched_at       timestamp
+  completed_at        timestamp
+  created_by          uuid
+  created_at          timestamp     [not null, default: `now()`]
+  updated_at          timestamp     [not null, default: `now()`]
+  deleted_at          timestamp
+
+  Note: '[PLANNED]'
 }
 
 Table route_stops {
-  id uuid [pk, default: `gen_random_uuid()`]
-  route_id uuid [not null]
-  sequence_number int [not null]
-  restaurant_id uuid [not null]
-  order_id uuid [not null]
+  id               uuid        [pk, default: `gen_random_uuid()`]
+  route_id         uuid        [not null]
+  sequence_number  int         [not null]
+  restaurant_id    uuid        [not null]
+  order_id         uuid        [not null]
   estimated_arrival_at timestamp
   actual_arrival_at timestamp
-  status stop_status [not null, default: 'PENDING']
+  status           stop_status [not null, default: 'PENDING']
 
   Indexes {
     (route_id, sequence_number) [unique, name: 'uq_route_stop_sequence']
     order_id [unique, name: 'uq_route_stop_order']
   }
-}
-
-Table driver_profiles {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [unique, not null]
-  license_number varchar(50)
-  current_vehicle_id uuid
-  status driver_status [not null, default: 'AVAILABLE']
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+  Note: '[PLANNED]'
 }
 
 Table deliveries {
-  id uuid [pk, default: `gen_random_uuid()`]
-  route_stop_id uuid [unique, not null]
-  order_id uuid [unique, not null]
-  driver_user_id uuid
-  status delivery_status [not null, default: 'PENDING']
-  departed_at timestamp
-  arrived_at timestamp
-  delivered_at timestamp
+  id                  uuid            [pk, default: `gen_random_uuid()`]
+  route_stop_id       uuid            [unique, not null]
+  order_id            uuid            [unique, not null]
+  driver_user_id      uuid
+  status              delivery_status [not null, default: 'PENDING']
+  departed_at         timestamp
+  arrived_at          timestamp
+  delivered_at        timestamp
   restaurant_confirmed_at timestamp
-  signature_url varchar(500)
-  failure_reason varchar(255)
-  current_latitude decimal(10,7)
-  current_longitude decimal(10,7)
+  signature_url       varchar(500)
+  failure_reason      varchar(255)
+  current_latitude    decimal(10,7)
+  current_longitude   decimal(10,7)
   last_location_updated_at timestamp
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+  created_at          timestamp       [not null, default: `now()`]
+  updated_at          timestamp       [not null, default: `now()`]
 
-  Indexes {
-    driver_user_id [name: 'idx_deliveries_driver']
-  }
+  Note: '[PLANNED]'
 }
 
-// ============================================================
-// CONTEXT 9: NOTIFICATIONS
-// ============================================================
-
 Table notifications {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null]
-  type notification_type [not null]
-  channel notification_channel [not null, default: 'IN_APP']
-  title varchar(200) [not null]
-  body text [not null]
+  id                  uuid                 [pk, default: `gen_random_uuid()`]
+  user_id             uuid                 [not null]
+  type                notification_type    [not null]
+  channel             notification_channel [not null, default: 'IN_APP']
+  title               varchar(200)         [not null]
+  body                text                 [not null]
   related_entity_type varchar(50)
-  related_entity_id uuid
-  sent_at timestamp
-  is_read boolean [not null, default: false]
-  read_at timestamp
-  metadata jsonb
-  created_at timestamp [not null, default: `now()`]
+  related_entity_id   uuid
+  sent_at             timestamp
+  is_read             boolean              [not null, default: false]
+  read_at             timestamp
+  metadata            jsonb
+  created_at          timestamp            [not null, default: `now()`]
 
-  Indexes {
-    (user_id, read_at) [name: 'idx_notifications_user_read']
-  }
+  Note: '[PLANNED]'
 }
 
 Table notification_templates {
-  id uuid [pk, default: `gen_random_uuid()`]
-  event_type varchar(50) [not null]
-  channel notification_channel [not null]
-  template_text text [not null]
-  is_active boolean [not null, default: true]
+  id            uuid                 [pk, default: `gen_random_uuid()`]
+  event_type    varchar(50)          [not null]
+  channel       notification_channel [not null]
+  template_text text                 [not null]
+  is_active     boolean              [not null, default: true]
 
   Indexes {
     (event_type, channel) [unique, name: 'uq_notification_template']
   }
+  Note: '[PLANNED]'
 }
 
-// ============================================================
-// CONTEXT 10: ANALYTICS
-// ============================================================
-
 Table analytics_aggregations {
-  id uuid [pk, default: `gen_random_uuid()`]
-  type varchar(100) [not null]
+  id           uuid      [pk, default: `gen_random_uuid()`]
+  type         varchar(100) [not null]
   period_start timestamp [not null]
-  period_end timestamp [not null]
-  data_json jsonb [not null]
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+  period_end   timestamp [not null]
+  data_json    jsonb     [not null]
+  created_at   timestamp [not null, default: `now()`]
+  updated_at   timestamp [not null, default: `now()`]
 
   Indexes {
     (type, period_start, period_end) [unique, name: 'uq_analytics_period']
   }
+  Note: '[PLANNED]'
 }
 
 Table export_jobs {
-  id uuid [pk, default: `gen_random_uuid()`]
-  requested_by uuid
-  export_type varchar(100) [not null]
-  status export_job_status [not null, default: 'PENDING']
-  parameters jsonb
-  file_path text
+  id            uuid             [pk, default: `gen_random_uuid()`]
+  requested_by  uuid
+  export_type   varchar(100)     [not null]
+  status        export_job_status [not null, default: 'PENDING']
+  parameters    jsonb
+  file_path     text
   error_message text
-  ready_at timestamp
-  expires_at timestamp
-  created_at timestamp [not null, default: `now()`]
-  updated_at timestamp [not null, default: `now()`]
+  ready_at      timestamp
+  expires_at    timestamp
+  created_at    timestamp        [not null, default: `now()`]
+  updated_at    timestamp        [not null, default: `now()`]
+
+  Note: '[PLANNED]'
 }
 
 // ======================
-// REFERENCES
+// PART B — REFERENCES (planned)
 // ======================
 
-Ref: users.role_id > roles.id
-Ref: refresh_tokens.user_id > users.id [delete: cascade]
-Ref: refresh_tokens.replaced_by_token_id > refresh_tokens.id [delete: set null]
-Ref: password_reset_tokens.user_id > users.id [delete: cascade]
-Ref: verification_codes.user_id > users.id [delete: cascade]
-Ref: user_market_assignments.user_id > users.id [delete: cascade]
-Ref: user_market_assignments.market_id > markets.id [delete: cascade]
-Ref: user_market_assignments.assigned_by > users.id [delete: set null]
-
-Ref: restaurants.approved_by > users.id [delete: set null]
 Ref: restaurant_members.restaurant_id > restaurants.id [delete: cascade]
 Ref: restaurant_members.user_id > users.id [delete: cascade]
-Ref: restaurant_members.invited_by > users.id [delete: set null]
-
-Ref: products.category_id > categories.id
-Ref: products.created_by > users.id [delete: set null]
-Ref: market_products.market_id > markets.id [delete: cascade]
-Ref: market_products.product_id > products.id [delete: cascade]
-Ref: market_products.updated_by > users.id [delete: set null]
-Ref: price_snapshots.market_product_id > market_products.id [delete: cascade]
-Ref: price_snapshots.recorded_by_user_id > users.id [delete: set null]
 Ref: price_alert_subscriptions.restaurant_id > restaurants.id [delete: cascade]
 Ref: price_alert_subscriptions.product_id > products.id [delete: cascade]
 Ref: system_config.updated_by > users.id [delete: set null]
 
 Ref: order_groups.grouped_by > users.id [delete: set null]
-Ref: scheduled_orders.restaurant_id > restaurants.id [delete: cascade]
-Ref: scheduled_orders.created_by_user_id > users.id [delete: restrict]
-Ref: orders.restaurant_id > restaurants.id [delete: restrict]
-Ref: orders.order_group_id > order_groups.id [delete: set null]
-Ref: orders.scheduled_order_id > scheduled_orders.id [delete: set null]
-Ref: orders.created_by_user_id > users.id [delete: restrict]
-Ref: orders.confirmed_by_user_id > users.id [delete: set null]
-Ref: orders.cancelled_by_user_id > users.id [delete: set null]
-Ref: order_items.order_id > orders.id [delete: cascade]
-Ref: order_items.market_product_id > market_products.id [delete: restrict]
 Ref: order_status_history.order_id > orders.id [delete: cascade]
-Ref: order_status_history.changed_by_user_id > users.id [delete: set null]
 
 Ref: invoices.restaurant_id > restaurants.id [delete: restrict]
 Ref: invoice_orders.invoice_id > invoices.id [delete: cascade]
@@ -949,7 +1007,6 @@ Ref: hub_receiving_items.hub_receiving_id > hub_receivings.id [delete: cascade]
 Ref: hub_receiving_items.market_product_id > market_products.id [delete: restrict]
 Ref: hub_outbound_events.hub_id > hubs.id [delete: restrict]
 Ref: hub_outbound_events.destination_route_id > delivery_routes.id [delete: set null]
-Ref: hub_outbound_events.recorded_by > users.id [delete: set null]
 Ref: cross_dock_transfers.hub_id > hubs.id [delete: restrict]
 Ref: cross_dock_transfers.hub_receiving_id > hub_receivings.id [delete: restrict]
 Ref: cross_dock_transfers.outbound_route_id > delivery_routes.id [delete: restrict]
@@ -959,12 +1016,9 @@ Ref: delivery_routes.procurement_batch_id > procurement_batches.id [delete: set 
 Ref: delivery_routes.order_group_id > order_groups.id [delete: set null]
 Ref: delivery_routes.driver_user_id > users.id [delete: set null]
 Ref: delivery_routes.vehicle_id > vehicles.id [delete: set null]
-Ref: delivery_routes.created_by > users.id [delete: set null]
 Ref: route_stops.route_id > delivery_routes.id [delete: cascade]
 Ref: route_stops.restaurant_id > restaurants.id [delete: restrict]
 Ref: route_stops.order_id > orders.id [delete: restrict]
-Ref: driver_profiles.user_id - users.id [delete: cascade]
-Ref: driver_profiles.current_vehicle_id > vehicles.id [delete: set null]
 Ref: deliveries.route_stop_id - route_stops.id [delete: restrict]
 Ref: deliveries.order_id - orders.id [delete: restrict]
 Ref: deliveries.driver_user_id > users.id [delete: set null]
@@ -976,52 +1030,68 @@ Ref: export_jobs.requested_by > users.id [delete: set null]
 // TABLE GROUPS
 // ======================
 
-TableGroup "1. Identity & Access" {
+TableGroup "A1. Identity & Access (implemented)" {
   roles
   users
   refresh_tokens
   password_reset_tokens
   verification_codes
   user_market_assignments
+  driver_profiles
 }
 
-TableGroup "2. Restaurant Profile" {
+TableGroup "A2. Restaurant Profile (implemented)" {
   restaurants
-  restaurant_members
+  delivery_addresses
 }
 
-TableGroup "3. Catalog & Pricing" {
-  categories
+TableGroup "A3. Catalog & Pricing (implemented)" {
+  product_categories
+  units_of_measurement
   products
   markets
   market_products
   price_snapshots
+}
+
+TableGroup "A4. Orders (implemented)" {
+  orders
+  order_items
+  scheduled_orders
+  order_issues
+}
+
+TableGroup "A5. Credit / Công nợ (implemented)" {
+  restaurant_credit
+  credit_transactions
+}
+
+TableGroup "A6. Assistant (implemented)" {
+  assistant_conversations
+}
+
+TableGroup "B1. Planned — Restaurant & Catalog" {
+  restaurant_members
   price_alert_subscriptions
   system_config
 }
 
-TableGroup "4. Order" {
+TableGroup "B2. Planned — Orders & Billing" {
   order_groups
-  scheduled_orders
-  orders
-  order_items
   order_status_history
-}
-
-TableGroup "5. Payment & Billing" {
   invoices
   invoice_orders
   payments
   refunds
 }
 
-TableGroup "6. Procurement" {
+TableGroup "B3. Planned — Procurement" {
   procurement_batches
   procurement_orders
   procurement_items
 }
 
-TableGroup "7. Hub Operations" {
+TableGroup "B4. Planned — Hub Operations" {
   hubs
   hub_inventory
   hub_receivings
@@ -1030,20 +1100,16 @@ TableGroup "7. Hub Operations" {
   cross_dock_transfers
 }
 
-TableGroup "8. Logistics & Delivery" {
+TableGroup "B5. Planned — Logistics & Delivery" {
   vehicles
   delivery_routes
   route_stops
-  driver_profiles
   deliveries
 }
 
-TableGroup "9. Notifications" {
+TableGroup "B6. Planned — Notifications & Analytics" {
   notifications
   notification_templates
-}
-
-TableGroup "10. Analytics" {
   analytics_aggregations
   export_jobs
 }
