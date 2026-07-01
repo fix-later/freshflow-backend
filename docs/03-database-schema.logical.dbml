@@ -1,0 +1,989 @@
+// FreshFlow LOGICAL ERD for dbdiagram.io
+//
+// Companion to the PHYSICAL model in 03-database-schema.dbml.
+// Reviewed against implementation on 2026-06-30.
+//
+// PURPOSE
+//   A technology-agnostic view of the domain: entities, business attributes,
+//   keys, and relationships. It answers "what data exists and how does it
+//   relate", NOT "how is it stored". Use the physical .dbml for column types,
+//   indexes, partitioning, DB defaults, and enforced FK delete rules.
+//
+// WHAT IS DELIBERATELY OMITTED (see physical model for these):
+//   - Physical data types / precision (varchar(n), decimal(p,s), jsonb, uuid[]).
+//     This file uses logical domains only: uuid, string, text, int, decimal,
+//     money, boolean, datetime, date, time, enum, json.
+//   - Index blocks, table partitioning, storage/concurrency notes.
+//   - DB-level defaults (gen_random_uuid(), now()) and FK ON DELETE actions.
+//   - Standard audit / soft-delete metadata. EVERY implemented entity carries
+//     created_at / updated_at (and deleted_at where soft-deletable). These are
+//     dropped from the logical view; only timestamps with domain meaning are
+//     kept (e.g. expires_at, cancelled_at, resolved_at, first_run_at).
+//   - Security material (password_hash, token_hash, code_hash) is reduced to
+//     the entity that owns it.
+//
+// LOGICAL vs PHYSICAL RELATIONSHIPS
+//   Unlike the physical file (which only draws relationships backed by a real
+//   DB foreign key), this logical model draws EVERY meaningful relationship,
+//   including ones the running database does not enforce. Non-enforced logical
+//   links are tagged "[logical only]" on the Ref line.
+//
+// A/B SPLIT mirrors the physical model:
+//   PART A = implemented domain (Auth, Catalog, Pricing, Orders, Assistant).
+//   PART B = planned design, not yet in the database.
+
+Project FreshFlow_Logical {
+  database_type: 'Logical'
+  Note: 'FreshFlow logical ERD. Domain entities and relationships independent of storage. Part A = implemented, Part B = planned. See 03-database-schema.dbml for the physical model.'
+}
+
+// ============================================================
+// LOGICAL ENUMS — PART A (stored as strings in the physical DB)
+// ============================================================
+
+Enum restaurant_status {
+  pending
+  active
+  suspended
+}
+
+Enum order_status {
+  Draft
+  Confirmed
+  Batched
+  PickedUp
+  AtHub
+  Delivering
+  Delivered
+  Cancelled
+}
+
+Enum order_payment_status {
+  NotApplicable
+  Outstanding
+  Settled
+  Waived
+}
+
+Enum recurrence_type {
+  Daily
+  Weekly
+}
+
+Enum credit_transaction_type {
+  charge
+  settlement
+  refund
+  adjustment
+}
+
+Enum order_issue_type {
+  missing
+  wrong
+  damaged
+}
+
+Enum order_issue_status {
+  open
+  resolved
+}
+
+Enum verification_channel {
+  email
+  phone
+}
+
+// ============================================================
+// PART A — IMPLEMENTED ENTITIES (logical)
+// ============================================================
+
+// ---------- Identity & Access ----------
+
+Table roles {
+  id          uuid    [pk]
+  name        string  [unique, not null]
+  description string  [not null]
+
+  Note: 'Global role lookup. One role per user.'
+}
+
+Table users {
+  id                uuid                [pk]
+  email             string              [not null]
+  phone             string              [note: 'Optional second login identifier.']
+  full_name         string
+  avatar_url        string
+  role_id           uuid                [not null]
+  is_active         boolean             [not null]
+  email_verified_at datetime
+
+  Note: 'Root user account. Account state is modeled by is_active + soft-delete, not a status enum.'
+}
+
+Table refresh_tokens {
+  id                   uuid       [pk]
+  user_id              uuid       [not null]
+  replaced_by_token_id uuid       [note: 'Rotation lineage (self-reference).']
+  expires_at           datetime   [not null]
+  revoked_at           datetime
+
+  Note: 'Rotating refresh token with reuse detection.'
+}
+
+Table password_reset_tokens {
+  id         uuid      [pk]
+  user_id    uuid      [not null]
+  expires_at datetime  [not null]
+  used_at    datetime
+}
+
+Table verification_codes {
+  id         uuid                 [pk]
+  user_id    uuid                 [not null]
+  channel    verification_channel [not null]
+  expires_at datetime             [not null]
+  used_at    datetime
+}
+
+Table user_market_assignments {
+  id          uuid  [pk]
+  user_id     uuid  [not null]
+  market_id   uuid  [not null]
+  assigned_by uuid  [note: 'User who made the assignment.']
+
+  Note: 'Which markets a staff user is assigned to (many-to-many bridge users <-> markets).'
+}
+
+Table driver_profiles {
+  id            uuid    [pk]
+  user_id       uuid    [unique, not null]
+  license_plate string
+  phone_number  string
+
+  Note: 'Extended profile for driver-role users. 1:1 with users.'
+}
+
+// ---------- Restaurant Profile ----------
+
+Table restaurants {
+  id             uuid              [pk]
+  user_id        uuid              [unique, not null]
+  name           string            [not null]
+  address        string
+  contact_person string
+  pickup_start   time
+  pickup_end     time
+  status         restaurant_status [not null]
+
+  Note: '1:1 with a user account (owner).'
+}
+
+Table delivery_addresses {
+  id            uuid     [pk]
+  restaurant_id uuid     [not null]
+  recipient_name string
+  phone         string
+  address_line  text     [not null]
+  latitude      decimal
+  longitude     decimal
+  is_default    boolean  [not null]
+
+  Note: 'Per-restaurant delivery addresses.'
+}
+
+// ---------- Catalog ----------
+
+Table product_categories {
+  id        uuid    [pk]
+  name      string  [not null]
+  is_active boolean [not null]
+}
+
+Table units_of_measurement {
+  id           uuid    [pk]
+  name         string  [not null]
+  abbreviation string
+  is_active    boolean [not null]
+
+  Note: 'Unit of measure for products (kg, bó, thùng, ...).'
+}
+
+Table products {
+  id          uuid    [pk]
+  category_id uuid    [note: 'Optional category.']
+  unit_id     uuid    [not null]
+  name        string  [not null]
+  description text
+  created_by  uuid    [note: 'User who created the product.']
+
+  Note: 'Master product catalog.'
+}
+
+// ---------- Market & Pricing ----------
+
+Table markets {
+  id        uuid    [pk]
+  name      string  [not null]
+  location  string
+  address   string
+  latitude  decimal
+  longitude decimal
+  is_active boolean [not null]
+
+  Note: 'Wholesale market / sourcing point.'
+}
+
+Table market_products {
+  id                uuid     [pk]
+  market_id         uuid     [not null]
+  product_id        uuid     [not null]
+  current_price     money    [not null]
+  current_quantity  int      [not null]
+  reserved_quantity int      [not null]
+  updated_by        uuid     [note: 'Market agent who last updated price/stock.']
+
+  Note: 'A product offered at a market with its live price and stock. Unique per (market, product).'
+}
+
+Table price_snapshots {
+  id                uuid     [pk]
+  market_product_id uuid     [not null]
+  price             money    [not null]
+  quantity          int      [not null]
+  recorded_by       uuid     [note: 'Market agent who recorded the snapshot.']
+  recorded_at       datetime [not null]
+
+  Note: 'Append-only price/stock history for a market product.'
+}
+
+// ---------- Orders ----------
+
+Table orders {
+  id                   uuid                 [pk]
+  restaurant_id        uuid                 [not null]
+  order_group_id       uuid                 [note: 'Optional grouping (planned order_groups).']
+  scheduled_order_id   uuid                 [note: 'Optional origin recurring order.']
+  status               order_status         [not null]
+  payment_status       order_payment_status [not null]
+  scheduled_for        datetime
+  confirmed_receipt_at datetime
+  total_amount         money                [not null]
+  notes                text
+  cancelled_at         datetime
+  cancellation_reason  text
+
+  Note: 'A restaurant purchase order.'
+}
+
+Table order_items {
+  id                    uuid    [pk]
+  order_id              uuid    [not null]
+  market_product_id     uuid    [not null]
+  product_name_snapshot string  [not null]
+  quantity              int     [not null]
+  unit_price            money   [not null]
+  locked_unit_price     money   [note: 'Price locked at confirmation.']
+  locked_total          money
+  actual_quantity       decimal [note: 'Quantity actually fulfilled.']
+
+  Note: 'Line item of an order.'
+}
+
+Table scheduled_orders {
+  id               uuid           [pk]
+  restaurant_id    uuid           [not null]
+  recurrence_type  recurrence_type [not null]
+  first_run_at     datetime       [not null]
+  last_executed_at datetime
+  cancelled_at     datetime
+  notes            text
+
+  Note: 'Recurring order template that generates orders.'
+}
+
+// ---------- B2B Credit / Công nợ ----------
+
+Table restaurant_credit {
+  restaurant_id       uuid  [pk]
+  credit_limit        money [not null]
+  outstanding_balance money [not null]
+
+  Note: '1:1 credit account per restaurant (B2B công nợ).'
+}
+
+Table credit_transactions {
+  id            uuid                    [pk]
+  restaurant_id uuid                    [not null]
+  order_id      uuid                    [note: 'Optional related order.']
+  type          credit_transaction_type [not null]
+  amount        money                   [not null]
+  balance_after money                   [not null]
+  note          string
+  created_at    datetime                [not null, note: 'Ledger event time (business-significant).']
+
+  Note: 'Append-only ledger of credit movements.'
+}
+
+Table order_issues {
+  id                uuid               [pk]
+  order_id          uuid               [not null]
+  order_item_id     uuid               [note: 'Optional specific line item.']
+  issue_type        order_issue_type   [not null]
+  affected_quantity decimal            [not null]
+  description       text               [not null]
+  status            order_issue_status [not null]
+  reported_by       uuid               [not null]
+  resolved_at       datetime
+
+  Note: 'Receipt / discrepancy report against a delivered order.'
+}
+
+// ---------- AI Shopping Assistant ----------
+
+Table assistant_conversations {
+  id         uuid     [pk]
+  user_id    uuid     [not null]
+  market_id  uuid     [note: 'Optional market context.']
+  session_id string   [unique, not null]
+  state      json     [not null]
+  expires_at datetime [not null]
+
+  Note: 'DB-backed AI assistant conversation with TTL (expires_at).'
+}
+
+// ======================
+// PART A — RELATIONSHIPS
+// ======================
+
+Ref: users.role_id > roles.id
+Ref: refresh_tokens.user_id > users.id
+Ref: refresh_tokens.replaced_by_token_id > refresh_tokens.id
+Ref: password_reset_tokens.user_id > users.id
+Ref: verification_codes.user_id > users.id
+Ref: user_market_assignments.user_id > users.id
+Ref: user_market_assignments.market_id > markets.id
+Ref: user_market_assignments.assigned_by > users.id [note: 'logical only']
+Ref: driver_profiles.user_id - users.id
+Ref: restaurants.user_id - users.id
+
+Ref: delivery_addresses.restaurant_id > restaurants.id
+
+Ref: products.category_id > product_categories.id
+Ref: products.unit_id > units_of_measurement.id
+Ref: products.created_by > users.id [note: 'logical only']
+
+Ref: market_products.market_id > markets.id
+Ref: market_products.product_id > products.id
+Ref: market_products.updated_by > users.id [note: 'logical only']
+Ref: price_snapshots.market_product_id > market_products.id
+Ref: price_snapshots.recorded_by > users.id [note: 'logical only']
+
+Ref: orders.restaurant_id > restaurants.id
+Ref: orders.scheduled_order_id > scheduled_orders.id [note: 'logical only']
+Ref: order_items.order_id > orders.id
+Ref: order_items.market_product_id > market_products.id
+Ref: scheduled_orders.restaurant_id > restaurants.id
+
+Ref: restaurant_credit.restaurant_id - restaurants.id
+Ref: credit_transactions.restaurant_id > restaurants.id
+Ref: credit_transactions.order_id > orders.id
+
+Ref: order_issues.order_id > orders.id
+Ref: order_issues.order_item_id > order_items.id
+Ref: order_issues.reported_by > users.id
+
+Ref: assistant_conversations.user_id > users.id [note: 'logical only']
+Ref: assistant_conversations.market_id > markets.id [note: 'logical only']
+
+// ============================================================
+// LOGICAL ENUMS — PART B (planned)
+// ============================================================
+
+Enum order_group_status {
+  OPEN
+  LOCKED
+  DISPATCHED
+  COMPLETED
+  CANCELLED
+}
+
+Enum invoice_status {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+Enum payment_method_enum {
+  VNPAY
+  MOMO
+  ZALOPAY
+  BANK_TRANSFER
+  CREDIT_TERM
+}
+
+Enum payment_txn_state {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+Enum refund_status {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+Enum procurement_status {
+  PLANNING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+Enum proc_order_status {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+Enum hub_status {
+  ACTIVE
+  INACTIVE
+}
+
+Enum hub_receiving_status {
+  IN_PROGRESS
+  COMPLETED
+  HAS_DISCREPANCY
+}
+
+Enum item_condition {
+  OK
+  DAMAGED
+  MISSING
+  PARTIAL
+}
+
+Enum vehicle_status {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+}
+
+Enum route_status {
+  PLANNED
+  DISPATCHED
+  COMPLETED
+  CANCELLED
+}
+
+Enum stop_status {
+  PENDING
+  ARRIVED
+  COMPLETED
+  FAILED
+}
+
+Enum delivery_status {
+  PENDING
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+}
+
+Enum notification_channel {
+  PUSH
+  SMS
+  IN_APP
+  EMAIL
+}
+
+Enum notification_type {
+  PRICE_ALERT
+  ORDER_STATUS
+  DELIVERY_UPDATE
+  PAYMENT
+  HUB_DISCREPANCY
+  SYSTEM
+}
+
+Enum export_job_status {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+// ============================================================
+// PART B — PLANNED ENTITIES (logical, design only)
+// ============================================================
+
+Table restaurant_members {
+  id            uuid    [pk]
+  restaurant_id uuid    [not null]
+  user_id       uuid    [not null]
+  is_active     boolean [not null]
+  joined_at     datetime [not null]
+  left_at       datetime
+  invited_by    uuid
+
+  Note: '[PLANNED] Multi-user restaurants. Conflicts with the current 1:1 restaurants<->users model.'
+}
+
+Table price_alert_subscriptions {
+  id                   uuid    [pk]
+  restaurant_id        uuid    [not null]
+  product_id           uuid    [not null]
+  threshold_percentage decimal [not null]
+  is_active            boolean [not null]
+
+  Note: '[PLANNED]'
+}
+
+Table system_config {
+  id          uuid   [pk]
+  key         string [unique, not null]
+  value       text   [not null]
+  description text
+  updated_by  uuid
+
+  Note: '[PLANNED]'
+}
+
+Table order_groups {
+  id           uuid               [pk]
+  name         string
+  status       order_group_status [not null]
+  grouped_by   uuid
+  total_orders int                [not null]
+
+  Note: '[PLANNED] orders.order_group_id is already reserved for this.'
+}
+
+Table order_status_history {
+  id                 uuid     [pk]
+  order_id           uuid     [not null]
+  from_status        string
+  to_status          string   [not null]
+  changed_by_user_id uuid
+  reason             text
+  changed_at         datetime [not null]
+
+  Note: '[PLANNED]'
+}
+
+Table invoices {
+  id                   uuid           [pk]
+  invoice_number       string         [unique, not null]
+  restaurant_id        uuid           [not null]
+  billing_period_start date
+  billing_period_end   date
+  subtotal_amount      money          [not null]
+  tax_amount           money          [not null]
+  total_amount         money          [not null]
+  status               invoice_status [not null]
+  due_date             date
+  issued_at            datetime
+
+  Note: '[PLANNED] Superseded for now by restaurant_credit + credit_transactions.'
+}
+
+Table invoice_orders {
+  invoice_id uuid  [not null]
+  order_id   uuid  [not null]
+  amount     money [not null]
+
+  Indexes {
+    (invoice_id, order_id) [pk]
+  }
+  Note: '[PLANNED]'
+}
+
+Table payments {
+  id                     uuid                [pk]
+  invoice_id             uuid                [not null]
+  restaurant_id          uuid                [not null]
+  amount                 money               [not null]
+  payment_method         payment_method_enum [not null]
+  gateway_transaction_id string
+  status                 payment_txn_state   [not null]
+  paid_at                datetime
+
+  Note: '[PLANNED] Per-gateway payment; superseded by B2B credit model in v1.'
+}
+
+Table refunds {
+  id          uuid          [pk]
+  payment_id  uuid          [not null]
+  order_id    uuid          [not null]
+  reason      string        [not null]
+  amount      money         [not null]
+  status      refund_status [not null]
+  refunded_at datetime
+
+  Note: '[PLANNED]'
+}
+
+Table procurement_batches {
+  id             uuid               [pk]
+  order_group_id uuid
+  batch_date     date               [not null]
+  status         procurement_status [not null]
+  total_orders   int                [not null]
+  completed_at   datetime
+
+  Note: '[PLANNED]'
+}
+
+Table procurement_orders {
+  id            uuid              [pk]
+  batch_id      uuid              [not null]
+  agent_user_id uuid              [not null]
+  market_id     uuid              [not null]
+  status        proc_order_status [not null]
+  started_at    datetime
+  completed_at  datetime
+
+  Note: '[PLANNED]'
+}
+
+Table procurement_items {
+  id                   uuid    [pk]
+  procurement_order_id uuid    [not null]
+  market_product_id    uuid    [not null]
+  target_quantity      decimal [not null]
+  actual_quantity      decimal
+  actual_unit_price    money
+  source_order_ids     json    [not null, note: 'Set of contributing order ids.']
+
+  Note: '[PLANNED]'
+}
+
+Table hubs {
+  id        uuid       [pk]
+  code      string     [unique, not null]
+  name      string     [not null]
+  address   string
+  latitude  decimal
+  longitude decimal
+  status    hub_status [not null]
+
+  Note: '[PLANNED]'
+}
+
+Table hub_inventory {
+  id                 uuid    [pk]
+  hub_id             uuid    [not null]
+  market_product_id  uuid    [not null]
+  quantity_in        decimal [not null]
+  quantity_out       decimal [not null]
+  quantity_available decimal [not null]
+
+  Note: '[PLANNED]'
+}
+
+Table hub_receivings {
+  id                   uuid                 [pk]
+  hub_id               uuid                 [not null]
+  procurement_order_id uuid                 [not null]
+  received_at          datetime             [not null]
+  hub_staff_user_id    uuid                 [not null]
+  status               hub_receiving_status [not null]
+
+  Note: '[PLANNED]'
+}
+
+Table hub_receiving_items {
+  id                uuid           [pk]
+  hub_receiving_id  uuid           [not null]
+  market_product_id uuid           [not null]
+  expected_quantity decimal        [not null]
+  received_quantity decimal        [not null]
+  condition_status  item_condition [not null]
+  notes             text
+
+  Note: '[PLANNED]'
+}
+
+Table hub_outbound_events {
+  id                   uuid     [pk]
+  hub_id               uuid     [not null]
+  destination_route_id uuid
+  items                json     [not null]
+  total_quantity_kg    decimal
+  dispatched_at        datetime [not null]
+  recorded_by          uuid
+
+  Note: '[PLANNED]'
+}
+
+Table cross_dock_transfers {
+  id               uuid   [pk]
+  hub_id           uuid   [not null]
+  hub_receiving_id uuid   [not null]
+  outbound_route_id uuid  [not null]
+  status           string [not null]
+  notes            text
+
+  Note: '[PLANNED]'
+}
+
+Table vehicles {
+  id            uuid           [pk]
+  license_plate string         [unique, not null]
+  capacity_kg   decimal        [not null]
+  vehicle_type  string
+  status        vehicle_status [not null]
+  registered_by uuid
+
+  Note: '[PLANNED]'
+}
+
+Table delivery_routes {
+  id                        uuid         [pk]
+  procurement_batch_id      uuid
+  order_group_id            uuid
+  route_date                date         [not null]
+  driver_user_id            uuid
+  vehicle_id                uuid
+  total_stops               int          [not null]
+  estimated_duration_minutes int
+  estimated_distance_km     decimal
+  status                    route_status [not null]
+  dispatched_at             datetime
+  completed_at              datetime
+  created_by                uuid
+
+  Note: '[PLANNED]'
+}
+
+Table route_stops {
+  id                   uuid        [pk]
+  route_id             uuid        [not null]
+  sequence_number      int         [not null]
+  restaurant_id        uuid        [not null]
+  order_id             uuid        [not null]
+  estimated_arrival_at datetime
+  actual_arrival_at    datetime
+  status               stop_status [not null]
+
+  Note: '[PLANNED]'
+}
+
+Table deliveries {
+  id                      uuid            [pk]
+  route_stop_id           uuid            [unique, not null]
+  order_id                uuid            [unique, not null]
+  driver_user_id          uuid
+  status                  delivery_status [not null]
+  departed_at             datetime
+  arrived_at              datetime
+  delivered_at            datetime
+  restaurant_confirmed_at datetime
+  failure_reason          string
+
+  Note: '[PLANNED]'
+}
+
+Table notifications {
+  id                  uuid                 [pk]
+  user_id             uuid                 [not null]
+  type                notification_type    [not null]
+  channel             notification_channel [not null]
+  title               string               [not null]
+  body                text                 [not null]
+  related_entity_type string
+  related_entity_id   uuid
+  sent_at             datetime
+  is_read             boolean              [not null]
+  read_at             datetime
+
+  Note: '[PLANNED]'
+}
+
+Table notification_templates {
+  id            uuid                 [pk]
+  event_type    string               [not null]
+  channel       notification_channel [not null]
+  template_text text                 [not null]
+  is_active     boolean              [not null]
+
+  Note: '[PLANNED]'
+}
+
+Table analytics_aggregations {
+  id           uuid     [pk]
+  type         string   [not null]
+  period_start datetime [not null]
+  period_end   datetime [not null]
+  data_json    json     [not null]
+
+  Note: '[PLANNED]'
+}
+
+Table export_jobs {
+  id           uuid              [pk]
+  requested_by uuid
+  export_type  string            [not null]
+  status       export_job_status [not null]
+  parameters   json
+  ready_at     datetime
+  expires_at   datetime
+
+  Note: '[PLANNED]'
+}
+
+// ======================
+// PART B — RELATIONSHIPS (planned)
+// ======================
+
+Ref: orders.order_group_id > order_groups.id [note: 'logical only']
+
+Ref: restaurant_members.restaurant_id > restaurants.id
+Ref: restaurant_members.user_id > users.id
+Ref: restaurant_members.invited_by > users.id [note: 'logical only']
+Ref: price_alert_subscriptions.restaurant_id > restaurants.id
+Ref: price_alert_subscriptions.product_id > products.id
+Ref: system_config.updated_by > users.id
+
+Ref: order_groups.grouped_by > users.id
+Ref: order_status_history.order_id > orders.id
+Ref: order_status_history.changed_by_user_id > users.id [note: 'logical only']
+
+Ref: invoices.restaurant_id > restaurants.id
+Ref: invoice_orders.invoice_id > invoices.id
+Ref: invoice_orders.order_id > orders.id
+Ref: payments.invoice_id > invoices.id
+Ref: payments.restaurant_id > restaurants.id
+Ref: refunds.payment_id > payments.id
+Ref: refunds.order_id > orders.id
+
+Ref: procurement_batches.order_group_id > order_groups.id
+Ref: procurement_orders.batch_id > procurement_batches.id
+Ref: procurement_orders.agent_user_id > users.id
+Ref: procurement_orders.market_id > markets.id
+Ref: procurement_items.procurement_order_id > procurement_orders.id
+Ref: procurement_items.market_product_id > market_products.id
+
+Ref: hub_inventory.hub_id > hubs.id
+Ref: hub_inventory.market_product_id > market_products.id
+Ref: hub_receivings.hub_id > hubs.id
+Ref: hub_receivings.procurement_order_id > procurement_orders.id
+Ref: hub_receivings.hub_staff_user_id > users.id
+Ref: hub_receiving_items.hub_receiving_id > hub_receivings.id
+Ref: hub_receiving_items.market_product_id > market_products.id
+Ref: hub_outbound_events.hub_id > hubs.id
+Ref: hub_outbound_events.destination_route_id > delivery_routes.id
+Ref: hub_outbound_events.recorded_by > users.id [note: 'logical only']
+Ref: cross_dock_transfers.hub_id > hubs.id
+Ref: cross_dock_transfers.hub_receiving_id > hub_receivings.id
+Ref: cross_dock_transfers.outbound_route_id > delivery_routes.id
+
+Ref: vehicles.registered_by > users.id
+Ref: delivery_routes.procurement_batch_id > procurement_batches.id
+Ref: delivery_routes.order_group_id > order_groups.id
+Ref: delivery_routes.driver_user_id > users.id
+Ref: delivery_routes.vehicle_id > vehicles.id
+Ref: delivery_routes.created_by > users.id [note: 'logical only']
+Ref: route_stops.route_id > delivery_routes.id
+Ref: route_stops.restaurant_id > restaurants.id
+Ref: route_stops.order_id > orders.id
+Ref: deliveries.route_stop_id - route_stops.id
+Ref: deliveries.order_id - orders.id
+Ref: deliveries.driver_user_id > users.id
+
+Ref: notifications.user_id > users.id
+Ref: export_jobs.requested_by > users.id
+
+// ======================
+// TABLE GROUPS
+// ======================
+
+TableGroup "A1. Identity & Access (implemented)" {
+  roles
+  users
+  refresh_tokens
+  password_reset_tokens
+  verification_codes
+  user_market_assignments
+  driver_profiles
+}
+
+TableGroup "A2. Restaurant Profile (implemented)" {
+  restaurants
+  delivery_addresses
+}
+
+TableGroup "A3. Catalog & Pricing (implemented)" {
+  product_categories
+  units_of_measurement
+  products
+  markets
+  market_products
+  price_snapshots
+}
+
+TableGroup "A4. Orders (implemented)" {
+  orders
+  order_items
+  scheduled_orders
+  order_issues
+}
+
+TableGroup "A5. Credit / Công nợ (implemented)" {
+  restaurant_credit
+  credit_transactions
+}
+
+TableGroup "A6. Assistant (implemented)" {
+  assistant_conversations
+}
+
+TableGroup "B1. Planned — Restaurant & Catalog" {
+  restaurant_members
+  price_alert_subscriptions
+  system_config
+}
+
+TableGroup "B2. Planned — Orders & Billing" {
+  order_groups
+  order_status_history
+  invoices
+  invoice_orders
+  payments
+  refunds
+}
+
+TableGroup "B3. Planned — Procurement" {
+  procurement_batches
+  procurement_orders
+  procurement_items
+}
+
+TableGroup "B4. Planned — Hub Operations" {
+  hubs
+  hub_inventory
+  hub_receivings
+  hub_receiving_items
+  hub_outbound_events
+  cross_dock_transfers
+}
+
+TableGroup "B5. Planned — Logistics & Delivery" {
+  vehicles
+  delivery_routes
+  route_stops
+  deliveries
+}
+
+TableGroup "B6. Planned — Notifications & Analytics" {
+  notifications
+  notification_templates
+  analytics_aggregations
+  export_jobs
+}
