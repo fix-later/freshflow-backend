@@ -1,5 +1,55 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mxfile host="app.diagrams.net" modified="2026-06-26T00:00:00.000Z" agent="Codex" version="24.7.17" type="device" pages="6">
+<mxfile host="app.diagrams.net" modified="2026-06-26T00:00:00.000Z" agent="Codex" version="24.7.17" type="device" pages="7">
+  <diagram id="system-overview-00" name="00-system-overview-diagrams">
+    <mxGraphModel dx="1400" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="FreshFlow — System Overview (logical + VPS deployment)" style="text;html=1;fontSize=16;fontStyle=1;fontColor=#1f3864;align=left;" vertex="1" parent="1"><mxGeometry x="40" y="24" width="700" height="30" as="geometry"/></mxCell>
+        <mxCell id="g_cli" value="Clients" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#eef5ff;strokeColor=#6c8ebf;fontSize=11;align=center;verticalAlign=top;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="40" y="90" width="220" height="270" as="geometry"/></mxCell>
+        <mxCell id="g_vps" value="VPS — Ubuntu (single host) · ufw 22/80/443" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#666666;fontSize=11;align=center;verticalAlign=top;spacingTop=4;dashed=1;" vertex="1" parent="1"><mxGeometry x="510" y="80" width="580" height="390" as="geometry"/></mxCell>
+        <mxCell id="g_ext" value="External Services (outbound HTTPS from VPS)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#fffaf0;strokeColor=#d6b656;fontSize=11;align=center;verticalAlign=top;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="310" y="560" width="800" height="210" as="geometry"/></mxCell>
+        <mxCell id="web" value="Web Admin
+(Angular + Tailwind CSS)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;align=center;verticalAlign=middle;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="60" y="140" width="180" height="80" as="geometry"/></mxCell>
+        <mxCell id="mob" value="Mobile App
+(React Native)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;align=center;verticalAlign=middle;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="60" y="250" width="180" height="80" as="geometry"/></mxCell>
+        <mxCell id="dns" value="DNS / Domain
+api.freshflow.fishfix.vn" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=11;align=center;verticalAlign=middle;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="300" y="185" width="150" height="75" as="geometry"/></mxCell>
+        <mxCell id="nginx" value="nginx
+reverse proxy
+TLS (Let’s Encrypt)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;align=center;verticalAlign=middle;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="530" y="160" width="130" height="95" as="geometry"/></mxCell>
+        <mxCell id="api" value="ASP.NET Core API
+(Kestrel)
+modular monolith" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=center;verticalAlign=middle;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="710" y="160" width="190" height="95" as="geometry"/></mxCell>
+        <mxCell id="pg" value="PostgreSQL
+localhost:5432" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;align=center;verticalAlign=middle;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="710" y="320" width="160" height="95" as="geometry"/></mxCell>
+        <mxCell id="redis" value="Redis
+localhost:6379" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;align=center;verticalAlign=middle;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="910" y="320" width="160" height="95" as="geometry"/></mxCell>
+        <mxCell id="resend" value="Resend
+Transactional email" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;align=center;verticalAlign=middle;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="330" y="620" width="135" height="90" as="geometry"/></mxCell>
+        <mxCell id="glm" value="GLM-5.2 / z.ai
+(via ZenMux)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;align=center;verticalAlign=middle;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="485" y="620" width="150" height="90" as="geometry"/></mxCell>
+        <mxCell id="cloud" value="Cloudinary
+Media / CDN" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;align=center;verticalAlign=middle;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="655" y="620" width="145" height="90" as="geometry"/></mxCell>
+        <mxCell id="goong" value="Goong
+Maps &amp; Routing" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;align=center;verticalAlign=middle;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="820" y="620" width="135" height="90" as="geometry"/></mxCell>
+        <mxCell id="ga" value="Google Analytics" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;align=center;verticalAlign=middle;spacingTop=4;" vertex="1" parent="1"><mxGeometry x="975" y="620" width="120" height="90" as="geometry"/></mxCell>
+        <mxCell id="legend" value="Đường nối:  xanh = HTTPS công khai (qua nginx)  ·  xanh lá = nội bộ trong VPS (loopback)  ·  vàng = VPS gọi ra External  ·  tím (đứt) = client gọi thẳng" style="text;html=1;fontSize=10;align=left;fillColor=#ffffff;strokeColor=#cccccc;spacingLeft=6;verticalAlign=middle;" vertex="1" parent="1"><mxGeometry x="40" y="500" width="1050" height="28" as="geometry"/></mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;orthogonalLoop=1;strokeColor=#6c8ebf;" edge="1" parent="1" source="web" target="dns"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;orthogonalLoop=1;strokeColor=#6c8ebf;" edge="1" parent="1" source="mob" target="dns"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" value="HTTPS 443 · REST/JWT + SignalR" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;orthogonalLoop=1;strokeColor=#6c8ebf;" edge="1" parent="1" source="dns" target="nginx"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" value="proxy → Kestrel · /hubs/* WebSocket" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;orthogonalLoop=1;strokeColor=#82b366;" edge="1" parent="1" source="nginx" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" value="EF Core · localhost" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;orthogonalLoop=1;strokeColor=#82b366;" edge="1" parent="1" source="api" target="pg"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="SignalR backplane · cache · rate-limit" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;orthogonalLoop=1;strokeColor=#82b366;" edge="1" parent="1" source="api" target="redis"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" value="email (verify / reset)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;orthogonalLoop=1;strokeColor=#d79b00;" edge="1" parent="1" source="api" target="resend"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" value="AI assistant (chat + tools)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;orthogonalLoop=1;strokeColor=#d79b00;" edge="1" parent="1" source="api" target="glm"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" value="upload media" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;orthogonalLoop=1;strokeColor=#d79b00;" edge="1" parent="1" source="api" target="cloud"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" value="geocoding · routing" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;orthogonalLoop=1;strokeColor=#d79b00;" edge="1" parent="1" source="api" target="goong"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e11" value="client-side tracking" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;orthogonalLoop=1;strokeColor=#9673a6;;dashed=1" edge="1" parent="1" source="web" target="ga"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e12" value="map tiles · autocomplete" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;labelBackgroundColor=#ffffff;jettySize=auto;orthogonalLoop=1;strokeColor=#9673a6;;dashed=1" edge="1" parent="1" source="web" target="goong"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
   <diagram id="system-context" name="01 - System Context">
     <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
       <root>
