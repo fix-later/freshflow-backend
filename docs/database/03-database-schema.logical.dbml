@@ -1,7 +1,7 @@
 // FreshFlow LOGICAL ERD for dbdiagram.io
 //
 // Companion to the PHYSICAL model in 03-database-schema.dbml.
-// Reviewed against implementation on 2026-06-30.
+// Reviewed against implementation on 2026-07-03.
 //
 // PURPOSE
 //   A technology-agnostic view of the domain: entities, business attributes,
@@ -26,11 +26,19 @@
 //   Unlike the physical file (which only draws relationships backed by a real
 //   DB foreign key), this logical model draws EVERY meaningful relationship,
 //   including ones the running database does not enforce. Non-enforced logical
-//   links are tagged "[logical only]" on the Ref line.
+//   links are drawn in GRAY ([color: #9e9e9e]) with a trailing "// logical only"
+//   comment. (DBML does not allow [note:] on Ref lines — color is the
+//   dbdiagram-visible marker.)
 //
 // A/B SPLIT mirrors the physical model:
 //   PART A = implemented domain (Auth, Catalog, Pricing, Orders, Assistant).
 //   PART B = planned design, not yet in the database.
+//
+// REMOVED BY DECISION (see docs/06-context-decisions.md) — deliberately NOT
+// part of this model; archived in the physical file only:
+//   - invoices / invoice_orders / payments / refunds — superseded by the
+//     B2B credit model: restaurant_credit + credit_transactions (DEC-002).
+//   - restaurant_members — single Restaurant actor, 1:1 with a User (DEC-003).
 
 Project FreshFlow_Logical {
   database_type: 'Logical'
@@ -109,8 +117,8 @@ Table roles {
 
 Table users {
   id                uuid                [pk]
-  email             string              [not null]
-  phone             string              [note: 'Optional second login identifier.']
+  email             string              [unique, not null]
+  phone             string              [unique, note: 'Optional second login identifier.']
   full_name         string
   avatar_url        string
   role_id           uuid                [not null]
@@ -124,6 +132,7 @@ Table refresh_tokens {
   id                   uuid       [pk]
   user_id              uuid       [not null]
   replaced_by_token_id uuid       [note: 'Rotation lineage (self-reference).']
+  family_id            uuid       [not null, note: 'Token family — revoked as a unit on reuse detection.']
   expires_at           datetime   [not null]
   revoked_at           datetime
 
@@ -151,7 +160,7 @@ Table user_market_assignments {
   market_id   uuid  [not null]
   assigned_by uuid  [note: 'User who made the assignment.']
 
-  Note: 'Which markets a staff user is assigned to (many-to-many bridge users <-> markets).'
+  Note: 'Which markets a staff user is assigned to (many-to-many bridge users <-> markets). Unique per (user, market).'
 }
 
 Table driver_profiles {
@@ -195,13 +204,13 @@ Table delivery_addresses {
 
 Table product_categories {
   id        uuid    [pk]
-  name      string  [not null]
+  name      string  [unique, not null]
   is_active boolean [not null]
 }
 
 Table units_of_measurement {
   id           uuid    [pk]
-  name         string  [not null]
+  name         string  [unique, not null]
   abbreviation string
   is_active    boolean [not null]
 
@@ -361,25 +370,25 @@ Ref: refresh_tokens.replaced_by_token_id > refresh_tokens.id
 Ref: password_reset_tokens.user_id > users.id
 Ref: verification_codes.user_id > users.id
 Ref: user_market_assignments.user_id > users.id
-Ref: user_market_assignments.market_id > markets.id
-Ref: user_market_assignments.assigned_by > users.id [note: 'logical only']
-Ref: driver_profiles.user_id - users.id
-Ref: restaurants.user_id - users.id
+Ref: user_market_assignments.market_id > markets.id [color: #9e9e9e] // logical only (cross-module, no FK)
+Ref: user_market_assignments.assigned_by > users.id [color: #9e9e9e] // logical only
+Ref: driver_profiles.user_id - users.id [color: #9e9e9e] // logical only (unique index, no FK)
+Ref: restaurants.user_id - users.id [color: #9e9e9e] // logical only (unique index, no FK)
 
 Ref: delivery_addresses.restaurant_id > restaurants.id
 
 Ref: products.category_id > product_categories.id
 Ref: products.unit_id > units_of_measurement.id
-Ref: products.created_by > users.id [note: 'logical only']
+Ref: products.created_by > users.id [color: #9e9e9e] // logical only
 
-Ref: market_products.market_id > markets.id
-Ref: market_products.product_id > products.id
-Ref: market_products.updated_by > users.id [note: 'logical only']
+Ref: market_products.market_id > markets.id [color: #9e9e9e] // logical only (cross-module, no FK)
+Ref: market_products.product_id > products.id [color: #9e9e9e] // logical only (cross-module, no FK)
+Ref: market_products.updated_by > users.id [color: #9e9e9e] // logical only
 Ref: price_snapshots.market_product_id > market_products.id
-Ref: price_snapshots.recorded_by > users.id [note: 'logical only']
+Ref: price_snapshots.recorded_by > users.id [color: #9e9e9e] // logical only
 
 Ref: orders.restaurant_id > restaurants.id
-Ref: orders.scheduled_order_id > scheduled_orders.id [note: 'logical only']
+Ref: orders.scheduled_order_id > scheduled_orders.id [color: #9e9e9e] // logical only
 Ref: order_items.order_id > orders.id
 Ref: order_items.market_product_id > market_products.id
 Ref: scheduled_orders.restaurant_id > restaurants.id
@@ -392,8 +401,8 @@ Ref: order_issues.order_id > orders.id
 Ref: order_issues.order_item_id > order_items.id
 Ref: order_issues.reported_by > users.id
 
-Ref: assistant_conversations.user_id > users.id [note: 'logical only']
-Ref: assistant_conversations.market_id > markets.id [note: 'logical only']
+Ref: assistant_conversations.user_id > users.id [color: #9e9e9e] // logical only
+Ref: assistant_conversations.market_id > markets.id [color: #9e9e9e] // logical only
 
 // ============================================================
 // LOGICAL ENUMS — PART B (planned)
@@ -405,36 +414,6 @@ Enum order_group_status {
   DISPATCHED
   COMPLETED
   CANCELLED
-}
-
-Enum invoice_status {
-  DRAFT
-  ISSUED
-  PARTIALLY_PAID
-  PAID
-  OVERDUE
-  CANCELLED
-}
-
-Enum payment_method_enum {
-  VNPAY
-  MOMO
-  ZALOPAY
-  BANK_TRANSFER
-  CREDIT_TERM
-}
-
-Enum payment_txn_state {
-  PENDING
-  SUCCEEDED
-  FAILED
-  CANCELLED
-}
-
-Enum refund_status {
-  PENDING
-  COMPLETED
-  FAILED
 }
 
 Enum procurement_status {
@@ -523,18 +502,6 @@ Enum export_job_status {
 // PART B — PLANNED ENTITIES (logical, design only)
 // ============================================================
 
-Table restaurant_members {
-  id            uuid    [pk]
-  restaurant_id uuid    [not null]
-  user_id       uuid    [not null]
-  is_active     boolean [not null]
-  joined_at     datetime [not null]
-  left_at       datetime
-  invited_by    uuid
-
-  Note: '[PLANNED] Multi-user restaurants. Conflicts with the current 1:1 restaurants<->users model.'
-}
-
 Table price_alert_subscriptions {
   id                   uuid    [pk]
   restaurant_id        uuid    [not null]
@@ -573,58 +540,6 @@ Table order_status_history {
   changed_by_user_id uuid
   reason             text
   changed_at         datetime [not null]
-
-  Note: '[PLANNED]'
-}
-
-Table invoices {
-  id                   uuid           [pk]
-  invoice_number       string         [unique, not null]
-  restaurant_id        uuid           [not null]
-  billing_period_start date
-  billing_period_end   date
-  subtotal_amount      money          [not null]
-  tax_amount           money          [not null]
-  total_amount         money          [not null]
-  status               invoice_status [not null]
-  due_date             date
-  issued_at            datetime
-
-  Note: '[PLANNED] Superseded for now by restaurant_credit + credit_transactions.'
-}
-
-Table invoice_orders {
-  invoice_id uuid  [not null]
-  order_id   uuid  [not null]
-  amount     money [not null]
-
-  Indexes {
-    (invoice_id, order_id) [pk]
-  }
-  Note: '[PLANNED]'
-}
-
-Table payments {
-  id                     uuid                [pk]
-  invoice_id             uuid                [not null]
-  restaurant_id          uuid                [not null]
-  amount                 money               [not null]
-  payment_method         payment_method_enum [not null]
-  gateway_transaction_id string
-  status                 payment_txn_state   [not null]
-  paid_at                datetime
-
-  Note: '[PLANNED] Per-gateway payment; superseded by B2B credit model in v1.'
-}
-
-Table refunds {
-  id          uuid          [pk]
-  payment_id  uuid          [not null]
-  order_id    uuid          [not null]
-  reason      string        [not null]
-  amount      money         [not null]
-  status      refund_status [not null]
-  refunded_at datetime
 
   Note: '[PLANNED]'
 }
@@ -842,26 +757,15 @@ Table export_jobs {
 // PART B — RELATIONSHIPS (planned)
 // ======================
 
-Ref: orders.order_group_id > order_groups.id [note: 'logical only']
+Ref: orders.order_group_id > order_groups.id [color: #9e9e9e] // logical only
 
-Ref: restaurant_members.restaurant_id > restaurants.id
-Ref: restaurant_members.user_id > users.id
-Ref: restaurant_members.invited_by > users.id [note: 'logical only']
 Ref: price_alert_subscriptions.restaurant_id > restaurants.id
 Ref: price_alert_subscriptions.product_id > products.id
 Ref: system_config.updated_by > users.id
 
 Ref: order_groups.grouped_by > users.id
 Ref: order_status_history.order_id > orders.id
-Ref: order_status_history.changed_by_user_id > users.id [note: 'logical only']
-
-Ref: invoices.restaurant_id > restaurants.id
-Ref: invoice_orders.invoice_id > invoices.id
-Ref: invoice_orders.order_id > orders.id
-Ref: payments.invoice_id > invoices.id
-Ref: payments.restaurant_id > restaurants.id
-Ref: refunds.payment_id > payments.id
-Ref: refunds.order_id > orders.id
+Ref: order_status_history.changed_by_user_id > users.id [color: #9e9e9e] // logical only
 
 Ref: procurement_batches.order_group_id > order_groups.id
 Ref: procurement_orders.batch_id > procurement_batches.id
@@ -879,7 +783,7 @@ Ref: hub_receiving_items.hub_receiving_id > hub_receivings.id
 Ref: hub_receiving_items.market_product_id > market_products.id
 Ref: hub_outbound_events.hub_id > hubs.id
 Ref: hub_outbound_events.destination_route_id > delivery_routes.id
-Ref: hub_outbound_events.recorded_by > users.id [note: 'logical only']
+Ref: hub_outbound_events.recorded_by > users.id [color: #9e9e9e] // logical only
 Ref: cross_dock_transfers.hub_id > hubs.id
 Ref: cross_dock_transfers.hub_receiving_id > hub_receivings.id
 Ref: cross_dock_transfers.outbound_route_id > delivery_routes.id
@@ -889,7 +793,7 @@ Ref: delivery_routes.procurement_batch_id > procurement_batches.id
 Ref: delivery_routes.order_group_id > order_groups.id
 Ref: delivery_routes.driver_user_id > users.id
 Ref: delivery_routes.vehicle_id > vehicles.id
-Ref: delivery_routes.created_by > users.id [note: 'logical only']
+Ref: delivery_routes.created_by > users.id [color: #9e9e9e] // logical only
 Ref: route_stops.route_id > delivery_routes.id
 Ref: route_stops.restaurant_id > restaurants.id
 Ref: route_stops.order_id > orders.id
@@ -945,18 +849,13 @@ TableGroup "A6. Assistant (implemented)" {
 }
 
 TableGroup "B1. Planned — Restaurant & Catalog" {
-  restaurant_members
   price_alert_subscriptions
   system_config
 }
 
-TableGroup "B2. Planned — Orders & Billing" {
+TableGroup "B2. Planned — Orders" {
   order_groups
   order_status_history
-  invoices
-  invoice_orders
-  payments
-  refunds
 }
 
 TableGroup "B3. Planned — Procurement" {

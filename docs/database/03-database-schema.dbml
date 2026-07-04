@@ -439,9 +439,10 @@ Ref: refresh_tokens.replaced_by_token_id > refresh_tokens.id [delete: set null]
 Ref: password_reset_tokens.user_id > users.id [delete: cascade]
 Ref: verification_codes.user_id > users.id [delete: cascade]
 Ref: user_market_assignments.user_id > users.id [delete: cascade]
-Ref: user_market_assignments.market_id > markets.id [delete: cascade]
-Ref: driver_profiles.user_id - users.id [note: 'Logical 1:1 (unique user_id); no DB-level FK.']
-Ref: restaurants.user_id - users.id [note: 'Logical 1:1 (unique user_id); no DB-level FK enforced.']
+// user_market_assignments.market_id -> markets.id is NOT FK-enforced (cross-module
+// reference; only user_id has a real FK). See the logical model for this link.
+Ref: driver_profiles.user_id - users.id [color: #9e9e9e] // Logical 1:1 (unique user_id); no DB-level FK
+Ref: restaurants.user_id - users.id [color: #9e9e9e] // Logical 1:1 (unique user_id); no DB-level FK
 Ref: delivery_addresses.restaurant_id > restaurants.id [delete: cascade]
 
 Ref: products.category_id > product_categories.id [delete: set null]

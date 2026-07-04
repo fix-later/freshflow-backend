@@ -13,7 +13,7 @@
 > **Physical source of truth:** the ASP.NET Core controllers under
 > `src/FreshFlow.API/Controllers/` and the SignalR hub mappings in
 > `src/FreshFlow.API/Program.cs`. This document is split into two parts, mirroring
-> `docs/03-database-schema.dbml`:
+> `docs/database/03-database-schema.dbml`:
 >
 > - **[Part A — Implemented API Surface](#2-implemented-api-surface-part-a--authoritative)**
 >   is the authoritative inventory of every route that physically exists today

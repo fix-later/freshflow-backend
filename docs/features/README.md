@@ -2,7 +2,7 @@
 
 Tài liệu **theo từng feature** (survey, audit, context, design, tasks, backlog) — tách khỏi bộ spec core đánh số ở `docs/` để dễ tracking. Mỗi thư mục con = 1 feature/đợt phân tích.
 
-> Bộ spec core ổn định (`00-index`, `01`–`06`, `REVIEW-REPORT`, schema, enums) vẫn nằm ở `docs/` gốc.
+> Bộ spec core ổn định (`00-index`, `01`-`06`, `REVIEW-REPORT`, schema, enums) vẫn nằm ở `docs/` gốc. Diagram và DBML companion docs nằm trong `docs/diagrams/` và `docs/database/`.
 
 ## ai-assistant — AI Shopping Assistant
 
@@ -21,7 +21,7 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 |---|---|
 | [AUDIT-2026-06-17 orders module research](./orders/AUDIT-2026-06-17-orders-module-research.md) | Audit |
 | [order-flow-analysis](./orders/order-flow-analysis.md) | Analysis |
-| [order-flow-diagrams.drawio](./orders/order-flow-diagrams.drawio) | Diagram |
+| [order-flow-diagrams.drawio](./orders/diagrams/order-flow-diagrams.drawio) | Diagram |
 
 ## logistics — Logistics module
 

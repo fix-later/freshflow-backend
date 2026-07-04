@@ -4,7 +4,7 @@
 |---|---|
 | **Ngày** | 2026-06-29 |
 | **Phạm vi** | Vòng đời trạng thái của các entity chính (toàn bộ thiết kế) |
-| **Nguồn sự thật** | Các enum domain trong `src/Modules/**/Domain/Enums` + ERD `03-database-schema.dbml` |
+| **Nguồn sự thật** | Các enum domain trong `src/Modules/**/Domain/Enums` + ERD [`03-database-schema.dbml`](../database/03-database-schema.dbml) |
 | **Draw.io source** | [`02B-state-machine-diagrams.drawio`](./02B-state-machine-diagrams.drawio) (mỗi entity là 1 page) |
 
 > Mô tả vòng đời (state machine) của từng entity: trạng thái, sự kiện/điều kiện kích hoạt chuyển trạng thái.
@@ -120,4 +120,4 @@ Append-only, xoay vòng theo `family_id`; phát hiện reuse → thu hồi **c�
 ## 09–12 — Payment, Delivery, DeliveryRoute, ProcurementOrder
 
 `Payment`, `Delivery`, `DeliveryRoute`, `ProcurementOrder` là vòng đời thuộc các module
-Payment / Logistics / Hub / Procurement. Các enum trạng thái lấy từ `03-database-schema.dbml`.
+Payment / Logistics / Hub / Procurement. Các enum trạng thái lấy từ [`03-database-schema.dbml`](../database/03-database-schema.dbml).

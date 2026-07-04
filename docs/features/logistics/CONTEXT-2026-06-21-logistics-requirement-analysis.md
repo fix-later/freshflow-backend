@@ -231,7 +231,7 @@ Khong nen generate migration truoc khi chot mot canonical model.
 - `deliveries` la mot row/order/route, co `sequence_number`
 - Khong co `route_stops`, khong co `delivery_schedules`
 
-### `docs/03-database-schema.dbml`
+### `docs/database/03-database-schema.dbml`
 
 - `vehicles` dung status enum
 - `delivery_routes` co route date, driver, vehicle, procurement batch/order group
@@ -375,7 +375,7 @@ Day la baseline hop ly nhat tu code hien tai, nhung van can Product Owner xac nh
 - `docs/01-requirements-spec.md` section FR-LOG/FR-HUB/FR-NOT
 - `docs/02-system-architecture.md` section Logistics/Realtime
 - `docs/03-database-schema.md`
-- `docs/03-database-schema.dbml`
+- `docs/database/03-database-schema.dbml`
 - `docs/04-api-design.md` section Logistics/DeliveryHub/RBAC
 - `specs/001-freshflow-platform/tasks.md` T035 va T039-T043
 - `specs/002-pricing-hub-admin-batch/spec.md`
