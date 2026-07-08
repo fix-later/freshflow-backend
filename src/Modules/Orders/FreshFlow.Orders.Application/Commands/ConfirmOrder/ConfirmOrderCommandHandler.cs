@@ -59,6 +59,11 @@ internal sealed class ConfirmOrderCommandHandler(
         if (chargeResult.IsFailure)
             return Result<OrderDto>.Failure(chargeResult.Error);
 
+        // Seam for SCRUM-266 (credit-limit alert): chargeResult.Value already exposes the
+        // post-charge CreditLimit/OutstandingBalance/AvailableCredit for this restaurant, so a
+        // future threshold check (and its integration event to Notifications) can hook in right
+        // here without touching CreditService or the order-confirmation flow above.
+
         return Result<OrderDto>.Success(OrderDtoMapper.ToDto(order));
     }
 }
