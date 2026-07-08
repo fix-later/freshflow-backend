@@ -23,6 +23,12 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 | [order-flow-analysis](./orders/order-flow-analysis.md) | Analysis |
 | [order-flow-diagrams.drawio](./orders/diagrams/order-flow-diagrams.drawio) | Diagram |
 
+## credit — B2B Credit, Debt & Statement (epic SCRUM-254, trong module Orders)
+
+| Doc | Loại | Trạng thái |
+|---|---|---|
+| [AUDIT-2026-07-07 cre backend plan](./credit/AUDIT-2026-07-07-cre-backend-plan.md) | Audit / Plan | 🟡 SCRUM-257 đang làm |
+
 ## logistics — Logistics module
 
 | Doc | Loại |
