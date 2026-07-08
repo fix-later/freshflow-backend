@@ -13,16 +13,24 @@
 |---|---|---|---|---|
 | 01 | [01-requirements-spec.md](./01-requirements-spec.md) | Functional & non-functional requirements, gaps, glossary | 283 | Complete |
 | 02 | [02-system-architecture.md](./02-system-architecture.md) | Architecture pattern, component diagrams, module breakdown, caching, deployment | 713 | Complete |
-| 02A | [02A-system-overview-diagrams.md](./02A-system-overview-diagrams.md) | Current backend system overview diagrams, runtime wiring, flows, deployment view, Draw.io source | — | Current |
-| 02B | [02B-state-machine-diagrams.md](./02B-state-machine-diagrams.md) | State machine cho các entity chính (Order, Restaurant, User, RefreshToken…); Draw.io source | — | Current |
-| 02C | [02C-activity-diagrams.md](./02C-activity-diagrams.md) | Activity/flowchart các luồng nghiệp vụ chính (có Actor, swimlane); Draw.io source | — | Current |
+| 02A | [02A-system-overview-diagrams.md](./diagrams/02A-system-overview-diagrams.md) | Current backend system overview diagrams, runtime wiring, flows, deployment view, Draw.io source | — | Current |
+| 02B | [02B-state-machine-diagrams.md](./diagrams/02B-state-machine-diagrams.md) | State machine cho các entity chính (Order, Restaurant, User, RefreshToken...); Draw.io source | — | Current |
+| 02C | [02C-activity-diagrams.md](./diagrams/02C-activity-diagrams.md) | Activity/flowchart các luồng nghiệp vụ chính (có Actor, swimlane); Draw.io source | — | Current |
+| 02D | [02D-package-diagram.md](./diagrams/02D-package-diagram.md) | Package/dependency diagram for current backend projects | — | Current |
+| 02E | [02E-class-diagrams.md](./diagrams/02E-class-diagrams.md) | Detailed class diagrams for implemented features | — | Current |
 | 03 | [03-database-schema.md](./03-database-schema.md) | PostgreSQL DDL, index strategy, Redis key design, migration strategy (reconciled w/ code 2026-06-29) | — | Current |
-| 03A | [03-database-schema.dbml](./03-database-schema.dbml) | Unified DBML for dbdiagram.io: Part A implemented + Part B planned (reconciled 2026-06-29) | — | Current |
+| 03A | [03-database-schema.dbml](./database/03-database-schema.dbml) | Physical DBML for dbdiagram.io: Part A implemented + Part B planned; archives tables removed by DEC-002/003 (reconciled 2026-07-03) | — | Current |
+| 03A' | [03-database-schema.conceptual.md](./database/03-database-schema.conceptual.md) + [.conceptual.dbml](./database/03-database-schema.conceptual.dbml) | Conceptual model: business entities + relationships only (mermaid + dbdiagram) | — | Current |
+| 03A" | [03-database-schema.logical.dbml](./database/03-database-schema.logical.dbml) | Logical ERD: attributes, keys, every meaningful relationship, tech-agnostic (reconciled 2026-07-03) | — | Current |
+| 03B | [03B-database-erd.md](./database/03B-database-erd.md) | Mermaid ERD for implemented tables only, compact crow's-foot view | — | Current |
+| 03C | [03C-table-descriptions.md](./database/03C-table-descriptions.md) | Chức năng nghiệp vụ của từng bảng (Part A + Part B + danh sách đã loại bỏ theo DEC) | — | Current |
 | 04 | [04-api-design.md](./04-api-design.md) | REST endpoints, SignalR hubs, validation rules, RBAC matrix; Part A implemented surface + Part B planned (reconciled w/ code 2026-06-30) | — | Current |
 | 05 | [05-implementation-plan.md](./05-implementation-plan.md) | 50-task breakdown, critical path, MVP scope, folder structure, coding standards | 912 | Complete |
 | — | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | Cross-reference gaps, inconsistencies, readiness assessment | — | Complete |
 
 > **Feature working docs** (survey/audit/context/design/tasks per feature) sống ở [`features/`](./features/README.md) — tách khỏi bộ spec core này để dễ tracking.
+>
+> **Supporting assets:** diagram docs và Draw.io sources ở [`diagrams/`](./diagrams/README.md); DBML/ERD/schema companion docs ở [`database/`](./database/README.md).
 
 ---
 

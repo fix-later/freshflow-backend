@@ -636,6 +636,109 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("assistant_conversations", (string)null);
                 });
 
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.CreditStatement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("ClosingBalance")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("closing_balance");
+
+                    b.Property<DateTime>("GeneratedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("generated_at");
+
+                    b.Property<decimal>("OpeningBalance")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("opening_balance");
+
+                    b.Property<DateTime>("PeriodEnd")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("period_end");
+
+                    b.Property<DateTime>("PeriodStart")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("period_start");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("restaurant_id");
+
+                    b.Property<decimal>("TotalCharges")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("total_charges");
+
+                    b.Property<decimal>("TotalRefunds")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("total_refunds");
+
+                    b.Property<decimal>("TotalSettlements")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("total_settlements");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId", "PeriodStart")
+                        .IsUnique()
+                        .HasDatabaseName("uq_credit_statements_restaurant_id_period_start");
+
+                    b.ToTable("credit_statements", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.CreditStatementLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("balance_after");
+
+                    b.Property<Guid>("CreditStatementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("credit_statement_id");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reference");
+
+                    b.Property<Guid>("TransactionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("transaction_id");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreditStatementId")
+                        .HasDatabaseName("idx_credit_statement_lines_statement_id");
+
+                    b.ToTable("credit_statement_lines", (string)null);
+                });
+
             modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.CreditTransaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -663,6 +766,16 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("OrderId")
                         .HasColumnType("uuid")
                         .HasColumnName("order_id");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("payment_method");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reference");
 
                     b.Property<Guid>("RestaurantId")
                         .HasColumnType("uuid")
@@ -898,6 +1011,12 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("CreditLimit")
                         .HasColumnType("numeric(14,2)")
                         .HasColumnName("credit_limit");
+
+                    b.Property<string>("LastAlertedLevel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("last_alerted_level");
 
                     b.Property<decimal>("OutstandingBalance")
                         .HasColumnType("numeric(14,2)")
@@ -1231,6 +1350,16 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.CreditStatementLine", b =>
+                {
+                    b.HasOne("FreshFlow.Orders.Domain.Entities.CreditStatement", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("CreditStatementId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_credit_statement_lines_statement");
+                });
+
             modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.OrderIssue", b =>
                 {
                     b.HasOne("FreshFlow.Orders.Domain.Entities.Order", null)
@@ -1265,6 +1394,11 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_price_snapshots_market_product");
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.CreditStatement", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.Order", b =>

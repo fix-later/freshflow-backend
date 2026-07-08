@@ -24,6 +24,10 @@ public sealed class GetCreditTransactionsQueryHandlerTests
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
         _restaurantReader.FindByUserIdAsync(UserId, default)
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
+        _creditRepository.GetTransactionsPageAsync(
+                Arg.Any<Guid>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+                Arg.Any<CancellationToken>())
+            .Returns((Array.Empty<CreditTransaction>(), (string?)null));
         _sut = new GetCreditTransactionsQueryHandler(_creditRepository, _restaurantReader);
     }
 
@@ -62,13 +66,43 @@ public sealed class GetCreditTransactionsQueryHandlerTests
             amount: 100m,
             balanceAfter: 100m,
             note: "Order confirmed");
-        _creditRepository.GetTransactionsAsync(RestaurantId, default).Returns([transaction]);
+        _creditRepository.GetTransactionsPageAsync(
+                RestaurantId, null, 50, null, null, default)
+            .Returns(([transaction], (string?)null));
 
         var result = await _sut.Handle(new GetCreditTransactionsQuery(UserId, IsAdmin: false, RestaurantId), default);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.Should().ContainSingle();
-        result.Value.Single().Type.Should().Be("charge");
-        result.Value.Single().OrderId.Should().Be(orderId);
+        result.Value.Items.Should().ContainSingle();
+        result.Value.Items.Single().Type.Should().Be("charge");
+        result.Value.Items.Single().OrderId.Should().Be(orderId);
+    }
+
+    [Fact]
+    public async Task Handle_PassesCursorPageSizeAndDateRangeToRepositoryAsync()
+    {
+        var from = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var to = new DateTime(2026, 6, 30, 0, 0, 0, DateTimeKind.Utc);
+
+        await _sut.Handle(
+            new GetCreditTransactionsQuery(UserId, IsAdmin: false, RestaurantId, "cursor-abc", 20, from, to),
+            default);
+
+        await _creditRepository.Received(1).GetTransactionsPageAsync(
+            RestaurantId, "cursor-abc", 20, from, to, default);
+    }
+
+    [Fact]
+    public async Task Handle_RepositoryReturnsNextCursor_ReturnsItInPageDtoAsync()
+    {
+        _creditRepository.GetTransactionsPageAsync(
+                RestaurantId, null, 50, null, null, default)
+            .Returns((Array.Empty<CreditTransaction>(), "next-cursor-xyz"));
+
+        var result = await _sut.Handle(new GetCreditTransactionsQuery(UserId, IsAdmin: false, RestaurantId), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.NextCursor.Should().Be("next-cursor-xyz");
+        result.Value.PageSize.Should().Be(50);
     }
 }

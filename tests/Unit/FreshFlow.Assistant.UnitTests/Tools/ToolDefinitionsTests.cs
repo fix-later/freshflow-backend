@@ -168,7 +168,7 @@ public sealed class ToolDefinitionsTests
 
         // Assert
         await _sender.Received(1).Send(
-            Arg.Is<GetOrderQuery>(q => q.UserId == _userId && q.OrderId == _orderId && q.IsAdmin == false),
+            Arg.Is<GetOrderQuery>(q => q.UserId == _userId && q.OrderId == _orderId && !q.IsAdmin),
             Arg.Any<CancellationToken>());
     }
 

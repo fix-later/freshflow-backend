@@ -45,6 +45,23 @@ internal sealed class CreditTransactionConfiguration : IEntityTypeConfiguration<
             .HasColumnName("note")
             .HasMaxLength(500);
 
+        // Nullable — only populated for Settlement rows (see CreditTransaction ctor guard).
+        // Explicit snake_case mapping (NOT ToString().ToLowerInvariant()) — BankTransfer's
+        // PascalCase word boundary must become "bank_transfer" to match the API-facing value
+        // CreditDtoMapper emits; a plain lowercase conversion would silently persist
+        // "banktransfer" instead, which only "works" because Enum.Parse(ignoreCase: true)
+        // happens to still round-trip it.
+        builder.Property(t => t.PaymentMethod)
+            .HasColumnName("payment_method")
+            .HasMaxLength(20)
+            .HasConversion(
+                v => v == null ? null : ToSnakeCase(v.Value),
+                v => v == null ? (PaymentMethod?)null : FromSnakeCase(v));
+
+        builder.Property(t => t.Reference)
+            .HasColumnName("reference")
+            .HasMaxLength(200);
+
         builder.Property(t => t.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
@@ -58,4 +75,21 @@ internal sealed class CreditTransactionConfiguration : IEntityTypeConfiguration<
         builder.HasIndex(t => t.CreatedAt)
             .HasDatabaseName("idx_credit_transactions_created_at");
     }
+
+    // Plain method calls (not inline switch/throw expressions) so the conversion lambdas
+    // above stay valid EF Core conversion expression trees (switch expressions and throw
+    // expressions are not supported inside an Expression<Func<...>>).
+    private static string ToSnakeCase(PaymentMethod value) => value switch
+    {
+        PaymentMethod.BankTransfer => "bank_transfer",
+        PaymentMethod.Manual => "manual",
+        _ => throw new ArgumentOutOfRangeException(nameof(value)),
+    };
+
+    private static PaymentMethod FromSnakeCase(string value) => value switch
+    {
+        "bank_transfer" => PaymentMethod.BankTransfer,
+        "manual" => PaymentMethod.Manual,
+        _ => throw new ArgumentOutOfRangeException(nameof(value)),
+    };
 }

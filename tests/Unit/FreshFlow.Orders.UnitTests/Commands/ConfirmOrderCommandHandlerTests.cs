@@ -158,6 +158,26 @@ public sealed class ConfirmOrderCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_CalledTwiceForSameOrder_ChargesCreditOnlyOnceAsync()
+    {
+        // Simulates a repeat-confirm request (e.g. a retried HTTP call) against the same
+        // order. The order instance is reused across both calls, exactly as a shared,
+        // request-scoped DbContext would return the now-Confirmed entity on the second load.
+        var order = NewDraftOrderWithItem();
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var firstResult = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+        var secondResult = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+
+        firstResult.IsSuccess.Should().BeTrue();
+        secondResult.IsFailure.Should().BeTrue();
+        secondResult.Error.Code.Should().Be("ORDER_NOT_DRAFT");
+        order.Status.Should().Be(OrderStatus.Confirmed);
+        await _creditService.Received(1).ChargeAsync(
+            RestaurantId, order.Id, Arg.Any<decimal>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Handle_PastCutoff_ReschedulesToNextDeliveryCycleBeforeConfirmingAsync()
     {
         // Confirm at 23:00 Vietnam time (16:00 UTC) — well past the 22:00 cutoff.

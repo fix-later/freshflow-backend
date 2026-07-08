@@ -4,14 +4,13 @@
 |---|---|
 | **Ngày** | 2026-06-29 |
 | **Phạm vi** | Các luồng nghiệp vụ chính của toàn hệ thống, **có Actor tham gia**, ở mức nghiệp vụ (không mô tả xử lý nội bộ chi tiết) |
-| **Nguồn sự thật** | Thiết kế nghiệp vụ + module đã implement; phần chưa code đánh dấu `[PLANNED]` |
+| **Nguồn sự thật** | Thiết kế nghiệp vụ + module đã implement (toàn bộ luồng nghiệp vụ) |
 | **Draw.io source** | [`02C-activity-diagrams.drawio`](./02C-activity-diagrams.drawio) (mỗi nghiệp vụ là 1 page, dạng swimlane theo Actor) |
 
 > Mỗi diagram là **activity/flowchart dạng swimlane**: mỗi cột (lane) là một **Actor**; các hộp là bước nghiệp vụ;
 > hình thoi là điểm quyết định. Mục tiêu là thể hiện *ai làm gì để hoàn thành nghiệp vụ*, không đi vào chi tiết code.
 
-**Quy ước (draw.io):** xanh dương = bước xử lý · cam (hình thoi) = quyết định ·
-xám + chữ nghiêng = bước thuộc phần `[PLANNED]` · ghi chú vàng = lưu ý.
+**Quy ước (draw.io):** xanh dương = bước xử lý · cam (hình thoi) = quyết định · ghi chú vàng = lưu ý.
 
 ### Actor trong hệ thống
 
@@ -29,17 +28,17 @@ xám + chữ nghiêng = bước thuộc phần `[PLANNED]` · ghi chú vàng = l
 
 ## Tổng hợp các page
 
-| # | Nghiệp vụ | Actor chính | Trạng thái |
-|---|-----------|-------------|-----------|
-| 01 | Đăng ký & duyệt nhà hàng | Restaurant Mgr, System, Email, Admin | Implemented |
-| 02 | Đặt hàng trong ngày (Draft → Confirm → công nợ) | Restaurant, System | Implemented |
-| 03 | Đơn đặt định kỳ tự sinh | Restaurant, System (Scheduler/Orders) | Implemented |
-| 04 | Cập nhật giá & bảng giá realtime | Market Agent, System, Restaurant | Implemented |
-| 05 | Fulfillment end-to-end (thu mua → hub → giao) | Ops, Agent, Hub Staff, Driver, Restaurant | `[PLANNED]` |
-| 06 | Xác nhận nhận hàng & xử lý sự cố | Restaurant, System, Ops/Admin | Implemented |
-| 07 | Công nợ & tất toán B2B | System, Restaurant, Admin/Ops | Implemented |
-| 08 | Trợ lý AI đặt hàng + Confirmation Gate | Restaurant, Assistant, LLM, System | Implemented |
-| 09 | Đăng nhập / refresh / quên mật khẩu | User, System, Email | Implemented |
+| # | Nghiệp vụ | Actor chính |
+|---|-----------|-------------|
+| 01 | Đăng ký & duyệt nhà hàng | Restaurant Mgr, System, Email, Admin |
+| 02 | Đặt hàng trong ngày (Draft → Confirm → công nợ) | Restaurant, System |
+| 03 | Đơn đặt định kỳ tự sinh | Restaurant, System (Scheduler/Orders) |
+| 04 | Cập nhật giá & bảng giá realtime | Market Agent, System, Restaurant |
+| 05 | Fulfillment end-to-end (thu mua → hub → giao) | Ops, Agent, Hub Staff, Driver, Restaurant |
+| 06 | Xác nhận nhận hàng & xử lý sự cố | Restaurant, System, Ops/Admin |
+| 07 | Công nợ & tất toán B2B | System, Restaurant, Admin/Ops |
+| 08 | Trợ lý AI đặt hàng + Confirmation Gate | Restaurant, Assistant, LLM, System |
+| 09 | Đăng nhập / refresh / quên mật khẩu | User, System, Email |
 
 ---
 
@@ -63,10 +62,10 @@ Market Agent cập nhật giá/lượng → System kiểm tra quyền (`user_mar
 update `market_products` + insert `price_snapshots` (append-only) → cache Redis + broadcast SignalR `market:{id}` →
 Restaurant nhận bảng giá realtime. Lỗi cache không rollback việc ghi giá.
 
-## 05 — Fulfillment end-to-end `[PLANNED]`
+## 05 — Fulfillment end-to-end
 System cutoff & gom đơn → Ops tạo batch + phân công Agent → Agent thu mua → Hub Staff nhận & đối chiếu
 (thiếu/hỏng → `order_issue`) → Ops lập tuyến + gán xe/tài xế → Driver giao → Restaurant nhận hàng.
-Đây là luồng tương ứng các state Order **Batched → Delivered** (`[PLANNED]`).
+Đây là luồng tương ứng các state Order **Batched → Delivered**.
 
 ## 06 — Xác nhận nhận hàng & xử lý sự cố
 Restaurant nhận hàng → nếu đúng/đủ thì **xác nhận** (`confirmed_receipt_at`); nếu có vấn đề thì

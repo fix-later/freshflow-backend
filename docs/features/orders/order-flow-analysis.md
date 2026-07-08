@@ -1,6 +1,6 @@
 # Order flow review
 
-File sơ đồ: [`order-flow-diagrams.drawio`](./order-flow-diagrams.drawio)
+File sơ đồ: [`order-flow-diagrams.drawio`](./diagrams/order-flow-diagrams.drawio)
 
 ## Cách đọc
 

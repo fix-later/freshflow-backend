@@ -8,4 +8,6 @@ public sealed record CreditTransactionDto(
     decimal Amount,
     decimal BalanceAfter,
     string? Note,
+    string? PaymentMethod,
+    string? Reference,
     DateTime CreatedAt);

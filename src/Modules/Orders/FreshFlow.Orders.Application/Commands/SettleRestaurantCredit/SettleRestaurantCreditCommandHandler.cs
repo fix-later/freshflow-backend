@@ -10,5 +10,11 @@ internal sealed class SettleRestaurantCreditCommandHandler(ICreditService credit
 {
     public Task<Result<RestaurantCreditDto>> Handle(
         SettleRestaurantCreditCommand request, CancellationToken cancellationToken) =>
-        creditService.SettleAsync(request.RestaurantId, request.Amount, request.Note, cancellationToken);
+        creditService.SettleAsync(
+            request.RestaurantId,
+            request.Amount,
+            request.PaymentMethod,
+            request.Reference,
+            request.Note,
+            cancellationToken);
 }

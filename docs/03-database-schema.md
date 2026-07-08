@@ -12,7 +12,7 @@
 
 > **Physical source of truth:** EF Core migrations plus the model snapshot at
 > `src/FreshFlow.Infrastructure.Persistence/Migrations/AppDbContextModelSnapshot.cs`.
-> The companion ER diagram `docs/03-database-schema.dbml` is a logical ERD for the
+> The companion ER diagram `docs/database/03-database-schema.dbml` is a logical ERD for the
 > implemented tables and enforced DB relationships where present. It is not a physical
 > migration script because the current EF schema uses mixed PascalCase/snake_case column
 > names unless a configuration explicitly maps a column.
