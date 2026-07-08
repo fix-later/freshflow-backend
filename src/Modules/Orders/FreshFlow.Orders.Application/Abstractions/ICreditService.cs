@@ -1,4 +1,5 @@
 using FreshFlow.Orders.Application.Dtos;
+using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
 
 namespace FreshFlow.Orders.Application.Abstractions;
@@ -24,6 +25,8 @@ public interface ICreditService
     public Task<Result<RestaurantCreditDto>> SettleAsync(
         Guid restaurantId,
         decimal amount,
+        PaymentMethod paymentMethod,
+        string? reference,
         string? note,
         CancellationToken ct);
 

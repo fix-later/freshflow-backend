@@ -11,6 +11,7 @@ using FreshFlow.Auth.Application.Queries.GetRoles;
 using FreshFlow.Auth.Application.Queries.GetUsers;
 using FreshFlow.Orders.Application.Commands.SetRestaurantCreditLimit;
 using FreshFlow.Orders.Application.Commands.SettleRestaurantCredit;
+using FreshFlow.Orders.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -91,17 +92,46 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    /// <summary>
+    /// POST /api/v1/admin/restaurants/{restaurantId}/credit/settle
+    /// Records a debt payment against a restaurant's outstanding credit balance.
+    /// <c>paymentMethod</c> is required (<c>bank_transfer</c> | <c>manual</c>); <c>reference</c>
+    /// is an optional external reference (e.g. bank transaction id).
+    /// </summary>
     [HttpPost("restaurants/{restaurantId:guid}/credit/settle")]
     [Authorize(Roles = "admin")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> SettleRestaurantCreditAsync(
         Guid restaurantId,
         [FromBody] SettleCreditRequest body,
         CancellationToken ct)
     {
+        if (!TryParsePaymentMethod(body.PaymentMethod, out var paymentMethod))
+            return BadRequest(ApiResponse.Err("VALIDATION_ERROR",
+                "'paymentMethod' must be one of: bank_transfer, manual."));
+
         var result = await sender.Send(
-            new SettleRestaurantCreditCommand(restaurantId, body.Amount, body.Note), ct);
+            new SettleRestaurantCreditCommand(restaurantId, body.Amount, paymentMethod, body.Reference, body.Note),
+            ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    private static bool TryParsePaymentMethod(string? raw, out PaymentMethod paymentMethod)
+    {
+        switch (raw)
+        {
+            case "bank_transfer":
+                paymentMethod = PaymentMethod.BankTransfer;
+                return true;
+            case "manual":
+                paymentMethod = PaymentMethod.Manual;
+                return true;
+            default:
+                paymentMethod = default;
+                return false;
+        }
     }
 
     [HttpPut("restaurants/{restaurantId:guid}/credit/limit")]
@@ -159,5 +189,5 @@ public sealed class AdminController(ISender sender) : ControllerBase
 public sealed record ActivateRequest(bool IsActive);
 public sealed record AssignRoleRequest(string RoleName);
 public sealed record ReplaceMarketAssignmentsRequest(IReadOnlyList<Guid> MarketIds);
-public sealed record SettleCreditRequest(decimal Amount, string? Note);
+public sealed record SettleCreditRequest(decimal Amount, string? PaymentMethod, string? Reference, string? Note);
 public sealed record SetCreditLimitRequest(decimal CreditLimit, string? Note);

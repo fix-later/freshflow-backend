@@ -98,6 +98,8 @@ public sealed class CreditService(
     public async Task<Result<RestaurantCreditDto>> SettleAsync(
         Guid restaurantId,
         decimal amount,
+        PaymentMethod paymentMethod,
+        string? reference,
         string? note,
         CancellationToken ct)
     {
@@ -125,7 +127,9 @@ public sealed class CreditService(
             CreditTransactionType.Settlement,
             amount,
             account.OutstandingBalance,
-            note));
+            note,
+            paymentMethod,
+            reference));
 
         return await SaveAndReturnAsync(account, ct);
     }
@@ -159,14 +163,11 @@ public sealed class CreditService(
 
         await EnsureTrackedAccountAsync(account, ct);
         creditRepository.Track(account);
-        creditRepository.AddTransaction(new CreditTransaction(
-            restaurantId,
-            orderId: null,
-            CreditTransactionType.Adjustment,
-            Math.Abs(newLimit - previousLimit),
-            account.OutstandingBalance,
-            note));
 
+        // A credit-limit change is not a balance movement — no ledger entry is written.
+        // The balance ledger (credit_transactions) records only charges, settlements,
+        // and refunds; CreditTransactionType.Adjustment is retained for backward
+        // compatibility with historical rows only.
         return await SaveAndReturnAsync(account, ct);
     }
 

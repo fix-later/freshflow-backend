@@ -8,6 +8,8 @@ internal sealed class SettleRestaurantCreditCommandValidator : AbstractValidator
     {
         RuleFor(c => c.RestaurantId).NotEmpty();
         RuleFor(c => c.Amount).GreaterThan(0m);
+        RuleFor(c => c.PaymentMethod).IsInEnum();
+        RuleFor(c => c.Reference).MaximumLength(200);
         RuleFor(c => c.Note).MaximumLength(500);
     }
 }

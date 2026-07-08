@@ -115,7 +115,8 @@ public sealed class CreditServiceTests
         account.Charge(30m);
         _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
 
-        var result = await _sut.SettleAsync(RestaurantId, 31m, "Bank transfer", default);
+        var result = await _sut.SettleAsync(
+            RestaurantId, 31m, PaymentMethod.BankTransfer, "TXN-1", "Bank transfer", default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("CREDIT_SETTLEMENT_EXCEEDS_BALANCE");
@@ -129,7 +130,8 @@ public sealed class CreditServiceTests
         account.Charge(70m);
         _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
 
-        var result = await _sut.SettleAsync(RestaurantId, 25m, "Bank transfer", default);
+        var result = await _sut.SettleAsync(
+            RestaurantId, 25m, PaymentMethod.BankTransfer, "TXN-42", "Bank transfer", default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.OutstandingBalance.Should().Be(45m);
@@ -138,8 +140,26 @@ public sealed class CreditServiceTests
             && t.OrderId == null
             && t.Type == CreditTransactionType.Settlement
             && t.Amount == 25m
-            && t.BalanceAfter == 45m));
+            && t.BalanceAfter == 45m
+            && t.PaymentMethod == PaymentMethod.BankTransfer
+            && t.Reference == "TXN-42"));
         await _creditRepository.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Settle_WithoutReference_WritesLedgerWithNullReferenceAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        account.Charge(50m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+
+        var result = await _sut.SettleAsync(
+            RestaurantId, 20m, PaymentMethod.Manual, reference: null, note: null, default);
+
+        result.IsSuccess.Should().BeTrue();
+        _creditRepository.Received(1).AddTransaction(Arg.Is<CreditTransaction>(t =>
+            t.PaymentMethod == PaymentMethod.Manual
+            && t.Reference == null));
     }
 
     [Fact]
@@ -163,7 +183,7 @@ public sealed class CreditServiceTests
     }
 
     [Fact]
-    public async Task SetCreditLimit_NewRestaurant_CreatesAccountAndWritesAdjustmentLedgerAsync()
+    public async Task SetCreditLimit_NewRestaurant_CreatesAccountWithoutTouchingBalanceLedgerAsync()
     {
         _creditRepository.FindAccountAsync(RestaurantId, default).Returns((RestaurantCredit?)null);
 
@@ -173,17 +193,14 @@ public sealed class CreditServiceTests
         result.Value.CreditLimit.Should().Be(1000m);
         await _creditRepository.Received(1).AddAccountAsync(
             Arg.Is<RestaurantCredit>(a => a.RestaurantId == RestaurantId), default);
-        _creditRepository.Received(1).AddTransaction(Arg.Is<CreditTransaction>(t =>
-            t.RestaurantId == RestaurantId
-            && t.OrderId == null
-            && t.Type == CreditTransactionType.Adjustment
-            && t.Amount == 1000m
-            && t.BalanceAfter == 0m));
+
+        // A limit change is not a balance movement — no CreditTransaction row is written.
+        _creditRepository.DidNotReceive().AddTransaction(Arg.Any<CreditTransaction>());
         await _creditRepository.Received(1).SaveChangesAsync(default);
     }
 
     [Fact]
-    public async Task SetCreditLimit_ExistingAccountIncreaseLimit_UpdatesLimitAndWritesAdjustmentDeltaAsync()
+    public async Task SetCreditLimit_ExistingAccountIncreaseLimit_UpdatesLimitWithoutTouchingBalanceLedgerAsync()
     {
         var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
         account.Charge(40m);
@@ -193,11 +210,9 @@ public sealed class CreditServiceTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.CreditLimit.Should().Be(300m);
-        _creditRepository.Received(1).AddTransaction(Arg.Is<CreditTransaction>(t =>
-            t.RestaurantId == RestaurantId
-            && t.Type == CreditTransactionType.Adjustment
-            && t.Amount == 200m
-            && t.BalanceAfter == 40m));
+
+        // A limit change is not a balance movement — no CreditTransaction row is written.
+        _creditRepository.DidNotReceive().AddTransaction(Arg.Any<CreditTransaction>());
         await _creditRepository.Received(1).SaveChangesAsync(default);
     }
 

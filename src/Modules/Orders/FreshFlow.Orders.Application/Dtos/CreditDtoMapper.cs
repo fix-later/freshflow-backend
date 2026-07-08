@@ -30,6 +30,8 @@ internal static class CreditDtoMapper
             transaction.Amount,
             transaction.BalanceAfter,
             transaction.Note,
+            transaction.PaymentMethod is null ? null : ToSnakeCase(transaction.PaymentMethod.Value.ToString()),
+            transaction.Reference,
             transaction.CreatedAt);
 
     private static string ToSnakeCase(string value) =>
