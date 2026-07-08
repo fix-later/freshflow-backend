@@ -278,7 +278,10 @@ public sealed class PersistenceConfigurationTests
 
         // Assert
         provider.GetRequiredService<IScheduledOrderGenerationService>().Should().NotBeNull();
-        provider.GetServices<IHostedService>().Should().ContainSingle();
+        provider.GetRequiredService<ICreditStatementGenerationService>().Should().NotBeNull();
+
+        // ScheduledOrderGenerationHostedService (recurring orders) + MonthlyCreditStatementHostedService.
+        provider.GetServices<IHostedService>().Should().HaveCount(2);
     }
 
     [Fact]
@@ -309,6 +312,46 @@ public sealed class PersistenceConfigurationTests
 
         // Assert
         prop.Should().BeNull("credit_transactions is append-only and has no deleted_at column");
+    }
+
+    // Regression (SCRUM-264 review finding): a plain ToString().ToLowerInvariant() conversion
+    // would silently persist "banktransfer" instead of "bank_transfer" — Enum.Parse(ignoreCase:
+    // true) still round-trips it, so a round-trip-only test wouldn't have caught this. These
+    // assert the literal provider-side (DB) string via the model's ValueConverter directly.
+    [Theory]
+    [InlineData(PaymentMethod.BankTransfer, "bank_transfer")]
+    [InlineData(PaymentMethod.Manual, "manual")]
+    public void CreditTransactionConfiguration_PaymentMethod_ConvertsToSnakeCaseProviderValue(
+        PaymentMethod value, string expectedStored)
+    {
+        // Arrange
+        using var ctx = CreateInMemoryContext();
+        var entity = ctx.Model.FindEntityType(typeof(CreditTransaction));
+        var converter = entity!.FindProperty(nameof(CreditTransaction.PaymentMethod))!.GetValueConverter();
+
+        // Act
+        var stored = converter!.ConvertToProvider(value);
+
+        // Assert
+        stored.Should().Be(expectedStored);
+    }
+
+    [Theory]
+    [InlineData("bank_transfer", PaymentMethod.BankTransfer)]
+    [InlineData("manual", PaymentMethod.Manual)]
+    public void CreditTransactionConfiguration_PaymentMethod_ConvertsFromSnakeCaseProviderValue(
+        string stored, PaymentMethod expected)
+    {
+        // Arrange
+        using var ctx = CreateInMemoryContext();
+        var entity = ctx.Model.FindEntityType(typeof(CreditTransaction));
+        var converter = entity!.FindProperty(nameof(CreditTransaction.PaymentMethod))!.GetValueConverter();
+
+        // Act
+        var value = converter!.ConvertFromProvider(stored);
+
+        // Assert
+        value.Should().Be(expected);
     }
 
     [Fact]
@@ -531,11 +574,13 @@ public sealed class PersistenceConfigurationTests
 
         // Assert
         var savedAccount = await repository.FindAccountAsync(restaurantId, CancellationToken.None);
-        var savedTransactions = await repository.GetTransactionsAsync(restaurantId, CancellationToken.None);
+        var (savedTransactions, nextCursor) = await repository.GetTransactionsPageAsync(
+            restaurantId, cursor: null, pageSize: 50, from: null, to: null, CancellationToken.None);
         savedAccount.Should().NotBeNull();
         savedAccount!.OutstandingBalance.Should().Be(300m);
         savedTransactions.Should().ContainSingle();
         savedTransactions.Single().Type.Should().Be(CreditTransactionType.Charge);
+        nextCursor.Should().BeNull();
     }
 
     private static Order NewConfirmedOrder(Guid restaurantId, DateTime createdAt)

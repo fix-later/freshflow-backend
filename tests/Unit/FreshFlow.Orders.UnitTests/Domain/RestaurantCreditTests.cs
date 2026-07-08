@@ -1,5 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Orders.Domain.Entities;
+using FreshFlow.Orders.Domain.Enums;
+using FreshFlow.Orders.Domain.Events;
 
 namespace FreshFlow.Orders.UnitTests.Domain;
 
@@ -111,5 +113,127 @@ public sealed class RestaurantCreditTests
 
         act.Should().Throw<InvalidOperationException>();
         credit.CreditLimit.Should().Be(100m);
+    }
+
+    // ── Threshold alerting (SCRUM-266) ──────────────────────────────────────────
+
+    [Fact]
+    public void Charge_UtilizationStaysBelowWarning_DoesNotRaiseEvent()
+    {
+        var credit = new RestaurantCredit(Guid.NewGuid(), creditLimit: 100m);
+
+        credit.Charge(79m); // 79% — below the 80% warning threshold
+
+        credit.DomainEvents.Should().BeEmpty();
+        credit.LastAlertedLevel.Should().Be(CreditAlertLevel.None);
+    }
+
+    [Fact]
+    public void Charge_CrossingIntoWarningThreshold_RaisesWarningEvent()
+    {
+        var restaurantId = Guid.NewGuid();
+        var credit = new RestaurantCredit(restaurantId, creditLimit: 100m);
+
+        credit.Charge(80m); // exactly 80% utilization
+
+        credit.DomainEvents.Should().ContainSingle();
+        var evt = credit.DomainEvents.Single().Should().BeOfType<CreditLimitThresholdReachedDomainEvent>().Subject;
+        evt.RestaurantId.Should().Be(restaurantId);
+        evt.Level.Should().Be(CreditAlertLevel.Warning);
+        evt.Utilization.Should().Be(0.8m);
+        evt.OutstandingBalance.Should().Be(80m);
+        evt.CreditLimit.Should().Be(100m);
+        credit.LastAlertedLevel.Should().Be(CreditAlertLevel.Warning);
+    }
+
+    [Fact]
+    public void Charge_CrossingDirectlyIntoExceededThreshold_RaisesOnlyOneExceededEvent()
+    {
+        // A single charge jumping straight from None to Exceeded (skipping over Warning
+        // in one step) must raise exactly ONE event — for the highest level reached, not
+        // one per threshold passed through. (Charge() itself forbids overshooting past
+        // 100% of the limit, so "Exceeded" is reached at exactly full utilization.)
+        var credit = new RestaurantCredit(Guid.NewGuid(), creditLimit: 100m);
+
+        credit.Charge(100m); // 100% utilization in one shot, straight from 0%
+
+        credit.DomainEvents.Should().ContainSingle();
+        credit.DomainEvents.Single().Should().BeOfType<CreditLimitThresholdReachedDomainEvent>()
+            .Which.Level.Should().Be(CreditAlertLevel.Exceeded);
+        credit.LastAlertedLevel.Should().Be(CreditAlertLevel.Exceeded);
+    }
+
+    [Fact]
+    public void Charge_AlreadyAtWarningLevel_FurtherChargeStillWithinWarning_DoesNotReRaise()
+    {
+        var credit = new RestaurantCredit(Guid.NewGuid(), creditLimit: 100m);
+        credit.Charge(80m); // crosses into Warning, raises + clears via ClearDomainEvents below
+        credit.ClearDomainEvents();
+
+        credit.Charge(10m); // now 90% — still Warning level, not yet Exceeded
+
+        credit.DomainEvents.Should().BeEmpty("anti-spam: no re-emit while still at the same level");
+        credit.LastAlertedLevel.Should().Be(CreditAlertLevel.Warning);
+    }
+
+    [Fact]
+    public void Charge_FromWarningCrossingIntoExceeded_RaisesExceededEvent()
+    {
+        var credit = new RestaurantCredit(Guid.NewGuid(), creditLimit: 100m);
+        credit.Charge(85m); // Warning
+        credit.ClearDomainEvents();
+
+        credit.Charge(15m); // now 100% — crosses into Exceeded
+
+        credit.DomainEvents.Should().ContainSingle();
+        credit.DomainEvents.Single().Should().BeOfType<CreditLimitThresholdReachedDomainEvent>()
+            .Which.Level.Should().Be(CreditAlertLevel.Exceeded);
+        credit.LastAlertedLevel.Should().Be(CreditAlertLevel.Exceeded);
+    }
+
+    [Fact]
+    public void Settle_DroppingUtilizationBelowWarningThreshold_RearmsToNoneWithoutRaisingEvent()
+    {
+        var credit = new RestaurantCredit(Guid.NewGuid(), creditLimit: 100m);
+        credit.Charge(90m); // Warning
+        credit.ClearDomainEvents();
+
+        credit.Settle(50m); // now 40% — back under Warning
+
+        credit.DomainEvents.Should().BeEmpty("re-arming must never itself raise an event");
+        credit.LastAlertedLevel.Should().Be(CreditAlertLevel.None);
+    }
+
+    [Fact]
+    public void Refund_DroppingFromExceededToWarningRange_RearmsToWarningOnly()
+    {
+        // Re-arm is incremental per level, not a hard reset to None — dropping from
+        // Exceeded to still-Warning-range utilization re-arms only down to Warning.
+        // (Charge() forbids overshooting past 100% of the limit, so Exceeded is reached at
+        // exactly full utilization.)
+        var credit = new RestaurantCredit(Guid.NewGuid(), creditLimit: 100m);
+        credit.Charge(100m); // Exceeded
+        credit.ClearDomainEvents();
+
+        credit.Refund(15m); // now 85% — Warning range, not below it
+
+        credit.DomainEvents.Should().BeEmpty();
+        credit.LastAlertedLevel.Should().Be(CreditAlertLevel.Warning);
+    }
+
+    [Fact]
+    public void Charge_AfterRearmToNone_RecrossingWarningThreshold_RaisesEventAgain()
+    {
+        var credit = new RestaurantCredit(Guid.NewGuid(), creditLimit: 100m);
+        credit.Charge(90m); // Warning
+        credit.Settle(60m); // back to 30% — re-arms to None
+        credit.ClearDomainEvents();
+
+        credit.Charge(50m); // now 80% again — re-crosses Warning
+
+        credit.DomainEvents.Should().ContainSingle();
+        credit.DomainEvents.Single().Should().BeOfType<CreditLimitThresholdReachedDomainEvent>()
+            .Which.Level.Should().Be(CreditAlertLevel.Warning);
+        credit.LastAlertedLevel.Should().Be(CreditAlertLevel.Warning);
     }
 }

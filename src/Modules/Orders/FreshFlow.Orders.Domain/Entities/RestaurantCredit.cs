@@ -1,7 +1,22 @@
+using FreshFlow.Orders.Domain.Enums;
+using FreshFlow.Orders.Domain.Events;
+using FreshFlow.SharedKernel.Domain;
+
 namespace FreshFlow.Orders.Domain.Entities;
 
-public sealed class RestaurantCredit
+/// <summary>
+/// Aggregate root (DEC-CRE-04, SCRUM-266) — became one specifically to raise
+/// <see cref="CreditLimitThresholdReachedDomainEvent"/> from <see cref="Charge"/> when a
+/// charge crosses a not-yet-alerted utilization threshold. <see cref="LastAlertedLevel"/>
+/// is the anti-spam state: an upward crossing only raises while the new level is above it;
+/// <see cref="Settle"/>/<see cref="Refund"/> re-arm it (lower it, never raise it) when
+/// utilization drops back below it, without raising an event themselves.
+/// </summary>
+public sealed class RestaurantCredit : AggregateRoot
 {
+    private const decimal WarningUtilization = 0.8m;
+    private const decimal ExceededUtilization = 1.0m;
+
     private RestaurantCredit() { } // EF Core
 
     public RestaurantCredit(Guid restaurantId, decimal creditLimit = 0m)
@@ -15,13 +30,13 @@ public sealed class RestaurantCredit
         RestaurantId = restaurantId;
         CreditLimit = creditLimit;
         OutstandingBalance = 0m;
-        UpdatedAt = DateTime.UtcNow;
+        LastAlertedLevel = CreditAlertLevel.None;
     }
 
     public Guid RestaurantId { get; private set; }
     public decimal CreditLimit { get; private set; }
     public decimal OutstandingBalance { get; private set; }
-    public DateTime UpdatedAt { get; private set; }
+    public CreditAlertLevel LastAlertedLevel { get; private set; }
 
     public decimal AvailableCredit => CreditLimit - OutstandingBalance;
 
@@ -37,6 +52,7 @@ public sealed class RestaurantCredit
 
         OutstandingBalance += amount;
         Touch();
+        RaiseThresholdEventIfCrossed();
     }
 
     public void Settle(decimal amount)
@@ -48,6 +64,7 @@ public sealed class RestaurantCredit
 
         OutstandingBalance -= amount;
         Touch();
+        RearmAlertIfBelowThreshold();
     }
 
     public void Refund(decimal amount)
@@ -59,6 +76,7 @@ public sealed class RestaurantCredit
 
         OutstandingBalance -= amount;
         Touch();
+        RearmAlertIfBelowThreshold();
     }
 
     public void SetCreditLimit(decimal newLimit)
@@ -80,4 +98,44 @@ public sealed class RestaurantCredit
     }
 
     private void Touch() => UpdatedAt = DateTime.UtcNow;
+
+    // ── Threshold alerting (SCRUM-266) ──────────────────────────────────────────
+
+    /// <summary>
+    /// Warning = [80%, 100%) utilization, Exceeded = &gt;=100%. Guards CreditLimit &lt;= 0
+    /// to avoid a decimal divide-by-zero — an account with no credit limit is always at
+    /// level None (it can never carry a positive balance: <see cref="Charge"/> would have
+    /// already rejected any charge against a zero limit).
+    /// </summary>
+    private CreditAlertLevel CurrentAlertLevel()
+    {
+        if (CreditLimit <= 0m)
+            return CreditAlertLevel.None;
+
+        var utilization = OutstandingBalance / CreditLimit;
+        if (utilization >= ExceededUtilization)
+            return CreditAlertLevel.Exceeded;
+        if (utilization >= WarningUtilization)
+            return CreditAlertLevel.Warning;
+        return CreditAlertLevel.None;
+    }
+
+    private void RaiseThresholdEventIfCrossed()
+    {
+        var level = CurrentAlertLevel();
+        if (level <= LastAlertedLevel)
+            return; // anti-spam: not a NEW crossing
+
+        var utilization = CreditLimit > 0m ? OutstandingBalance / CreditLimit : 0m;
+        RaiseDomainEvent(new CreditLimitThresholdReachedDomainEvent(
+            RestaurantId, level, utilization, OutstandingBalance, CreditLimit, DateTime.UtcNow));
+        LastAlertedLevel = level;
+    }
+
+    private void RearmAlertIfBelowThreshold()
+    {
+        var level = CurrentAlertLevel();
+        if (level < LastAlertedLevel)
+            LastAlertedLevel = level; // re-arm — never raises an event on the way down
+    }
 }

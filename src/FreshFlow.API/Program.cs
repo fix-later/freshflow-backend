@@ -1,18 +1,19 @@
 using System.Threading.RateLimiting;
 using FluentValidation;
 using FreshFlow.API.Assistant;
+using FreshFlow.API.Swagger;
 using FreshFlow.Auth.Infrastructure;
 using FreshFlow.Catalog.Infrastructure;
 using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Notifications.Infrastructure;
 using FreshFlow.Orders.Infrastructure;
 using FreshFlow.Orders.Infrastructure.Realtime;
 using FreshFlow.Pricing.Infrastructure;
 using FreshFlow.Pricing.Infrastructure.Realtime;
+using MicroElements.Swashbuckle.FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
-using MicroElements.Swashbuckle.FluentValidation.AspNetCore;
-using FreshFlow.API.Swagger;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -183,6 +184,7 @@ builder.Services.AddAuthModule(builder.Configuration);
 builder.Services.AddCatalogModule(builder.Configuration);
 builder.Services.AddPricingModule(builder.Configuration);
 builder.Services.AddOrdersModule(builder.Configuration);
+builder.Services.AddNotificationsModule(builder.Configuration);
 
 // ── AI Shopping Assistant (Tầng 2 — host-layer orchestration) ──
 builder.Services.AddAssistant(builder.Configuration);

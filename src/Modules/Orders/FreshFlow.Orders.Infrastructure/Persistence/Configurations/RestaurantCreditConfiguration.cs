@@ -1,4 +1,5 @@
 using FreshFlow.Orders.Domain.Entities;
+using FreshFlow.Orders.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -31,6 +32,25 @@ internal sealed class RestaurantCreditConfiguration : IEntityTypeConfiguration<R
             .IsRequired()
             .IsConcurrencyToken();
 
+        // SCRUM-266 anti-spam state — single-word enum values, ToLowerInvariant is safe
+        // here (unlike PaymentMethod's two-word "bank_transfer", see the 264 lesson).
+        builder.Property(c => c.LastAlertedLevel)
+            .HasColumnName("last_alerted_level")
+            .IsRequired()
+            .HasMaxLength(20)
+            .HasConversion(
+                v => v.ToString().ToLowerInvariant(),
+                v => Enum.Parse<CreditAlertLevel>(v, ignoreCase: true));
+
         builder.Ignore(c => c.AvailableCredit);
+
+        // RestaurantCredit became an AggregateRoot (DEC-CRE-04) purely to raise domain
+        // events — it does NOT use BaseEntity's Id/CreatedAt/DeletedAt at all (its PK is
+        // RestaurantId, and restaurant_credit is not a soft-deletable table). Ignore them
+        // explicitly so EF doesn't try to map spurious columns for them.
+        builder.Ignore(c => c.Id);
+        builder.Ignore(c => c.CreatedAt);
+        builder.Ignore(c => c.DeletedAt);
+        builder.Ignore(c => c.IsDeleted);
     }
 }
