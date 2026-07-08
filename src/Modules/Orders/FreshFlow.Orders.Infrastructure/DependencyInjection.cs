@@ -41,12 +41,15 @@ public static class DependencyInjection
         services.AddScoped<IOrderIssueRepository, OrderIssueRepository>();
         services.AddScoped<IScheduledOrderRepository, ScheduledOrderRepository>();
         services.AddScoped<ICreditRepository, CreditRepository>();
+        services.AddScoped<ICreditStatementRepository, CreditStatementRepository>();
 
         // Application services
         services.AddScoped<ICreditService, CreditService>();
+        services.AddScoped<ICreditStatementGenerationService, CreditStatementGenerationService>();
         services.AddScoped<IScheduledOrderGenerationService, ScheduledOrderGenerationService>();
         services.AddScoped<IOrderBroadcastService, OrderBroadcastService>();
         services.AddHostedService<ScheduledOrderGenerationHostedService>();
+        services.AddHostedService<MonthlyCreditStatementHostedService>();
 
         // Cross-module read projections used by Orders without project references to Auth/Catalog/Pricing.
         services.AddScoped<IMarketProductReader, MarketProductReader>();
