@@ -38,7 +38,8 @@ public sealed class NotificationWriter(
             if (result.IsSuccess)
                 persisted.MarkSent();
             else
-                persisted.MarkFailed(result.Error.Message);
+                persisted.MarkFailed(
+                    string.IsNullOrWhiteSpace(result.Error.Message) ? "Unknown error" : result.Error.Message);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

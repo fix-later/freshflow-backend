@@ -44,6 +44,9 @@ internal sealed class NotificationDeviceConfiguration : IEntityTypeConfiguration
         builder.Property(d => d.RevokedAt)
             .HasColumnName("revoked_at");
 
+        builder.Property(d => d.DeletedAt)
+            .HasColumnName("deleted_at");
+
         builder.HasIndex(d => d.UserId)
             .HasDatabaseName("idx_notification_devices_user_id");
 

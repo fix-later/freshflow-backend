@@ -244,7 +244,7 @@ public sealed class NotificationRepositoryTests
         var dueWithoutAttemptAt = await AddFailedNotificationAsync(sut, db, "Due null", null, attempts: 1);
         await AddFailedNotificationAsync(sut, db, "Recent", now.AddSeconds(-10), attempts: 1);
         await AddFailedNotificationAsync(sut, db, "Exhausted", now.AddMinutes(-5), attempts: 3);
-        await AddNotificationAsync(sut, db, Guid.NewGuid(), "Pending", now.AddMinutes(-5));
+        var pending = await AddNotificationAsync(sut, db, Guid.NewGuid(), "Pending", now.AddMinutes(-5));
         var sent = await AddNotificationAsync(sut, db, Guid.NewGuid(), "Sent", now.AddMinutes(-5));
         sent.MarkSent();
         await sut.UpdateAsync(sent, default);
@@ -255,11 +255,32 @@ public sealed class NotificationRepositoryTests
             batchSize: 10,
             default);
 
-        result.Select(n => n.Id).Should().BeEquivalentTo([due.Id, dueWithoutAttemptAt.Id]);
+        result.Select(n => n.Id).Should().BeEquivalentTo([due.Id, dueWithoutAttemptAt.Id, pending.Id]);
         result.Should().OnlyContain(n =>
-            n.SendStatus == NotificationSendStatus.failed &&
+            (n.SendStatus == NotificationSendStatus.failed || n.SendStatus == NotificationSendStatus.pending) &&
             n.AttemptCount < 3 &&
             (n.LastAttemptAt == null || n.LastAttemptAt < now.AddMinutes(-1)));
+    }
+
+    [Fact]
+    public async Task GetRetryablePageAsync_NeverAttemptedPendingRow_IsIncludedInRetryBatchAsync()
+    {
+        using var db = CreateContext();
+        var sut = new NotificationRepository(db);
+        var now = DateTime.UtcNow;
+        var stuckPending = await AddNotificationAsync(sut, db, Guid.NewGuid(), "Stuck pending", now.AddMinutes(-10));
+
+        var result = await sut.GetRetryablePageAsync(
+            maxAttempts: 3,
+            backoffThreshold: now.AddMinutes(-1),
+            batchSize: 10,
+            default);
+
+        result.Select(n => n.Id).Should().Contain(stuckPending.Id);
+        var row = result.Single(n => n.Id == stuckPending.Id);
+        row.SendStatus.Should().Be(NotificationSendStatus.pending);
+        row.AttemptCount.Should().Be(0);
+        row.LastAttemptAt.Should().BeNull();
     }
 
     [Fact]

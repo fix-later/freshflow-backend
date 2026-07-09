@@ -53,6 +53,9 @@ public sealed class NotificationPersistenceConfigurationTests
         entity.FindProperty(nameof(NotificationDevice.RevokedAt))!
             .GetColumnName(table)
             .Should().Be("revoked_at");
+        entity.FindProperty(nameof(NotificationDevice.DeletedAt))!
+            .GetColumnName(table)
+            .Should().Be("deleted_at");
 
         var activeTokenIndex = entity.GetIndexes()
             .Single(i => i.Properties.Select(p => p.Name)
@@ -95,6 +98,9 @@ public sealed class NotificationPersistenceConfigurationTests
         entity.FindProperty(nameof(Notification.FailedReason))!
             .GetColumnName(table)
             .Should().Be("failed_reason");
+        entity.FindProperty(nameof(Notification.DeletedAt))!
+            .GetColumnName(table)
+            .Should().Be("deleted_at");
 
         entity.GetForeignKeys().Should().BeEmpty(
             "notifications.user_id is a cross-module plain Guid per DEC-NOT-12");

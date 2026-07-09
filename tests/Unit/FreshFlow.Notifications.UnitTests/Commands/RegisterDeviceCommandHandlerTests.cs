@@ -117,4 +117,17 @@ public sealed class RegisterDeviceCommandHandlerTests
             Arg.Any<string?>(),
             Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task Handle_EmptyToken_ReturnsValidationErrorAsync()
+    {
+        var result = await _sut.Handle(
+            new RegisterDeviceCommand(Guid.NewGuid(), "", "ios", null), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("VALIDATION_ERROR");
+        await _devices.DidNotReceive().RegisterAsync(
+            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<NotificationDevicePlatform>(),
+            Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
 }

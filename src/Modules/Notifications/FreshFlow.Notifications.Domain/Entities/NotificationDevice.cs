@@ -35,6 +35,7 @@ public sealed class NotificationDevice
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
     public DateTime? RevokedAt { get; private set; }
+    public DateTime? DeletedAt { get; private set; }
 
     public bool IsActive => RevokedAt is null;
 

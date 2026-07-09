@@ -71,7 +71,8 @@ public sealed class NotificationDeviceControllerTests
             ControllerContext = CreateControllerContext(userId)
         };
 
-        var result = await controller.UnregisterDeviceAsync("push-token", default);
+        var result = await controller.UnregisterDeviceAsync(
+            new UnregisterNotificationDeviceRequest("push-token"), default);
 
         result.Should().BeOfType<OkObjectResult>();
         await sender.Received(1).Send(
@@ -94,7 +95,8 @@ public sealed class NotificationDeviceControllerTests
             ControllerContext = CreateControllerContext(userId)
         };
 
-        var result = await controller.UnregisterDeviceAsync("missing-token", default);
+        var result = await controller.UnregisterDeviceAsync(
+            new UnregisterNotificationDeviceRequest("missing-token"), default);
 
         result.Should().BeOfType<NotFoundObjectResult>();
     }

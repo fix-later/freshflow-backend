@@ -30,7 +30,8 @@ public sealed class NotificationRetryService(
                     if (result.IsSuccess)
                         notification.MarkSent();
                     else
-                        notification.MarkFailed(result.Error.Message);
+                        notification.MarkFailed(
+                            string.IsNullOrWhiteSpace(result.Error.Message) ? "Unknown error" : result.Error.Message);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {

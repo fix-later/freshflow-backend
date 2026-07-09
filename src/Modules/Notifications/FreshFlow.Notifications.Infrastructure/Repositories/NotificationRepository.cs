@@ -91,9 +91,12 @@ internal sealed class NotificationRepository(AppDbContext db) : INotificationRep
         if (batchSize <= 0)
             throw new ArgumentException("batchSize must be greater than zero.", nameof(batchSize));
 
+        // pending rows are included because a crash or exception between AddAsync and the final
+        // UpdateAsync can leave a row stuck in pending forever; treating it like failed with
+        // 0 attempts lets the retry job pick it up.
         return await db.Set<Notification>()
             .Where(n =>
-                n.SendStatus == NotificationSendStatus.failed &&
+                (n.SendStatus == NotificationSendStatus.failed || n.SendStatus == NotificationSendStatus.pending) &&
                 n.AttemptCount < maxAttempts &&
                 (n.LastAttemptAt == null || n.LastAttemptAt < backoffThreshold))
             .OrderBy(n => n.LastAttemptAt)

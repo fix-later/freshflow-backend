@@ -46,6 +46,7 @@ public sealed class Notification
     public int AttemptCount { get; private set; }
     public DateTime? LastAttemptAt { get; private set; }
     public string? FailedReason { get; private set; }
+    public DateTime? DeletedAt { get; private set; }
 
     public void MarkRead()
     {
@@ -66,6 +67,9 @@ public sealed class Notification
 
     public void MarkFailed(string reason)
     {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Failure reason is required.", nameof(reason));
+
         SendStatus = NotificationSendStatus.failed;
         AttemptCount++;
         LastAttemptAt = DateTime.UtcNow;

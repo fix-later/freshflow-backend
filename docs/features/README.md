@@ -33,7 +33,7 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 
 | Doc | Loại | Trạng thái |
 |---|---|---|
-| [AUDIT-2026-07-08 not backend plan](./notifications/AUDIT-2026-07-08-not-backend-plan.md) | Audit / Plan | ⏳ Chưa code (SCRUM-327/330/331/334) |
+| [AUDIT-2026-07-08 not backend plan](./notifications/AUDIT-2026-07-08-not-backend-plan.md) | Audit / Plan | ✅ Hoàn thành (SCRUM-327/330/331/334) |
 
 ## logistics — Logistics module
 

@@ -71,6 +71,9 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
             .HasColumnName("failed_reason")
             .HasColumnType("text");
 
+        builder.Property(n => n.DeletedAt)
+            .HasColumnName("deleted_at");
+
         builder.HasIndex(n => n.UserId)
             .HasDatabaseName("idx_notifications_user_id");
 

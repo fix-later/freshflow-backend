@@ -103,4 +103,23 @@ public sealed class NotificationTests
         notification.LastAttemptAt.Should().NotBeNull();
         notification.FailedReason.Should().Be("push failed");
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void MarkFailed_EmptyOrWhitespaceReason_ThrowsArgumentException(string? reason)
+    {
+        var notification = new Notification(
+            Guid.NewGuid(),
+            NotificationType.system,
+            "Title",
+            "Body",
+            null);
+
+        var act = () => notification.MarkFailed(reason!);
+
+        act.Should().Throw<ArgumentException>()
+            .WithParameterName("reason");
+    }
 }
