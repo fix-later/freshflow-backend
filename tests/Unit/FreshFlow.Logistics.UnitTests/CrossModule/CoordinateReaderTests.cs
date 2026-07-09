@@ -45,6 +45,7 @@ public sealed class CoordinateReaderTests
     {
         using var fixture = await SqliteFixture.CreateAsync();
         var restaurantId = Guid.NewGuid();
+        await fixture.InsertRestaurantAsync(restaurantId, "Pho Fresh");
         await fixture.InsertDeliveryAddressAsync(restaurantId, 10.111m, 106.222m, isDefault: true);
         await fixture.InsertDeliveryAddressAsync(restaurantId, 10.333m, 106.444m, isDefault: false);
         var sut = new RestaurantCoordinateReader(fixture.Context);
@@ -53,6 +54,7 @@ public sealed class CoordinateReaderTests
 
         result.Should().NotBeNull();
         result!.RestaurantId.Should().Be(restaurantId);
+        result.Name.Should().Be("Pho Fresh");
         result.Latitude.Should().Be(10.111m);
         result.Longitude.Should().Be(106.222m);
     }
@@ -62,6 +64,7 @@ public sealed class CoordinateReaderTests
     {
         using var fixture = await SqliteFixture.CreateAsync();
         var restaurantId = Guid.NewGuid();
+        await fixture.InsertRestaurantAsync(restaurantId, "Deleted Address");
         await fixture.InsertDeliveryAddressAsync(restaurantId, 10.111m, 106.222m, isDefault: false);
         await fixture.InsertDeliveryAddressAsync(restaurantId, 10.333m, 106.444m, isDefault: true, deleted: true);
         var sut = new RestaurantCoordinateReader(fixture.Context);
@@ -109,6 +112,14 @@ public sealed class CoordinateReaderTests
 
             await context.Database.ExecuteSqlRawAsync(
                 """
+                CREATE TABLE restaurants (
+                    "Id" TEXT NOT NULL,
+                    "Name" TEXT NOT NULL
+                );
+                """);
+
+            await context.Database.ExecuteSqlRawAsync(
+                """
                 CREATE TABLE delivery_addresses (
                     "RestaurantId" TEXT NOT NULL,
                     "Latitude" TEXT NULL,
@@ -131,6 +142,13 @@ public sealed class CoordinateReaderTests
                 $"""
                 INSERT INTO markets ("Id", "Name", "Latitude", "Longitude", "DeletedAt")
                 VALUES ({id}, {name}, {latitude}, {longitude}, {DeletedAt(deleted)});
+                """);
+
+        public async Task InsertRestaurantAsync(Guid id, string name) =>
+            await Context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                INSERT INTO restaurants ("Id", "Name")
+                VALUES ({id}, {name});
                 """);
 
         public async Task InsertDeliveryAddressAsync(

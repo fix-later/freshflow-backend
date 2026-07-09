@@ -49,7 +49,7 @@ public static class ErrorExtensions
                         or "DELIVERY_DATE_OUT_OF_WINDOW" or "INVALID_ACTUAL_QUANTITY"
                         or "SCHEDULED_ORDER_FIRST_RUN_IN_PAST" or "INVALID_ISSUE_QUANTITY"
                         or "HUB_RELAY_NOT_SUPPORTED" or "STOP_LIMIT_EXCEEDED"
-                        or "MISSING_COORDINATES"
+                        or "MISSING_COORDINATES" or "INVALID_STOP_ORDER"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 

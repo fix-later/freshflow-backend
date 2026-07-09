@@ -85,4 +85,41 @@ public sealed class DeliveryRoute
         OptimizationCriteria = criteria;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    public void AdjustStopOrder(IReadOnlyList<Guid> orderedEntityIds)
+    {
+        if (Status != RouteStatus.selected)
+            throw new InvalidOperationException("Only selected routes can have their stop order adjusted.");
+
+        ArgumentNullException.ThrowIfNull(orderedEntityIds);
+
+        var currentIds = Stops.Select(stop => stop.EntityId).ToHashSet();
+        var newIds = orderedEntityIds.ToHashSet();
+
+        if (orderedEntityIds.Count != Stops.Count || !currentIds.SetEquals(newIds))
+        {
+            throw new ArgumentException(
+                "StopOrder must be a permutation of the route's existing stop entity ids.",
+                nameof(orderedEntityIds));
+        }
+
+        var byEntityId = Stops.ToDictionary(stop => stop.EntityId);
+        Stops = orderedEntityIds
+            .Select((id, index) => byEntityId[id] with { StopOrder = index })
+            .ToList()
+            .AsReadOnly();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void MarkReviewed()
+    {
+        if (Status != RouteStatus.selected)
+            throw new InvalidOperationException("Only selected routes can be reviewed.");
+
+        if (OptimizationCriteria is null)
+            throw new InvalidOperationException("Route must be optimized before it can be reviewed.");
+
+        Status = RouteStatus.reviewed;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

@@ -16,6 +16,6 @@ internal sealed class RestaurantCoordinateReader(AppDbContext db) : IRestaurantC
 
         return row is null
             ? null
-            : new RestaurantCoordinateDto(row.RestaurantId, row.Latitude, row.Longitude);
+            : new RestaurantCoordinateDto(row.RestaurantId, row.Name, row.Latitude, row.Longitude);
     }
 }

@@ -9,6 +9,10 @@ public interface IRouteOptimizer
         IReadOnlyList<RouteStop> stops,
         DateOnly serviceDate,
         OptimizationCriteria criteria);
+
+    public RouteOptimizationResult Recalculate(
+        IReadOnlyList<RouteStop> stops,
+        DateOnly serviceDate);
 }
 
 public sealed record RouteOptimizationResult(

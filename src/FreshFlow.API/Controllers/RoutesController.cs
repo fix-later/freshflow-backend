@@ -1,6 +1,7 @@
 using FreshFlow.API.Extensions;
 using FreshFlow.Logistics.Application.Commands.CalculateRoute;
 using FreshFlow.Logistics.Application.Commands.OptimizeRoute;
+using FreshFlow.Logistics.Application.Commands.ReviewRoute;
 using FreshFlow.Logistics.Application.Commands.SelectRoute;
 using FreshFlow.Logistics.Application.Queries.GetRoute;
 using FreshFlow.Logistics.Application.Queries.ListRoutes;
@@ -52,6 +53,16 @@ public sealed class RoutesController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    [HttpPost("{id:guid}/review")]
+    public async Task<IActionResult> ReviewRouteAsync(
+        Guid id,
+        [FromBody] ReviewRouteRequest? body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new ReviewRouteCommand(id, body?.StopOrder), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     [HttpGet]
     public async Task<IActionResult> ListRoutesAsync(
         [FromQuery] string? cursor = null,
@@ -83,3 +94,5 @@ public sealed record CalculateRouteRequest(
     bool? CompareWithHub);
 
 public sealed record OptimizeRouteRequest(string OptimizationCriteria);
+
+public sealed record ReviewRouteRequest(IReadOnlyList<Guid>? StopOrder);

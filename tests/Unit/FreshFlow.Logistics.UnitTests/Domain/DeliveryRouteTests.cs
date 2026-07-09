@@ -150,22 +150,125 @@ public sealed class DeliveryRouteTests
         act.Should().Throw<InvalidOperationException>();
     }
 
-    private static RouteStop MarketStop(int stopOrder = 0) =>
+    [Fact]
+    public void AdjustStopOrder_RouteNotSelected_ThrowsInvalidOperationException()
+    {
+        var marketId = Guid.NewGuid();
+        var restaurantId = Guid.NewGuid();
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [MarketStop(id: marketId), RestaurantStop(1, restaurantId)],
+            null);
+
+        var act = () => route.AdjustStopOrder([restaurantId, marketId]);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void AdjustStopOrder_InvalidPermutation_ThrowsArgumentException()
+    {
+        var marketId = Guid.NewGuid();
+        var restaurantId = Guid.NewGuid();
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [MarketStop(id: marketId), RestaurantStop(1, restaurantId)],
+            null);
+        route.Select();
+
+        var act = () => route.AdjustStopOrder([restaurantId, restaurantId]);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void AdjustStopOrder_ValidPermutation_RenumbersStops()
+    {
+        var marketId = Guid.NewGuid();
+        var firstRestaurantId = Guid.NewGuid();
+        var secondRestaurantId = Guid.NewGuid();
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [
+                MarketStop(id: marketId),
+                RestaurantStop(1, firstRestaurantId),
+                RestaurantStop(2, secondRestaurantId)
+            ],
+            null);
+        route.Select();
+
+        route.AdjustStopOrder([marketId, secondRestaurantId, firstRestaurantId]);
+
+        route.Stops.Select(stop => stop.EntityId).Should().Equal(marketId, secondRestaurantId, firstRestaurantId);
+        route.Stops.Select(stop => stop.StopOrder).Should().Equal(0, 1, 2);
+    }
+
+    [Fact]
+    public void MarkReviewed_SelectedOptimizedRoute_TransitionsToReviewed()
+    {
+        var route = OptimizedSelectedRoute();
+
+        route.MarkReviewed();
+
+        route.Status.Should().Be(RouteStatus.reviewed);
+    }
+
+    [Fact]
+    public void MarkReviewed_SelectedRouteWithoutOptimization_ThrowsInvalidOperationException()
+    {
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [MarketStop(), RestaurantStop(1)],
+            null);
+        route.Select();
+
+        var act = route.MarkReviewed;
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Theory]
+    [InlineData(RouteStatus.planned)]
+    [InlineData(RouteStatus.reviewed)]
+    [InlineData(RouteStatus.assigned)]
+    [InlineData(RouteStatus.cancelled)]
+    public void MarkReviewed_InvalidState_ThrowsInvalidOperationException(RouteStatus status)
+    {
+        var route = OptimizedSelectedRoute();
+        SetStatus(route, status);
+
+        var act = route.MarkReviewed;
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    private static DeliveryRoute OptimizedSelectedRoute()
+    {
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [MarketStop(), RestaurantStop(1)],
+            null);
+        route.ApplyOptimization(route.Stops, 10m, 20, 50000m, OptimizationCriteria.distance);
+        route.Select();
+        return route;
+    }
+
+    private static RouteStop MarketStop(int stopOrder = 0, Guid? id = null) =>
         new(
             stopOrder,
             StopEntityType.market,
-            Guid.NewGuid(),
+            id ?? Guid.NewGuid(),
             "Market",
             10.1m,
             106.1m,
             null,
             null);
 
-    private static RouteStop RestaurantStop(int stopOrder = 0) =>
+    private static RouteStop RestaurantStop(int stopOrder = 0, Guid? id = null) =>
         new(
             stopOrder,
             StopEntityType.restaurant,
-            Guid.NewGuid(),
+            id ?? Guid.NewGuid(),
             "Restaurant",
             10.2m,
             106.2m,

@@ -35,13 +35,7 @@ internal sealed class NearestNeighborTwoOptOptimizer(IConfiguration config) : IR
 
         var optimizedStops = marketStops
             .Concat(optimizedRestaurants)
-            .Select((stop, index) => stop with { StopOrder = index })
             .ToList();
-
-        var totalDistanceKm = CalculateTotalDistance(optimizedStops);
-        var roundedDistanceKm = Math.Round((decimal)totalDistanceKm, 2, MidpointRounding.AwayFromZero);
-        var durationMinutes = (int)Math.Round(totalDistanceKm / _avgSpeedKmh * 60, MidpointRounding.AwayFromZero);
-        var estimatedCost = Math.Round(roundedDistanceKm * _costPerKm, 2, MidpointRounding.AwayFromZero);
 
         // MVP caveat: avg_speed_kmh and cost_per_km are constants for every edge,
         // so TIME and COST are monotonic functions of DISTANCE. The selected criterion
@@ -49,8 +43,29 @@ internal sealed class NearestNeighborTwoOptOptimizer(IConfiguration config) : IR
         // road-distance and cost models are introduced.
         _ = criteria;
 
+        return BuildResult(optimizedStops, serviceDate);
+    }
+
+    public RouteOptimizationResult Recalculate(IReadOnlyList<RouteStop> stops, DateOnly serviceDate)
+    {
+        ArgumentNullException.ThrowIfNull(stops);
+
+        return BuildResult(stops.OrderBy(stop => stop.StopOrder).ToList(), serviceDate);
+    }
+
+    private RouteOptimizationResult BuildResult(List<RouteStop> finalStops, DateOnly serviceDate)
+    {
+        var renumberedStops = finalStops
+            .Select((stop, index) => stop with { StopOrder = index })
+            .ToList();
+
+        var totalDistanceKm = CalculateTotalDistance(renumberedStops);
+        var roundedDistanceKm = Math.Round((decimal)totalDistanceKm, 2, MidpointRounding.AwayFromZero);
+        var durationMinutes = (int)Math.Round(totalDistanceKm / _avgSpeedKmh * 60, MidpointRounding.AwayFromZero);
+        var estimatedCost = Math.Round(roundedDistanceKm * _costPerKm, 2, MidpointRounding.AwayFromZero);
+
         return new RouteOptimizationResult(
-            ApplyProvisionalEtas(optimizedStops, serviceDate).AsReadOnly(),
+            ApplyProvisionalEtas(renumberedStops, serviceDate).AsReadOnly(),
             roundedDistanceKm,
             durationMinutes,
             estimatedCost);

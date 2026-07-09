@@ -7,4 +7,4 @@ public interface IRestaurantCoordinateReader
         CancellationToken ct);
 }
 
-public sealed record RestaurantCoordinateDto(Guid RestaurantId, decimal? Latitude, decimal? Longitude);
+public sealed record RestaurantCoordinateDto(Guid RestaurantId, string Name, decimal? Latitude, decimal? Longitude);

@@ -21,7 +21,7 @@ public sealed class CalculateRouteCommandHandlerTests
         markets.FindByIdAsync(marketId, Arg.Any<CancellationToken>())
             .Returns(new MarketCoordinateDto(marketId, "Market A", 10.1m, 106.1m));
         restaurants.FindByRestaurantIdAsync(restaurantId, Arg.Any<CancellationToken>())
-            .Returns(new RestaurantCoordinateDto(restaurantId, 10.2m, 106.2m));
+            .Returns(new RestaurantCoordinateDto(restaurantId, "Bistro B", 10.2m, 106.2m));
         var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
 
         var result = await sut.Handle(
@@ -43,6 +43,8 @@ public sealed class CalculateRouteCommandHandlerTests
         result.Value.Stops[0].EntityName.Should().Be("Market A");
         result.Value.Stops[1].EntityType.Should().Be("restaurant");
         result.Value.Stops[1].EntityId.Should().Be(restaurantId);
+        result.Value.Stops[1].EntityName.Should().Be("Bistro B");
+        result.Value.Stops[1].EntityName.Should().NotBe(restaurantId.ToString());
         repository.Routes.Should().ContainSingle(route => route.RouteType == RouteType.direct);
         repository.SaveChangesCount.Should().Be(1);
     }
@@ -111,7 +113,7 @@ public sealed class CalculateRouteCommandHandlerTests
         markets.FindByIdAsync(marketId, Arg.Any<CancellationToken>())
             .Returns(new MarketCoordinateDto(marketId, "Market A", 10.1m, 106.1m));
         restaurants.FindByRestaurantIdAsync(restaurantId, Arg.Any<CancellationToken>())
-            .Returns(new RestaurantCoordinateDto(restaurantId, 10.2m, null));
+            .Returns(new RestaurantCoordinateDto(restaurantId, "Bistro B", 10.2m, null));
         var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
 
         var result = await sut.Handle(Command(marketId, restaurantId), default);

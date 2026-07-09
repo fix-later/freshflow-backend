@@ -3,6 +3,7 @@ using FluentAssertions;
 using FreshFlow.API.Controllers;
 using FreshFlow.Logistics.Application.Commands.CalculateRoute;
 using FreshFlow.Logistics.Application.Commands.OptimizeRoute;
+using FreshFlow.Logistics.Application.Commands.ReviewRoute;
 using FreshFlow.Logistics.Application.Commands.SelectRoute;
 using FreshFlow.Logistics.Application.Dtos;
 using FreshFlow.Logistics.Application.Queries.GetRoute;
@@ -125,6 +126,41 @@ public sealed class RoutesControllerTests
             default);
 
         result.Should().BeOfType<ConflictObjectResult>();
+    }
+
+    [Fact]
+    public async Task ReviewRouteAsync_NullBody_SendsCommandWithNullStopOrderAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var routeId = Guid.NewGuid();
+        sender.Send(Arg.Any<ReviewRouteCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<RouteDto>.Success(CreateDto(routeId)));
+        var controller = new RoutesController(sender);
+
+        var result = await controller.ReviewRouteAsync(routeId, null, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<ReviewRouteCommand>(command =>
+                command.RouteId == routeId &&
+                command.StopOrder == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ReviewRouteAsync_InvalidStopOrder_Returns422Async()
+    {
+        var sender = Substitute.For<ISender>();
+        sender.Send(Arg.Any<ReviewRouteCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<RouteDto>.Failure(Error.Validation("INVALID_STOP_ORDER", "invalid")));
+        var controller = new RoutesController(sender);
+
+        var result = await controller.ReviewRouteAsync(
+            Guid.NewGuid(),
+            new ReviewRouteRequest([Guid.NewGuid()]),
+            default);
+
+        result.Should().BeOfType<UnprocessableEntityObjectResult>();
     }
 
     [Fact]

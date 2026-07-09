@@ -155,6 +155,27 @@ public sealed class NearestNeighborTwoOptOptimizerTests
         result.Stops[0].EstimatedArrivalAt.Should().Be(serviceDate.ToDateTime(new TimeOnly(startHour, 0)));
     }
 
+    [Fact]
+    public void Recalculate_FixedStopOrder_CalculatesMetricsWithoutReordering()
+    {
+        var sut = CreateSut(avgSpeedKmh: 60, costPerKm: 1000);
+        var stops = new[]
+        {
+            Stop(0, StopEntityType.market, "Market", 0m, 0m),
+            Stop(1, StopEntityType.restaurant, "Far East", 0m, 3m),
+            Stop(2, StopEntityType.restaurant, "Near East", 0m, 1m)
+        };
+        var expectedDistance = Math.Round(TotalDistance(stops), 2, MidpointRounding.AwayFromZero);
+
+        var result = sut.Recalculate(stops, new DateOnly(2026, 7, 9));
+
+        result.Stops.Select(stop => stop.EntityName).Should().Equal("Market", "Far East", "Near East");
+        result.Stops.Select(stop => stop.StopOrder).Should().Equal(0, 1, 2);
+        result.TotalDistanceKm.Should().Be(expectedDistance);
+        result.EstimatedDurationMinutes.Should().Be(ExpectedDurationMinutes(stops, 60));
+        result.EstimatedCost.Should().Be(expectedDistance * 1000);
+    }
+
     private static NearestNeighborTwoOptOptimizer CreateSut(
         double avgSpeedKmh = 30,
         decimal costPerKm = 5000,
@@ -225,4 +246,7 @@ public sealed class NearestNeighborTwoOptOptimizerTests
         (int)Math.Round(
             HaversineDistanceCalculator.DistanceKm(0m, 0m, 0m, 1m) / avgSpeedKmh * 60,
             MidpointRounding.AwayFromZero);
+
+    private static int ExpectedDurationMinutes(IReadOnlyList<RouteStop> stops, double avgSpeedKmh) =>
+        (int)Math.Round((double)TotalDistance(stops) / avgSpeedKmh * 60, MidpointRounding.AwayFromZero);
 }

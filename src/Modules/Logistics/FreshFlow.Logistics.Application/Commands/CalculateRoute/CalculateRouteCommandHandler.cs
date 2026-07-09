@@ -62,7 +62,7 @@ internal sealed class CalculateRouteCommandHandler(
                 stops.Count,
                 StopEntityType.restaurant,
                 restaurant.RestaurantId,
-                restaurant.RestaurantId.ToString(),
+                restaurant.Name,
                 restaurant.Latitude.Value,
                 restaurant.Longitude.Value,
                 null,

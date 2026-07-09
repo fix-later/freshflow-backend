@@ -9,8 +9,14 @@ internal sealed class RestaurantCoordinateRowConfiguration : IEntityTypeConfigur
     {
         builder.HasNoKey();
         builder.ToSqlQuery(
-            """SELECT "RestaurantId", "Latitude", "Longitude" FROM delivery_addresses WHERE "IsDefault" = true AND "DeletedAt" IS NULL""");
+            """
+            SELECT da."RestaurantId", r."Name" AS "Name", da."Latitude", da."Longitude"
+            FROM delivery_addresses da
+            JOIN restaurants r ON r."Id" = da."RestaurantId"
+            WHERE da."IsDefault" = true AND da."DeletedAt" IS NULL
+            """);
         builder.Property(r => r.RestaurantId);
+        builder.Property(r => r.Name);
         builder.Property(r => r.Latitude);
         builder.Property(r => r.Longitude);
     }
