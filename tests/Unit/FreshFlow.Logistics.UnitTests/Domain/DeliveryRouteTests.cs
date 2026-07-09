@@ -182,6 +182,60 @@ public sealed class DeliveryRouteTests
     }
 
     [Fact]
+    public void AdjustStopOrder_EmptyList_ThrowsArgumentException()
+    {
+        var marketId = Guid.NewGuid();
+        var restaurantId = Guid.NewGuid();
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [MarketStop(id: marketId), RestaurantStop(1, restaurantId)],
+            null);
+        route.Select();
+
+        var act = () => route.AdjustStopOrder([]);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void AdjustStopOrder_MissingStop_ThrowsArgumentException()
+    {
+        var marketId = Guid.NewGuid();
+        var firstRestaurantId = Guid.NewGuid();
+        var secondRestaurantId = Guid.NewGuid();
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [
+                MarketStop(id: marketId),
+                RestaurantStop(1, firstRestaurantId),
+                RestaurantStop(2, secondRestaurantId)
+            ],
+            null);
+        route.Select();
+
+        var act = () => route.AdjustStopOrder([marketId, firstRestaurantId]);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void AdjustStopOrder_UnknownStopId_ThrowsArgumentException()
+    {
+        var marketId = Guid.NewGuid();
+        var restaurantId = Guid.NewGuid();
+        var unknownId = Guid.NewGuid();
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [MarketStop(id: marketId), RestaurantStop(1, restaurantId)],
+            null);
+        route.Select();
+
+        var act = () => route.AdjustStopOrder([marketId, unknownId]);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
     public void AdjustStopOrder_ValidPermutation_RenumbersStops()
     {
         var marketId = Guid.NewGuid();
