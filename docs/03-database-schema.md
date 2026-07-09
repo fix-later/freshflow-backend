@@ -17,18 +17,19 @@
 > migration script because the current EF schema uses mixed PascalCase/snake_case column
 > names unless a configuration explicitly maps a column.
 
-**Implemented today** (Auth, Catalog, Pricing, Orders, Assistant):
+**Implemented today** (Auth, Catalog, Pricing, Orders, Assistant, Notifications):
 `roles`, `users`, `refresh_tokens`, `password_reset_tokens`, `verification_codes`,
 `user_market_assignments`, `driver_profiles`, `restaurants`, `delivery_addresses`,
 `product_categories`, `units_of_measurement`, `products`, `markets`, `market_products`,
 `price_snapshots`, `orders`, `order_items`, `scheduled_orders`, `order_issues`,
-`restaurant_credit`, `credit_transactions`, `assistant_conversations`.
+`restaurant_credit`, `credit_transactions`, `assistant_conversations`,
+`notifications`, `notification_devices` (epic NOT SCRUM-300).
 
 **Planned — NOT yet in the database** (kept below for roadmap, marked `[PLANNED]`):
 `system_config`, `order_groups`, `order_status_history`, `restaurant_members`,
 `price_alert_subscriptions`, `invoices`, `invoice_orders`, `payments`, `refunds`,
 `procurement_*`, `hubs`, `hub_*`, `cross_dock_transfers`, `vehicles`, `delivery_routes`,
-`route_stops`, `deliveries`, `notifications`, `notification_templates`,
+`route_stops`, `deliveries`, `notification_templates`,
 `analytics_aggregations`, `export_jobs`.
 
 **Key deltas vs the original design (reflected in the implementation notes below):**
@@ -88,7 +89,7 @@
 | Entity | Aggregate Root | Owned By Module | Relationship Summary |
 |--------|---------------|-----------------|----------------------|
 | `roles` | No | Auth | Lookup table for global user roles. Seeded values: `admin`, `operations_manager`, `market_agent`, `hub_staff`, `driver`, `restaurant`. |
-| `users` | Yes | Auth | Root of all user accounts. Each user has exactly one global role through `users.role_id`. Optional `phone` can be used as a second login identifier. Logical one-to-one with `restaurants` and `driver_profiles` through unique `user_id` columns, but no DB FK for those profile links. One-to-many with `refresh_tokens`; `notifications` is planned. |
+| `users` | Yes | Auth | Root of all user accounts. Each user has exactly one global role through `users.role_id`. Optional `phone` can be used as a second login identifier. Logical one-to-one with `restaurants` and `driver_profiles` through unique `user_id` columns, but no DB FK for those profile links. One-to-many with `refresh_tokens` and `notifications`/`notification_devices` (Notifications module; no DB FK — app-level link per DEC-NOT-12). |
 | `refresh_tokens` | No | Auth | Many-to-one with `users`. Append-only; each row is an issued token. |
 | `user_market_assignments` | No | Auth | Many-to-many join between `users` (market_agent) and `markets`. Enforces market-level access control for Market Agents. |
 | `markets` | Yes | Catalog | Root of market registry data. Referenced by `market_products` and `user_market_assignments`; `market_products.market_id` is currently a logical ID, not an enforced DB FK. |
@@ -112,7 +113,8 @@
 | `payments` | No | Payment | `[PLANNED/SUPERSEDED]` Original payment model, superseded by B2B credit in current implementation. |
 | `refunds` | No | Payment | `[PLANNED/SUPERSEDED]` Original refund model, superseded by B2B credit in current implementation. |
 | `driver_profiles` | No | Auth | Extended profile for `driver` role users. Logical one-to-one with `users` through unique `user_id`; no DB FK. |
-| `notifications` | No | Notifications | `[PLANNED]` Append-only notification log. |
+| `notifications` | No | Notifications | Notification log: content immutable, read + send metadata mutable. `user_id` app-level link (no DB FK, DEC-NOT-12). Consumed integration events → persisted rows (order_status, credit_alert). |
+| `notification_devices` | Yes | Notifications | Push token registry (FCM/APNs/web-push). Soft-unregister via `revoked_at`; one active token per (user_id, token). |
 | `analytics_aggregations` | No | Analytics | `[PLANNED]` Pre-computed analytics rows. Read by Analytics module only. |
 | `export_jobs` | No | Analytics | `[PLANNED]` Async CSV export job tracking. |
 | `password_reset_tokens` | No | Auth | _(implemented)_ Append-only password-reset tokens. Many-to-one with `users`. |
@@ -918,27 +920,63 @@ CREATE TABLE deliveries (
 );
 
 -- ============================================================
--- NOTIFICATIONS MODULE TABLES   [PLANNED — not implemented]
+-- NOTIFICATIONS MODULE TABLES   [IMPLEMENTED 2026-07-08/09 — epic NOT SCRUM-300]
+-- Migrations: 20260708143833_AddNotificationDevices, 20260708151450_AddNotifications,
+--             AddNotificationSendStatus. See docs/features/notifications/AUDIT-2026-07-08-not-backend-plan.md.
 -- ============================================================
 
 -- notifications
--- Append-only persistent notification log.
--- No updated_at or deleted_at — notifications are immutable once created.
--- read_at: set when the user reads/dismisses the notification.
+-- Content is append-only/immutable (title/body/payload/type/user_id/created_at);
+-- read metadata (is_read/read_at) and send metadata (send_status/attempt_count/
+-- last_attempt_at/failed_reason) are the only mutable columns (DEC-NOT-11).
+-- No updated_at or deleted_at.
 -- payload: event-specific JSON data. Schema varies by type — see Section 4.2.
+-- NOTE: `type` is stored as VARCHAR(50) via EF HasConversion<string>() (snake_case),
+--   NOT a PG enum type — repo-wide convention (no PG enum types).
+-- NOTE: `user_id` is a plain indexed UUID with NO DB-level FK to users(id).
+--   Per DEC-NOT-12 the modular-monolith boundary forbids a cross-module FK;
+--   referential integrity is enforced at the application layer (recipient resolver +
+--   validation). The earlier fk_notifications_user constraint was aspirational only.
 CREATE TABLE notifications (
-    id          UUID                PRIMARY KEY,
-    user_id     UUID                NOT NULL,
-    type        notification_type   NOT NULL,
-    title       TEXT                NOT NULL,
-    body        TEXT                NOT NULL,
-    payload     JSONB,
-    is_read     BOOLEAN             NOT NULL DEFAULT false,
-    read_at     TIMESTAMPTZ,
-    created_at  TIMESTAMPTZ         NOT NULL,
-    CONSTRAINT fk_notifications_user
-        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    id               UUID           PRIMARY KEY,
+    user_id          UUID           NOT NULL,
+    type             VARCHAR(50)    NOT NULL,   -- order_status | credit_alert | system
+    title            TEXT           NOT NULL,
+    body             TEXT           NOT NULL,
+    payload          JSONB,
+    is_read          BOOLEAN        NOT NULL DEFAULT false,
+    read_at          TIMESTAMPTZ,
+    send_status      VARCHAR(20)    NOT NULL DEFAULT 'pending',  -- pending | sent | failed
+    attempt_count    INTEGER        NOT NULL DEFAULT 0,
+    last_attempt_at  TIMESTAMPTZ,
+    failed_reason    TEXT,
+    created_at       TIMESTAMPTZ    NOT NULL
 );
+CREATE INDEX idx_notifications_user_id ON notifications (user_id);
+CREATE INDEX idx_notifications_user_read_created
+    ON notifications (user_id, is_read, created_at, id);   -- list (cursor) + unread filter
+CREATE INDEX idx_notifications_retry_scan
+    ON notifications (attempt_count, last_attempt_at)
+    WHERE send_status = 'failed';                            -- partial index for retry job scan
+
+-- notification_devices
+-- Push token registry (FCM/APNs/web-push). Added by SCRUM-327 (not in original docs/03).
+-- Soft-unregister via revoked_at (audit + prevents token reuse). user_id = plain indexed
+-- UUID, no cross-module FK (DEC-NOT-12). Dedup: one active token per (user_id, token).
+CREATE TABLE notification_devices (
+    id          UUID           PRIMARY KEY,
+    user_id     UUID           NOT NULL,
+    token       TEXT           NOT NULL,       -- FCM/APNs/web-push token
+    platform    VARCHAR(20)    NOT NULL,       -- ios | android | web
+    device_id   TEXT,                          -- client-supplied, optional
+    created_at  TIMESTAMPTZ    NOT NULL,
+    updated_at  TIMESTAMPTZ    NOT NULL,
+    revoked_at  TIMESTAMPTZ                     -- soft-unregister
+);
+CREATE INDEX idx_notification_devices_user_id ON notification_devices (user_id);
+CREATE UNIQUE INDEX ux_notification_devices_user_token_active
+    ON notification_devices (user_id, token)
+    WHERE revoked_at IS NULL;                    -- idempotent upsert on re-register
 
 -- ============================================================
 -- ANALYTICS MODULE TABLES   [PLANNED — not implemented]
@@ -1109,14 +1147,19 @@ CREATE INDEX idx_delivery_routes_route_metadata_gin
     ON delivery_routes USING GIN (route_metadata jsonb_path_ops);
 ```
 
-#### `notifications.payload` _(planned)_
+#### `notifications.payload`
 
 Stores event-specific data alongside the human-readable `title` and `body`. Structure varies by `notification_type`.
+
+> **Implemented today (epic NOT SCRUM-300):** `order_status`, `credit_alert`, `system`.
+> `price_change` and `delivery_update` are `[PLANNED]` — blocked until the Pricing and
+> Logistics epics emit the corresponding integration events into `FreshFlow.Contracts`
+> (DEC-NOT-03); no consumer persists them yet.
 
 **Schema by notification_type:**
 
 ```json
-// type: 'price_change'
+// type: 'price_change'   [PLANNED — blocked by Pricing epic]
 {
   "market_id": "uuid",
   "product_id": "uuid",
@@ -1127,22 +1170,36 @@ Stores event-specific data alongside the human-readable `title` and `body`. Stru
   "updated_at": "2026-05-10T04:10:00+07:00"
 }
 
-// type: 'order_status'
+// type: 'order_status'  (confirmed — from OrderConfirmedIntegrationEvent)
 {
   "order_id": "uuid",
-  "previous_status": "confirmed",
-  "new_status": "in_transit",
-  "changed_by_user_id": "uuid",
-  "estimated_delivery_at": "2026-05-10T06:00:00+07:00"
+  "new_status": "confirmed",
+  "total_amount": 1250000.00,
+  "occurred_at": "2026-05-10T04:10:00+07:00"
+}
+// type: 'order_status'  (cancelled — from OrderCancelledIntegrationEvent)
+{
+  "order_id": "uuid",
+  "new_status": "cancelled",
+  "cancellation_reason": "out_of_stock",
+  "occurred_at": "2026-05-10T04:10:00+07:00"
 }
 
-// type: 'delivery_update'
+// type: 'delivery_update'   [PLANNED — blocked by Logistics epic]
 {
   "delivery_route_id": "uuid",
   "order_id": "uuid",
   "delivery_status": "delivered",
   "actual_arrival": "2026-05-10T05:47:00+07:00",
   "estimated_arrival": "2026-05-10T06:00:00+07:00"
+}
+
+// type: 'credit_alert'
+{
+  "level": "warning",              // "warning" | "exceeded"
+  "utilization": 0.85,
+  "outstanding": 8500000.00,
+  "limit": 10000000.00
 }
 
 // type: 'system'
