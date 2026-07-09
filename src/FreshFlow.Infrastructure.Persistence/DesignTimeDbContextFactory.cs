@@ -80,6 +80,7 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<App
             "FreshFlow.Catalog.Infrastructure",
             "FreshFlow.Pricing.Infrastructure",
             "FreshFlow.Orders.Infrastructure",
+            "FreshFlow.Logistics.Infrastructure",
             "FreshFlow.Notifications.Infrastructure"
         };
 
