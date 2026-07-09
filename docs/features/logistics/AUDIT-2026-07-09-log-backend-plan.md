@@ -26,7 +26,7 @@
 | 4 | SCRUM-305 | UC-LOG-03+04+05+06 | Run Route Optimization Engine | Net-new (core) | ✅ DONE (commit 4169afe) |
 | 5 | SCRUM-309 | UC-LOG-11 | Review Optimized Route | Net-new | ✅ PASS (reviewer-log; fix MEDIUM commit fbc8819) |
 | 6 | SCRUM-306 | UC-LOG-07+08 | Check Vehicle & Driver Eligibility | Net-new | ✅ PASS (reviewer-log; fix MEDIUM+LOW commit 4d071f7) |
-| 7 | SCRUM-307 | UC-LOG-09+10+12 | Assign Vehicle (High priority) | Net-new (điểm tích hợp) | 🔶 Implemented + verified (coder: 267/267, coverage ≥94% branch, no-drift) — reviewer-log review đang chờ; chưa commit |
+| 7 | SCRUM-307 | UC-LOG-09+10+12 | Assign Vehicle (High priority) | Net-new (điểm tích hợp) | ✅ PASS (reviewer-log, commit 5222e2b; 267/267) |
 
 **Quy ước commit:** `feat(logistics): SCRUM-XXX <description>` — 1 commit/task, đúng key của task. KHÔNG commit khi chưa được supervisor cấp/xác nhận key (giữ trong working tree).
 
@@ -215,3 +215,19 @@ DDL roadmap tại `docs/03-database-schema.md:844-918`:
 | 2026-07-10 | **SCRUM-306 ✅ DONE (commit 4d071f7).** Check Vehicle & Driver Eligibility (QUERY read-only). Gồm fix vòng 2: tách `IVehicleCapacityPolicy` ra Infrastructure (sửa vi phạm dependency rule Application→Infrastructure) + thêm filter DeletedAt cho double-book. Shape khớp plan: `CheckEligibilityQuery(RouteId, VehicleId, DriverUserId?)`, `EligibilityResultDto(IsEligible, Reasons)`, reason codes đúng. Seam `DriverRow`+`DriverReader` (JOIN users→roles). **307 sẽ tái dùng qua `ISender.Send(CheckEligibilityQuery)`** (supersede đề xuất tách EligibilityEvaluator — không cần vì 306 đã là MediatR query sạch). Cập nhật §4 SCRUM-307 line reuse. |
 | 2026-07-10 | **Đính chính review status (supervisor):** SCRUM-309 THỰC RA đã được reviewer-log review — PASS + fix MEDIUM (thêm test) qua commit `fbc8819` (KHÔNG phải "chưa review/batched" như ghi nhầm trước đó). SCRUM-306 cũng đã PASS + fix MEDIUM+LOW (tách IVehicleCapacityPolicy + filter DeletedAt) qua `4d071f7`. ⇒ Chỉ còn **SCRUM-307** là chưa qua review. Cập nhật §0 cho khớp. |
 | 2026-07-10 | **SCRUM-307 — coder tiếp quản, verify + hoàn thiện diff codex để lại.** Đối chiếu từng file (Domain/Application/Infrastructure/API/tests) với DEC-LOG-14 — khớp 100%, không cần sửa thêm. Phát hiện 1 điểm drift chỉ trong TÀI LIỆU (không phải code): §4 dòng cũ ghi mã lỗi `ROUTE_ALREADY_ASSIGNED` cho case đã-assigned-khác-giá-trị, nhưng code+test thực tế dùng `ROUTE_INVALID_TRANSITION` (nhất quán với các guard state route khác) → đã sửa §4 cho khớp code. Verify checklist đầy đủ: `dotnet build FreshFlow.slnx` 0 lỗi; `dotnet test tests/Unit/FreshFlow.Logistics.UnitTests/` 267/267 PASS; `dotnet format --verify-no-changes` exit 0; `dotnet ef migrations has-pending-model-changes` no-drift; coverage Logistics.Domain line=100%/branch=94.23%, Application line=97.85%/branch=99.1%, Infrastructure line=98.69%/branch=97.5% (cả 3 package ≥80% line và branch). Migration `20260709184843_AddDeliveryRouteDriverAssignment` giữ nguyên (đã tạo sẵn bởi codex, không cần tạo lại). Chưa commit — đã bàn giao cho reviewer để review độc lập. |
+| 2026-07-10 | **SCRUM-307 ✅ PASS (reviewer-log, commit 5222e2b) — EPIC LOG 7/7 DONE.** Assign Vehicle: `DeliveryRoute.Assign()` idempotent, migration `20260709184843_AddDeliveryRouteDriverAssignment` (driver_user_id + partial unique index (vehicle_id, service_date) WHERE assigned), `AssignVehicleCommand` tái dùng `ISender.Send(CheckEligibilityQuery)`, `SaveAssignmentAsync` bắt unique-violation→409 VEHICLE_NOT_AVAILABLE. reviewer-log: 0 CRITICAL/HIGH; 1 MEDIUM = thiếu optimistic concurrency token trên UpdatedAt (race 2 dispatcher gán 2 XE KHÁC nhau cùng lúc CÙNG 1 route — unique index không bắt vì khác vehicle_id) → **defer, không block** (đã lường trước ở DEC-LOG-14 mục secondary). Chuyển sang §7 follow-up. Toàn epic 311→313→303→305→309→306→307 DONE. |
+
+---
+
+## 7. Follow-up còn tồn (NGOÀI 7-task epic LOG — cần SCRUM key riêng)
+
+| # | Hạng mục | Nguồn | Mức | Ghi chú |
+|---|---|---|---|---|
+| F-1 | **Optimistic concurrency token trên `DeliveryRoute.UpdatedAt`** | reviewer-log 307 (MEDIUM) | MEDIUM | Race 2 dispatcher gán 2 XE KHÁC nhau cùng lúc CÙNG 1 route → partial unique index (vehicle_id, service_date) KHÔNG bắt (khác vehicle_id). Mark `UpdatedAt` `IsConcurrencyToken()` (mẫu `Order`) để 1 trong 2 UPDATE thua → retry/409. Đã lường trước ở DEC-LOG-14 (secondary), defer có chủ đích. |
+| F-2 | **`DeliveryZone.Activate()` dead code** | review 313 (MEDIUM) | MEDIUM | Method chưa được wire. Khi có task reactivate zone → phải đồng thời clear `DeletedAt` (không chỉ set `IsActive=true`). |
+| F-3 | **`DeliveryRouteMappings` visibility `public`** | review 303 (LOW) | LOW | Không nhất quán `internal` như Vehicle/DeliveryZone mappings. Dọn khi tiện. |
+| F-4 | **HUB_RELAY routing** | DEC-LOG-07 | Feature | MVP chỉ DIRECT; validator chặn HUB_RELAY. Mở khi epic HUB (SCRUM-256) có bảng `hubs`+toạ độ. |
+| F-5 | **Road-distance provider thay Haversine** | DEC-LOG-03 | Feature | Optimizer hiện approximation đường-chim-bay. Thay OSRM/Google → ordering theo criteria mới thực sự khác nhau. |
+| F-6 | **Capacity theo weight thật thay stop-count proxy** | DEC-LOG-05 | Feature | Khi Catalog/Orders có product weight → thay `maxStopsPerVehicle` proxy bằng tổng kg so `capacity_kg`, mã lỗi `VEHICLE_CAPACITY_EXCEEDED` theo weight. |
+| F-7 | **Redis route caching** | DEC-LOG-11 | Perf | Cache calculate/optimize (SHA-256 stop-ids+criterion, TTL 1h) khi Redis backplane được cấu hình. |
+| F-8 | **Driver execution + Delivery schedules** | FR-LOG-007 / FR-LOG-005 | Epic | Ngoài phạm vi epic LOG này: driver xem route/cập nhật stop (ARRIVED/DELIVERED/FAILED), bảng `deliveries` normalized, `delivery_schedules`, planned-departure thật (thay ETA provisional của 305). |
