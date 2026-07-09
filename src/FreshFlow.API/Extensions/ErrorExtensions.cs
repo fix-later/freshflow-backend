@@ -15,6 +15,7 @@ public static class ErrorExtensions
         if (error.Code is "EMAIL_ALREADY_EXISTS" or "PHONE_ALREADY_EXISTS"
                         or "REFRESH_TOKEN_REUSE" or "ALREADY_APPROVED"
                         or "CATEGORY_NAME_CONFLICT" or "UNIT_NAME_CONFLICT"
+                        or "DELIVERY_ZONE_CODE_EXISTS"
                         or "PLATE_NUMBER_DUPLICATE"
                         or "MARKET_PRODUCT_ALREADY_EXISTS")
             return new ConflictObjectResult(body);

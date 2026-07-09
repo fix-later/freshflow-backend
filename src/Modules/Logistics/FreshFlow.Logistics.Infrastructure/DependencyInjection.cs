@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(applicationAssembly, includeInternalTypes: true);
 
         services.AddScoped<IVehicleRepository, VehicleRepository>();
+        services.AddScoped<IDeliveryZoneRepository, DeliveryZoneRepository>();
 
         // Logistics:MaxStopsPerVehicle is intentionally left for SCRUM-306/307 route logic.
         return services;
