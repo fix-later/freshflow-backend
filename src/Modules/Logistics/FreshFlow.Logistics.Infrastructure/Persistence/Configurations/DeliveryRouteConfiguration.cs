@@ -1,0 +1,99 @@
+using System.Text.Json;
+using FreshFlow.Logistics.Domain.Entities;
+using FreshFlow.Logistics.Domain.Enums;
+using FreshFlow.Logistics.Domain.ValueObjects;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FreshFlow.Logistics.Infrastructure.Persistence.Configurations;
+
+internal sealed class DeliveryRouteConfiguration : IEntityTypeConfiguration<DeliveryRoute>
+{
+    public void Configure(EntityTypeBuilder<DeliveryRoute> builder)
+    {
+        builder.ToTable("delivery_routes");
+        builder.HasKey(r => r.Id);
+
+        builder.Property(r => r.Id)
+            .HasColumnName("id")
+            .IsRequired();
+
+        builder.Property(r => r.RouteType)
+            .HasColumnName("route_type")
+            .HasMaxLength(20)
+            .HasConversion<string>()
+            .IsRequired();
+
+        builder.Property(r => r.Status)
+            .HasColumnName("status")
+            .HasMaxLength(20)
+            .HasConversion<string>()
+            .IsRequired();
+
+        builder.Property(r => r.ServiceDate)
+            .HasColumnName("service_date")
+            .HasColumnType("date")
+            .IsRequired();
+
+        builder.Property(r => r.TotalDistanceKm)
+            .HasColumnName("total_distance_km")
+            .HasColumnType("numeric(10,2)");
+
+        builder.Property(r => r.EstimatedDurationMinutes)
+            .HasColumnName("estimated_duration_minutes");
+
+        builder.Property(r => r.EstimatedCost)
+            .HasColumnName("estimated_cost")
+            .HasColumnType("numeric(12,2)");
+
+        builder.Property(r => r.VehicleId)
+            .HasColumnName("vehicle_id");
+
+        builder.Property(r => r.OrderGroupId)
+            .HasColumnName("order_group_id");
+
+        builder.Property(r => r.CreatedBy)
+            .HasColumnName("created_by");
+
+        builder.Property(r => r.CreatedAt)
+            .HasColumnName("created_at")
+            .IsRequired();
+
+        builder.Property(r => r.UpdatedAt)
+            .HasColumnName("updated_at")
+            .IsRequired();
+
+        builder.Property(r => r.DeletedAt)
+            .HasColumnName("deleted_at");
+
+        var stopsComparer = new ValueComparer<IReadOnlyList<RouteStop>>(
+            (a, b) => (a ?? Array.Empty<RouteStop>()).SequenceEqual(b ?? Array.Empty<RouteStop>()),
+            v => (v ?? Array.Empty<RouteStop>())
+                .Aggregate(0, (hash, stop) => HashCode.Combine(hash, stop.GetHashCode())),
+            v => (IReadOnlyList<RouteStop>)(v ?? Array.Empty<RouteStop>()).ToList().AsReadOnly());
+
+        builder.Property(r => r.Stops)
+            .HasColumnName("route_metadata")
+            .HasColumnType("jsonb")
+            .HasConversion(
+                v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                v => JsonSerializer.Deserialize<List<RouteStop>>(v, (JsonSerializerOptions?)null) ?? new List<RouteStop>())
+            .Metadata.SetValueComparer(stopsComparer);
+
+        builder.HasIndex(r => new { r.VehicleId, r.ServiceDate })
+            .HasDatabaseName("idx_delivery_routes_vehicle_service_date");
+
+        builder.HasIndex(r => r.Status)
+            .HasDatabaseName("idx_delivery_routes_status");
+
+        builder.HasIndex(r => r.ServiceDate)
+            .HasDatabaseName("idx_delivery_routes_service_date");
+
+        builder.HasIndex(r => r.OrderGroupId)
+            .HasDatabaseName("idx_delivery_routes_order_group_id");
+
+        builder.HasIndex(r => r.CreatedBy)
+            .HasDatabaseName("idx_delivery_routes_created_by");
+    }
+}
