@@ -47,6 +47,11 @@ internal sealed class DeliveryRouteConfiguration : IEntityTypeConfiguration<Deli
             .HasColumnName("estimated_cost")
             .HasColumnType("numeric(12,2)");
 
+        builder.Property(r => r.OptimizationCriteria)
+            .HasColumnName("optimization_criteria")
+            .HasMaxLength(20)
+            .HasConversion<string>();
+
         builder.Property(r => r.VehicleId)
             .HasColumnName("vehicle_id");
 

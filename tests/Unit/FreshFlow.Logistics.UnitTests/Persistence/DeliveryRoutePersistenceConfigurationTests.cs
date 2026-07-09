@@ -44,6 +44,9 @@ public sealed class DeliveryRoutePersistenceConfigurationTests
         entity.FindProperty(nameof(DeliveryRoute.Stops))!
             .GetColumnName(table)
             .Should().Be("route_metadata");
+        entity.FindProperty(nameof(DeliveryRoute.OptimizationCriteria))!
+            .GetColumnName(table)
+            .Should().Be("optimization_criteria");
         entity.FindProperty(nameof(DeliveryRoute.VehicleId))!
             .GetColumnName(table)
             .Should().Be("vehicle_id");
@@ -101,6 +104,7 @@ public sealed class DeliveryRoutePersistenceConfigurationTests
         provider.GetRequiredService<IDeliveryRouteRepository>().Should().NotBeNull();
         provider.GetRequiredService<IMarketCoordinateReader>().Should().NotBeNull();
         provider.GetRequiredService<IRestaurantCoordinateReader>().Should().NotBeNull();
+        provider.GetRequiredService<IRouteOptimizer>().Should().NotBeNull();
     }
 
     private static AppDbContext CreateContext()

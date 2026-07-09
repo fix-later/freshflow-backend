@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentAssertions;
 using FreshFlow.API.Controllers;
 using FreshFlow.Logistics.Application.Commands.CalculateRoute;
+using FreshFlow.Logistics.Application.Commands.OptimizeRoute;
 using FreshFlow.Logistics.Application.Commands.SelectRoute;
 using FreshFlow.Logistics.Application.Dtos;
 using FreshFlow.Logistics.Application.Queries.GetRoute;
@@ -89,6 +90,44 @@ public sealed class RoutesControllerTests
     }
 
     [Fact]
+    public async Task OptimizeRouteAsync_Success_SendsCommandAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var routeId = Guid.NewGuid();
+        sender.Send(Arg.Any<OptimizeRouteCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<RouteDto>.Success(CreateDto(routeId)));
+        var controller = new RoutesController(sender);
+
+        var result = await controller.OptimizeRouteAsync(
+            routeId,
+            new OptimizeRouteRequest("DISTANCE"),
+            default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<OptimizeRouteCommand>(command =>
+                command.RouteId == routeId &&
+                command.OptimizationCriteria == "DISTANCE"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OptimizeRouteAsync_InvalidTransition_Returns409Async()
+    {
+        var sender = Substitute.For<ISender>();
+        sender.Send(Arg.Any<OptimizeRouteCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<RouteDto>.Failure(Error.Conflict("ROUTE_INVALID_TRANSITION", "invalid")));
+        var controller = new RoutesController(sender);
+
+        var result = await controller.OptimizeRouteAsync(
+            Guid.NewGuid(),
+            new OptimizeRouteRequest("COST"),
+            default);
+
+        result.Should().BeOfType<ConflictObjectResult>();
+    }
+
+    [Fact]
     public async Task ListRoutesAsync_Success_SendsQueryAsync()
     {
         var sender = Substitute.For<ISender>();
@@ -133,6 +172,7 @@ public sealed class RoutesControllerTests
                 new RouteStopDto(0, "market", Guid.NewGuid(), "Market", 10.1m, 106.1m, null, null),
                 new RouteStopDto(1, "restaurant", Guid.NewGuid(), "Restaurant", 10.2m, 106.2m, null, null)
             ],
+            null,
             null,
             null,
             null,

@@ -17,6 +17,7 @@ public sealed class DeliveryRouteRepositoryTests
     {
         using var fixture = await SqliteRouteFixture.CreateAsync();
         var route = CreateRoute();
+        route.ApplyOptimization(route.Stops, 12.34m, 25, 61700m, OptimizationCriteria.cost);
 
         await using (var writeContext = fixture.CreateContext())
         {
@@ -32,6 +33,10 @@ public sealed class DeliveryRouteRepositoryTests
 
         result.Should().NotBeNull();
         result!.Stops.Should().Equal(route.Stops);
+        result.TotalDistanceKm.Should().Be(12.34m);
+        result.EstimatedDurationMinutes.Should().Be(25);
+        result.EstimatedCost.Should().Be(61700m);
+        result.OptimizationCriteria.Should().Be(OptimizationCriteria.cost);
         result.Stops[0].EntityName.Should().Be("Market");
         result.Stops[1].EntityName.Should().Be("Restaurant");
     }

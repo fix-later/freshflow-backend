@@ -26,6 +26,7 @@ public static class DeliveryRouteMappings
             route.TotalDistanceKm,
             route.EstimatedDurationMinutes,
             route.EstimatedCost,
+            route.OptimizationCriteria?.ToString(),
             route.VehicleId,
             route.OrderGroupId,
             route.CreatedAt,

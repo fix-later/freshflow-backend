@@ -4,6 +4,7 @@ using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Logistics.Application.Abstractions;
 using FreshFlow.Logistics.Application.Behaviors;
 using FreshFlow.Logistics.Infrastructure.CrossModule;
+using FreshFlow.Logistics.Infrastructure.Optimization;
 using FreshFlow.Logistics.Infrastructure.Repositories;
 using MediatR;
 using Microsoft.Extensions.Configuration;
@@ -36,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IDeliveryRouteRepository, DeliveryRouteRepository>();
         services.AddScoped<IMarketCoordinateReader, MarketCoordinateReader>();
         services.AddScoped<IRestaurantCoordinateReader, RestaurantCoordinateReader>();
+        services.AddScoped<IRouteOptimizer, NearestNeighborTwoOptOptimizer>();
 
         // Logistics:MaxStopsPerVehicle is intentionally left for SCRUM-306/307 route logic.
         return services;

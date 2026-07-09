@@ -30,6 +30,7 @@ public sealed class DeliveryRoute
     public decimal? TotalDistanceKm { get; private set; }
     public int? EstimatedDurationMinutes { get; private set; }
     public decimal? EstimatedCost { get; private set; }
+    public OptimizationCriteria? OptimizationCriteria { get; private set; }
     public Guid? VehicleId { get; private set; }
     public Guid? OrderGroupId { get; private set; }
     public Guid? CreatedBy { get; private set; }
@@ -62,6 +63,26 @@ public sealed class DeliveryRoute
             throw new InvalidOperationException("Only planned routes can be selected.");
 
         Status = RouteStatus.selected;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ApplyOptimization(
+        IReadOnlyList<RouteStop> optimizedStops,
+        decimal totalDistanceKm,
+        int estimatedDurationMinutes,
+        decimal estimatedCost,
+        OptimizationCriteria criteria)
+    {
+        if (Status != RouteStatus.planned && Status != RouteStatus.selected)
+            throw new InvalidOperationException("Only planned or selected routes can be optimized.");
+
+        ArgumentNullException.ThrowIfNull(optimizedStops);
+
+        Stops = optimizedStops.ToList().AsReadOnly();
+        TotalDistanceKm = totalDistanceKm;
+        EstimatedDurationMinutes = estimatedDurationMinutes;
+        EstimatedCost = estimatedCost;
+        OptimizationCriteria = criteria;
         UpdatedAt = DateTime.UtcNow;
     }
 }

@@ -9,6 +9,7 @@ public sealed record RouteDto(
     decimal? TotalDistanceKm,
     int? EstimatedDurationMinutes,
     decimal? EstimatedCost,
+    string? OptimizationCriteria,
     Guid? VehicleId,
     Guid? OrderGroupId,
     DateTime CreatedAt,
