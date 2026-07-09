@@ -28,6 +28,7 @@ public static class DeliveryRouteMappings
             route.EstimatedCost,
             route.OptimizationCriteria?.ToString(),
             route.VehicleId,
+            route.DriverUserId,
             route.OrderGroupId,
             route.CreatedAt,
             route.UpdatedAt);

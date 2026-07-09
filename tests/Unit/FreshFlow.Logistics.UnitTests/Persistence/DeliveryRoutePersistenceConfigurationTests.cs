@@ -50,6 +50,9 @@ public sealed class DeliveryRoutePersistenceConfigurationTests
         entity.FindProperty(nameof(DeliveryRoute.VehicleId))!
             .GetColumnName(table)
             .Should().Be("vehicle_id");
+        entity.FindProperty(nameof(DeliveryRoute.DriverUserId))!
+            .GetColumnName(table)
+            .Should().Be("driver_user_id");
         entity.FindProperty(nameof(DeliveryRoute.OrderGroupId))!
             .GetColumnName(table)
             .Should().Be("order_group_id");
@@ -62,6 +65,10 @@ public sealed class DeliveryRoutePersistenceConfigurationTests
 
         entity.GetIndexes().Should().Contain(i =>
             i.GetDatabaseName() == "idx_delivery_routes_vehicle_service_date");
+        var assignedRouteIndex = entity.GetIndexes()
+            .Single(i => i.GetDatabaseName() == "ux_delivery_routes_vehicle_service_date_assigned");
+        assignedRouteIndex.IsUnique.Should().BeTrue();
+        assignedRouteIndex.GetFilter().Should().Be("status = 'assigned' AND deleted_at IS NULL");
         entity.GetIndexes().Should().Contain(i =>
             i.GetDatabaseName() == "idx_delivery_routes_status");
         entity.GetIndexes().Should().Contain(i =>

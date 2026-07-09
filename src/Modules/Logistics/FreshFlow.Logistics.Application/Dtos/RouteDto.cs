@@ -11,6 +11,7 @@ public sealed record RouteDto(
     decimal? EstimatedCost,
     string? OptimizationCriteria,
     Guid? VehicleId,
+    Guid? DriverUserId,
     Guid? OrderGroupId,
     DateTime CreatedAt,
     DateTime UpdatedAt);

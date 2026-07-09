@@ -32,6 +32,7 @@ public sealed class DeliveryRoute
     public decimal? EstimatedCost { get; private set; }
     public OptimizationCriteria? OptimizationCriteria { get; private set; }
     public Guid? VehicleId { get; private set; }
+    public Guid? DriverUserId { get; private set; }
     public Guid? OrderGroupId { get; private set; }
     public Guid? CreatedBy { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -120,6 +121,26 @@ public sealed class DeliveryRoute
             throw new InvalidOperationException("Route must be optimized before it can be reviewed.");
 
         Status = RouteStatus.reviewed;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Assign(Guid vehicleId, Guid? driverUserId)
+    {
+        if (Status == RouteStatus.assigned)
+        {
+            if (VehicleId == vehicleId && DriverUserId == driverUserId)
+                return;
+
+            throw new InvalidOperationException(
+                "Route is already assigned to a different vehicle or driver.");
+        }
+
+        if (Status != RouteStatus.reviewed)
+            throw new InvalidOperationException("Only reviewed routes can be assigned a vehicle.");
+
+        VehicleId = vehicleId;
+        DriverUserId = driverUserId;
+        Status = RouteStatus.assigned;
         UpdatedAt = DateTime.UtcNow;
     }
 }

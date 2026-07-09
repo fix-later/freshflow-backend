@@ -296,6 +296,81 @@ public sealed class DeliveryRouteTests
         act.Should().Throw<InvalidOperationException>();
     }
 
+    [Fact]
+    public void Assign_ReviewedRoute_TransitionsToAssignedAndSetsVehicleAndDriver()
+    {
+        var route = ReviewedRoute();
+        var vehicleId = Guid.NewGuid();
+        var driverUserId = Guid.NewGuid();
+
+        route.Assign(vehicleId, driverUserId);
+
+        route.Status.Should().Be(RouteStatus.assigned);
+        route.VehicleId.Should().Be(vehicleId);
+        route.DriverUserId.Should().Be(driverUserId);
+        route.UpdatedAt.Should().BeAfter(route.CreatedAt);
+    }
+
+    [Fact]
+    public void Assign_SameVehicleAndDriverWhenAlreadyAssigned_IsIdempotent()
+    {
+        var route = ReviewedRoute();
+        var vehicleId = Guid.NewGuid();
+        var driverUserId = Guid.NewGuid();
+        route.Assign(vehicleId, driverUserId);
+        var updatedAt = route.UpdatedAt;
+
+        route.Assign(vehicleId, driverUserId);
+
+        route.Status.Should().Be(RouteStatus.assigned);
+        route.VehicleId.Should().Be(vehicleId);
+        route.DriverUserId.Should().Be(driverUserId);
+        route.UpdatedAt.Should().Be(updatedAt);
+    }
+
+    [Fact]
+    public void Assign_DifferentVehicleWhenAlreadyAssigned_ThrowsInvalidOperationException()
+    {
+        var route = ReviewedRoute();
+        route.Assign(Guid.NewGuid(), Guid.NewGuid());
+
+        var act = () => route.Assign(Guid.NewGuid(), route.DriverUserId);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Assign_DifferentDriverWhenAlreadyAssigned_ThrowsInvalidOperationException()
+    {
+        var route = ReviewedRoute();
+        var vehicleId = Guid.NewGuid();
+        route.Assign(vehicleId, Guid.NewGuid());
+
+        var act = () => route.Assign(vehicleId, Guid.NewGuid());
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Theory]
+    [InlineData(RouteStatus.planned)]
+    [InlineData(RouteStatus.selected)]
+    [InlineData(RouteStatus.cancelled)]
+    public void Assign_InvalidState_ThrowsInvalidOperationException(RouteStatus status)
+    {
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [MarketStop(), RestaurantStop(1)],
+            null);
+        if (status == RouteStatus.selected)
+            route.Select();
+        else
+            SetStatus(route, status);
+
+        var act = () => route.Assign(Guid.NewGuid(), Guid.NewGuid());
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
     private static DeliveryRoute OptimizedSelectedRoute()
     {
         var route = DeliveryRoute.CreateDirect(
@@ -304,6 +379,13 @@ public sealed class DeliveryRouteTests
             null);
         route.ApplyOptimization(route.Stops, 10m, 20, 50000m, OptimizationCriteria.distance);
         route.Select();
+        return route;
+    }
+
+    private static DeliveryRoute ReviewedRoute()
+    {
+        var route = OptimizedSelectedRoute();
+        route.MarkReviewed();
         return route;
     }
 

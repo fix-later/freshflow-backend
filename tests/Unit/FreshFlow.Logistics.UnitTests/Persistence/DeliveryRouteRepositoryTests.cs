@@ -6,6 +6,7 @@ using FreshFlow.Logistics.Domain.ValueObjects;
 using FreshFlow.Logistics.Infrastructure.Repositories;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FreshFlow.Logistics.UnitTests.Persistence;
 
@@ -94,6 +95,45 @@ public sealed class DeliveryRouteRepositoryTests
         ignoredResult.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task SaveAssignmentAsync_HappyPath_ReturnsTrueAsync()
+    {
+        using var db = CreateInMemoryContext();
+        var sut = new DeliveryRouteRepository(db);
+        var route = CreateReviewedRoute();
+        route.Assign(Guid.NewGuid(), Guid.NewGuid());
+        await sut.AddAsync(route, default);
+
+        var result = await sut.SaveAssignmentAsync(default);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsUniqueViolation_PostgresUniqueViolation_ReturnsTrue()
+    {
+        var pgException = new PostgresException(
+            messageText: "duplicate key value violates unique constraint",
+            severity: "ERROR",
+            invariantSeverity: "ERROR",
+            sqlState: PostgresErrorCodes.UniqueViolation);
+        var dbUpdateException = new DbUpdateException("insert failed", pgException);
+
+        var result = DeliveryRouteRepository.IsUniqueViolation(dbUpdateException);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsUniqueViolation_NonPostgresUniqueViolation_ReturnsFalse()
+    {
+        var dbUpdateException = new DbUpdateException("insert failed", new InvalidOperationException());
+
+        var result = DeliveryRouteRepository.IsUniqueViolation(dbUpdateException);
+
+        result.Should().BeFalse();
+    }
+
     private static AppDbContext CreateInMemoryContext()
     {
         _ = typeof(FreshFlow.Logistics.Infrastructure.DependencyInjection).Assembly;
@@ -143,6 +183,15 @@ public sealed class DeliveryRouteRepositoryTests
                 new RouteStop(1, StopEntityType.restaurant, Guid.NewGuid(), "Restaurant", 10.2m, 106.2m, null, null)
             ],
             null);
+
+    private static DeliveryRoute CreateReviewedRoute()
+    {
+        var route = CreateRoute();
+        route.ApplyOptimization(route.Stops, 12.34m, 25, 61700m, OptimizationCriteria.cost);
+        route.Select();
+        route.MarkReviewed();
+        return route;
+    }
 
     private sealed class SqliteRouteFixture : IDisposable
     {

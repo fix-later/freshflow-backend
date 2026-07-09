@@ -1,4 +1,5 @@
 using FreshFlow.API.Extensions;
+using FreshFlow.Logistics.Application.Commands.AssignVehicle;
 using FreshFlow.Logistics.Application.Commands.CalculateRoute;
 using FreshFlow.Logistics.Application.Commands.OptimizeRoute;
 using FreshFlow.Logistics.Application.Commands.ReviewRoute;
@@ -64,6 +65,16 @@ public sealed class RoutesController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    [HttpPost("{id:guid}/assign-vehicle")]
+    public async Task<IActionResult> AssignVehicleAsync(
+        Guid id,
+        [FromBody] AssignVehicleRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new AssignVehicleCommand(id, body.VehicleId, body.DriverUserId), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     [HttpGet]
     public async Task<IActionResult> ListRoutesAsync(
         [FromQuery] string? cursor = null,
@@ -108,3 +119,5 @@ public sealed record CalculateRouteRequest(
 public sealed record OptimizeRouteRequest(string OptimizationCriteria);
 
 public sealed record ReviewRouteRequest(IReadOnlyList<Guid>? StopOrder);
+
+public sealed record AssignVehicleRequest(Guid VehicleId, Guid? DriverUserId);

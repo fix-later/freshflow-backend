@@ -6,6 +6,7 @@ using FreshFlow.Logistics.Application.Abstractions;
 using FreshFlow.Logistics.Domain.Entities;
 using FreshFlow.Logistics.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FreshFlow.Logistics.Infrastructure.Repositories;
 
@@ -16,6 +17,19 @@ internal sealed class DeliveryRouteRepository(AppDbContext db) : IDeliveryRouteR
 
     public Task SaveChangesAsync(CancellationToken ct) =>
         db.SaveChangesAsync(ct);
+
+    public async Task<bool> SaveAssignmentAsync(CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            return false;
+        }
+    }
 
     public Task<DeliveryRoute?> FindByIdAsync(Guid id, CancellationToken ct) =>
         db.Set<DeliveryRoute>().FirstOrDefaultAsync(r => r.Id == id, ct);
@@ -109,4 +123,7 @@ internal sealed class DeliveryRouteRepository(AppDbContext db) : IDeliveryRouteR
             return Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
         }
     }
+
+    internal static bool IsUniqueViolation(DbUpdateException ex) =>
+        ex.InnerException is PostgresException pg && pg.SqlState == PostgresErrorCodes.UniqueViolation;
 }

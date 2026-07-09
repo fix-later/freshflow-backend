@@ -55,6 +55,9 @@ internal sealed class DeliveryRouteConfiguration : IEntityTypeConfiguration<Deli
         builder.Property(r => r.VehicleId)
             .HasColumnName("vehicle_id");
 
+        builder.Property(r => r.DriverUserId)
+            .HasColumnName("driver_user_id");
+
         builder.Property(r => r.OrderGroupId)
             .HasColumnName("order_group_id");
 
@@ -88,6 +91,13 @@ internal sealed class DeliveryRouteConfiguration : IEntityTypeConfiguration<Deli
 
         builder.HasIndex(r => new { r.VehicleId, r.ServiceDate })
             .HasDatabaseName("idx_delivery_routes_vehicle_service_date");
+
+        builder.HasIndex(
+                r => new { r.VehicleId, r.ServiceDate },
+                "ux_delivery_routes_vehicle_service_date_assigned")
+            .IsUnique()
+            .HasFilter("status = 'assigned' AND deleted_at IS NULL")
+            .HasDatabaseName("ux_delivery_routes_vehicle_service_date_assigned");
 
         builder.HasIndex(r => r.Status)
             .HasDatabaseName("idx_delivery_routes_status");

@@ -17,6 +17,7 @@ public static class ErrorExtensions
                         or "CATEGORY_NAME_CONFLICT" or "UNIT_NAME_CONFLICT"
                         or "DELIVERY_ZONE_CODE_EXISTS"
                         or "PLATE_NUMBER_DUPLICATE"
+                        or "VEHICLE_NOT_AVAILABLE"
                         or "MARKET_PRODUCT_ALREADY_EXISTS")
             return new ConflictObjectResult(body);
 
@@ -50,6 +51,7 @@ public static class ErrorExtensions
                         or "SCHEDULED_ORDER_FIRST_RUN_IN_PAST" or "INVALID_ISSUE_QUANTITY"
                         or "HUB_RELAY_NOT_SUPPORTED" or "STOP_LIMIT_EXCEEDED"
                         or "MISSING_COORDINATES" or "INVALID_STOP_ORDER"
+                        or "VEHICLE_NOT_ELIGIBLE"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 

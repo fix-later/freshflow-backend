@@ -10,6 +10,8 @@ internal sealed class InMemoryDeliveryRouteRepository : IDeliveryRouteRepository
 
     public IReadOnlyList<DeliveryRoute> Routes => _routes.AsReadOnly();
     public int SaveChangesCount { get; private set; }
+    public int SaveAssignmentCount { get; private set; }
+    public bool SaveAssignmentResult { get; set; } = true;
 
     public Task<DeliveryRoute?> FindByIdAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_routes.FirstOrDefault(route => route.Id == id));
@@ -55,5 +57,11 @@ internal sealed class InMemoryDeliveryRouteRepository : IDeliveryRouteRepository
     {
         SaveChangesCount++;
         return Task.CompletedTask;
+    }
+
+    public Task<bool> SaveAssignmentAsync(CancellationToken ct)
+    {
+        SaveAssignmentCount++;
+        return Task.FromResult(SaveAssignmentResult);
     }
 }

@@ -1,6 +1,7 @@
 using System.Reflection;
 using FluentAssertions;
 using FreshFlow.API.Controllers;
+using FreshFlow.Logistics.Application.Commands.AssignVehicle;
 using FreshFlow.Logistics.Application.Commands.CalculateRoute;
 using FreshFlow.Logistics.Application.Commands.OptimizeRoute;
 using FreshFlow.Logistics.Application.Commands.ReviewRoute;
@@ -222,6 +223,63 @@ public sealed class RoutesControllerTests
     }
 
     [Fact]
+    public async Task AssignVehicleAsync_Success_SendsCommandAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var routeId = Guid.NewGuid();
+        var vehicleId = Guid.NewGuid();
+        var driverUserId = Guid.NewGuid();
+        sender.Send(Arg.Any<AssignVehicleCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<RouteDto>.Success(CreateDto(routeId)));
+        var controller = new RoutesController(sender);
+
+        var result = await controller.AssignVehicleAsync(
+            routeId,
+            new AssignVehicleRequest(vehicleId, driverUserId),
+            default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<AssignVehicleCommand>(command =>
+                command.RouteId == routeId &&
+                command.VehicleId == vehicleId &&
+                command.DriverUserId == driverUserId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AssignVehicleAsync_NotEligible_Returns422Async()
+    {
+        var sender = Substitute.For<ISender>();
+        sender.Send(Arg.Any<AssignVehicleCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<RouteDto>.Failure(Error.Validation("VEHICLE_NOT_ELIGIBLE", "invalid")));
+        var controller = new RoutesController(sender);
+
+        var result = await controller.AssignVehicleAsync(
+            Guid.NewGuid(),
+            new AssignVehicleRequest(Guid.NewGuid(), null),
+            default);
+
+        result.Should().BeOfType<UnprocessableEntityObjectResult>();
+    }
+
+    [Fact]
+    public async Task AssignVehicleAsync_NotAvailable_Returns409Async()
+    {
+        var sender = Substitute.For<ISender>();
+        sender.Send(Arg.Any<AssignVehicleCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<RouteDto>.Failure(Error.Conflict("VEHICLE_NOT_AVAILABLE", "conflict")));
+        var controller = new RoutesController(sender);
+
+        var result = await controller.AssignVehicleAsync(
+            Guid.NewGuid(),
+            new AssignVehicleRequest(Guid.NewGuid(), null),
+            default);
+
+        result.Should().BeOfType<ConflictObjectResult>();
+    }
+
+    [Fact]
     public async Task GetRouteAsync_NotFound_Returns404Async()
     {
         var sender = Substitute.For<ISender>();
@@ -245,6 +303,7 @@ public sealed class RoutesControllerTests
                 new RouteStopDto(0, "market", Guid.NewGuid(), "Market", 10.1m, 106.1m, null, null),
                 new RouteStopDto(1, "restaurant", Guid.NewGuid(), "Restaurant", 10.2m, 106.2m, null, null)
             ],
+            null,
             null,
             null,
             null,
