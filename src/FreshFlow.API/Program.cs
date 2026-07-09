@@ -221,6 +221,18 @@ app.UseExceptionHandler(errorApp =>
             return;
         }
 
+        if (feature?.Error is UnauthorizedAccessException)
+        {
+            ctx.Response.StatusCode = 401;
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.WriteAsJsonAsync(new
+            {
+                success = false,
+                error = new { code = "UNAUTHORIZED", message = "Authentication is required or the provided credentials are invalid." }
+            });
+            return;
+        }
+
         // Log non-validation errors with request context — do NOT expose details in response (M8-host).
         if (feature?.Error is not null)
         {

@@ -29,6 +29,12 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 |---|---|---|
 | [AUDIT-2026-07-07 cre backend plan](./credit/AUDIT-2026-07-07-cre-backend-plan.md) | Audit / Plan | 🟡 SCRUM-257 đang làm |
 
+## notifications — Notifications & Alerts (epic SCRUM-300, module Notifications)
+
+| Doc | Loại | Trạng thái |
+|---|---|---|
+| [AUDIT-2026-07-08 not backend plan](./notifications/AUDIT-2026-07-08-not-backend-plan.md) | Audit / Plan | ✅ Hoàn thành (SCRUM-327/330/331/334) |
+
 ## logistics — Logistics module
 
 | Doc | Loại |

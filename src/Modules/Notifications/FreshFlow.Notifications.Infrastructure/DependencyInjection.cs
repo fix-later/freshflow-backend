@@ -1,6 +1,17 @@
+using System.Reflection;
+using FluentValidation;
+using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Notifications.Application.Abstractions;
+using FreshFlow.Notifications.Application.Behaviors;
+using FreshFlow.Notifications.Application.Services;
+using FreshFlow.Notifications.Infrastructure.CrossModule;
+using FreshFlow.Notifications.Infrastructure.Jobs;
+using FreshFlow.Notifications.Infrastructure.Push;
+using FreshFlow.Notifications.Infrastructure.Repositories;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace FreshFlow.Notifications.Infrastructure;
 
@@ -10,12 +21,31 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration config)
     {
-        _ = config;
+        // Register this assembly so AppDbContext discovers Notifications EF configurations.
+        EfAssemblyRegistry.Register(Assembly.GetExecutingAssembly());
+        services.TryAddSingleton(config);
 
-        // SCRUM-266 Option B: scan the Notifications application assembly for
-        // integration-event consumers only. Persistence remains deferred.
-        var applicationAssembly = System.Reflection.Assembly.Load("FreshFlow.Notifications.Application");
-        services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(applicationAssembly));
+        // MediatR - scan Application assembly for command handlers and integration consumers.
+        var applicationAssembly = typeof(INotificationDeviceRepository).Assembly;
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssembly(applicationAssembly);
+            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+        });
+
+        // FluentValidation - auto-register all validators from Application.
+        services.AddValidatorsFromAssembly(applicationAssembly, includeInternalTypes: true);
+
+        // Repositories
+        services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<INotificationDeviceRepository, NotificationDeviceRepository>();
+
+        // Application services and cross-module read projections
+        services.AddScoped<INotificationWriter, NotificationWriter>();
+        services.AddScoped<IPushSender, LogPushSender>();
+        services.AddScoped<INotificationRetryService, NotificationRetryService>();
+        services.AddScoped<INotificationRecipientResolver, NotificationRecipientResolver>();
+        services.AddHostedService<NotificationRetryHostedService>();
 
         return services;
     }
