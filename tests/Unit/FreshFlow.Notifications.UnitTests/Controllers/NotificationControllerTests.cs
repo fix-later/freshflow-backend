@@ -77,6 +77,24 @@ public sealed class NotificationControllerTests
     }
 
     [Fact]
+    public async Task ListAsync_Failure_ReturnsMappedErrorAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var userId = Guid.NewGuid();
+        sender.Send(Arg.Any<ListNotificationsQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<NotificationPageDto>.Failure(
+                Error.Validation("VALIDATION_ERROR", "Page size is invalid.")));
+        var controller = new NotificationController(sender)
+        {
+            ControllerContext = CreateControllerContext(userId)
+        };
+
+        var result = await controller.ListAsync(pageSize: 0);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
     public async Task MarkReadAsync_Success_UsesUserIdFromJwtAsync()
     {
         var sender = Substitute.For<ISender>();

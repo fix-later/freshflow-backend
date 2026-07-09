@@ -6,7 +6,9 @@ using FreshFlow.Notifications.Domain.Enums;
 
 namespace FreshFlow.Notifications.Application.Services;
 
-public sealed class NotificationWriter(INotificationRepository notifications) : INotificationWriter
+public sealed class NotificationWriter(
+    INotificationRepository notifications,
+    IPushSender pushSender) : INotificationWriter
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -28,7 +30,27 @@ public sealed class NotificationWriter(INotificationRepository notifications) : 
             body,
             SerializePayload(payload));
 
-        return await notifications.AddAsync(notification, ct);
+        var persisted = await notifications.AddAsync(notification, ct);
+
+        try
+        {
+            var result = await pushSender.SendAsync(persisted, ct);
+            if (result.IsSuccess)
+                persisted.MarkSent();
+            else
+                persisted.MarkFailed(result.Error.Message);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            persisted.MarkFailed(ex.Message);
+        }
+
+        await notifications.UpdateAsync(persisted, ct);
+        return persisted;
     }
 
     private static string? SerializePayload(IReadOnlyDictionary<string, object?>? payload)

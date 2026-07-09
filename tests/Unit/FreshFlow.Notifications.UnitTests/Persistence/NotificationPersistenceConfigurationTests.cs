@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace FreshFlow.Notifications.UnitTests.Persistence;
 
@@ -82,11 +83,26 @@ public sealed class NotificationPersistenceConfigurationTests
         entity.FindProperty(nameof(Notification.CreatedAt))!
             .GetColumnName(table)
             .Should().Be("created_at");
+        entity.FindProperty(nameof(Notification.SendStatus))!
+            .GetColumnName(table)
+            .Should().Be("send_status");
+        entity.FindProperty(nameof(Notification.AttemptCount))!
+            .GetColumnName(table)
+            .Should().Be("attempt_count");
+        entity.FindProperty(nameof(Notification.LastAttemptAt))!
+            .GetColumnName(table)
+            .Should().Be("last_attempt_at");
+        entity.FindProperty(nameof(Notification.FailedReason))!
+            .GetColumnName(table)
+            .Should().Be("failed_reason");
 
         entity.GetForeignKeys().Should().BeEmpty(
             "notifications.user_id is a cross-module plain Guid per DEC-NOT-12");
         entity.GetIndexes().Should().Contain(i =>
             i.GetDatabaseName() == "idx_notifications_user_id");
+        entity.GetIndexes().Should().Contain(i =>
+            i.GetDatabaseName() == "idx_notifications_retry_scan" &&
+            i.GetFilter() == "send_status = 'failed'");
     }
 
     [Fact]
@@ -107,6 +123,7 @@ public sealed class NotificationPersistenceConfigurationTests
         var services = new ServiceCollection();
         services.AddDbContext<AppDbContext>(options =>
             options.UseInMemoryDatabase($"notifications-{Guid.NewGuid()}"));
+        services.AddLogging();
 
         services.AddNotificationsModule(new ConfigurationBuilder().Build());
         using var provider = services.BuildServiceProvider();
@@ -114,7 +131,10 @@ public sealed class NotificationPersistenceConfigurationTests
         provider.GetRequiredService<INotificationDeviceRepository>().Should().NotBeNull();
         provider.GetRequiredService<INotificationRepository>().Should().NotBeNull();
         provider.GetRequiredService<INotificationWriter>().Should().NotBeNull();
+        provider.GetRequiredService<IPushSender>().Should().NotBeNull();
+        provider.GetRequiredService<INotificationRetryService>().Should().NotBeNull();
         provider.GetRequiredService<INotificationRecipientResolver>().Should().NotBeNull();
+        provider.GetServices<IHostedService>().Should().ContainSingle();
     }
 
     private static AppDbContext CreateContext()

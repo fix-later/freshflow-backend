@@ -5,6 +5,8 @@ using FreshFlow.Notifications.Application.Abstractions;
 using FreshFlow.Notifications.Application.Behaviors;
 using FreshFlow.Notifications.Application.Services;
 using FreshFlow.Notifications.Infrastructure.CrossModule;
+using FreshFlow.Notifications.Infrastructure.Jobs;
+using FreshFlow.Notifications.Infrastructure.Push;
 using FreshFlow.Notifications.Infrastructure.Repositories;
 using MediatR;
 using Microsoft.Extensions.Configuration;
@@ -40,7 +42,10 @@ public static class DependencyInjection
 
         // Application services and cross-module read projections
         services.AddScoped<INotificationWriter, NotificationWriter>();
+        services.AddScoped<IPushSender, LogPushSender>();
+        services.AddScoped<INotificationRetryService, NotificationRetryService>();
         services.AddScoped<INotificationRecipientResolver, NotificationRecipientResolver>();
+        services.AddHostedService<NotificationRetryHostedService>();
 
         return services;
     }

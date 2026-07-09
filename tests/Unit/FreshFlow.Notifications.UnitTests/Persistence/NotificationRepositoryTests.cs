@@ -30,6 +30,32 @@ public sealed class NotificationRepositoryTests
         row.Type.Should().Be(NotificationType.credit_alert);
         row.Payload.Should().Be("""{"level":"warning"}""");
         row.IsRead.Should().BeFalse();
+        row.SendStatus.Should().Be(NotificationSendStatus.pending);
+        row.AttemptCount.Should().Be(0);
+        row.LastAttemptAt.Should().BeNull();
+        row.FailedReason.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_PersistsSendStatusChangesAsync()
+    {
+        using var db = CreateContext();
+        var sut = new NotificationRepository(db);
+        var notification = await sut.AddAsync(new Notification(
+            Guid.NewGuid(),
+            NotificationType.system,
+            "System notification",
+            "System notification body.",
+            null), default);
+
+        notification.MarkSent();
+        await sut.UpdateAsync(notification, default);
+
+        var row = await db.Set<Notification>().SingleAsync();
+        row.SendStatus.Should().Be(NotificationSendStatus.sent);
+        row.AttemptCount.Should().Be(1);
+        row.LastAttemptAt.Should().NotBeNull();
+        row.FailedReason.Should().BeNull();
     }
 
     [Fact]
@@ -208,6 +234,72 @@ public sealed class NotificationRepositoryTests
         result.Items.Should().OnlyContain(n => n.UserId == userId);
     }
 
+    [Fact]
+    public async Task GetRetryablePageAsync_ReturnsOnlyFailedDueNotificationsUnderMaxAttemptsAsync()
+    {
+        using var db = CreateContext();
+        var sut = new NotificationRepository(db);
+        var now = DateTime.UtcNow;
+        var due = await AddFailedNotificationAsync(sut, db, "Due", now.AddMinutes(-5), attempts: 1);
+        var dueWithoutAttemptAt = await AddFailedNotificationAsync(sut, db, "Due null", null, attempts: 1);
+        await AddFailedNotificationAsync(sut, db, "Recent", now.AddSeconds(-10), attempts: 1);
+        await AddFailedNotificationAsync(sut, db, "Exhausted", now.AddMinutes(-5), attempts: 3);
+        await AddNotificationAsync(sut, db, Guid.NewGuid(), "Pending", now.AddMinutes(-5));
+        var sent = await AddNotificationAsync(sut, db, Guid.NewGuid(), "Sent", now.AddMinutes(-5));
+        sent.MarkSent();
+        await sut.UpdateAsync(sent, default);
+
+        var result = await sut.GetRetryablePageAsync(
+            maxAttempts: 3,
+            backoffThreshold: now.AddMinutes(-1),
+            batchSize: 10,
+            default);
+
+        result.Select(n => n.Id).Should().BeEquivalentTo([due.Id, dueWithoutAttemptAt.Id]);
+        result.Should().OnlyContain(n =>
+            n.SendStatus == NotificationSendStatus.failed &&
+            n.AttemptCount < 3 &&
+            (n.LastAttemptAt == null || n.LastAttemptAt < now.AddMinutes(-1)));
+    }
+
+    [Fact]
+    public async Task GetRetryablePageAsync_RespectsBatchSizeAsync()
+    {
+        using var db = CreateContext();
+        var sut = new NotificationRepository(db);
+        var now = DateTime.UtcNow;
+        await AddFailedNotificationAsync(sut, db, "First", now.AddMinutes(-5), attempts: 1);
+        await AddFailedNotificationAsync(sut, db, "Second", now.AddMinutes(-4), attempts: 1);
+
+        var result = await sut.GetRetryablePageAsync(
+            maxAttempts: 3,
+            backoffThreshold: now.AddMinutes(-1),
+            batchSize: 1,
+            default);
+
+        result.Should().ContainSingle();
+    }
+
+    [Theory]
+    [InlineData(0, 10)]
+    [InlineData(-1, 10)]
+    [InlineData(3, 0)]
+    [InlineData(3, -1)]
+    public async Task GetRetryablePageAsync_InvalidLimits_ThrowsArgumentExceptionAsync(
+        int maxAttempts,
+        int batchSize)
+    {
+        using var db = CreateContext();
+        var sut = new NotificationRepository(db);
+        Func<Task> act = () => sut.GetRetryablePageAsync(
+            maxAttempts,
+            DateTime.UtcNow,
+            batchSize,
+            default);
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
     private static AppDbContext CreateContext()
     {
         _ = typeof(FreshFlow.Notifications.Infrastructure.DependencyInjection).Assembly;
@@ -235,6 +327,30 @@ public sealed class NotificationRepositoryTests
             null), default);
 
         db.Entry(notification).Property(n => n.CreatedAt).CurrentValue = createdAt;
+        await db.SaveChangesAsync();
+
+        return notification;
+    }
+
+    private static async Task<Notification> AddFailedNotificationAsync(
+        NotificationRepository repository,
+        AppDbContext db,
+        string title,
+        DateTime? lastAttemptAt,
+        int attempts)
+    {
+        var notification = new Notification(
+            Guid.NewGuid(),
+            NotificationType.system,
+            title,
+            $"{title} body.",
+            null);
+
+        for (var i = 0; i < attempts; i++)
+            notification.MarkFailed("provider down");
+
+        await repository.AddAsync(notification, default);
+        db.Entry(notification).Property(n => n.LastAttemptAt).CurrentValue = lastAttemptAt;
         await db.SaveChangesAsync();
 
         return notification;

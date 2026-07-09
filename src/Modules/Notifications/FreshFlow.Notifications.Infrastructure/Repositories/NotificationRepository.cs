@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Notifications.Application.Abstractions;
 using FreshFlow.Notifications.Domain.Entities;
+using FreshFlow.Notifications.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace FreshFlow.Notifications.Infrastructure.Repositories;
@@ -15,6 +16,12 @@ internal sealed class NotificationRepository(AppDbContext db) : INotificationRep
         await db.Set<Notification>().AddAsync(notification, ct);
         await db.SaveChangesAsync(ct);
         return notification;
+    }
+
+    public async Task UpdateAsync(Notification notification, CancellationToken ct)
+    {
+        db.Set<Notification>().Update(notification);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<(IReadOnlyList<Notification> Items, string? NextCursor)> GetPageAsync(
@@ -70,6 +77,29 @@ internal sealed class NotificationRepository(AppDbContext db) : INotificationRep
         notification.MarkRead();
         await db.SaveChangesAsync(ct);
         return notification;
+    }
+
+    public async Task<IReadOnlyList<Notification>> GetRetryablePageAsync(
+        int maxAttempts,
+        DateTime backoffThreshold,
+        int batchSize,
+        CancellationToken ct)
+    {
+        if (maxAttempts <= 0)
+            throw new ArgumentException("maxAttempts must be greater than zero.", nameof(maxAttempts));
+
+        if (batchSize <= 0)
+            throw new ArgumentException("batchSize must be greater than zero.", nameof(batchSize));
+
+        return await db.Set<Notification>()
+            .Where(n =>
+                n.SendStatus == NotificationSendStatus.failed &&
+                n.AttemptCount < maxAttempts &&
+                (n.LastAttemptAt == null || n.LastAttemptAt < backoffThreshold))
+            .OrderBy(n => n.LastAttemptAt)
+            .ThenBy(n => n.Id)
+            .Take(batchSize)
+            .ToListAsync(ct);
     }
 
     private sealed record NotificationCursor(

@@ -28,6 +28,8 @@ public sealed class Notification
         Title = title.Trim();
         Body = body.Trim();
         Payload = string.IsNullOrWhiteSpace(payload) ? null : payload;
+        SendStatus = NotificationSendStatus.pending;
+        AttemptCount = 0;
         CreatedAt = DateTime.UtcNow;
     }
 
@@ -40,6 +42,10 @@ public sealed class Notification
     public bool IsRead { get; private set; }
     public DateTime? ReadAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
+    public NotificationSendStatus SendStatus { get; private set; } = NotificationSendStatus.pending;
+    public int AttemptCount { get; private set; }
+    public DateTime? LastAttemptAt { get; private set; }
+    public string? FailedReason { get; private set; }
 
     public void MarkRead()
     {
@@ -48,5 +54,21 @@ public sealed class Notification
 
         IsRead = true;
         ReadAt = DateTime.UtcNow;
+    }
+
+    public void MarkSent()
+    {
+        SendStatus = NotificationSendStatus.sent;
+        AttemptCount++;
+        LastAttemptAt = DateTime.UtcNow;
+        FailedReason = null;
+    }
+
+    public void MarkFailed(string reason)
+    {
+        SendStatus = NotificationSendStatus.failed;
+        AttemptCount++;
+        LastAttemptAt = DateTime.UtcNow;
+        FailedReason = reason;
     }
 }
