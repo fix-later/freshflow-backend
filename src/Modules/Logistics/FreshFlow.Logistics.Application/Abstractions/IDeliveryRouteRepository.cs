@@ -17,4 +17,10 @@ public interface IDeliveryRouteRepository
     public Task AddAsync(DeliveryRoute route, CancellationToken ct);
 
     public Task SaveChangesAsync(CancellationToken ct);
+
+    public Task<bool> ExistsOtherRouteForVehicleOnDateAsync(
+        Guid vehicleId,
+        DateOnly serviceDate,
+        Guid excludeRouteId,
+        CancellationToken ct);
 }

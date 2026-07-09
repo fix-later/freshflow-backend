@@ -3,6 +3,7 @@ using FreshFlow.Logistics.Application.Commands.CalculateRoute;
 using FreshFlow.Logistics.Application.Commands.OptimizeRoute;
 using FreshFlow.Logistics.Application.Commands.ReviewRoute;
 using FreshFlow.Logistics.Application.Commands.SelectRoute;
+using FreshFlow.Logistics.Application.Queries.CheckEligibility;
 using FreshFlow.Logistics.Application.Queries.GetRoute;
 using FreshFlow.Logistics.Application.Queries.ListRoutes;
 using MediatR;
@@ -75,6 +76,17 @@ public sealed class RoutesController(ISender sender) : ControllerBase
         return result.IsSuccess
             ? Ok(ApiResponse.OkPaged(result.Value.Items, result.Value.PageSize, result.Value.NextCursor))
             : result.Error.ToActionResult();
+    }
+
+    [HttpGet("{routeId:guid}/eligibility")]
+    public async Task<IActionResult> CheckEligibilityAsync(
+        Guid routeId,
+        [FromQuery] Guid vehicleId,
+        [FromQuery(Name = "driver_user_id")] Guid? driverUserId,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new CheckEligibilityQuery(routeId, vehicleId, driverUserId), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     [HttpGet("{id:guid}")]

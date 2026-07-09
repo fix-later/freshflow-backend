@@ -20,6 +20,22 @@ internal sealed class DeliveryRouteRepository(AppDbContext db) : IDeliveryRouteR
     public Task<DeliveryRoute?> FindByIdAsync(Guid id, CancellationToken ct) =>
         db.Set<DeliveryRoute>().FirstOrDefaultAsync(r => r.Id == id, ct);
 
+    public async Task<bool> ExistsOtherRouteForVehicleOnDateAsync(
+        Guid vehicleId,
+        DateOnly serviceDate,
+        Guid excludeRouteId,
+        CancellationToken ct) =>
+        await db.Set<DeliveryRoute>()
+            .AsNoTracking()
+            .AnyAsync(
+                r =>
+                    r.Id != excludeRouteId &&
+                    r.VehicleId == vehicleId &&
+                    r.ServiceDate == serviceDate &&
+                    r.Status != RouteStatus.cancelled &&
+                    r.DeletedAt == null,
+                ct);
+
     public async Task<(IReadOnlyList<DeliveryRoute> Items, string? NextCursor)> GetPageAsync(
         string? cursor,
         int pageSize,

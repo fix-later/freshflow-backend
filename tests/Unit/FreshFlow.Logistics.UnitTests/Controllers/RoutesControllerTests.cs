@@ -6,6 +6,7 @@ using FreshFlow.Logistics.Application.Commands.OptimizeRoute;
 using FreshFlow.Logistics.Application.Commands.ReviewRoute;
 using FreshFlow.Logistics.Application.Commands.SelectRoute;
 using FreshFlow.Logistics.Application.Dtos;
+using FreshFlow.Logistics.Application.Queries.CheckEligibility;
 using FreshFlow.Logistics.Application.Queries.GetRoute;
 using FreshFlow.Logistics.Application.Queries.ListRoutes;
 using FreshFlow.SharedKernel.Application;
@@ -182,6 +183,42 @@ public sealed class RoutesControllerTests
                 query.ServiceDate == serviceDate &&
                 query.Status == "selected"),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CheckEligibilityAsync_Success_SendsQueryAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var routeId = Guid.NewGuid();
+        var vehicleId = Guid.NewGuid();
+        var driverUserId = Guid.NewGuid();
+        sender.Send(Arg.Any<CheckEligibilityQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<EligibilityResultDto>.Success(new EligibilityResultDto(true, [])));
+        var controller = new RoutesController(sender);
+
+        var result = await controller.CheckEligibilityAsync(routeId, vehicleId, driverUserId, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<CheckEligibilityQuery>(query =>
+                query.RouteId == routeId &&
+                query.VehicleId == vehicleId &&
+                query.DriverUserId == driverUserId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CheckEligibilityAsync_RouteNotFound_Returns404Async()
+    {
+        var sender = Substitute.For<ISender>();
+        var routeId = Guid.NewGuid();
+        sender.Send(Arg.Any<CheckEligibilityQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<EligibilityResultDto>.Failure(Error.NotFound("DELIVERY_ROUTE", routeId)));
+        var controller = new RoutesController(sender);
+
+        var result = await controller.CheckEligibilityAsync(routeId, Guid.NewGuid(), null, default);
+
+        result.Should().BeOfType<NotFoundObjectResult>();
     }
 
     [Fact]

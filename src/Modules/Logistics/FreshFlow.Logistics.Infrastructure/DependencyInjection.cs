@@ -3,6 +3,7 @@ using FluentValidation;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Logistics.Application.Abstractions;
 using FreshFlow.Logistics.Application.Behaviors;
+using FreshFlow.Logistics.Infrastructure.Configuration;
 using FreshFlow.Logistics.Infrastructure.CrossModule;
 using FreshFlow.Logistics.Infrastructure.Optimization;
 using FreshFlow.Logistics.Infrastructure.Repositories;
@@ -35,11 +36,13 @@ public static class DependencyInjection
         services.AddScoped<IVehicleRepository, VehicleRepository>();
         services.AddScoped<IDeliveryZoneRepository, DeliveryZoneRepository>();
         services.AddScoped<IDeliveryRouteRepository, DeliveryRouteRepository>();
+        services.AddScoped<IDriverReader, DriverReader>();
         services.AddScoped<IMarketCoordinateReader, MarketCoordinateReader>();
         services.AddScoped<IRestaurantCoordinateReader, RestaurantCoordinateReader>();
+        services.AddScoped<IVehicleCapacityPolicy, VehicleCapacityPolicy>();
         services.AddScoped<IRouteOptimizer, NearestNeighborTwoOptOptimizer>();
 
-        // Logistics:MaxStopsPerVehicle is intentionally left for SCRUM-306/307 route logic.
+        // VehicleCapacityPolicy uses Logistics:MaxStopsPerVehicle for SCRUM-306/307 route capacity checks.
         return services;
     }
 }

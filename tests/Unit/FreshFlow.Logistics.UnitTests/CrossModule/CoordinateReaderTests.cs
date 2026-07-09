@@ -74,6 +74,39 @@ public sealed class CoordinateReaderTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public async Task DriverReader_ExistingUser_ReturnsRoleAndStatusAsync()
+    {
+        using var fixture = await SqliteFixture.CreateAsync();
+        var roleId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        await fixture.InsertRoleAsync(roleId, "driver");
+        await fixture.InsertUserAsync(userId, roleId, isActive: true);
+        var sut = new DriverReader(fixture.Context);
+
+        var result = await sut.FindByUserIdAsync(userId, default);
+
+        result.Should().NotBeNull();
+        result!.UserId.Should().Be(userId);
+        result.RoleName.Should().Be("driver");
+        result.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DriverReader_DeletedUser_ReturnsNullAsync()
+    {
+        using var fixture = await SqliteFixture.CreateAsync();
+        var roleId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        await fixture.InsertRoleAsync(roleId, "driver");
+        await fixture.InsertUserAsync(userId, roleId, isActive: true, deleted: true);
+        var sut = new DriverReader(fixture.Context);
+
+        var result = await sut.FindByUserIdAsync(userId, default);
+
+        result.Should().BeNull();
+    }
+
     private sealed class SqliteFixture : IDisposable
     {
         private readonly SqliteConnection _connection;
@@ -120,6 +153,24 @@ public sealed class CoordinateReaderTests
 
             await context.Database.ExecuteSqlRawAsync(
                 """
+                CREATE TABLE roles (
+                    "Id" TEXT NOT NULL,
+                    "Name" TEXT NOT NULL
+                );
+                """);
+
+            await context.Database.ExecuteSqlRawAsync(
+                """
+                CREATE TABLE users (
+                    "Id" TEXT NOT NULL,
+                    "RoleId" TEXT NOT NULL,
+                    "IsActive" INTEGER NOT NULL,
+                    "DeletedAt" TEXT NULL
+                );
+                """);
+
+            await context.Database.ExecuteSqlRawAsync(
+                """
                 CREATE TABLE delivery_addresses (
                     "RestaurantId" TEXT NOT NULL,
                     "Latitude" TEXT NULL,
@@ -149,6 +200,24 @@ public sealed class CoordinateReaderTests
                 $"""
                 INSERT INTO restaurants ("Id", "Name")
                 VALUES ({id}, {name});
+                """);
+
+        public async Task InsertRoleAsync(Guid id, string name) =>
+            await Context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                INSERT INTO roles ("Id", "Name")
+                VALUES ({id}, {name});
+                """);
+
+        public async Task InsertUserAsync(
+            Guid id,
+            Guid roleId,
+            bool isActive,
+            bool deleted = false) =>
+            await Context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                INSERT INTO users ("Id", "RoleId", "IsActive", "DeletedAt")
+                VALUES ({id}, {roleId}, {isActive}, {DeletedAt(deleted)});
                 """);
 
         public async Task InsertDeliveryAddressAsync(

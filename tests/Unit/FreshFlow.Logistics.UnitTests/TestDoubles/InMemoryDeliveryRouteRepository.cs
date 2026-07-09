@@ -14,6 +14,18 @@ internal sealed class InMemoryDeliveryRouteRepository : IDeliveryRouteRepository
     public Task<DeliveryRoute?> FindByIdAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_routes.FirstOrDefault(route => route.Id == id));
 
+    public Task<bool> ExistsOtherRouteForVehicleOnDateAsync(
+        Guid vehicleId,
+        DateOnly serviceDate,
+        Guid excludeRouteId,
+        CancellationToken ct) =>
+        Task.FromResult(_routes.Any(route =>
+            route.Id != excludeRouteId &&
+            route.VehicleId == vehicleId &&
+            route.ServiceDate == serviceDate &&
+            route.Status != RouteStatus.cancelled &&
+            route.DeletedAt == null));
+
     public Task<(IReadOnlyList<DeliveryRoute> Items, string? NextCursor)> GetPageAsync(
         string? cursor,
         int pageSize,

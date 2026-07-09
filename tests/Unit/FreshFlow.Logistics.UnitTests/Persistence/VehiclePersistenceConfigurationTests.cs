@@ -63,7 +63,7 @@ public sealed class VehiclePersistenceConfigurationTests
     }
 
     [Fact]
-    public void AddLogisticsModule_RegistersVehicleRepository()
+    public void AddLogisticsModule_RegistersLogisticsRepositoriesAndReaders()
     {
         var services = new ServiceCollection();
         services.AddDbContext<AppDbContext>(options =>
@@ -73,6 +73,8 @@ public sealed class VehiclePersistenceConfigurationTests
         using var provider = services.BuildServiceProvider();
 
         provider.GetRequiredService<IVehicleRepository>().Should().NotBeNull();
+        provider.GetRequiredService<IDriverReader>().Should().NotBeNull();
+        provider.GetRequiredService<IVehicleCapacityPolicy>().Should().NotBeNull();
     }
 
     private static AppDbContext CreateContext()

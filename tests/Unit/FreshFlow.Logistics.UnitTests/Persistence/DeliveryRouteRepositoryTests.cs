@@ -66,6 +66,34 @@ public sealed class DeliveryRouteRepositoryTests
         result.Items.Should().ContainSingle(route => route.Id == newest.Id);
     }
 
+    [Fact]
+    public async Task ExistsOtherRouteForVehicleOnDateAsync_IgnoresExcludedCancelledDeletedAndDifferentDateAsync()
+    {
+        using var db = CreateInMemoryContext();
+        var sut = new DeliveryRouteRepository(db);
+        var vehicleId = Guid.NewGuid();
+        var route = await AddRouteAsync(sut, db, DateTime.UtcNow);
+        var sameDateRoute = await AddRouteAsync(sut, db, DateTime.UtcNow);
+        SetRouteAssignment(db, sameDateRoute, vehicleId, RouteStatus.assigned, route.ServiceDate);
+        var cancelledRoute = await AddRouteAsync(sut, db, DateTime.UtcNow);
+        SetRouteAssignment(db, cancelledRoute, vehicleId, RouteStatus.cancelled, route.ServiceDate);
+        var deletedRoute = await AddRouteAsync(sut, db, DateTime.UtcNow);
+        SetRouteAssignment(db, deletedRoute, vehicleId, RouteStatus.assigned, route.ServiceDate, deleted: true);
+        var differentDateRoute = await AddRouteAsync(sut, db, DateTime.UtcNow);
+        SetRouteAssignment(db, differentDateRoute, vehicleId, RouteStatus.assigned, route.ServiceDate.AddDays(1));
+        await db.SaveChangesAsync();
+
+        var result = await sut.ExistsOtherRouteForVehicleOnDateAsync(vehicleId, route.ServiceDate, route.Id, default);
+        var ignoredResult = await sut.ExistsOtherRouteForVehicleOnDateAsync(
+            vehicleId,
+            route.ServiceDate,
+            sameDateRoute.Id,
+            default);
+
+        result.Should().BeTrue();
+        ignoredResult.Should().BeFalse();
+    }
+
     private static AppDbContext CreateInMemoryContext()
     {
         _ = typeof(FreshFlow.Logistics.Infrastructure.DependencyInjection).Assembly;
@@ -90,6 +118,21 @@ public sealed class DeliveryRouteRepositoryTests
         await db.SaveChangesAsync();
 
         return route;
+    }
+
+    private static void SetRouteAssignment(
+        AppDbContext db,
+        DeliveryRoute route,
+        Guid vehicleId,
+        RouteStatus status,
+        DateOnly serviceDate,
+        bool deleted = false)
+    {
+        db.Entry(route).Property(r => r.VehicleId).CurrentValue = vehicleId;
+        db.Entry(route).Property(r => r.Status).CurrentValue = status;
+        db.Entry(route).Property(r => r.ServiceDate).CurrentValue = serviceDate;
+        if (deleted)
+            db.Entry(route).Property(r => r.DeletedAt).CurrentValue = DateTime.UtcNow;
     }
 
     private static DeliveryRoute CreateRoute() =>
