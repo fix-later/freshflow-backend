@@ -100,6 +100,60 @@ public sealed class HubInboundTests
         inventory.UpdatedAt.Should().BeOnOrAfter(originalUpdatedAt);
     }
 
+    [Fact]
+    public void HubInventory_AddOutbound_IncreasesQuantityOut()
+    {
+        var inventory = HubInventory.Create(Guid.NewGuid(), Guid.NewGuid());
+
+        inventory.AddOutbound(3.5m);
+
+        inventory.QuantityOut.Should().Be(3.5m);
+    }
+
+    [Fact]
+    public void HubOutboundEvent_Record_ValidInput_SetsTotal()
+    {
+        var item1 = new HubOutboundItem(Guid.NewGuid(), null, 1.25m);
+        var item2 = new HubOutboundItem(Guid.NewGuid(), Guid.NewGuid(), 2.75m);
+
+        var outbound = HubOutboundEvent.Record(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            [item1, item2],
+            DateTime.UtcNow);
+
+        outbound.Id.Should().NotBeEmpty();
+        outbound.Items.Should().Equal(item1, item2);
+        outbound.TotalQuantityKg.Should().Be(4m);
+    }
+
+    [Fact]
+    public void HubOutboundEvent_Record_EmptyItems_ThrowsArgumentException()
+    {
+        var act = () => HubOutboundEvent.Record(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            [],
+            DateTime.UtcNow);
+
+        act.Should().Throw<ArgumentException>()
+            .WithParameterName("items");
+    }
+
+    [Fact]
+    public void CrossDockTransfer_Create_ValidInput_SetsPendingAndTrimsNotes()
+    {
+        var transfer = CrossDockTransfer.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "  Dock A  ");
+
+        transfer.Id.Should().NotBeEmpty();
+        transfer.Status.Should().Be(CrossDockTransfer.StatusPending);
+        transfer.Notes.Should().Be("Dock A");
+    }
+
     private static HubInboundEvent CreateInbound() =>
         HubInboundEvent.Record(
             Guid.NewGuid(),

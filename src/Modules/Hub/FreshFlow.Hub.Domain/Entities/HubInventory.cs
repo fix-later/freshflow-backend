@@ -45,4 +45,13 @@ public sealed class HubInventory
         QuantityIn += quantity;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    public void AddOutbound(decimal quantity)
+    {
+        if (quantity <= 0)
+            throw new ArgumentException("Outbound quantity must be greater than zero.", nameof(quantity));
+
+        QuantityOut += quantity;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

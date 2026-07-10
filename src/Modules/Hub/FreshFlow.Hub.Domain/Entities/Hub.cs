@@ -71,6 +71,15 @@ public sealed class Hub
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void ApplyOutbound(decimal totalKg)
+    {
+        if (totalKg <= 0)
+            throw new ArgumentException("Outbound quantity must be greater than zero.", nameof(totalKg));
+
+        OccupiedCapacityKg -= totalKg;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void Deactivate()
     {
         if (!IsActive)

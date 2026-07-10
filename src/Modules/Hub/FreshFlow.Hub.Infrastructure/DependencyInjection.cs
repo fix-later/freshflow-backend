@@ -37,6 +37,9 @@ public static class DependencyInjection
         services.AddScoped<IHubDiscrepancyRepository, HubDiscrepancyRepository>();
         services.AddScoped<IHubDiscrepancyReader, HubDiscrepancyRepository>();
         services.AddScoped<IOrderLookupReader, OrderLookupReader>();
+        services.AddScoped<IDeliveryRouteReader, DeliveryRouteReader>();
+        services.AddScoped<ICrossDockRepository, CrossDockRepository>();
+        services.AddScoped<IHubOutboundRepository, HubOutboundRepository>();
 
         return services;
     }

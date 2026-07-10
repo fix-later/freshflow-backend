@@ -31,4 +31,15 @@ public sealed class HubErrorExtensionsTests
 
         result.Should().BeOfType<NotFoundObjectResult>();
     }
+
+    [Theory]
+    [InlineData("INSUFFICIENT_HUB_STOCK")]
+    [InlineData("INBOUND_NOT_ARRIVED")]
+    [InlineData("OUTBOUND_ROUTE_INVALID")]
+    public void ToActionResult_HubDispatchValidationErrors_Return422(string code)
+    {
+        var result = Error.Validation(code, "dispatch").ToActionResult();
+
+        result.Should().BeOfType<UnprocessableEntityObjectResult>();
+    }
 }

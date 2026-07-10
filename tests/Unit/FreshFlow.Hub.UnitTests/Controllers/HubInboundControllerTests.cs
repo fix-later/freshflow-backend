@@ -1,11 +1,15 @@
 using System.Reflection;
 using FluentAssertions;
 using FreshFlow.API.Controllers;
+using FreshFlow.Hub.Application.Commands.CreateCrossDock;
 using FreshFlow.Hub.Application.Commands.RecordInbound;
+using FreshFlow.Hub.Application.Commands.RecordOutbound;
 using FreshFlow.Hub.Application.Commands.ScanInbound;
 using FreshFlow.Hub.Application.Dtos;
 using FreshFlow.Hub.Application.Queries.GetPendingInbound;
+using FreshFlow.Hub.Application.Queries.ListCrossDock;
 using FreshFlow.Hub.Application.Queries.ListInbound;
+using FreshFlow.Hub.Application.Queries.ListOutbound;
 using FreshFlow.Hub.Domain.Entities;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
@@ -122,6 +126,108 @@ public sealed class HubInboundControllerTests
             Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task CreateCrossDockAsync_Success_SendsCommandAndReturnsCreatedAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var hubId = Guid.NewGuid();
+        var inboundId = Guid.NewGuid();
+        var routeId = Guid.NewGuid();
+        sender.Send(Arg.Any<CreateCrossDockCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<CrossDockTransferDto>.Success(CreateCrossDockDto(hubId, inboundId, routeId)));
+        var controller = new HubInboundController(sender);
+
+        var result = await controller.CreateCrossDockAsync(
+            hubId,
+            new CreateCrossDockRequest(inboundId, routeId, "Dock 1"),
+            default);
+
+        result.Should().BeOfType<CreatedResult>();
+        await sender.Received(1).Send(
+            Arg.Is<CreateCrossDockCommand>(command =>
+                command.HubId == hubId &&
+                command.InboundEventId == inboundId &&
+                command.OutboundRouteId == routeId &&
+                command.Notes == "Dock 1"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ListCrossDockAsync_Success_SendsQueryAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var hubId = Guid.NewGuid();
+        sender.Send(Arg.Any<ListCrossDockQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<CrossDockTransferPageDto>.Success(
+                new CrossDockTransferPageDto([CreateCrossDockDto(hubId, Guid.NewGuid(), Guid.NewGuid())], 25, null)));
+        var controller = new HubInboundController(sender);
+
+        var result = await controller.ListCrossDockAsync(hubId, "pending", "cursor", 25, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<ListCrossDockQuery>(query =>
+                query.HubId == hubId &&
+                query.Status == "pending" &&
+                query.Cursor == "cursor" &&
+                query.PageSize == 25),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RecordOutboundAsync_Success_SendsCommandAndReturnsCreatedAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var hubId = Guid.NewGuid();
+        var routeId = Guid.NewGuid();
+        var marketProductId = Guid.NewGuid();
+        var dispatchedAt = DateTime.UtcNow;
+        sender.Send(Arg.Any<RecordOutboundCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<HubOutboundEventDto>.Success(CreateOutboundDto(hubId, routeId)));
+        var controller = new HubInboundController(sender);
+
+        var result = await controller.RecordOutboundAsync(
+            hubId,
+            new RecordOutboundRequest(
+                routeId,
+                [new RecordOutboundItemRequest(marketProductId, null, 3m)],
+                dispatchedAt),
+            default);
+
+        result.Should().BeOfType<CreatedResult>();
+        await sender.Received(1).Send(
+            Arg.Is<RecordOutboundCommand>(command =>
+                command.HubId == hubId &&
+                command.DestinationRouteId == routeId &&
+                command.DispatchedAt == dispatchedAt &&
+                command.Items.Count == 1 &&
+                command.Items[0].MarketProductId == marketProductId &&
+                command.Items[0].QuantityKg == 3m),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ListOutboundAsync_Success_SendsQueryWithDateAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var hubId = Guid.NewGuid();
+        var date = new DateOnly(2026, 7, 11);
+        sender.Send(Arg.Any<ListOutboundQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<HubOutboundPageDto>.Success(
+                new HubOutboundPageDto([CreateOutboundDto(hubId, Guid.NewGuid())], 50, null, 10m)));
+        var controller = new HubInboundController(sender);
+
+        var result = await controller.ListOutboundAsync(hubId, date, null, 50, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<ListOutboundQuery>(query =>
+                query.HubId == hubId &&
+                query.Date == date &&
+                query.PageSize == 50),
+            Arg.Any<CancellationToken>());
+    }
+
     private static HubInboundDto CreateDto(Guid hubId) =>
         new(
             Guid.NewGuid(),
@@ -136,6 +242,29 @@ public sealed class HubInboundControllerTests
             null,
             HubInboundEvent.StatusPending,
             HubInboundEvent.ConditionOk,
+            null,
+            DateTime.UtcNow,
+            DateTime.UtcNow);
+
+    private static CrossDockTransferDto CreateCrossDockDto(Guid hubId, Guid inboundId, Guid routeId) =>
+        new(
+            Guid.NewGuid(),
+            hubId,
+            inboundId,
+            routeId,
+            CrossDockTransfer.StatusPending,
+            null,
+            DateTime.UtcNow,
+            DateTime.UtcNow);
+
+    private static HubOutboundEventDto CreateOutboundDto(Guid hubId, Guid routeId) =>
+        new(
+            Guid.NewGuid(),
+            hubId,
+            routeId,
+            [new HubOutboundItemDto(Guid.NewGuid(), null, 10m)],
+            10m,
+            DateTime.UtcNow,
             null,
             DateTime.UtcNow,
             DateTime.UtcNow);

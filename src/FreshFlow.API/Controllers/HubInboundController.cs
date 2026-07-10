@@ -1,12 +1,16 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Hub.Application.Commands.AcknowledgeDiscrepancy;
+using FreshFlow.Hub.Application.Commands.CreateCrossDock;
 using FreshFlow.Hub.Application.Commands.RecordDiscrepancy;
 using FreshFlow.Hub.Application.Commands.RecordInbound;
+using FreshFlow.Hub.Application.Commands.RecordOutbound;
 using FreshFlow.Hub.Application.Commands.ScanInbound;
 using FreshFlow.Hub.Application.Queries.GetPendingInbound;
+using FreshFlow.Hub.Application.Queries.ListCrossDock;
 using FreshFlow.Hub.Application.Queries.ListDiscrepancies;
 using FreshFlow.Hub.Application.Queries.ListInbound;
+using FreshFlow.Hub.Application.Queries.ListOutbound;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -74,6 +78,7 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         var result = await sender.Send(new ListInboundQuery(hubId, date, cursor, pageSize), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
+
     [HttpPost("{hubId:guid}/inbound/{inboundId:guid}/discrepancy")]
     public async Task<IActionResult> RecordDiscrepancyAsync(
         Guid hubId,
@@ -126,6 +131,73 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    [HttpPost("{hubId:guid}/cross-dock")]
+    public async Task<IActionResult> CreateCrossDockAsync(
+        Guid hubId,
+        [FromBody] CreateCrossDockRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new CreateCrossDockCommand(
+                hubId,
+                body.InboundEventId,
+                body.OutboundRouteId,
+                body.Notes),
+            ct);
+
+        return result.IsSuccess
+            ? Created($"/api/v1/hubs/{hubId}/cross-dock/{result.Value.CrossDockId}", ApiResponse.Ok(result.Value))
+            : result.Error.ToActionResult();
+    }
+
+    [HttpGet("{hubId:guid}/cross-dock")]
+    public async Task<IActionResult> ListCrossDockAsync(
+        Guid hubId,
+        [FromQuery] string? status = null,
+        [FromQuery] string? cursor = null,
+        [FromQuery(Name = "page_size")] int pageSize = 50,
+        CancellationToken ct = default)
+    {
+        var result = await sender.Send(new ListCrossDockQuery(hubId, status, cursor, pageSize), ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse.OkPaged(result.Value.Items, result.Value.PageSize, result.Value.NextCursor))
+            : result.Error.ToActionResult();
+    }
+
+    [HttpPost("{hubId:guid}/outbound")]
+    public async Task<IActionResult> RecordOutboundAsync(
+        Guid hubId,
+        [FromBody] RecordOutboundRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new RecordOutboundCommand(
+                hubId,
+                body.DestinationRouteId,
+                body.Items.Select(item => new HubOutboundItemCommand(
+                    item.MarketProductId,
+                    item.ProductId,
+                    item.QuantityKg)).ToList().AsReadOnly(),
+                body.DispatchedAt),
+            ct);
+
+        return result.IsSuccess
+            ? Created($"/api/v1/hubs/{hubId}/outbound/{result.Value.OutboundId}", ApiResponse.Ok(result.Value))
+            : result.Error.ToActionResult();
+    }
+
+    [HttpGet("{hubId:guid}/outbound")]
+    public async Task<IActionResult> ListOutboundAsync(
+        Guid hubId,
+        [FromQuery] DateOnly? date = null,
+        [FromQuery] string? cursor = null,
+        [FromQuery(Name = "page_size")] int pageSize = 50,
+        CancellationToken ct = default)
+    {
+        var result = await sender.Send(new ListOutboundQuery(hubId, date, cursor, pageSize), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     private Guid ResolveUserId()
     {
         var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -152,3 +224,18 @@ public sealed record RecordDiscrepancyRequest(
     decimal AffectedQuantity,
     string ConditionStatus,
     string? Notes);
+
+public sealed record CreateCrossDockRequest(
+    Guid InboundEventId,
+    Guid OutboundRouteId,
+    string? Notes);
+
+public sealed record RecordOutboundRequest(
+    Guid DestinationRouteId,
+    IReadOnlyList<RecordOutboundItemRequest> Items,
+    DateTime DispatchedAt);
+
+public sealed record RecordOutboundItemRequest(
+    Guid MarketProductId,
+    Guid? ProductId,
+    decimal QuantityKg);

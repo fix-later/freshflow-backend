@@ -53,6 +53,8 @@ public static class ErrorExtensions
                         or "HUB_RELAY_NOT_SUPPORTED" or "STOP_LIMIT_EXCEEDED"
                         or "MISSING_COORDINATES" or "INVALID_STOP_ORDER"
                         or "VEHICLE_NOT_ELIGIBLE" or "HUB_CAPACITY_EXCEEDED"
+                        or "INSUFFICIENT_HUB_STOCK" or "INBOUND_NOT_ARRIVED"
+                        or "OUTBOUND_ROUTE_INVALID"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 

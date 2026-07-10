@@ -20,8 +20,8 @@
 
 | Thứ tự build | SCRUM Key | UC | Tên | Loại | Trạng thái |
 |---|---|---|---|---|---|
-| 1 | SCRUM-286 | UC-HUB-01 | Manage Hub | Net-new (**bootstrap module**) | ✅ PASS (reviewer 2026-07-10; 47/47 Hub, full suite 0 regression, coverage 91.6%, format+no-drift sạch) |
-| 2 | SCRUM-288 | UC-HUB-02+03+04+05 | Receive & Reconcile Incoming Goods (scan + inbound + inventory) | Net-new (core) | ✅ PASS (reviewer 2026-07-10; 89/89, full suite 0 regression, cov 89.5%) — ⚠️ MEDIUM kg→int drift → CHỐT patch decimal(kg) standalone trước commit (DEC-HUB-04 addendum) |
+| 1 | SCRUM-286 | UC-HUB-01 | Manage Hub | Net-new (**bootstrap module**) | ✅ DONE (commit d3edf5a) — PASS reviewer; 47/47, cov 91.6% |
+| 2 | SCRUM-288 | UC-HUB-02+03+04+05 | Receive & Reconcile Incoming Goods (scan + inbound + inventory) | Net-new (core) | ✅ DONE (commit d3edf5a) — PASS reviewer; 89/89, cov 89.5%; decimal(kg) patch gộp trong commit |
 | 3 | SCRUM-290 | UC-HUB-06+07 | Handle Hub Discrepancy (+refund-qua-credit + notify) | Net-new | ⬜ Chưa bắt đầu (phụ thuộc 288) |
 | 4 | SCRUM-292 | UC-HUB-08+09+10 | Cross-dock & Prepare Dispatch (+outbound) | Net-new | ⬜ Chưa bắt đầu (phụ thuộc 288) |
 | 5 | SCRUM-294 | UC-HUB-11+12 | Handover Goods & Driver Checkout | Net-new (điểm tích hợp Logistics) | ⬜ Chưa bắt đầu (phụ thuộc 292) |
@@ -100,6 +100,7 @@ DDL roadmap tham chiếu (ta ÁP DỤNG với điều chỉnh cross-module FK �
 
 ---
 - **DEC-HUB-15 (leader chốt 2026-07-10, verify code thật 288) — 290 giới thiệu Hub→Orders read-seam đầu tiên để resolve+validate `orderItemId → orderId` lúc tạo discrepancy.** `HubInboundItem` KHÔNG mang orderItemId (chỉ market_product/kg) và AC1 request chỉ có `orderItemId` (không orderId), nhưng discrepancy cần `order_id` (cho reader `HasOpenDiscrepanciesForOrderAsync` mà DEL sẽ dùng) + cần validate orderItem thật (an toàn tài chính vì kích hoạt refund). ⇒ seam `IOrderLookupReader` (`HasNoKey`+`ToSqlQuery` trên `order_items`, **PascalCase columns** — order_items dùng EF default, xem correction memory `project_ef_column_casing`), không thấy → 404 `ORDER_ITEM_NOT_FOUND`. Hub lưu `order_id`+`order_item_id`, KHÔNG lưu restaurant_id/lockedUnitPrice (Orders resolve khi refund/notify — phân vai rõ với DEC-HUB-06). **`HubDiscrepancy` là entity Hub DUY NHẤT kế thừa `AggregateRoot`** (bắt buộc để `DomainEventDispatchInterceptor` dispatch domain event; entity Hub khác là plain class).
+- **DEC-HUB-16 (leader chốt 2026-07-10, verify code thật Logistics) — 292 cross-dock KHÔNG enforce được "outbound route cùng hub" (FR-HUB-002 AC3); chỉ verify route TỒN TẠI.** `DeliveryRoute` (LOG epic) KHÔNG có cột/field `hub_id` (fields: Id, RouteType, Status, ServiceDate, Stops, Vehicle/Driver/OrderGroup/CreatedBy...) — route hiện là Market→Restaurant DIRECT, HUB_RELAY đã defer (DEC-LOG-07). ⇒ không có liên kết route↔hub để so khớp. **Quyết định MVP:** `IDeliveryRouteReader.FindByIdAsync` verify route tồn tại (không thấy → 422 `OUTBOUND_ROUTE_INVALID`); check "cùng hub" DEFER + ghi rõ (mở lại khi route mang hub linkage / HUB_RELAY build). Giống tinh thần LOG defer HUB_RELAY. **KHÔNG mở scope sang Logistics để thêm hub_id vào delivery_routes ở epic này** — nếu supervisor muốn enforce AC3 thật thì cần task cross-epic riêng.
 
 ## 3. Rủi ro & bề mặt bảo mật
 
@@ -179,13 +180,37 @@ DDL roadmap tham chiếu (ta ÁP DỤNG với điều chỉnh cross-module FK �
 
 
 ### SCRUM-292 — Cross-dock & Prepare Dispatch (UC-HUB-08+09+10) — *phụ thuộc 288*
-**Mục tiêu:** cross-dock link inbound→outbound route + outbound tracking. FR-HUB-002, FR-HUB-004.
-- **Domain:** `CrossDockTransfer` aggregate (`Id, HubId, InboundEventId (FK), OutboundRouteId, Status(pending/in_progress/completed) default pending, Notes?, timestamps, DeletedAt`). `HubOutboundEvent` aggregate (`Id, HubId, DestinationRouteId, Items(JSONB), TotalQuantityKg, DispatchedAt, RecordedBy?, timestamps`). `Hub.ApplyOutbound(totalKg)` giảm occupied. Inventory `quantity_out += qty` guard ≤ quantity_in.
-- **Application:** `CreateCrossDockCommand(hubId, inboundDeliveryId, outboundRouteId)`+Handler (guard inbound status = `ARRIVED_AT_HUB`→ else 422; outbound route cùng hub→ else 422; →201 crossDockId). `RecordOutboundCommand(hubId, destinationRouteId, items[], dispatchedAt)`+Handler (atomic: outbound event + inventory quantity_out += + occupied −=; over-dispatch→422 `INSUFFICIENT_HUB_STOCK`). `ListCrossDockQuery(hubId)` (status). Readers: `IDeliveryRouteReader` (seam Logistics — verify route thuộc hub / tồn tại). `ICrossDockRepository`, `IHubOutboundRepository`.
-- **Infrastructure:** configs snake_case; seam `DeliveryRouteRow` (SQL từ `delivery_routes` — snake_case vì Logistics dùng snake_case! verify: quote theo casing thật của Logistics config). Migration `AddCrossDockAndOutbound`.
-- **API:** `POST /api/v1/hubs/{hubId}/cross-dock` (201), `GET /api/v1/hubs/{hubId}/cross-dock` (list+status), `POST /api/v1/hubs/{hubId}/outbound` (201+outboundId), `GET /api/v1/hubs/{hubId}/outbound?date=`. RBAC `hub_staff,admin,operations_manager`.
-- **Test ≥80%:** cross-dock happy→201; inbound sai status→422; route khác hub→422; outbound happy→inventory quantity_out tăng+occupied giảm; over-dispatch→422 `INSUFFICIENT_HUB_STOCK`; list cross-dock/outbound; concurrency.
-- **Status inbound (CHỐT — không còn là điểm mờ):** 288 đã thêm field thật `HubInboundEvent.Status` (PENDING→ARRIVED_AT_HUB). Cross-dock guard ở 292 dùng **đúng giá trị `ARRIVED_AT_HUB`**: `CreateCrossDockCommand` chỉ cho phép khi `inbound.Status == ARRIVED_AT_HUB` (tức đã scan-confirmed), else 422. KHÔNG còn coi "mọi inbound = ARRIVED_AT_HUB" như đề xuất tạm trước đây.
+**Mục tiêu:** cross-dock link inbound→outbound route + outbound tracking. FR-HUB-002, FR-HUB-004. **KHÔNG có domain event / integration event** (state machine + inventory update thuần — verify: không cross-module side-effect cần event; notify delivery là DEL/schedule, defer).
+
+**⚠️ ĐỐI CHIẾU CODE THẬT (290 + Logistics):**
+- **Entity plain `sealed class`** (KHÔNG AggregateRoot — khác HubDiscrepancy) vì không raise domain event. Mẫu style = `HubInboundEvent` (Record factory, Guid.NewGuid/UtcNow thủ công, Items jsonb qua HasConversion+ValueComparer).
+- **Seam template = 290 `OrderLookupReader`:** interface + DTO record ở `Application/Abstractions`; `Row` (init props) + `RowConfiguration` (`HasNoKey()`+`ToSqlQuery`) + `Reader(AppDbContext db)` ở `Infrastructure/CrossModule`; đăng ký DI.
+- **`delivery_routes` = snake_case columns** (`id`, `status`, `service_date`, `deleted_at` — verify DeliveryRouteConfiguration) — KHÁC `order_items` (PascalCase). Seam SQL: `SELECT id AS "RouteId", status AS "Status" FROM delivery_routes WHERE deleted_at IS NULL` (alias PascalCase để khớp property Row).
+- **Inventory nay là `decimal NUMERIC(12,2)` kg** (sau patch decimal) → guard `INSUFFICIENT_HUB_STOCK` so sánh decimal kg, KHÔNG int.
+
+**Domain (plain sealed class):**
+- `CrossDockTransfer`: `Id, HubId, InboundEventId, OutboundRouteId, Status(pending/in_progress/completed default pending), Notes?, timestamps, DeletedAt`. Factory `Create(...)`; (state transition pending→in_progress→completed nếu cần — MVP chỉ tạo pending).
+- `HubOutboundEvent`: `Id, HubId, DestinationRouteId, Items(JSONB List<HubOutboundItem{MarketProductId, ProductId?, QuantityKg}>), TotalQuantityKg, DispatchedAt, RecordedBy?, timestamps, DeletedAt`. Factory `Record(...)`.
+- `Hub.ApplyOutbound(decimal totalKg)`: `OccupiedCapacityKg -= totalKg` (guard không âm ở handler). `HubInventory.AddOutbound(decimal qty)`: `QuantityOut += qty`.
+
+**Application:**
+- `CreateCrossDockCommand(hubId, inboundDeliveryId, outboundRouteId)`+Validator+Handler: hub tồn tại (404); inbound tồn tại thuộc hub (404); **inbound.Status == ARRIVED_AT_HUB** else 422 `INBOUND_NOT_ARRIVED`; outbound route tồn tại qua `IDeliveryRouteReader` else 422 `OUTBOUND_ROUTE_INVALID`; **"route cùng hub" (AC3) KHÔNG enforce được — DEC-HUB-16** (delivery_routes không có hub linkage); tạo transfer pending; 201 crossDockId.
+- `RecordOutboundCommand(hubId, destinationRouteId, items[], dispatchedAt)`+Validator+Handler: hub (404); route tồn tại qua seam else 422 `OUTBOUND_ROUTE_INVALID`; per product: `inventory.QuantityOut + qty > QuantityIn` → 422 `INSUFFICIENT_HUB_STOCK`; ATOMIC 1 SaveChanges: tạo outbound event + `inventory.AddOutbound(qty)` per product + `hub.ApplyOutbound(totalKg)`; 201 outboundId.
+- `ListCrossDockQuery(hubId)` (status) + `ListOutboundQuery(hubId, date?)` — cursor paged (private record per repo).
+- Readers: `IDeliveryRouteReader.FindByIdAsync(routeId)` (verify tồn tại). Repos: `ICrossDockRepository`, `IHubOutboundRepository`, tái dùng `IHubInventoryRepository`/`IHubRepository`. Đăng ký DI.
+
+**Infrastructure:**
+- `CrossDockTransferConfiguration` + `HubOutboundEventConfiguration` snake_case (mirror HubInboundEventConfiguration: HasCheckConstraint `status IN ('pending','in_progress','completed')`, `total_quantity_kg > 0`; items jsonb HasConversion+ValueComparer; FK nội bộ `inbound_event_id`→`hub_inbound_events`; `outbound_route_id`/`destination_route_id` = Guid+index KHÔNG FK cross-module).
+- Seam `IDeliveryRouteReader` + `DeliveryRouteRow{Guid RouteId; string Status;}` + config (HasNoKey+ToSqlQuery **snake_case→alias PascalCase**) + `DeliveryRouteReader`.
+- Migration `AddCrossDockAndOutbound` (create-only, no-drift).
+- **ErrorExtensions: thêm** `INSUFFICIENT_HUB_STOCK`→422, `INBOUND_NOT_ARRIVED`→422, `OUTBOUND_ROUTE_INVALID`→422.
+
+**API:** `POST /api/v1/hubs/{hubId}/cross-dock`(201), `GET /api/v1/hubs/{hubId}/cross-dock`(list+status), `POST /api/v1/hubs/{hubId}/outbound`(201+outboundId), `GET /api/v1/hubs/{hubId}/outbound?date=`. RBAC `hub_staff,admin,operations_manager`.
+
+**Test ≥80%:** cross-dock happy→201; inbound sai status (PENDING)→422 `INBOUND_NOT_ARRIVED`; outbound route không tồn tại→422 `OUTBOUND_ROUTE_INVALID`; outbound happy→inventory quantity_out tăng + occupied giảm (decimal kg); over-dispatch (quantity_out+qty>quantity_in)→422 `INSUFFICIENT_HUB_STOCK`; fractional-kg (0.5+0.5 vs quantity_in) đúng vì decimal; list cross-dock/outbound paged; concurrency 2 outbound không âm kho. **KHÔNG test "route khác hub→422"** (không enforce được — DEC-HUB-16).
+
+**KHÔNG được làm:** enforce same-hub cho route (defer — DEC-HUB-16); cross-module FK; domain/integration event (292 không có); apply migration DB thật; đụng Logistics/Orders code; commit khi chưa có key.
+
 
 ### SCRUM-294 — Handover Goods & Driver Checkout (UC-HUB-11+12) — *phụ thuộc 292; điểm tích hợp Logistics*
 **Mục tiêu:** ghi nhận bàn giao goods tại hub cho driver + driver checkout xác nhận. DEC-HUB-11 (không FR riêng).
@@ -238,3 +263,5 @@ DDL roadmap tham chiếu (ta ÁP DỤNG với điều chỉnh cross-module FK �
 
 - **2026-07-10 (SCRUM-288 PASS + MEDIUM)** — Reviewer PASS: 89/89, full suite 0 regression, cov 89.5%, 3 error code map đúng (test riêng), 2-step atomic + HasPendingInboundAsync verify bằng test EF thật. **1 MEDIUM cần chốt trước 292:** `decimal.ToInt32(QuantityKg)` drift (xem DEC-HUB-04 addendum) — leader đề xuất đổi HubInventory quantity sang decimal(kg). 2 LOW: `GetPendingInboundQueryValidator`/`ListInboundQueryValidator` chưa test (fold blanket vào 292/fix). Báo supervisor.
 - **2026-07-10 (rounding CHỐT)** — Supervisor chốt option (a): `HubInventory` quantity → `decimal NUMERIC(12,2)` kg, bỏ `decimal.ToInt32`. Thực thi = standalone patch codex NGAY (286+288 chưa commit) + gộp 2 LOW validator test. reviewer re-review nhanh phần đổi kiểu. 290/292 không đổi. Inventory nay đo kg → DEC-HUB-04 thống nhất đơn vị.
+- **2026-07-10 (commit d3edf5a)** — Supervisor commit gộp SCRUM-286 + SCRUM-288 + patch decimal (83 file); Jira 286/288 → Done. Dừng dispatch SCRUM-290 (spec đã sẵn sàng) do session cost cao; chờ supervisor xác nhận tiếp. Team idle.
+- **2026-07-10 (SCRUM-292 prep, đọc code thật 290+Logistics)** — Seam template = 290 OrderLookupReader (tái dùng cho IDeliveryRouteReader). `delivery_routes` snake_case (alias PascalCase trong ToSqlQuery). **DEC-HUB-16:** DeliveryRoute KHÔNG có hub_id → cross-dock chỉ verify route tồn tại, defer check same-hub (AC3). 292 KHÔNG có domain/integration event (state machine + inventory decimal-kg). §4 SCRUM-292 viết lại + gửi supervisor. IHubDiscrepancyReader.HasOpenDiscrepanciesForOrderAsync(orderId) đã có (dùng ở 294, không phải 292).
