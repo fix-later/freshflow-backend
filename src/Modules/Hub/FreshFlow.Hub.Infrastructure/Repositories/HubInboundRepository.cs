@@ -24,6 +24,15 @@ internal sealed class HubInboundRepository(AppDbContext db) : IHubInboundReposit
                 e.DeletedAt == null,
                 ct);
 
+    public Task<bool> ExistsForHubAsync(Guid hubId, Guid inboundId, CancellationToken ct) =>
+        db.Set<HubInboundEvent>()
+            .AsNoTracking()
+            .AnyAsync(e =>
+                e.Id == inboundId &&
+                e.HubId == hubId &&
+                e.DeletedAt == null,
+                ct);
+
     public Task<bool> DeliveryScheduleExistsAsync(Guid hubId, Guid deliveryScheduleId, CancellationToken ct) =>
         db.Set<HubInboundEvent>()
             .AsNoTracking()

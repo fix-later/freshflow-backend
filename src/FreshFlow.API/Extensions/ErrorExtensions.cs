@@ -61,7 +61,8 @@ public static class ErrorExtensions
                         or "ORDER_NOT_DELIVERED" or "ORDER_RECEIPT_ALREADY_CONFIRMED"
                         or "ORDER_ISSUE_NOT_ALLOWED" or "ORDER_ISSUE_ALREADY_RESOLVED"
                         or "SCHEDULED_ORDER_NOT_ACTIVE" or "SCHEDULED_ORDER_ALREADY_CANCELLED"
-                        or "ROUTE_INVALID_TRANSITION" or "HUB_HAS_PENDING_DELIVERIES")
+                        or "ROUTE_INVALID_TRANSITION" or "HUB_HAS_PENDING_DELIVERIES"
+                        or "DISCREPANCY_ALREADY_ACKNOWLEDGED")
             return new ConflictObjectResult(body);
 
         if (error.Code is "ROLE_NOT_CONFIGURED")

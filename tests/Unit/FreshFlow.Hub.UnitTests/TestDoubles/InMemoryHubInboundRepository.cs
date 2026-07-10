@@ -28,6 +28,12 @@ internal sealed class InMemoryHubInboundRepository : IHubInboundRepository
             e.Status == HubInboundEvent.StatusPending &&
             e.DeletedAt == null));
 
+    public Task<bool> ExistsForHubAsync(Guid hubId, Guid inboundId, CancellationToken ct) =>
+        Task.FromResult(_inbounds.Any(e =>
+            e.Id == inboundId &&
+            e.HubId == hubId &&
+            e.DeletedAt == null));
+
     public Task<bool> DeliveryScheduleExistsAsync(Guid hubId, Guid deliveryScheduleId, CancellationToken ct) =>
         Task.FromResult(_inbounds.Any(e =>
             e.HubId == hubId &&

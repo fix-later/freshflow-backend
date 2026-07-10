@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentValidation;
 using FreshFlow.Hub.Application.Abstractions;
 using FreshFlow.Hub.Application.Behaviors;
+using FreshFlow.Hub.Infrastructure.CrossModule;
 using FreshFlow.Hub.Infrastructure.Repositories;
 using FreshFlow.Infrastructure.Persistence;
 using MediatR;
@@ -33,6 +34,9 @@ public static class DependencyInjection
         services.AddScoped<IHubRepository, HubRepository>();
         services.AddScoped<IHubInboundRepository, HubInboundRepository>();
         services.AddScoped<IHubInventoryRepository, HubInventoryRepository>();
+        services.AddScoped<IHubDiscrepancyRepository, HubDiscrepancyRepository>();
+        services.AddScoped<IHubDiscrepancyReader, HubDiscrepancyRepository>();
+        services.AddScoped<IOrderLookupReader, OrderLookupReader>();
 
         return services;
     }
