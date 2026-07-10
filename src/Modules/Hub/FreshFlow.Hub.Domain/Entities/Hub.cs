@@ -56,6 +56,9 @@ public sealed class Hub
     {
         Validate(name, latitude, longitude, capacityKg);
 
+        if (capacityKg < OccupiedCapacityKg)
+            throw new InvalidOperationException("Capacity cannot be less than occupied capacity.");
+
         Name = name.Trim();
         Address = NormalizeOptional(address);
         Latitude = latitude;

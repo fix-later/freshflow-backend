@@ -14,7 +14,7 @@ internal sealed class HubInboundRepository(AppDbContext db) : IHubInboundReposit
         await db.Set<HubInboundEvent>().AddAsync(inbound, ct);
 
     public Task SaveChangesAsync(CancellationToken ct) =>
-        db.SaveChangesAsync(ct);
+        HubSaveChanges.SaveAsync(db, ct);
 
     public Task<HubInboundEvent?> FindPendingByIdAsync(Guid id, CancellationToken ct) =>
         db.Set<HubInboundEvent>()

@@ -21,11 +21,12 @@ public sealed class HubDiscrepancyCommandHandlerTests
         var orders = new InMemoryOrderLookupReader();
         var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
         var inbound = CreateInbound(hub.Id);
+        inbound.ConfirmArrival();
         var orderItemId = Guid.NewGuid();
         var orderId = Guid.NewGuid();
         await hubs.AddAsync(hub, default);
         await inbounds.AddAsync(inbound, default);
-        orders.Add(orderItemId, orderId);
+        orders.Add(orderItemId, orderId, inbound.Items.Single().MarketProductId);
         var sut = new RecordDiscrepancyCommandHandler(hubs, inbounds, discrepancies, orders);
 
         var result = await sut.Handle(
@@ -54,6 +55,7 @@ public sealed class HubDiscrepancyCommandHandlerTests
         var inbounds = new InMemoryHubInboundRepository();
         var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
         var inbound = CreateInbound(hub.Id);
+        inbound.ConfirmArrival();
         await hubs.AddAsync(hub, default);
         await inbounds.AddAsync(inbound, default);
         var discrepancies = new InMemoryHubDiscrepancyRepository();
@@ -75,6 +77,37 @@ public sealed class HubDiscrepancyCommandHandlerTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("ORDER_ITEM_NOT_FOUND");
+        discrepancies.SaveChangesCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RecordDiscrepancy_OrderItemProductNotInInbound_ReturnsValidationAsync()
+    {
+        var hubs = new InMemoryHubRepository();
+        var inbounds = new InMemoryHubInboundRepository();
+        var orders = new InMemoryOrderLookupReader();
+        var discrepancies = new InMemoryHubDiscrepancyRepository();
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        var inbound = CreateInbound(hub.Id);
+        inbound.ConfirmArrival();
+        var orderItemId = Guid.NewGuid();
+        await hubs.AddAsync(hub, default);
+        await inbounds.AddAsync(inbound, default);
+        orders.Add(orderItemId, Guid.NewGuid(), Guid.NewGuid());
+        var sut = new RecordDiscrepancyCommandHandler(hubs, inbounds, discrepancies, orders);
+
+        var result = await sut.Handle(
+            new RecordDiscrepancyCommand(
+                hub.Id,
+                inbound.Id,
+                orderItemId,
+                1m,
+                HubDiscrepancy.ConditionMissing,
+                null),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_ITEM_NOT_IN_INBOUND");
         discrepancies.SaveChangesCount.Should().Be(0);
     }
 
@@ -104,6 +137,68 @@ public sealed class HubDiscrepancyCommandHandlerTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("HUB_INBOUND_EVENT_NOT_FOUND");
+    }
+
+    [Fact]
+    public async Task RecordDiscrepancy_PendingInbound_ReturnsInboundNotArrivedAsync()
+    {
+        var hubs = new InMemoryHubRepository();
+        var inbounds = new InMemoryHubInboundRepository();
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        var inbound = CreateInbound(hub.Id);
+        await hubs.AddAsync(hub, default);
+        await inbounds.AddAsync(inbound, default);
+        var sut = new RecordDiscrepancyCommandHandler(
+            hubs,
+            inbounds,
+            new InMemoryHubDiscrepancyRepository(),
+            new InMemoryOrderLookupReader());
+
+        var result = await sut.Handle(
+            new RecordDiscrepancyCommand(
+                hub.Id,
+                inbound.Id,
+                Guid.NewGuid(),
+                1m,
+                HubDiscrepancy.ConditionMissing,
+                null),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INBOUND_NOT_ARRIVED");
+    }
+
+    [Fact]
+    public async Task RecordDiscrepancy_AffectedQuantityExceedsOrderItem_ReturnsInvalidIssueQuantityAsync()
+    {
+        var hubs = new InMemoryHubRepository();
+        var inbounds = new InMemoryHubInboundRepository();
+        var orders = new InMemoryOrderLookupReader();
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        var inbound = CreateInbound(hub.Id);
+        inbound.ConfirmArrival();
+        var orderItemId = Guid.NewGuid();
+        await hubs.AddAsync(hub, default);
+        await inbounds.AddAsync(inbound, default);
+        orders.Add(orderItemId, Guid.NewGuid(), inbound.Items.Single().MarketProductId, quantity: 2m);
+        var sut = new RecordDiscrepancyCommandHandler(
+            hubs,
+            inbounds,
+            new InMemoryHubDiscrepancyRepository(),
+            orders);
+
+        var result = await sut.Handle(
+            new RecordDiscrepancyCommand(
+                hub.Id,
+                inbound.Id,
+                orderItemId,
+                3m,
+                HubDiscrepancy.ConditionPartial,
+                null),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INVALID_ISSUE_QUANTITY");
     }
 
     [Fact]

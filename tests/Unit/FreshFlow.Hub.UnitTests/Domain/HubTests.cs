@@ -93,6 +93,18 @@ public sealed class HubTests
     }
 
     [Fact]
+    public void Update_CapacityBelowOccupied_ThrowsInvalidOperationException()
+    {
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        hub.ApplyInbound(100m);
+
+        var act = () => hub.Update("Main Hub", null, null, null, 50m, null);
+
+        act.Should().Throw<InvalidOperationException>();
+        hub.CapacityKg.Should().Be(1000m);
+    }
+
+    [Fact]
     public void ApplyInbound_IncreasesOccupiedCapacity()
     {
         var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);

@@ -92,6 +92,7 @@ internal sealed class HubInboundEventConfiguration : IEntityTypeConfiguration<Hu
 
         builder.Property(e => e.UpdatedAt)
             .HasColumnName("updated_at")
+            .IsConcurrencyToken()
             .IsRequired();
 
         builder.Property(e => e.DeletedAt)

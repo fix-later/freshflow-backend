@@ -38,6 +38,8 @@ public sealed class HubErrorExtensionsTests
     [InlineData("OUTBOUND_ROUTE_INVALID")]
     [InlineData("ROUTE_HAS_NO_DRIVER")]
     [InlineData("DRIVER_ROUTE_MISMATCH")]
+    [InlineData("HUB_CAPACITY_BELOW_OCCUPIED")]
+    [InlineData("ORDER_ITEM_NOT_IN_INBOUND")]
     public void ToActionResult_HubDispatchValidationErrors_Return422(string code)
     {
         var result = Error.Validation(code, "dispatch").ToActionResult();

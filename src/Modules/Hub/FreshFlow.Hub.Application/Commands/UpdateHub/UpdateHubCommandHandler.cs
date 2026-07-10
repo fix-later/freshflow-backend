@@ -15,6 +15,14 @@ internal sealed class UpdateHubCommandHandler(IHubRepository hubs)
         if (hub is null)
             return Result<HubDto>.Failure(Error.NotFound("HUB", request.HubId));
 
+        if (request.CapacityKg < hub.OccupiedCapacityKg)
+        {
+            return Result<HubDto>.Failure(
+                Error.Validation(
+                    "HUB_CAPACITY_BELOW_OCCUPIED",
+                    "Hub capacity cannot be less than occupied capacity."));
+        }
+
         hub.Update(
             request.Name,
             request.Address,
@@ -23,7 +31,17 @@ internal sealed class UpdateHubCommandHandler(IHubRepository hubs)
             request.CapacityKg,
             request.ManagedBy);
 
-        await hubs.SaveChangesAsync(ct);
+        try
+        {
+            await hubs.SaveChangesAsync(ct);
+        }
+        catch (HubConcurrencyException)
+        {
+            return Result<HubDto>.Failure(
+                Error.Conflict(
+                    "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                    "Hub was updated by another request. Please refresh and retry."));
+        }
 
         return Result<HubDto>.Success(hub.ToDto());
     }

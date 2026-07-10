@@ -68,6 +68,9 @@ public sealed class HubPersistenceConfigurationTests
         entity.FindProperty(nameof(HubEntity.DeletedAt))!
             .GetColumnName(table)
             .Should().Be("deleted_at");
+        entity.FindProperty(nameof(HubEntity.UpdatedAt))!
+            .IsConcurrencyToken
+            .Should().BeTrue();
 
         entity.FindProperty(nameof(HubEntity.AvailableCapacityKg)).Should().BeNull();
         entity.GetForeignKeys().Should().BeEmpty(
@@ -117,6 +120,9 @@ public sealed class HubPersistenceConfigurationTests
             .GetColumnName(table)
             .Should().Be("condition_status");
         entity.FindProperty(nameof(HubInboundEvent.DeletedAt))!.GetColumnName(table).Should().Be("deleted_at");
+        entity.FindProperty(nameof(HubInboundEvent.UpdatedAt))!
+            .IsConcurrencyToken
+            .Should().BeTrue();
 
         entity.GetForeignKeys().Should().ContainSingle(fk =>
             fk.PrincipalEntityType.ClrType == typeof(HubEntity));
@@ -165,6 +171,9 @@ public sealed class HubPersistenceConfigurationTests
             .Value
             .Should().Be("quantity_in - quantity_out");
         entity.FindProperty(nameof(HubInventory.DeletedAt))!.GetColumnName(table).Should().Be("deleted_at");
+        entity.FindProperty(nameof(HubInventory.UpdatedAt))!
+            .IsConcurrencyToken
+            .Should().BeTrue();
 
         entity.GetForeignKeys().Should().ContainSingle(fk =>
             fk.PrincipalEntityType.ClrType == typeof(HubEntity));

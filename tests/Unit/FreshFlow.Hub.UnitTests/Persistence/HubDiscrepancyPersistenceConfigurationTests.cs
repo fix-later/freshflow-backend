@@ -59,6 +59,9 @@ public sealed class HubDiscrepancyPersistenceConfigurationTests
 
         entity.GetSqlQuery().Should().Contain("oi.\"Id\" AS \"OrderItemId\"");
         entity.GetSqlQuery().Should().Contain("oi.\"OrderId\" AS \"OrderId\"");
+        entity.GetSqlQuery().Should().Contain("oi.\"MarketProductId\" AS \"MarketProductId\"");
+        entity.GetSqlQuery().Should().Contain("oi.\"Quantity\"::numeric AS \"Quantity\"");
+        entity.GetSqlQuery().Should().Contain("oi.\"ActualQuantity\" AS \"ActualQuantity\"");
         entity.GetForeignKeys().Should().BeEmpty();
     }
 

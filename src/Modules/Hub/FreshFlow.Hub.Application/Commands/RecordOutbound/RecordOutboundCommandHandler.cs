@@ -54,7 +54,14 @@ internal sealed class RecordOutboundCommandHandler(
 
         hub.ApplyOutbound(totalQuantityKg);
         await outbounds.AddAsync(outbound, ct);
-        await outbounds.SaveChangesAsync(ct);
+        try
+        {
+            await outbounds.SaveChangesAsync(ct);
+        }
+        catch (HubConcurrencyException)
+        {
+            return ConcurrencyConflict();
+        }
 
         return Result<HubOutboundEventDto>.Success(outbound.ToDto());
     }
@@ -62,4 +69,10 @@ internal sealed class RecordOutboundCommandHandler(
     private static Result<HubOutboundEventDto> InsufficientStock() =>
         Result<HubOutboundEventDto>.Failure(
             Error.Validation("INSUFFICIENT_HUB_STOCK", "Hub stock is not sufficient for this outbound dispatch."));
+
+    private static Result<HubOutboundEventDto> ConcurrencyConflict() =>
+        Result<HubOutboundEventDto>.Failure(
+            Error.Conflict(
+                "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                "Hub stock was updated by another request. Please refresh and retry."));
 }

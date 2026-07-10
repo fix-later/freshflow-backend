@@ -53,7 +53,9 @@ public static class ErrorExtensions
                         or "HUB_RELAY_NOT_SUPPORTED" or "STOP_LIMIT_EXCEEDED"
                         or "MISSING_COORDINATES" or "INVALID_STOP_ORDER"
                         or "VEHICLE_NOT_ELIGIBLE" or "HUB_CAPACITY_EXCEEDED"
+                        or "HUB_CAPACITY_BELOW_OCCUPIED"
                         or "INSUFFICIENT_HUB_STOCK" or "INBOUND_NOT_ARRIVED"
+                        or "ORDER_ITEM_NOT_IN_INBOUND"
                         or "OUTBOUND_ROUTE_INVALID" or "ROUTE_HAS_NO_DRIVER"
                         or "DRIVER_ROUTE_MISMATCH"
             || error.Code.StartsWith("ACCOUNT_"))

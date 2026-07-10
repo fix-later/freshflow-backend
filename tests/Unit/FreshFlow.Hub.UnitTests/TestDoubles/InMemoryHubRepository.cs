@@ -36,8 +36,8 @@ internal sealed class InMemoryHubRepository : IHubRepository
         CancellationToken ct)
     {
         var query = _hubs.AsEnumerable();
-        if (isActive.HasValue)
-            query = query.Where(h => h.IsActive == isActive.Value);
+        if (isActive is { } active)
+            query = query.Where(h => h.IsActive == active);
 
         return Task.FromResult<(IReadOnlyList<HubEntity>, string?)>(
             (query.Take(pageSize).ToList().AsReadOnly(), null));

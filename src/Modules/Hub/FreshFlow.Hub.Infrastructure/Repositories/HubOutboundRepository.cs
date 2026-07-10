@@ -13,8 +13,17 @@ internal sealed class HubOutboundRepository(AppDbContext db) : IHubOutboundRepos
     public async Task AddAsync(HubOutboundEvent outbound, CancellationToken ct) =>
         await db.Set<HubOutboundEvent>().AddAsync(outbound, ct);
 
+    public Task<HubOutboundEvent?> FindByIdForHubAsync(Guid hubId, Guid outboundId, CancellationToken ct) =>
+        db.Set<HubOutboundEvent>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e =>
+                e.Id == outboundId &&
+                e.HubId == hubId &&
+                e.DeletedAt == null,
+                ct);
+
     public Task SaveChangesAsync(CancellationToken ct) =>
-        db.SaveChangesAsync(ct);
+        HubSaveChanges.SaveAsync(db, ct);
 
     public async Task<(IReadOnlyList<HubOutboundEvent> Items, string? NextCursor, decimal TotalQuantityKg)> GetHistoryPageAsync(
         Guid hubId,

@@ -15,7 +15,7 @@ internal sealed class HubRepository(AppDbContext db) : IHubRepository
         await db.Set<HubEntity>().AddAsync(hub, ct);
 
     public Task SaveChangesAsync(CancellationToken ct) =>
-        db.SaveChangesAsync(ct);
+        HubSaveChanges.SaveAsync(db, ct);
 
     public Task<HubEntity?> FindByIdAsync(Guid id, CancellationToken ct) =>
         db.Set<HubEntity>().FirstOrDefaultAsync(h => h.Id == id, ct);
@@ -40,8 +40,8 @@ internal sealed class HubRepository(AppDbContext db) : IHubRepository
 
         var query = db.Set<HubEntity>().AsNoTracking();
 
-        if (isActive.HasValue)
-            query = query.Where(h => h.IsActive == isActive.Value);
+        if (isActive is { } active)
+            query = query.Where(h => h.IsActive == active);
 
         var decoded = HubCursor.TryDecode(cursor);
         if (decoded is not null)

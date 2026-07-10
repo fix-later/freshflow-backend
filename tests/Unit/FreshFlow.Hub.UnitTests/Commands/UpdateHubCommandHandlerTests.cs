@@ -47,4 +47,22 @@ public sealed class UpdateHubCommandHandlerTests
         result.Error.Code.Should().Be("HUB_NOT_FOUND");
         repository.SaveChangesCount.Should().Be(0);
     }
+
+    [Fact]
+    public async Task Handle_CapacityBelowOccupied_ReturnsValidationErrorAsync()
+    {
+        var repository = new InMemoryHubRepository();
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        hub.ApplyInbound(250m);
+        await repository.AddAsync(hub, default);
+        var sut = new UpdateHubCommandHandler(repository);
+
+        var result = await sut.Handle(
+            new UpdateHubCommand(hub.Id, "Main Hub", null, null, null, 100m, null),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("HUB_CAPACITY_BELOW_OCCUPIED");
+        repository.SaveChangesCount.Should().Be(0);
+    }
 }

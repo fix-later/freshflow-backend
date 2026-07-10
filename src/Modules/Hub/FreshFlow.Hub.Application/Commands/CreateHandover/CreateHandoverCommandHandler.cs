@@ -10,6 +10,7 @@ namespace FreshFlow.Hub.Application.Commands.CreateHandover;
 internal sealed class CreateHandoverCommandHandler(
     IHubRepository hubs,
     IDeliveryRouteReader routes,
+    IHubOutboundRepository outbounds,
     IHubHandoverRepository handovers)
     : IRequestHandler<CreateHandoverCommand, Result<HubHandoverDto>>
 {
@@ -33,6 +34,13 @@ internal sealed class CreateHandoverCommandHandler(
         {
             return Result<HubHandoverDto>.Failure(
                 Error.Validation("DRIVER_ROUTE_MISMATCH", "Driver does not match the delivery route assignment."));
+        }
+
+        if (request.OutboundEventId.HasValue &&
+            await outbounds.FindByIdForHubAsync(request.HubId, request.OutboundEventId.Value, ct) is null)
+        {
+            return Result<HubHandoverDto>.Failure(
+                Error.NotFound("HUB_OUTBOUND_EVENT", request.OutboundEventId.Value));
         }
 
         var handover = HubHandoverEvent.Create(

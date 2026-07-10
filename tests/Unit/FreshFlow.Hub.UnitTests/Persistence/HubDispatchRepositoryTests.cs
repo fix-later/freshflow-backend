@@ -86,6 +86,25 @@ public sealed class HubDispatchRepositoryTests
     }
 
     [Fact]
+    public async Task HubOutboundRepository_FindByIdForHubAsync_FiltersByHubAsync()
+    {
+        using var db = CreateContext();
+        var hubs = new HubRepository(db);
+        var sut = new HubOutboundRepository(db);
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        var otherHub = HubEntity.Create("Other Hub", null, null, null, 1000, null);
+        var outbound = CreateOutbound(hub.Id, 1m);
+        await hubs.AddAsync(hub, default);
+        await hubs.AddAsync(otherHub, default);
+        await sut.AddAsync(outbound, default);
+        await sut.SaveChangesAsync(default);
+
+        var result = await sut.FindByIdForHubAsync(otherHub.Id, outbound.Id, default);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public async Task HubHandoverRepository_GetPageAsync_FiltersByHubAndReturnsNextCursorAsync()
     {
         using var db = CreateContext();

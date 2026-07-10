@@ -6,8 +6,13 @@ internal sealed class InMemoryOrderLookupReader : IOrderLookupReader
 {
     private readonly Dictionary<Guid, OrderLookupDto> _orders = [];
 
-    public void Add(Guid orderItemId, Guid orderId) =>
-        _orders[orderItemId] = new OrderLookupDto(orderItemId, orderId);
+    public void Add(
+        Guid orderItemId,
+        Guid orderId,
+        Guid marketProductId,
+        decimal quantity = 10m,
+        decimal? actualQuantity = null) =>
+        _orders[orderItemId] = new OrderLookupDto(orderItemId, orderId, marketProductId, quantity, actualQuantity);
 
     public Task<OrderLookupDto?> FindByOrderItemIdAsync(Guid orderItemId, CancellationToken ct) =>
         Task.FromResult(_orders.GetValueOrDefault(orderItemId));

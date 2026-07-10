@@ -53,7 +53,17 @@ internal sealed class ScanInboundCommandHandler(
         }
 
         hub.ApplyInbound(inbound.TotalQuantityKg);
-        await inbounds.SaveChangesAsync(ct);
+        try
+        {
+            await inbounds.SaveChangesAsync(ct);
+        }
+        catch (HubConcurrencyException)
+        {
+            return Result<HubInboundDto>.Failure(
+                Error.Conflict(
+                    "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                    "Hub capacity was updated by another request. Please refresh and retry."));
+        }
 
         return Result<HubInboundDto>.Success(inbound.ToDto());
     }

@@ -57,6 +57,7 @@ internal sealed class HubInventoryConfiguration : IEntityTypeConfiguration<HubIn
 
         builder.Property(i => i.UpdatedAt)
             .HasColumnName("updated_at")
+            .IsConcurrencyToken()
             .IsRequired();
 
         builder.Property(i => i.DeletedAt)

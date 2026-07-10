@@ -12,6 +12,13 @@ internal sealed class OrderLookupReader(AppDbContext db) : IOrderLookupReader
             .AsNoTracking()
             .FirstOrDefaultAsync(o => o.OrderItemId == orderItemId, ct);
 
-        return row is null ? null : new OrderLookupDto(row.OrderItemId, row.OrderId);
+        return row is null
+            ? null
+            : new OrderLookupDto(
+                row.OrderItemId,
+                row.OrderId,
+                row.MarketProductId,
+                row.Quantity,
+                row.ActualQuantity);
     }
 }

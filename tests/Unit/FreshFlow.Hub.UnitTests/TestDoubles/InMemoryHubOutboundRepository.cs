@@ -16,6 +16,12 @@ internal sealed class InMemoryHubOutboundRepository : IHubOutboundRepository
         return Task.CompletedTask;
     }
 
+    public Task<HubOutboundEvent?> FindByIdForHubAsync(Guid hubId, Guid outboundId, CancellationToken ct) =>
+        Task.FromResult(_outbounds.FirstOrDefault(e =>
+            e.Id == outboundId &&
+            e.HubId == hubId &&
+            e.DeletedAt == null));
+
     public Task SaveChangesAsync(CancellationToken ct)
     {
         SaveChangesCount++;
