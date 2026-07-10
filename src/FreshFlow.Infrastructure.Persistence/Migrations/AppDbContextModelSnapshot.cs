@@ -636,6 +636,274 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("assistant_conversations", (string)null);
                 });
 
+            modelBuilder.Entity("FreshFlow.Logistics.Domain.Entities.DeliveryRoute", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DriverUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("driver_user_id");
+
+                    b.Property<decimal?>("EstimatedCost")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("estimated_cost");
+
+                    b.Property<int?>("EstimatedDurationMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("estimated_duration_minutes");
+
+                    b.Property<string>("OptimizationCriteria")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("optimization_criteria");
+
+                    b.Property<Guid?>("OrderGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_group_id");
+
+                    b.Property<string>("RouteType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("route_type");
+
+                    b.Property<DateOnly>("ServiceDate")
+                        .HasColumnType("date")
+                        .HasColumnName("service_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Stops")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("route_metadata");
+
+                    b.Property<decimal?>("TotalDistanceKm")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("total_distance_km");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("VehicleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("vehicle_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("idx_delivery_routes_created_by");
+
+                    b.HasIndex("OrderGroupId")
+                        .HasDatabaseName("idx_delivery_routes_order_group_id");
+
+                    b.HasIndex("ServiceDate")
+                        .HasDatabaseName("idx_delivery_routes_service_date");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("idx_delivery_routes_status");
+
+                    b.HasIndex("VehicleId", "ServiceDate")
+                        .HasDatabaseName("idx_delivery_routes_vehicle_service_date");
+
+                    b.HasIndex(new[] { "VehicleId", "ServiceDate" }, "ux_delivery_routes_vehicle_service_date_assigned")
+                        .IsUnique()
+                        .HasDatabaseName("ux_delivery_routes_vehicle_service_date_assigned")
+                        .HasFilter("status = 'assigned' AND deleted_at IS NULL");
+
+                    b.ToTable("delivery_routes", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Logistics.Domain.Entities.DeliveryZone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ux_delivery_zones_code_active")
+                        .HasFilter("deleted_at IS NULL");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("idx_delivery_zones_is_active");
+
+                    b.ToTable("delivery_zones", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Logistics.Domain.Entities.Vehicle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("CapacityKg")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("capacity_kg");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<bool>("IsAvailable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_available");
+
+                    b.Property<string>("PlateNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("plate_number");
+
+                    b.Property<Guid?>("RegisteredBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("registered_by");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("VehicleType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("vehicle_type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("idx_vehicles_deleted_at");
+
+                    b.HasIndex("PlateNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ux_vehicles_plate_number_active")
+                        .HasFilter("deleted_at IS NULL");
+
+                    b.ToTable("vehicles", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.DriverRow", b =>
+                {
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RoleName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT u.\"Id\" AS \"UserId\", r.\"Name\" AS \"RoleName\", u.\"IsActive\" AS \"IsActive\"\nFROM users u\nJOIN roles r ON r.\"Id\" = u.\"RoleId\"\nWHERE u.\"DeletedAt\" IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.MarketCoordinateRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT \"Id\", \"Name\", \"Latitude\", \"Longitude\" FROM markets WHERE \"DeletedAt\" IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.RestaurantCoordinateRow", b =>
+                {
+                    b.Property<decimal?>("Latitude")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT da.\"RestaurantId\", r.\"Name\" AS \"Name\", da.\"Latitude\", da.\"Longitude\"\nFROM delivery_addresses da\nJOIN restaurants r ON r.\"Id\" = da.\"RestaurantId\"\nWHERE da.\"IsDefault\" = true AND da.\"DeletedAt\" IS NULL");
+                });
+
             modelBuilder.Entity("FreshFlow.Notifications.Domain.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")

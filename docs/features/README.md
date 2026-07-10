@@ -35,12 +35,13 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 |---|---|---|
 | [AUDIT-2026-07-08 not backend plan](./notifications/AUDIT-2026-07-08-not-backend-plan.md) | Audit / Plan | ✅ Hoàn thành (SCRUM-327/330/331/334) |
 
-## logistics — Logistics module
+## logistics — Logistics module (epic SCRUM-298 — Route Planning & Optimization)
 
-| Doc | Loại |
-|---|---|
-| [CONTEXT-2026-06-21 requirement analysis](./logistics/CONTEXT-2026-06-21-logistics-requirement-analysis.md) | Context |
-| [CONTEXT-2026-06-21 standalone demo](./logistics/CONTEXT-2026-06-21-standalone-logistics-demo.md) | Context |
+| Doc | Loại | Trạng thái |
+|---|---|---|
+| [AUDIT-2026-07-09 log backend plan](./logistics/AUDIT-2026-07-09-log-backend-plan.md) | Audit / Plan | ⬜ 7 task chưa bắt đầu |
+| [CONTEXT-2026-06-21 requirement analysis](./logistics/CONTEXT-2026-06-21-logistics-requirement-analysis.md) | Context | — |
+| [CONTEXT-2026-06-21 standalone demo](./logistics/CONTEXT-2026-06-21-standalone-logistics-demo.md) | Context | — |
 
 ## auth-catalog — Auth / Profile / Catalog
 

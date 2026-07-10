@@ -15,6 +15,9 @@ public static class ErrorExtensions
         if (error.Code is "EMAIL_ALREADY_EXISTS" or "PHONE_ALREADY_EXISTS"
                         or "REFRESH_TOKEN_REUSE" or "ALREADY_APPROVED"
                         or "CATEGORY_NAME_CONFLICT" or "UNIT_NAME_CONFLICT"
+                        or "DELIVERY_ZONE_CODE_EXISTS"
+                        or "PLATE_NUMBER_DUPLICATE"
+                        or "VEHICLE_NOT_AVAILABLE"
                         or "MARKET_PRODUCT_ALREADY_EXISTS")
             return new ConflictObjectResult(body);
 
@@ -46,6 +49,9 @@ public static class ErrorExtensions
                         or "INVALID_CREDIT_LIMIT" or "CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE"
                         or "DELIVERY_DATE_OUT_OF_WINDOW" or "INVALID_ACTUAL_QUANTITY"
                         or "SCHEDULED_ORDER_FIRST_RUN_IN_PAST" or "INVALID_ISSUE_QUANTITY"
+                        or "HUB_RELAY_NOT_SUPPORTED" or "STOP_LIMIT_EXCEEDED"
+                        or "MISSING_COORDINATES" or "INVALID_STOP_ORDER"
+                        or "VEHICLE_NOT_ELIGIBLE"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 
@@ -53,7 +59,8 @@ public static class ErrorExtensions
                         or "ORDER_CANNOT_RESCHEDULE" or "ORDER_NOT_CANCELLABLE" or "ORDER_CANNOT_ADJUST"
                         or "ORDER_NOT_DELIVERED" or "ORDER_RECEIPT_ALREADY_CONFIRMED"
                         or "ORDER_ISSUE_NOT_ALLOWED" or "ORDER_ISSUE_ALREADY_RESOLVED"
-                        or "SCHEDULED_ORDER_NOT_ACTIVE" or "SCHEDULED_ORDER_ALREADY_CANCELLED")
+                        or "SCHEDULED_ORDER_NOT_ACTIVE" or "SCHEDULED_ORDER_ALREADY_CANCELLED"
+                        or "ROUTE_INVALID_TRANSITION")
             return new ConflictObjectResult(body);
 
         if (error.Code is "ROLE_NOT_CONFIGURED")
