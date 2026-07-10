@@ -27,6 +27,9 @@ services:
       Email__FromAddress: ${EMAIL_FROM_ADDRESS}
       Email__FromName: ${EMAIL_FROM_NAME}
       Email__FrontendBaseUrl: ${FRONTEND_BASE_URL}
+      Cloudinary__CloudName: ${CLOUDINARY_CLOUD_NAME}
+      Cloudinary__ApiKey: ${CLOUDINARY_API_KEY}
+      Cloudinary__ApiSecret: ${CLOUDINARY_API_SECRET}
       AdminSeed__Email: ${ADMIN_SEED_EMAIL}
       AdminSeed__Password: ${ADMIN_SEED_PASSWORD}
       ADMIN_SEED_EMAIL: ${ADMIN_SEED_EMAIL}

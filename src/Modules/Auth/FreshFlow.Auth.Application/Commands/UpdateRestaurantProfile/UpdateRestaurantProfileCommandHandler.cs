@@ -22,6 +22,7 @@ internal sealed class UpdateRestaurantProfileCommandHandler(IRestaurantRepositor
             request.ContactPerson,
             request.PickupStart,
             request.PickupEnd,
+            request.BusinessLicenseUrl,
             ct);
 
         if (updated is null)
@@ -36,6 +37,7 @@ internal sealed class UpdateRestaurantProfileCommandHandler(IRestaurantRepositor
                 updated.ContactPerson,
                 updated.PickupStart,
                 updated.PickupEnd,
-                updated.UpdatedAt));
+                updated.UpdatedAt,
+                updated.BusinessLicenseUrl));
     }
 }

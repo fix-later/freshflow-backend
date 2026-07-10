@@ -4,6 +4,7 @@ using FreshFlow.API.Assistant;
 using FreshFlow.API.Swagger;
 using FreshFlow.Auth.Infrastructure;
 using FreshFlow.Catalog.Infrastructure;
+using FreshFlow.Infrastructure.Media;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Logistics.Infrastructure;
 using FreshFlow.Notifications.Infrastructure;
@@ -47,10 +48,10 @@ builder.Services.AddSwaggerGen(options =>
     };
 
     options.AddSecurityDefinition("Bearer", bearerScheme);
-    options.AddSecurityRequirement(_ => new OpenApiSecurityRequirement
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
     {
         {
-            new OpenApiSecuritySchemeReference("Bearer"),
+            new OpenApiSecuritySchemeReference("Bearer", document),
             new List<string>()
         }
     });
@@ -187,6 +188,7 @@ builder.Services.AddPricingModule(builder.Configuration);
 builder.Services.AddOrdersModule(builder.Configuration);
 builder.Services.AddLogisticsModule(builder.Configuration);
 builder.Services.AddNotificationsModule(builder.Configuration);
+builder.Services.AddMediaModule(builder.Configuration);
 
 // ── AI Shopping Assistant (Tầng 2 — host-layer orchestration) ──
 builder.Services.AddAssistant(builder.Configuration);

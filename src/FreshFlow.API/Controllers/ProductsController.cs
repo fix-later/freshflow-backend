@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Catalog.Application.Commands.Products.Create;
+using FreshFlow.Catalog.Application.Commands.Products.CreateImageUploadSignature;
 using FreshFlow.Catalog.Application.Commands.Products.Deactivate;
 using FreshFlow.Catalog.Application.Commands.Products.Update;
 using FreshFlow.Catalog.Application.Queries.Products.GetProductById;
@@ -34,6 +35,15 @@ public sealed class ProductsController(ISender sender) : ControllerBase
             : result.Error.ToActionResult();
     }
 
+    /// <summary>POST /api/v1/products/image/upload-signature — Admin only. Signs a Cloudinary product image upload.</summary>
+    [HttpPost("image/upload-signature")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> CreateProductImageUploadSignatureAsync(CancellationToken ct)
+    {
+        var result = await sender.Send(new CreateProductImageUploadSignatureCommand(), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     /// <summary>GET /api/v1/products — Returns a paged list of products.</summary>
     [HttpGet]
     [Authorize(Roles = "admin,operations_manager,market_agent,hub_staff,restaurant")]
@@ -64,7 +74,9 @@ public sealed class ProductsController(ISender sender) : ControllerBase
         Guid id, [FromBody] UpdateProductRequest body, CancellationToken ct)
     {
         var result = await sender.Send(
-            new UpdateProductCommand(id, body.Name, body.UnitId, body.CategoryId, body.Description), ct);
+            new UpdateProductCommand(
+                id, body.Name, body.UnitId, body.CategoryId, body.Description, body.ImageUrl),
+            ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -91,4 +103,5 @@ public sealed record UpdateProductRequest(
     string Name,
     Guid UnitId,
     Guid? CategoryId,
-    string? Description);
+    string? Description,
+    string? ImageUrl = null);

@@ -7,4 +7,5 @@ public sealed record UpdateRestaurantProfileResponse(
     string? ContactPerson,
     TimeOnly? PickupStart,
     TimeOnly? PickupEnd,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    string? BusinessLicenseUrl = null);

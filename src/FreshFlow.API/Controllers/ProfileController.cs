@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
+using FreshFlow.Auth.Application.Commands.CreateAvatarUploadSignature;
 using FreshFlow.Auth.Application.Commands.UpdateMyProfile;
 using FreshFlow.Auth.Application.Queries.GetMyProfile;
 using MediatR;
@@ -35,6 +36,17 @@ public sealed class ProfileController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new UpdateMyProfileCommand(userId, body.FullName, body.Phone, body.AvatarUrl), ct);
 
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>POST /api/v1/profile/me/avatar/upload-signature — signs a Cloudinary avatar upload.</summary>
+    [HttpPost("me/avatar/upload-signature")]
+    public async Task<IActionResult> CreateAvatarUploadSignatureAsync(CancellationToken ct)
+    {
+        if (!TryResolveUserId(out _))
+            return Unauthorized(ApiResponse.Err("UNAUTHORIZED", "User ID claim is missing or malformed."));
+
+        var result = await sender.Send(new CreateAvatarUploadSignatureCommand(), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 

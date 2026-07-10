@@ -25,7 +25,8 @@ public sealed class GetRestaurantProfileQueryHandlerTests
             Address: "123 Market St",
             ContactPerson: "Jane Doe",
             PickupStart: new TimeOnly(8, 0),
-            PickupEnd: new TimeOnly(20, 0));
+            PickupEnd: new TimeOnly(20, 0),
+            BusinessLicenseUrl: "https://res.cloudinary.com/demo/image/upload/v1/freshflow/licenses/abc.jpg");
 
     // ── NotFound ──────────────────────────────────────────────────────────────
 
@@ -81,6 +82,7 @@ public sealed class GetRestaurantProfileQueryHandlerTests
         response.PickupStart.Should().Be(dto.PickupStart);
         response.PickupEnd.Should().Be(dto.PickupEnd);
         response.UpdatedAt.Should().Be(dto.UpdatedAt);
+        response.BusinessLicenseUrl.Should().Be(dto.BusinessLicenseUrl);
     }
 
     [Fact]
@@ -104,5 +106,6 @@ public sealed class GetRestaurantProfileQueryHandlerTests
         response.ContactPerson.Should().BeNull();
         response.PickupStart.Should().BeNull();
         response.PickupEnd.Should().BeNull();
+        response.BusinessLicenseUrl.Should().BeNull();
     }
 }

@@ -13,6 +13,7 @@ internal sealed class RestaurantRow
     public string? ContactPerson { get; set; }
     public TimeOnly? PickupStart { get; set; }
     public TimeOnly? PickupEnd { get; set; }
+    public string? BusinessLicenseUrl { get; set; }
     public RestaurantStatus Status { get; set; } = RestaurantStatus.Pending;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

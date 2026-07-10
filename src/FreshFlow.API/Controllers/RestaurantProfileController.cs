@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
+using FreshFlow.Auth.Application.Commands.CreateLicenseUploadSignature;
 using FreshFlow.Auth.Application.Commands.DeliveryAddress.Add;
 using FreshFlow.Auth.Application.Commands.DeliveryAddress.Delete;
 using FreshFlow.Auth.Application.Commands.DeliveryAddress.Update;
@@ -56,9 +57,21 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
                 body.Address,
                 body.ContactPerson,
                 body.PickupStart,
-                body.PickupEnd),
+                body.PickupEnd,
+                body.BusinessLicenseUrl),
             ct);
 
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>
+    /// POST /api/v1/restaurants/me/business-license/upload-signature — signs a Cloudinary
+    /// business-license upload.
+    /// </summary>
+    [HttpPost("me/business-license/upload-signature")]
+    public async Task<IActionResult> CreateLicenseUploadSignatureAsync(CancellationToken ct)
+    {
+        var result = await sender.Send(new CreateLicenseUploadSignatureCommand(), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -143,7 +156,8 @@ public sealed record UpdateRestaurantProfileRequest(
     string? Address,
     string? ContactPerson,
     TimeOnly? PickupStart,
-    TimeOnly? PickupEnd);
+    TimeOnly? PickupEnd,
+    string? BusinessLicenseUrl = null);
 
 public sealed record DeliveryAddressRequest(
     string AddressLine,

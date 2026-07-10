@@ -28,17 +28,20 @@ public sealed class UpdateRestaurantProfileCommandHandlerTests
         var updatedDto = new RestaurantDto(
             RestaurantId, "New Name", RestaurantStatus.Active, DateTime.UtcNow, UserId,
             "123 Main St", "John Doe",
-            new TimeOnly(8, 0), new TimeOnly(12, 0));
+            new TimeOnly(8, 0), new TimeOnly(12, 0),
+            "https://res.cloudinary.com/demo/image/upload/v1/freshflow/licenses/abc.jpg");
 
         _restaurants.FindByUserIdAsync(UserId, default).Returns(existingDto);
         _restaurants.UpdateProfileAsync(
             RestaurantId, "New Name", "123 Main St", "John Doe",
-            new TimeOnly(8, 0), new TimeOnly(12, 0), default)
+            new TimeOnly(8, 0), new TimeOnly(12, 0),
+            "https://res.cloudinary.com/demo/image/upload/v1/freshflow/licenses/abc.jpg", default)
             .Returns(updatedDto);
 
         var command = new UpdateRestaurantProfileCommand(
             UserId, "New Name", "123 Main St", "John Doe",
-            new TimeOnly(8, 0), new TimeOnly(12, 0));
+            new TimeOnly(8, 0), new TimeOnly(12, 0),
+            "https://res.cloudinary.com/demo/image/upload/v1/freshflow/licenses/abc.jpg");
 
         // Act
         var result = await _sut.Handle(command, default);
@@ -51,6 +54,8 @@ public sealed class UpdateRestaurantProfileCommandHandlerTests
         result.Value.ContactPerson.Should().Be("John Doe");
         result.Value.PickupStart.Should().Be(new TimeOnly(8, 0));
         result.Value.PickupEnd.Should().Be(new TimeOnly(12, 0));
+        result.Value.BusinessLicenseUrl.Should().Be(
+            "https://res.cloudinary.com/demo/image/upload/v1/freshflow/licenses/abc.jpg");
     }
 
     [Fact]
@@ -65,11 +70,11 @@ public sealed class UpdateRestaurantProfileCommandHandlerTests
 
         _restaurants.FindByUserIdAsync(UserId, default).Returns(existingDto);
         _restaurants.UpdateProfileAsync(
-            RestaurantId, "Updated Name", null, null, null, null, default)
+            RestaurantId, "Updated Name", null, null, null, null, null, default)
             .Returns(updatedDto);
 
         var command = new UpdateRestaurantProfileCommand(
-            UserId, "Updated Name", null, null, null, null);
+            UserId, "Updated Name", null, null, null, null, null);
 
         // Act
         var result = await _sut.Handle(command, default);
@@ -90,7 +95,7 @@ public sealed class UpdateRestaurantProfileCommandHandlerTests
         _restaurants.FindByUserIdAsync(UserId, default).Returns((RestaurantDto?)null);
 
         var command = new UpdateRestaurantProfileCommand(
-            UserId, "Some Name", null, null, null, null);
+            UserId, "Some Name", null, null, null, null, null);
 
         // Act
         var result = await _sut.Handle(command, default);
@@ -109,11 +114,11 @@ public sealed class UpdateRestaurantProfileCommandHandlerTests
 
         _restaurants.FindByUserIdAsync(UserId, default).Returns(existingDto);
         _restaurants.UpdateProfileAsync(
-            RestaurantId, "New Name", null, null, null, null, default)
+            RestaurantId, "New Name", null, null, null, null, null, default)
             .Returns((RestaurantDto?)null);
 
         var command = new UpdateRestaurantProfileCommand(
-            UserId, "New Name", null, null, null, null);
+            UserId, "New Name", null, null, null, null, null);
 
         // Act
         var result = await _sut.Handle(command, default);
@@ -137,12 +142,12 @@ public sealed class UpdateRestaurantProfileCommandHandlerTests
         _restaurants.FindByUserIdAsync(UserId, default).Returns(existingDto);
         _restaurants.UpdateProfileAsync(
             RestaurantId, "New", "456 Street", null,
-            new TimeOnly(9, 30), new TimeOnly(17, 0), default)
+            new TimeOnly(9, 30), new TimeOnly(17, 0), null, default)
             .Returns(updatedDto);
 
         var command = new UpdateRestaurantProfileCommand(
             UserId, "New", "456 Street", null,
-            new TimeOnly(9, 30), new TimeOnly(17, 0));
+            new TimeOnly(9, 30), new TimeOnly(17, 0), null);
 
         // Act
         await _sut.Handle(command, default);
@@ -150,6 +155,6 @@ public sealed class UpdateRestaurantProfileCommandHandlerTests
         // Assert
         await _restaurants.Received(1).UpdateProfileAsync(
             RestaurantId, "New", "456 Street", null,
-            new TimeOnly(9, 30), new TimeOnly(17, 0), default);
+            new TimeOnly(9, 30), new TimeOnly(17, 0), null, default);
     }
 }

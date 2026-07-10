@@ -43,13 +43,16 @@ public sealed class Product : AggregateRoot
     /// <summary>Legacy free-text unit kept for transition; superseded by UnitId.</summary>
     public string? LegacyUnit { get; private set; }
 
+    public string? ImageUrl { get; private set; }
+
     public void Update(
         string name,
         Guid? categoryId,
         Guid unitId,
         string? description,
         string? legacyCategory = null,
-        string? legacyUnit = null)
+        string? legacyUnit = null,
+        string? imageUrl = null)
     {
         Name = name;
         CategoryId = categoryId;
@@ -57,6 +60,8 @@ public sealed class Product : AggregateRoot
         Description = description;
         LegacyCategory = legacyCategory;
         LegacyUnit = legacyUnit;
+        if (imageUrl is not null)
+            ImageUrl = imageUrl;
         UpdatedAt = DateTime.UtcNow;
     }
 

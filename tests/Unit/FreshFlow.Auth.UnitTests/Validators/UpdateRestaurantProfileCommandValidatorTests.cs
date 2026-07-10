@@ -14,8 +14,9 @@ public sealed class UpdateRestaurantProfileCommandValidatorTests
         string? address = null,
         string? contactPerson = null,
         TimeOnly? pickupStart = null,
-        TimeOnly? pickupEnd = null) =>
-        new(AnyUserId, name, address, contactPerson, pickupStart, pickupEnd);
+        TimeOnly? pickupEnd = null,
+        string? businessLicenseUrl = null) =>
+        new(AnyUserId, name, address, contactPerson, pickupStart, pickupEnd, businessLicenseUrl);
 
     [Fact]
     public async Task Validate_ValidFullCommand_Passes()
@@ -131,6 +132,46 @@ public sealed class UpdateRestaurantProfileCommandValidatorTests
         var result = await _sut.ValidateAsync(ValidCommand(
             pickupStart: new TimeOnly(8, 0),
             pickupEnd: new TimeOnly(12, 0)));
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_ValidBusinessLicenseUrl_Passes()
+    {
+        var result = await _sut.ValidateAsync(ValidCommand(
+            businessLicenseUrl: "https://res.cloudinary.com/demo/image/upload/v1/freshflow/licenses/abc.jpg"));
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_BusinessLicenseUrlExceeds512Chars_Fails()
+    {
+        var result = await _sut.ValidateAsync(ValidCommand(
+            businessLicenseUrl: "https://example.com/" + new string('x', 500)));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e =>
+            e.PropertyName == nameof(UpdateRestaurantProfileCommand.BusinessLicenseUrl));
+    }
+
+    [Theory]
+    [InlineData("not-a-url")]
+    [InlineData("ftp://example.com/license.jpg")]
+    public async Task Validate_InvalidBusinessLicenseUrl_Fails(string url)
+    {
+        var result = await _sut.ValidateAsync(ValidCommand(businessLicenseUrl: url));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e =>
+            e.PropertyName == nameof(UpdateRestaurantProfileCommand.BusinessLicenseUrl));
+    }
+
+    [Fact]
+    public async Task Validate_NullBusinessLicenseUrl_Passes()
+    {
+        var result = await _sut.ValidateAsync(ValidCommand(businessLicenseUrl: null));
 
         result.IsValid.Should().BeTrue();
     }
