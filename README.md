@@ -24,6 +24,11 @@ dotnet user-secrets set "JWT:Key" "your-at-least-32-char-local-dev-secret!!"
 
 # Admin seed account password
 dotnet user-secrets set "AdminSeed:Password" "YourLocalAdminPassword"
+
+# Cloudinary signed uploads
+dotnet user-secrets set "Cloudinary:CloudName" "YOUR_CLOUDINARY_CLOUD_NAME"
+dotnet user-secrets set "Cloudinary:ApiKey" "YOUR_CLOUDINARY_API_KEY"
+dotnet user-secrets set "Cloudinary:ApiSecret" "YOUR_CLOUDINARY_API_SECRET"
 ```
 
 User-secrets are loaded automatically in the `Development` environment and override `appsettings.Development.json`.
@@ -34,7 +39,7 @@ Secrets are injected as environment variables in `docker-compose.dev-vps.yml`. C
 
 ```bash
 cp .env.dev-vps.example .env
-# edit .env — set POSTGRES_PASSWORD, REDIS_PASSWORD, JWT_KEY, etc.
+# edit .env — set POSTGRES_PASSWORD, REDIS_PASSWORD, JWT_KEY, CLOUDINARY_*, etc.
 docker compose -f docker-compose.dev-vps.yml up -d
 ```
 

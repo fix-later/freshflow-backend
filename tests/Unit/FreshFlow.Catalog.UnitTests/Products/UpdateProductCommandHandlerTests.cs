@@ -118,6 +118,33 @@ public sealed class UpdateProductCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_UpdateWithoutImageUrl_PreservesExistingImageUrl()
+    {
+        // Arrange
+        var unit = new UnitOfMeasurement("kg", "kg");
+        var product = new Product("Carrot", unit.Id, null, null, null);
+        product.Update(
+            product.Name,
+            product.CategoryId,
+            product.UnitId,
+            product.Description,
+            imageUrl: "https://res.cloudinary.com/demo/image/upload/v1/freshflow/products/old.jpg");
+
+        _products.FindByIdAsync(product.Id, default).Returns(product);
+        _units.FindByIdAsync(unit.Id, default).Returns(unit);
+
+        var cmd = new UpdateProductCommand(product.Id, "Carrot updated", unit.Id, null, "Updated description");
+
+        // Act
+        var result = await _sut.Handle(cmd, default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.ImageUrl.Should().Be(
+            "https://res.cloudinary.com/demo/image/upload/v1/freshflow/products/old.jpg");
+    }
+
+    [Fact]
     public async Task Handle_UpdateLegacyFields_ReflectsNewCategoryAndUnitNames()
     {
         // Arrange

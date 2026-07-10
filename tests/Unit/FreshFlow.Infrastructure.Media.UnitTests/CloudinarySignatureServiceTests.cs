@@ -71,6 +71,34 @@ public sealed class CloudinarySignatureServiceTests
     }
 
     [Fact]
+    public void Sign_ExtraParameters_DoNotOverrideTimestampOrFolder()
+    {
+        var timestamp = new DateTimeOffset(2026, 7, 10, 8, 0, 0, TimeSpan.Zero);
+        var sut = CreateSut(new FixedTimeProvider(timestamp));
+
+        var result = sut.Sign(new CloudinarySignatureRequest(
+            "avatars",
+            new Dictionary<string, object>
+            {
+                ["timestamp"] = 1,
+                ["folder"] = "licenses",
+                ["public_id"] = "user-123"
+            }));
+
+        var cloudinary = new Cloudinary(new Account(Settings.CloudName, Settings.ApiKey, Settings.ApiSecret));
+        var expectedSignature = cloudinary.Api.SignParameters(new Dictionary<string, object>
+        {
+            ["timestamp"] = timestamp.ToUnixTimeSeconds(),
+            ["folder"] = "avatars",
+            ["public_id"] = "user-123"
+        });
+
+        result.Timestamp.Should().Be(timestamp.ToUnixTimeSeconds());
+        result.Folder.Should().Be("avatars");
+        result.Signature.Should().Be(expectedSignature);
+    }
+
+    [Fact]
     public void Sign_ReturnsTimestampFromTimeProvider()
     {
         var timestamp = new DateTimeOffset(2026, 7, 10, 8, 0, 0, TimeSpan.Zero);

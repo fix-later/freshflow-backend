@@ -13,7 +13,7 @@ internal sealed class CloudinarySignatureService(
         var settings = options.Value;
         var timestamp = timeProvider.GetUtcNow().ToUnixTimeSeconds();
 
-        var parameters = new Dictionary<string, object>
+        var parameters = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
             ["timestamp"] = timestamp,
             ["folder"] = request.Folder
@@ -22,7 +22,7 @@ internal sealed class CloudinarySignatureService(
         if (request.Extra is not null)
         {
             foreach (var (key, value) in request.Extra)
-                parameters[key] = value;
+                parameters.TryAdd(key, value);
         }
 
         var cloudinary = new Cloudinary(new Account(settings.CloudName, settings.ApiKey, settings.ApiSecret));

@@ -60,7 +60,8 @@ public sealed class Product : AggregateRoot
         Description = description;
         LegacyCategory = legacyCategory;
         LegacyUnit = legacyUnit;
-        ImageUrl = imageUrl;
+        if (imageUrl is not null)
+            ImageUrl = imageUrl;
         UpdatedAt = DateTime.UtcNow;
     }
 
