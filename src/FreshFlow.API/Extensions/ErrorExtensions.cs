@@ -54,7 +54,8 @@ public static class ErrorExtensions
                         or "MISSING_COORDINATES" or "INVALID_STOP_ORDER"
                         or "VEHICLE_NOT_ELIGIBLE" or "HUB_CAPACITY_EXCEEDED"
                         or "INSUFFICIENT_HUB_STOCK" or "INBOUND_NOT_ARRIVED"
-                        or "OUTBOUND_ROUTE_INVALID"
+                        or "OUTBOUND_ROUTE_INVALID" or "ROUTE_HAS_NO_DRIVER"
+                        or "DRIVER_ROUTE_MISMATCH"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 
@@ -64,7 +65,8 @@ public static class ErrorExtensions
                         or "ORDER_ISSUE_NOT_ALLOWED" or "ORDER_ISSUE_ALREADY_RESOLVED"
                         or "SCHEDULED_ORDER_NOT_ACTIVE" or "SCHEDULED_ORDER_ALREADY_CANCELLED"
                         or "ROUTE_INVALID_TRANSITION" or "HUB_HAS_PENDING_DELIVERIES"
-                        or "DISCREPANCY_ALREADY_ACKNOWLEDGED")
+                        or "DISCREPANCY_ALREADY_ACKNOWLEDGED"
+                        or "HUB_HANDOVER_ALREADY_CHECKED_OUT")
             return new ConflictObjectResult(body);
 
         if (error.Code is "ROLE_NOT_CONFIGURED")

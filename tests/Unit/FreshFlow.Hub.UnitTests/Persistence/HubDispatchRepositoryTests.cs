@@ -85,6 +85,48 @@ public sealed class HubDispatchRepositoryTests
         result.TotalQuantityKg.Should().Be(3m);
     }
 
+    [Fact]
+    public async Task HubHandoverRepository_GetPageAsync_FiltersByHubAndReturnsNextCursorAsync()
+    {
+        using var db = CreateContext();
+        var hubs = new HubRepository(db);
+        var sut = new HubHandoverRepository(db);
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        var otherHub = HubEntity.Create("Other Hub", null, null, null, 1000, null);
+        var matching = CreateHandover(hub.Id);
+        await hubs.AddAsync(hub, default);
+        await hubs.AddAsync(otherHub, default);
+        await sut.AddAsync(matching, default);
+        await sut.AddAsync(CreateHandover(hub.Id), default);
+        await sut.AddAsync(CreateHandover(otherHub.Id), default);
+        await sut.SaveChangesAsync(default);
+
+        var result = await sut.GetPageAsync(hub.Id, null, 1, default);
+
+        result.Items.Should().ContainSingle();
+        result.Items.Should().OnlyContain(h => h.HubId == hub.Id);
+        result.NextCursor.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task HubHandoverRepository_FindByIdAsync_FiltersByHubAsync()
+    {
+        using var db = CreateContext();
+        var hubs = new HubRepository(db);
+        var sut = new HubHandoverRepository(db);
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        var otherHub = HubEntity.Create("Other Hub", null, null, null, 1000, null);
+        var handover = CreateHandover(hub.Id);
+        await hubs.AddAsync(hub, default);
+        await hubs.AddAsync(otherHub, default);
+        await sut.AddAsync(handover, default);
+        await sut.SaveChangesAsync(default);
+
+        var result = await sut.FindByIdAsync(otherHub.Id, handover.Id, default);
+
+        result.Should().BeNull();
+    }
+
     private static AppDbContext CreateContext()
     {
         _ = typeof(FreshFlow.Hub.Infrastructure.DependencyInjection).Assembly;
@@ -115,4 +157,13 @@ public sealed class HubDispatchRepositoryTests
             Guid.NewGuid(),
             [new HubOutboundItem(Guid.NewGuid(), null, quantityKg)],
             DateTime.UtcNow);
+
+    private static HubHandoverEvent CreateHandover(Guid hubId) =>
+        HubHandoverEvent.Create(
+            hubId,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            null,
+            Guid.NewGuid(),
+            null);
 }

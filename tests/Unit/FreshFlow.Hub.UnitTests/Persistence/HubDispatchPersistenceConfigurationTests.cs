@@ -79,9 +79,43 @@ public sealed class HubDispatchPersistenceConfigurationTests
 
         entity.GetSqlQuery().Should().Contain("id AS \"RouteId\"");
         entity.GetSqlQuery().Should().Contain("status AS \"Status\"");
+        entity.GetSqlQuery().Should().Contain("driver_user_id AS \"DriverUserId\"");
         entity.GetSqlQuery().Should().Contain("delivery_routes");
         entity.GetSqlQuery().Should().Contain("deleted_at IS NULL");
         entity.GetForeignKeys().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void HubHandoverEventConfiguration_UsesSnakeCaseAndNoRouteForeignKey()
+    {
+        using var ctx = CreateContext();
+        var entity = ctx.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(HubHandoverEvent))!;
+        var table = StoreObjectIdentifier.Table("hub_handover_events", null);
+
+        entity.GetTableName().Should().Be("hub_handover_events");
+        entity.FindProperty(nameof(HubHandoverEvent.HubId))!.GetColumnName(table).Should().Be("hub_id");
+        entity.FindProperty(nameof(HubHandoverEvent.DeliveryRouteId))!
+            .GetColumnName(table)
+            .Should().Be("delivery_route_id");
+        entity.FindProperty(nameof(HubHandoverEvent.DriverUserId))!
+            .GetColumnName(table)
+            .Should().Be("driver_user_id");
+        entity.FindProperty(nameof(HubHandoverEvent.OutboundEventId))!
+            .GetColumnName(table)
+            .Should().Be("outbound_event_id");
+        entity.FindProperty(nameof(HubHandoverEvent.DriverConfirmedAt))!
+            .GetColumnName(table)
+            .Should().Be("driver_confirmed_at");
+
+        entity.GetForeignKeys().Should().OnlyContain(fk =>
+            fk.PrincipalEntityType.ClrType == typeof(HubEntity) ||
+            fk.PrincipalEntityType.ClrType == typeof(HubOutboundEvent));
+        entity.GetCheckConstraints().Should().Contain(c =>
+            c.Name == "ck_hub_handover_events_status");
+        entity.GetIndexes().Should().Contain(i =>
+            i.GetDatabaseName() == "idx_hub_handover_events_delivery_route_id");
+        entity.GetIndexes().Should().Contain(i =>
+            i.GetDatabaseName() == "idx_hub_handover_events_driver_user_id");
     }
 
     [Fact]
@@ -98,6 +132,7 @@ public sealed class HubDispatchPersistenceConfigurationTests
 
         provider.GetRequiredService<ICrossDockRepository>().Should().NotBeNull();
         provider.GetRequiredService<IHubOutboundRepository>().Should().NotBeNull();
+        provider.GetRequiredService<IHubHandoverRepository>().Should().NotBeNull();
         provider.GetRequiredService<IDeliveryRouteReader>().Should().NotBeNull();
     }
 

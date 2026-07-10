@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IDeliveryRouteReader, DeliveryRouteReader>();
         services.AddScoped<ICrossDockRepository, CrossDockRepository>();
         services.AddScoped<IHubOutboundRepository, HubOutboundRepository>();
+        services.AddScoped<IHubHandoverRepository, HubHandoverRepository>();
 
         return services;
     }

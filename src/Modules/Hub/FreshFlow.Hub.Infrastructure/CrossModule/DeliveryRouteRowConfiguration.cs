@@ -9,8 +9,13 @@ internal sealed class DeliveryRouteRowConfiguration : IEntityTypeConfiguration<D
     {
         builder.HasNoKey();
         builder.ToSqlQuery(
-            """SELECT id AS "RouteId", status AS "Status" FROM delivery_routes WHERE deleted_at IS NULL""");
+            """
+            SELECT id AS "RouteId", status AS "Status", driver_user_id AS "DriverUserId"
+            FROM delivery_routes
+            WHERE deleted_at IS NULL
+            """);
         builder.Property(r => r.RouteId);
         builder.Property(r => r.Status);
+        builder.Property(r => r.DriverUserId);
     }
 }

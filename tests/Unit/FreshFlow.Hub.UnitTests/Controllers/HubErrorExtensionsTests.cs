@@ -36,10 +36,20 @@ public sealed class HubErrorExtensionsTests
     [InlineData("INSUFFICIENT_HUB_STOCK")]
     [InlineData("INBOUND_NOT_ARRIVED")]
     [InlineData("OUTBOUND_ROUTE_INVALID")]
+    [InlineData("ROUTE_HAS_NO_DRIVER")]
+    [InlineData("DRIVER_ROUTE_MISMATCH")]
     public void ToActionResult_HubDispatchValidationErrors_Return422(string code)
     {
         var result = Error.Validation(code, "dispatch").ToActionResult();
 
         result.Should().BeOfType<UnprocessableEntityObjectResult>();
+    }
+
+    [Fact]
+    public void ToActionResult_HubHandoverAlreadyCheckedOut_Returns409()
+    {
+        var result = Error.Conflict("HUB_HANDOVER_ALREADY_CHECKED_OUT", "checked out").ToActionResult();
+
+        result.Should().BeOfType<ConflictObjectResult>();
     }
 }
