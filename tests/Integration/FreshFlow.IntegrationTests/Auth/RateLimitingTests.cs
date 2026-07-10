@@ -58,6 +58,9 @@ public sealed class RateLimitingTests(RateLimitingTests.RateLimitFactory factory
                     ["JWT:Key"] = "rate-limit-test-secret-key-min-32-chars!!",
                     ["JWT:Issuer"] = "https://test.freshflow",
                     ["JWT:Audience"] = "freshflow-api",
+                    ["Cloudinary:CloudName"] = "rate-limit-test-cloud",
+                    ["Cloudinary:ApiKey"] = "rate-limit-test-key",
+                    ["Cloudinary:ApiSecret"] = "rate-limit-test-secret",
                     // Low limit so the 4th request triggers 429 — no BCrypt overhead needed.
                     ["RateLimiting:Auth:PermitLimit"] = "3"
                 }));
