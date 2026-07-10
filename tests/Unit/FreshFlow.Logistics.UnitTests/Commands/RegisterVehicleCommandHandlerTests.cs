@@ -63,4 +63,21 @@ public sealed class RegisterVehicleCommandHandlerTests
         result.Error.Code.Should().Be("VALIDATION_ERROR");
         repository.Vehicles.Should().BeEmpty();
     }
+
+    [Theory]
+    [InlineData("999")]
+    [InlineData("-1")]
+    public async Task Handle_NumericStringVehicleType_ReturnsValidationFailureAsync(string vehicleType)
+    {
+        var repository = new InMemoryVehicleRepository();
+        var sut = new RegisterVehicleCommandHandler(repository);
+
+        var result = await sut.Handle(
+            new RegisterVehicleCommand("ABC-123", 1200, vehicleType, null),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("VALIDATION_ERROR");
+        repository.Vehicles.Should().BeEmpty();
+    }
 }

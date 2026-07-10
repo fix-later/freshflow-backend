@@ -77,7 +77,7 @@ public sealed class DeliveryZonesControllerTests
 
         result.Should().BeOfType<OkObjectResult>();
         await sender.Received(1).Send(
-            Arg.Is<GetDeliveryZonesQuery>(query => query.ActiveOnly == false),
+            Arg.Is<GetDeliveryZonesQuery>(query => !query.ActiveOnly),
             Arg.Any<CancellationToken>());
     }
 

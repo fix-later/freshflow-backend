@@ -13,7 +13,7 @@ internal sealed class RestaurantCoordinateRowConfiguration : IEntityTypeConfigur
             SELECT da."RestaurantId", r."Name" AS "Name", da."Latitude", da."Longitude"
             FROM delivery_addresses da
             JOIN restaurants r ON r."Id" = da."RestaurantId"
-            WHERE da."IsDefault" = true AND da."DeletedAt" IS NULL
+            WHERE da."IsDefault" = true AND da."DeletedAt" IS NULL AND r.status = 'active'
             """);
         builder.Property(r => r.RestaurantId);
         builder.Property(r => r.Name);

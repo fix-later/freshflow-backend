@@ -41,6 +41,19 @@ public sealed class CoordinateReaderTests
     }
 
     [Fact]
+    public async Task MarketCoordinateReader_InactiveMarket_ReturnsNullAsync()
+    {
+        using var fixture = await SqliteFixture.CreateAsync();
+        var marketId = Guid.NewGuid();
+        await fixture.InsertMarketAsync(marketId, "Inactive", 10.123m, 106.456m, isActive: false);
+        var sut = new MarketCoordinateReader(fixture.Context);
+
+        var result = await sut.FindByIdAsync(marketId, default);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public async Task RestaurantCoordinateReader_DefaultAddress_ReturnsCoordinatesAsync()
     {
         using var fixture = await SqliteFixture.CreateAsync();
@@ -67,6 +80,22 @@ public sealed class CoordinateReaderTests
         await fixture.InsertRestaurantAsync(restaurantId, "Deleted Address");
         await fixture.InsertDeliveryAddressAsync(restaurantId, 10.111m, 106.222m, isDefault: false);
         await fixture.InsertDeliveryAddressAsync(restaurantId, 10.333m, 106.444m, isDefault: true, deleted: true);
+        var sut = new RestaurantCoordinateReader(fixture.Context);
+
+        var result = await sut.FindByRestaurantIdAsync(restaurantId, default);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("pending")]
+    [InlineData("suspended")]
+    public async Task RestaurantCoordinateReader_NonActiveStatus_ReturnsNullAsync(string status)
+    {
+        using var fixture = await SqliteFixture.CreateAsync();
+        var restaurantId = Guid.NewGuid();
+        await fixture.InsertRestaurantAsync(restaurantId, "Not Active", status);
+        await fixture.InsertDeliveryAddressAsync(restaurantId, 10.111m, 106.222m, isDefault: true);
         var sut = new RestaurantCoordinateReader(fixture.Context);
 
         var result = await sut.FindByRestaurantIdAsync(restaurantId, default);
@@ -139,6 +168,7 @@ public sealed class CoordinateReaderTests
                     "Name" TEXT NOT NULL,
                     "Latitude" TEXT NULL,
                     "Longitude" TEXT NULL,
+                    "IsActive" INTEGER NOT NULL,
                     "DeletedAt" TEXT NULL
                 );
                 """);
@@ -147,7 +177,8 @@ public sealed class CoordinateReaderTests
                 """
                 CREATE TABLE restaurants (
                     "Id" TEXT NOT NULL,
-                    "Name" TEXT NOT NULL
+                    "Name" TEXT NOT NULL,
+                    status TEXT NOT NULL
                 );
                 """);
 
@@ -188,18 +219,19 @@ public sealed class CoordinateReaderTests
             string name,
             decimal? latitude,
             decimal? longitude,
+            bool isActive = true,
             bool deleted = false) =>
             await Context.Database.ExecuteSqlInterpolatedAsync(
                 $"""
-                INSERT INTO markets ("Id", "Name", "Latitude", "Longitude", "DeletedAt")
-                VALUES ({id}, {name}, {latitude}, {longitude}, {DeletedAt(deleted)});
+                INSERT INTO markets ("Id", "Name", "Latitude", "Longitude", "IsActive", "DeletedAt")
+                VALUES ({id}, {name}, {latitude}, {longitude}, {isActive}, {DeletedAt(deleted)});
                 """);
 
-        public async Task InsertRestaurantAsync(Guid id, string name) =>
+        public async Task InsertRestaurantAsync(Guid id, string name, string status = "active") =>
             await Context.Database.ExecuteSqlInterpolatedAsync(
                 $"""
-                INSERT INTO restaurants ("Id", "Name")
-                VALUES ({id}, {name});
+                INSERT INTO restaurants ("Id", "Name", status)
+                VALUES ({id}, {name}, {status});
                 """);
 
         public async Task InsertRoleAsync(Guid id, string name) =>

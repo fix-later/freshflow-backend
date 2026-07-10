@@ -13,7 +13,8 @@ internal sealed class RegisterVehicleCommandHandler(IVehicleRepository vehicles)
 {
     public async Task<Result<VehicleDto>> Handle(RegisterVehicleCommand request, CancellationToken ct)
     {
-        if (!Enum.TryParse<VehicleType>(request.VehicleType, ignoreCase: true, out var vehicleType))
+        if (!Enum.TryParse<VehicleType>(request.VehicleType, ignoreCase: true, out var vehicleType) ||
+            !Enum.IsDefined(vehicleType))
         {
             return Result<VehicleDto>.Failure(
                 Error.Validation("VALIDATION_ERROR", "VehicleType must be one of: van, truck, motorbike."));

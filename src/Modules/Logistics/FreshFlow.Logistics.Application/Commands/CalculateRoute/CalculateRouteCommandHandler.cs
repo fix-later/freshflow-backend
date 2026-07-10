@@ -17,6 +17,20 @@ internal sealed class CalculateRouteCommandHandler(
 {
     public async Task<Result<RouteDto>> Handle(CalculateRouteCommand request, CancellationToken ct)
     {
+        if (request.HubIds.Count > 0 || request.CompareWithHub)
+        {
+            return Result<RouteDto>.Failure(Error.Validation(
+                "HUB_RELAY_NOT_SUPPORTED",
+                "HUB_RELAY routing is not yet supported -- pending the Hub module (SCRUM-256)."));
+        }
+
+        if (request.SourceMarketIds.Count + request.DestinationRestaurantIds.Count > 20)
+        {
+            return Result<RouteDto>.Failure(Error.Validation(
+                "STOP_LIMIT_EXCEEDED",
+                "A delivery route cannot contain more than 20 stops."));
+        }
+
         // OptimizationCriteria is validated here but only consumed by SCRUM-305's
         // optimization engine, which is not implemented yet.
         var stops = new List<RouteStop>();

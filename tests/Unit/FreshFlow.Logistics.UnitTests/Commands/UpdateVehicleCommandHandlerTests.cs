@@ -81,6 +81,26 @@ public sealed class UpdateVehicleCommandHandlerTests
         repository.SaveChangesCount.Should().Be(0);
     }
 
+    [Theory]
+    [InlineData("999")]
+    [InlineData("-1")]
+    public async Task Handle_NumericStringVehicleType_ReturnsValidationFailureAsync(string vehicleType)
+    {
+        var repository = new InMemoryVehicleRepository();
+        var vehicle = new Vehicle("ABC-123", 1200, VehicleType.van, null);
+        await repository.AddAsync(vehicle, default);
+        var sut = new UpdateVehicleCommandHandler(repository);
+
+        var result = await sut.Handle(
+            new UpdateVehicleCommand(vehicle.Id, "ABC-123", 1500, vehicleType),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("VALIDATION_ERROR");
+        vehicle.VehicleType.Should().Be(VehicleType.van);
+        repository.SaveChangesCount.Should().Be(0);
+    }
+
     [Fact]
     public async Task Handle_SamePlateNumber_DoesNotTreatAsDuplicateAsync()
     {

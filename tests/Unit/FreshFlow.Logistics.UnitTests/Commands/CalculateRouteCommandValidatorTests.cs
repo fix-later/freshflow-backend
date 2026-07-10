@@ -17,32 +17,29 @@ public sealed class CalculateRouteCommandValidatorTests
     }
 
     [Fact]
-    public void Validate_HubIdsPresent_FailsWithHubRelayNotSupported()
+    public void Validate_HubIdsPresent_Passes()
     {
         var result = _sut.Validate(Command(hubIds: [Guid.NewGuid()]));
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(error => error.ErrorCode == "HUB_RELAY_NOT_SUPPORTED");
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
-    public void Validate_CompareWithHubTrue_FailsWithHubRelayNotSupported()
+    public void Validate_CompareWithHubTrue_Passes()
     {
         var result = _sut.Validate(Command(compareWithHub: true));
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(error => error.ErrorCode == "HUB_RELAY_NOT_SUPPORTED");
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
-    public void Validate_MoreThan20Stops_FailsWithStopLimitExceeded()
+    public void Validate_MoreThan20Stops_Passes()
     {
         var result = _sut.Validate(Command(
             sourceMarketIds: Enumerable.Range(0, 10).Select(_ => Guid.NewGuid()).ToList(),
             destinationRestaurantIds: Enumerable.Range(0, 11).Select(_ => Guid.NewGuid()).ToList()));
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(error => error.ErrorCode == "STOP_LIMIT_EXCEEDED");
+        result.IsValid.Should().BeTrue();
     }
 
     [Theory]

@@ -236,6 +236,22 @@ public sealed class DeliveryRouteTests
     }
 
     [Fact]
+    public void AdjustStopOrder_RestaurantBeforeMarket_ThrowsArgumentException()
+    {
+        var marketId = Guid.NewGuid();
+        var restaurantId = Guid.NewGuid();
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [MarketStop(id: marketId), RestaurantStop(1, restaurantId)],
+            null);
+        route.Select();
+
+        var act = () => route.AdjustStopOrder([restaurantId, marketId]);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
     public void AdjustStopOrder_ValidPermutation_RenumbersStops()
     {
         var marketId = Guid.NewGuid();

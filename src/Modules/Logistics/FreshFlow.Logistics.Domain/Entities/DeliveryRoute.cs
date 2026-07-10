@@ -105,10 +105,26 @@ public sealed class DeliveryRoute
         }
 
         var byEntityId = Stops.ToDictionary(stop => stop.EntityId);
-        Stops = orderedEntityIds
+        var reordered = orderedEntityIds
             .Select((id, index) => byEntityId[id] with { StopOrder = index })
-            .ToList()
-            .AsReadOnly();
+            .ToList();
+
+        var seenRestaurantStop = false;
+        foreach (var stop in reordered)
+        {
+            if (stop.EntityType == StopEntityType.restaurant)
+            {
+                seenRestaurantStop = true;
+            }
+            else if (seenRestaurantStop)
+            {
+                throw new ArgumentException(
+                    "Market (pickup) stops must precede restaurant (dropoff) stops.",
+                    nameof(orderedEntityIds));
+            }
+        }
+
+        Stops = reordered.AsReadOnly();
         UpdatedAt = DateTime.UtcNow;
     }
 

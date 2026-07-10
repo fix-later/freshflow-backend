@@ -57,6 +57,32 @@ public sealed class VehiclesControllerTests
     }
 
     [Fact]
+    public async Task RegisterVehicleAsync_Success_FallsBackToSubClaimAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var userId = Guid.NewGuid();
+        var dto = CreateDto();
+        sender.Send(Arg.Any<RegisterVehicleCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<VehicleDto>.Success(dto));
+        var identity = new ClaimsIdentity(
+            [new Claim("sub", userId.ToString())],
+            authenticationType: "Test");
+        var controller = new VehiclesController(sender)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+            }
+        };
+
+        await controller.RegisterVehicleAsync(new RegisterVehicleRequest("ABC-123", 1200, "van"), default);
+
+        await sender.Received(1).Send(
+            Arg.Is<RegisterVehicleCommand>(command => command.RegisteredBy == userId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task ListVehiclesAsync_Success_ReturnsPagedEnvelopeAsync()
     {
         var sender = Substitute.For<ISender>();

@@ -111,7 +111,11 @@ internal sealed class DeliveryRouteRepository(AppDbContext db) : IDeliveryRouteR
                 var json = Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
                 return JsonSerializer.Deserialize<RouteCursor>(json, Options);
             }
-            catch
+            catch (FormatException)
+            {
+                return null;
+            }
+            catch (JsonException)
             {
                 return null;
             }

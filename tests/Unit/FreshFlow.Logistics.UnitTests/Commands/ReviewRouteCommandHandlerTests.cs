@@ -38,7 +38,8 @@ public sealed class ReviewRouteCommandHandlerTests
     {
         var repository = new InMemoryDeliveryRouteRepository();
         var route = CreateOptimizedSelectedRoute();
-        var order = route.Stops.Select(stop => stop.EntityId).Reverse().ToArray();
+        var stopIds = route.Stops.Select(stop => stop.EntityId).ToArray();
+        var order = new[] { stopIds[0], stopIds[2], stopIds[1] };
         var recalculatedStops = order
             .Select((id, index) => route.Stops.Single(stop => stop.EntityId == id) with { StopOrder = index })
             .ToList();

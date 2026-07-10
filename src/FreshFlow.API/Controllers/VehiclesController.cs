@@ -21,7 +21,9 @@ public sealed class VehiclesController(ISender sender) : ControllerBase
         [FromBody] RegisterVehicleRequest body,
         CancellationToken ct)
     {
-        var registeredBy = Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id)
+        var registeredBy = Guid.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"),
+            out var id)
             ? id
             : (Guid?)null;
 

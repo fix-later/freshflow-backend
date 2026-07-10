@@ -92,7 +92,11 @@ internal sealed class VehicleRepository(AppDbContext db) : IVehicleRepository
                 var json = Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
                 return JsonSerializer.Deserialize<VehicleCursor>(json, Options);
             }
-            catch
+            catch (FormatException)
+            {
+                return null;
+            }
+            catch (JsonException)
             {
                 return null;
             }

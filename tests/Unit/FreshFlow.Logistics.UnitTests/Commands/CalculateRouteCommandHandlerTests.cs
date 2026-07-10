@@ -123,6 +123,77 @@ public sealed class CalculateRouteCommandHandlerTests
         repository.Routes.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task Handle_HubIdsPresent_ReturnsHubRelayNotSupportedAsync()
+    {
+        var repository = new InMemoryDeliveryRouteRepository();
+        var markets = Substitute.For<IMarketCoordinateReader>();
+        var restaurants = Substitute.For<IRestaurantCoordinateReader>();
+        var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
+
+        var result = await sut.Handle(
+            new CalculateRouteCommand(
+                [Guid.NewGuid()],
+                [Guid.NewGuid()],
+                [Guid.NewGuid()],
+                "COST",
+                new DateOnly(2026, 7, 9),
+                false),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("HUB_RELAY_NOT_SUPPORTED");
+        repository.Routes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_CompareWithHubTrue_ReturnsHubRelayNotSupportedAsync()
+    {
+        var repository = new InMemoryDeliveryRouteRepository();
+        var markets = Substitute.For<IMarketCoordinateReader>();
+        var restaurants = Substitute.For<IRestaurantCoordinateReader>();
+        var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
+
+        var result = await sut.Handle(
+            new CalculateRouteCommand(
+                [Guid.NewGuid()],
+                [],
+                [Guid.NewGuid()],
+                "COST",
+                new DateOnly(2026, 7, 9),
+                true),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("HUB_RELAY_NOT_SUPPORTED");
+        repository.Routes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_MoreThan20Stops_ReturnsStopLimitExceededAsync()
+    {
+        var repository = new InMemoryDeliveryRouteRepository();
+        var markets = Substitute.For<IMarketCoordinateReader>();
+        var restaurants = Substitute.For<IRestaurantCoordinateReader>();
+        var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
+        var sourceMarketIds = Enumerable.Range(0, 10).Select(_ => Guid.NewGuid()).ToList();
+        var destinationRestaurantIds = Enumerable.Range(0, 11).Select(_ => Guid.NewGuid()).ToList();
+
+        var result = await sut.Handle(
+            new CalculateRouteCommand(
+                sourceMarketIds,
+                [],
+                destinationRestaurantIds,
+                "COST",
+                new DateOnly(2026, 7, 9),
+                false),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("STOP_LIMIT_EXCEEDED");
+        repository.Routes.Should().BeEmpty();
+    }
+
     private static CalculateRouteCommand Command(Guid marketId, Guid restaurantId) =>
         new([marketId], [], [restaurantId], "COST", new DateOnly(2026, 7, 9), false);
 }
