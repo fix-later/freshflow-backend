@@ -3,6 +3,7 @@ using System;
 using FreshFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FreshFlow.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260710103647_AddHubs")]
+    partial class AddHubs
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -669,181 +672,6 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("hubs", null, t =>
                         {
                             t.HasCheckConstraint("ck_hubs_capacity_kg_positive", "capacity_kg > 0");
-                        });
-                });
-
-            modelBuilder.Entity("FreshFlow.Hub.Domain.Entities.HubInboundEvent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("ArrivedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("arrived_at");
-
-                    b.Property<string>("ConditionStatus")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasDefaultValue("OK")
-                        .HasColumnName("condition_status");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid?>("DeliveryRouteId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("delivery_route_id");
-
-                    b.Property<Guid?>("DeliveryScheduleId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("delivery_schedule_id");
-
-                    b.Property<string>("DiscrepancyNotes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("discrepancy_notes");
-
-                    b.Property<Guid>("HubId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("hub_id");
-
-                    b.Property<Guid?>("HubStaffUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("hub_staff_user_id");
-
-                    b.Property<string>("Items")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("items");
-
-                    b.Property<Guid?>("RecordedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("recorded_by");
-
-                    b.Property<Guid?>("SourceMarketId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("source_market_id");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasDefaultValue("PENDING")
-                        .HasColumnName("status");
-
-                    b.Property<decimal>("TotalQuantityKg")
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("total_quantity_kg");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ArrivedAt")
-                        .HasDatabaseName("idx_hub_inbound_events_arrived_at");
-
-                    b.HasIndex("DeliveryScheduleId")
-                        .HasDatabaseName("idx_hub_inbound_events_delivery_schedule_id");
-
-                    b.HasIndex("HubId")
-                        .HasDatabaseName("idx_hub_inbound_events_hub_id");
-
-                    b.HasIndex("Status")
-                        .HasDatabaseName("idx_hub_inbound_events_status");
-
-                    b.HasIndex("HubId", "DeliveryScheduleId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_hub_inbound_events_hub_delivery_schedule_active")
-                        .HasFilter("delivery_schedule_id IS NOT NULL AND deleted_at IS NULL");
-
-                    b.ToTable("hub_inbound_events", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_hub_inbound_events_status", "status IN ('PENDING', 'ARRIVED_AT_HUB')");
-
-                            t.HasCheckConstraint("ck_hub_inbound_events_total_quantity_kg_positive", "total_quantity_kg > 0");
-                        });
-                });
-
-            modelBuilder.Entity("FreshFlow.Hub.Domain.Entities.HubInventory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid>("HubId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("hub_id");
-
-                    b.Property<Guid>("MarketProductId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("market_product_id");
-
-                    b.Property<decimal>("QuantityAvailable")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("numeric(12,2)")
-                        .HasColumnName("quantity_available")
-                        .HasComputedColumnSql("quantity_in - quantity_out", true);
-
-                    b.Property<decimal>("QuantityIn")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("numeric(12,2)")
-                        .HasDefaultValue(0m)
-                        .HasColumnName("quantity_in");
-
-                    b.Property<decimal>("QuantityOut")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("numeric(12,2)")
-                        .HasDefaultValue(0m)
-                        .HasColumnName("quantity_out");
-
-                    b.Property<DateTime>("RecordedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("recorded_at");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("HubId")
-                        .HasDatabaseName("idx_hub_inventory_hub_id");
-
-                    b.HasIndex("MarketProductId")
-                        .HasDatabaseName("idx_hub_inventory_market_product_id");
-
-                    b.HasIndex("HubId", "MarketProductId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_hub_inventory_hub_market_product");
-
-                    b.ToTable("hub_inventory", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_hub_inventory_quantity_available_non_negative", "quantity_in >= quantity_out");
-
-                            t.HasCheckConstraint("ck_hub_inventory_quantity_in_non_negative", "quantity_in >= 0");
-
-                            t.HasCheckConstraint("ck_hub_inventory_quantity_out_non_negative", "quantity_out >= 0");
                         });
                 });
 
@@ -2028,26 +1856,6 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UnitId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("FreshFlow.Hub.Domain.Entities.HubInboundEvent", b =>
-                {
-                    b.HasOne("FreshFlow.Hub.Domain.Entities.Hub", null)
-                        .WithMany()
-                        .HasForeignKey("HubId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_hub_inbound_events_hub");
-                });
-
-            modelBuilder.Entity("FreshFlow.Hub.Domain.Entities.HubInventory", b =>
-                {
-                    b.HasOne("FreshFlow.Hub.Domain.Entities.Hub", null)
-                        .WithMany()
-                        .HasForeignKey("HubId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_hub_inventory_hub");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.CreditStatementLine", b =>

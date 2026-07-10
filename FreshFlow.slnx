@@ -57,6 +57,7 @@
     <Project Path="tests/Unit/FreshFlow.Assistant.UnitTests/FreshFlow.Assistant.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Auth.UnitTests/FreshFlow.Auth.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Catalog.UnitTests/FreshFlow.Catalog.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Hub.UnitTests/FreshFlow.Hub.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Infrastructure.Media.UnitTests/FreshFlow.Infrastructure.Media.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Logistics.UnitTests/FreshFlow.Logistics.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Notifications.UnitTests/FreshFlow.Notifications.UnitTests.csproj" />
