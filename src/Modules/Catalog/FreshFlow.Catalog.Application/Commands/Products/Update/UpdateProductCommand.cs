@@ -9,5 +9,6 @@ public record UpdateProductCommand(
     string Name,
     Guid UnitId,
     Guid? CategoryId,
-    string? Description)
+    string? Description,
+    string? ImageUrl = null)
     : IRequest<Result<ProductDto>>;

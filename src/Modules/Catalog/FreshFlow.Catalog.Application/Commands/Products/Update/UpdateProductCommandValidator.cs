@@ -22,5 +22,13 @@ internal sealed class UpdateProductCommandValidator : AbstractValidator<UpdatePr
             .NotEqual(Guid.Empty)
             .WithMessage("CategoryId must not be an empty GUID.")
             .When(x => x.CategoryId.HasValue);
+
+        RuleFor(x => x.ImageUrl)
+            .MaximumLength(512)
+            .Must(url =>
+                Uri.TryCreate(url, UriKind.Absolute, out var u) &&
+                (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp))
+            .WithMessage("ImageUrl must be a valid absolute HTTPS or HTTP URL.")
+            .When(x => x.ImageUrl is not null);
     }
 }

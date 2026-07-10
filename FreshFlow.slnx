@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/FreshFlow.API/FreshFlow.API.csproj" />
+    <Project Path="src/FreshFlow.Infrastructure.Media/FreshFlow.Infrastructure.Media.csproj" />
     <Project Path="src/FreshFlow.Infrastructure.Persistence/FreshFlow.Infrastructure.Persistence.csproj" />
   </Folder>
   <Folder Name="/src/Modules/" />
@@ -56,6 +57,7 @@
     <Project Path="tests/Unit/FreshFlow.Assistant.UnitTests/FreshFlow.Assistant.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Auth.UnitTests/FreshFlow.Auth.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Catalog.UnitTests/FreshFlow.Catalog.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Infrastructure.Media.UnitTests/FreshFlow.Infrastructure.Media.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Logistics.UnitTests/FreshFlow.Logistics.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Notifications.UnitTests/FreshFlow.Notifications.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Orders.UnitTests/FreshFlow.Orders.UnitTests.csproj" />

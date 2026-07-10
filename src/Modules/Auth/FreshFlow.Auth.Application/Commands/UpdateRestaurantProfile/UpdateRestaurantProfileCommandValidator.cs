@@ -19,6 +19,14 @@ public sealed class UpdateRestaurantProfileCommandValidator
             .MaximumLength(200)
             .When(x => x.ContactPerson is not null);
 
+        RuleFor(x => x.BusinessLicenseUrl)
+            .MaximumLength(512)
+            .Must(url =>
+                Uri.TryCreate(url, UriKind.Absolute, out var u) &&
+                (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp))
+            .WithMessage("BusinessLicenseUrl must be a valid absolute HTTPS or HTTP URL.")
+            .When(x => x.BusinessLicenseUrl is not null);
+
         RuleFor(x => x.PickupEnd)
             .Must((cmd, pickupEnd) => pickupEnd!.Value > cmd.PickupStart!.Value)
             .WithMessage("Pickup end time must be after pickup start time.")

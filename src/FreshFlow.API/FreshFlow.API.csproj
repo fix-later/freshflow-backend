@@ -23,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\FreshFlow.Infrastructure.Media\FreshFlow.Infrastructure.Media.csproj" />
     <ProjectReference Include="..\FreshFlow.Infrastructure.Persistence\FreshFlow.Infrastructure.Persistence.csproj" />
     <ProjectReference Include="..\Modules\Auth\FreshFlow.Auth.Infrastructure\FreshFlow.Auth.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Catalog\FreshFlow.Catalog.Infrastructure\FreshFlow.Catalog.Infrastructure.csproj" />

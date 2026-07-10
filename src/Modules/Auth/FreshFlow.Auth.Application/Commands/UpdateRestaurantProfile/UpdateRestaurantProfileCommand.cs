@@ -8,4 +8,5 @@ public sealed record UpdateRestaurantProfileCommand(
     string? Address,
     string? ContactPerson,
     TimeOnly? PickupStart,
-    TimeOnly? PickupEnd) : ICommand<UpdateRestaurantProfileResponse>;
+    TimeOnly? PickupEnd,
+    string? BusinessLicenseUrl) : ICommand<UpdateRestaurantProfileResponse>;

@@ -44,7 +44,8 @@ internal sealed class UpdateProductCommandHandler(
             request.UnitId,
             request.Description,
             legacyCategory: legacyCategory,
-            legacyUnit: unit.Name);
+            legacyUnit: unit.Name,
+            imageUrl: request.ImageUrl);
 
         await products.SaveChangesAsync(ct);
 

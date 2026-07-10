@@ -21,6 +21,8 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.LegacyCategory).HasColumnName("category");
         builder.Property(p => p.LegacyUnit).HasColumnName("unit");
 
+        builder.Property(p => p.ImageUrl).HasMaxLength(512);
+
         builder.Property(p => p.CreatedAt).IsRequired();
         builder.Property(p => p.UpdatedAt).IsRequired();
         builder.Property(p => p.DeletedAt);

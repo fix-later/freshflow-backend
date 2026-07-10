@@ -74,6 +74,7 @@ internal sealed class RestaurantRepository(AppDbContext db) : IRestaurantReposit
         string? contactPerson,
         TimeOnly? pickupStart,
         TimeOnly? pickupEnd,
+        string? businessLicenseUrl,
         CancellationToken ct)
     {
         var row = await db.Set<RestaurantRow>()
@@ -87,6 +88,7 @@ internal sealed class RestaurantRepository(AppDbContext db) : IRestaurantReposit
         row.ContactPerson = contactPerson;
         row.PickupStart = pickupStart;
         row.PickupEnd = pickupEnd;
+        row.BusinessLicenseUrl = businessLicenseUrl;
         row.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
         return ToDto(row);
@@ -94,5 +96,5 @@ internal sealed class RestaurantRepository(AppDbContext db) : IRestaurantReposit
 
     private static RestaurantDto ToDto(RestaurantRow row) =>
         new(row.Id, row.Name, row.Status, row.UpdatedAt, row.UserId,
-            row.Address, row.ContactPerson, row.PickupStart, row.PickupEnd);
+            row.Address, row.ContactPerson, row.PickupStart, row.PickupEnd, row.BusinessLicenseUrl);
 }

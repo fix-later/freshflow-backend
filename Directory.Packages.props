@@ -24,6 +24,8 @@
     <!-- Extensions -->
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.9" />
@@ -37,6 +39,9 @@
 
     <!-- Redis -->
     <PackageVersion Include="StackExchange.Redis" Version="2.8.16" />
+
+    <!-- Media -->
+    <PackageVersion Include="CloudinaryDotNet" Version="1.29.2" />
 
     <!-- API / docs -->
     <PackageVersion Include="Scalar.AspNetCore" Version="2.16.2" />

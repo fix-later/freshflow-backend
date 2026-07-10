@@ -16,6 +16,7 @@ public interface IRestaurantRepository
         string? contactPerson,
         TimeOnly? pickupStart,
         TimeOnly? pickupEnd,
+        string? businessLicenseUrl,
         CancellationToken ct);
 }
 
@@ -28,7 +29,8 @@ public sealed record RestaurantDto(
     string? Address = null,
     string? ContactPerson = null,
     TimeOnly? PickupStart = null,
-    TimeOnly? PickupEnd = null)
+    TimeOnly? PickupEnd = null,
+    string? BusinessLicenseUrl = null)
 {
     /// <summary>
     /// Backward-compatible convenience property.

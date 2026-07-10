@@ -11,4 +11,5 @@ public record ProductDto(
     Guid? CreatedBy,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    bool IsDeleted);
+    bool IsDeleted,
+    string? ImageUrl = null);
