@@ -43,6 +43,12 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 | [CONTEXT-2026-06-21 requirement analysis](./logistics/CONTEXT-2026-06-21-logistics-requirement-analysis.md) | Context | — |
 | [CONTEXT-2026-06-21 standalone demo](./logistics/CONTEXT-2026-06-21-standalone-logistics-demo.md) | Context | — |
 
+## hub — Hub Operations, Reconciliation & Cross-docking (epic SCRUM-256, module Hub)
+
+| Doc | Loại | Trạng thái |
+|---|---|---|
+| [AUDIT-2026-07-10 hub backend plan](./hub/AUDIT-2026-07-10-hub-backend-plan.md) | Audit / Plan | ⬜ 6 task BE chưa bắt đầu |
+
 ## auth-catalog — Auth / Profile / Catalog
 
 | Doc | Loại |

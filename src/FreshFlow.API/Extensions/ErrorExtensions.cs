@@ -18,7 +18,8 @@ public static class ErrorExtensions
                         or "DELIVERY_ZONE_CODE_EXISTS"
                         or "PLATE_NUMBER_DUPLICATE"
                         or "VEHICLE_NOT_AVAILABLE"
-                        or "MARKET_PRODUCT_ALREADY_EXISTS")
+                        or "MARKET_PRODUCT_ALREADY_EXISTS"
+                        or "ALREADY_RECEIVED")
             return new ConflictObjectResult(body);
 
         if (error.Code is "UNAUTHORIZED" or "INVALID_CREDENTIALS" or "INVALID_CURRENT_PASSWORD"
@@ -51,7 +52,12 @@ public static class ErrorExtensions
                         or "SCHEDULED_ORDER_FIRST_RUN_IN_PAST" or "INVALID_ISSUE_QUANTITY"
                         or "HUB_RELAY_NOT_SUPPORTED" or "STOP_LIMIT_EXCEEDED"
                         or "MISSING_COORDINATES" or "INVALID_STOP_ORDER"
-                        or "VEHICLE_NOT_ELIGIBLE"
+                        or "VEHICLE_NOT_ELIGIBLE" or "HUB_CAPACITY_EXCEEDED"
+                        or "HUB_CAPACITY_BELOW_OCCUPIED"
+                        or "INSUFFICIENT_HUB_STOCK" or "INBOUND_NOT_ARRIVED"
+                        or "ORDER_ITEM_NOT_IN_INBOUND"
+                        or "OUTBOUND_ROUTE_INVALID" or "ROUTE_HAS_NO_DRIVER"
+                        or "DRIVER_ROUTE_MISMATCH"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 
@@ -60,11 +66,16 @@ public static class ErrorExtensions
                         or "ORDER_NOT_DELIVERED" or "ORDER_RECEIPT_ALREADY_CONFIRMED"
                         or "ORDER_ISSUE_NOT_ALLOWED" or "ORDER_ISSUE_ALREADY_RESOLVED"
                         or "SCHEDULED_ORDER_NOT_ACTIVE" or "SCHEDULED_ORDER_ALREADY_CANCELLED"
-                        or "ROUTE_INVALID_TRANSITION")
+                        or "ROUTE_INVALID_TRANSITION" or "HUB_HAS_PENDING_DELIVERIES"
+                        or "DISCREPANCY_ALREADY_ACKNOWLEDGED"
+                        or "HUB_HANDOVER_ALREADY_CHECKED_OUT")
             return new ConflictObjectResult(body);
 
         if (error.Code is "ROLE_NOT_CONFIGURED")
             return new ObjectResult(body) { StatusCode = 500 };
+
+        if (error.Code is "SCAN_NO_MATCH")
+            return new NotFoundObjectResult(body);
 
         return new ObjectResult(body) { StatusCode = 500 };
     }
