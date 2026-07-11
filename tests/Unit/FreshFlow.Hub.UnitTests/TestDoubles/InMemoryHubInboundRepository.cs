@@ -8,6 +8,7 @@ internal sealed class InMemoryHubInboundRepository : IHubInboundRepository
     private readonly List<HubInboundEvent> _inbounds = [];
 
     public IReadOnlyList<HubInboundEvent> Inbounds => _inbounds.AsReadOnly();
+    public bool ThrowConcurrencyOnSave { get; set; }
     public int SaveChangesCount { get; private set; }
 
     public Task AddAsync(HubInboundEvent inbound, CancellationToken ct)
@@ -18,6 +19,9 @@ internal sealed class InMemoryHubInboundRepository : IHubInboundRepository
 
     public Task SaveChangesAsync(CancellationToken ct)
     {
+        if (ThrowConcurrencyOnSave)
+            throw new HubConcurrencyException("test", new Exception());
+
         SaveChangesCount++;
         return Task.CompletedTask;
     }

@@ -31,14 +31,14 @@ public sealed class HubHandoverControllerTests
     }
 
     [Fact]
-    public void DriverCheckoutAsync_AllowsDriverAndOperationsRoles()
+    public void DriverCheckoutAsync_RequiresDriverRoleOnly()
     {
         var attr = typeof(HubHandoverController)
             .GetMethod(nameof(HubHandoverController.DriverCheckoutAsync))!
             .GetCustomAttribute<AuthorizeAttribute>();
 
         attr.Should().NotBeNull();
-        attr!.Roles.Should().Be("driver,hub_staff,admin,operations_manager");
+        attr!.Roles.Should().Be("driver");
     }
 
     [Fact]

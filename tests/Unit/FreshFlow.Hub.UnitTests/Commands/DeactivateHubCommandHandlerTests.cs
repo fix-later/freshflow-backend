@@ -25,6 +25,20 @@ public sealed class DeactivateHubCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_SaveConcurrencyConflict_ReturnsConflictAsync()
+    {
+        var repository = new InMemoryHubRepository { ThrowConcurrencyOnSave = true };
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        await repository.AddAsync(hub, default);
+        var sut = new DeactivateHubCommandHandler(repository);
+
+        var result = await sut.Handle(new DeactivateHubCommand(hub.Id), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("OPTIMISTIC_CONCURRENCY_CONFLICT");
+    }
+
+    [Fact]
     public async Task Handle_ExistingHubWithPendingInbound_ReturnsConflictHookAsync()
     {
         var repository = new InMemoryHubRepository { HasPendingInboundResult = true };

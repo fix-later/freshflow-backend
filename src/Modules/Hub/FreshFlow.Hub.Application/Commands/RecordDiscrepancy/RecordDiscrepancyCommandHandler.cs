@@ -57,7 +57,17 @@ internal sealed class RecordDiscrepancyCommandHandler(
             request.Notes);
 
         await discrepancies.AddAsync(discrepancy, ct);
-        await discrepancies.SaveChangesAsync(ct);
+        try
+        {
+            await discrepancies.SaveChangesAsync(ct);
+        }
+        catch (HubConcurrencyException)
+        {
+            return Result<HubDiscrepancyDto>.Failure(
+                Error.Conflict(
+                    "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                    "Discrepancy save conflicted with another request. Please refresh and retry."));
+        }
 
         return Result<HubDiscrepancyDto>.Success(discrepancy.ToDto());
     }

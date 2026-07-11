@@ -8,6 +8,7 @@ internal sealed class InMemoryHubHandoverRepository : IHubHandoverRepository
     private readonly List<HubHandoverEvent> _handovers = [];
 
     public IReadOnlyList<HubHandoverEvent> Handovers => _handovers.AsReadOnly();
+    public bool ThrowConcurrencyOnSave { get; set; }
     public int SaveChangesCount { get; private set; }
 
     public Task AddAsync(HubHandoverEvent handover, CancellationToken ct)
@@ -32,6 +33,9 @@ internal sealed class InMemoryHubHandoverRepository : IHubHandoverRepository
 
     public Task SaveChangesAsync(CancellationToken ct)
     {
+        if (ThrowConcurrencyOnSave)
+            throw new HubConcurrencyException("test", new Exception());
+
         SaveChangesCount++;
         return Task.CompletedTask;
     }

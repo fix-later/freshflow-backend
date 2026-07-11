@@ -37,6 +37,28 @@ public sealed class HubInboundCommandHandlerTests
     }
 
     [Fact]
+    public async Task RecordInbound_SaveConcurrencyConflict_ReturnsAlreadyReceivedAsync()
+    {
+        var hubs = new InMemoryHubRepository();
+        var inbounds = new InMemoryHubInboundRepository { ThrowConcurrencyOnSave = true };
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        await hubs.AddAsync(hub, default);
+        var sut = new RecordInboundCommandHandler(hubs, inbounds);
+
+        var result = await sut.Handle(
+            new RecordInboundCommand(
+                hub.Id,
+                null,
+                Guid.NewGuid(),
+                [new HubInboundItemCommand(Guid.NewGuid(), null, 5m)],
+                DateTime.UtcNow),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ALREADY_RECEIVED");
+    }
+
+    [Fact]
     public async Task RecordInbound_DuplicateDeliverySchedule_ReturnsAlreadyReceivedAsync()
     {
         var hubs = new InMemoryHubRepository();

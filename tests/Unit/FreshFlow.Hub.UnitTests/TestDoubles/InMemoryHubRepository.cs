@@ -9,6 +9,7 @@ internal sealed class InMemoryHubRepository : IHubRepository
 
     public IReadOnlyList<HubEntity> Hubs => _hubs.AsReadOnly();
     public bool HasPendingInboundResult { get; set; }
+    public bool ThrowConcurrencyOnSave { get; set; }
     public int SaveChangesCount { get; private set; }
 
     public Task AddAsync(HubEntity hub, CancellationToken ct)
@@ -19,6 +20,9 @@ internal sealed class InMemoryHubRepository : IHubRepository
 
     public Task SaveChangesAsync(CancellationToken ct)
     {
+        if (ThrowConcurrencyOnSave)
+            throw new HubConcurrencyException("test", new Exception());
+
         SaveChangesCount++;
         return Task.CompletedTask;
     }

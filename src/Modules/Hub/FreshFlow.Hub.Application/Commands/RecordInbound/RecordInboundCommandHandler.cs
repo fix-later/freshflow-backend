@@ -34,7 +34,15 @@ internal sealed class RecordInboundCommandHandler(
             request.ArrivedAt);
 
         await inbounds.AddAsync(inbound, ct);
-        await inbounds.SaveChangesAsync(ct);
+        try
+        {
+            await inbounds.SaveChangesAsync(ct);
+        }
+        catch (HubConcurrencyException)
+        {
+            return Result<HubInboundDto>.Failure(
+                Error.Conflict("ALREADY_RECEIVED", "Inbound delivery schedule has already been recorded."));
+        }
 
         return Result<HubInboundDto>.Success(inbound.ToDto());
     }

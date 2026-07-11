@@ -150,6 +150,21 @@ public sealed class HubHandoverCommandHandlerTests
     }
 
     [Fact]
+    public async Task DriverCheckout_SaveConcurrencyConflict_ReturnsConflictAsync()
+    {
+        var handovers = new InMemoryHubHandoverRepository { ThrowConcurrencyOnSave = true };
+        var driverUserId = Guid.NewGuid();
+        var handover = CreateHandover(driverUserId: driverUserId);
+        await handovers.AddAsync(handover, default);
+        var sut = new DriverCheckoutCommandHandler(handovers);
+
+        var result = await sut.Handle(new DriverCheckoutCommand(handover.HubId, handover.Id, driverUserId), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("OPTIMISTIC_CONCURRENCY_CONFLICT");
+    }
+
+    [Fact]
     public async Task DriverCheckout_DifferentDriver_ReturnsForbiddenAsync()
     {
         var handovers = new InMemoryHubHandoverRepository();

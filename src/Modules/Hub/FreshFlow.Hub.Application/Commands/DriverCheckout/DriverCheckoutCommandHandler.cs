@@ -28,7 +28,18 @@ internal sealed class DriverCheckoutCommandHandler(IHubHandoverRepository handov
                 Error.Conflict("HUB_HANDOVER_ALREADY_CHECKED_OUT", "Hub handover has already been checked out."));
         }
 
-        await handovers.SaveChangesAsync(ct);
+        try
+        {
+            await handovers.SaveChangesAsync(ct);
+        }
+        catch (HubConcurrencyException)
+        {
+            return Result<HubHandoverDto>.Failure(
+                Error.Conflict(
+                    "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                    "Hub handover was updated by another request. Please refresh and retry."));
+        }
+
         return Result<HubHandoverDto>.Success(handover.ToDto());
     }
 }

@@ -8,6 +8,7 @@ internal sealed class InMemoryHubDiscrepancyRepository : IHubDiscrepancyReposito
     private readonly List<HubDiscrepancy> _discrepancies = [];
 
     public IReadOnlyList<HubDiscrepancy> Discrepancies => _discrepancies.AsReadOnly();
+    public bool ThrowConcurrencyOnSave { get; set; }
     public int SaveChangesCount { get; private set; }
 
     public Task AddAsync(HubDiscrepancy discrepancy, CancellationToken ct)
@@ -48,6 +49,9 @@ internal sealed class InMemoryHubDiscrepancyRepository : IHubDiscrepancyReposito
 
     public Task SaveChangesAsync(CancellationToken ct)
     {
+        if (ThrowConcurrencyOnSave)
+            throw new HubConcurrencyException("test", new Exception());
+
         SaveChangesCount++;
         return Task.CompletedTask;
     }

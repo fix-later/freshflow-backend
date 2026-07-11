@@ -30,4 +30,18 @@ public sealed class CreateHubCommandHandlerTests
         repository.Hubs.Should().ContainSingle();
         repository.SaveChangesCount.Should().Be(1);
     }
+
+    [Fact]
+    public async Task Handle_SaveConcurrencyConflict_ReturnsConflictAsync()
+    {
+        var repository = new InMemoryHubRepository { ThrowConcurrencyOnSave = true };
+        var sut = new CreateHubCommandHandler(repository);
+
+        var result = await sut.Handle(
+            new CreateHubCommand("Main Hub", null, null, null, 1000, null),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("OPTIMISTIC_CONCURRENCY_CONFLICT");
+    }
 }

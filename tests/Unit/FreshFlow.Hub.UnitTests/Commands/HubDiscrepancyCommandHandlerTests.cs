@@ -49,6 +49,36 @@ public sealed class HubDiscrepancyCommandHandlerTests
     }
 
     [Fact]
+    public async Task RecordDiscrepancy_SaveConcurrencyConflict_ReturnsConflictAsync()
+    {
+        var hubs = new InMemoryHubRepository();
+        var inbounds = new InMemoryHubInboundRepository();
+        var discrepancies = new InMemoryHubDiscrepancyRepository { ThrowConcurrencyOnSave = true };
+        var orders = new InMemoryOrderLookupReader();
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        var inbound = CreateInbound(hub.Id);
+        inbound.ConfirmArrival();
+        var orderItemId = Guid.NewGuid();
+        await hubs.AddAsync(hub, default);
+        await inbounds.AddAsync(inbound, default);
+        orders.Add(orderItemId, Guid.NewGuid(), inbound.Items.Single().MarketProductId);
+        var sut = new RecordDiscrepancyCommandHandler(hubs, inbounds, discrepancies, orders);
+
+        var result = await sut.Handle(
+            new RecordDiscrepancyCommand(
+                hub.Id,
+                inbound.Id,
+                orderItemId,
+                1m,
+                HubDiscrepancy.ConditionMissing,
+                null),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("OPTIMISTIC_CONCURRENCY_CONFLICT");
+    }
+
+    [Fact]
     public async Task RecordDiscrepancy_OrderItemMissing_ReturnsOrderItemNotFoundAsync()
     {
         var hubs = new InMemoryHubRepository();
@@ -218,6 +248,22 @@ public sealed class HubDiscrepancyCommandHandlerTests
         result.Value.Status.Should().Be(HubDiscrepancy.StatusAcknowledged);
         result.Value.AcknowledgedBy.Should().Be(adminUserId);
         repo.SaveChangesCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AcknowledgeDiscrepancy_SaveConcurrencyConflict_ReturnsConflictAsync()
+    {
+        var repo = new InMemoryHubDiscrepancyRepository { ThrowConcurrencyOnSave = true };
+        var discrepancy = CreateDiscrepancy();
+        await repo.AddAsync(discrepancy, default);
+        var sut = new AcknowledgeDiscrepancyCommandHandler(repo);
+
+        var result = await sut.Handle(
+            new AcknowledgeDiscrepancyCommand(discrepancy.HubId, discrepancy.Id, Guid.NewGuid()),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("OPTIMISTIC_CONCURRENCY_CONFLICT");
     }
 
     [Fact]

@@ -24,7 +24,17 @@ internal sealed class DeactivateHubCommandHandler(IHubRepository hubs)
         }
 
         hub.Deactivate();
-        await hubs.SaveChangesAsync(ct);
+        try
+        {
+            await hubs.SaveChangesAsync(ct);
+        }
+        catch (HubConcurrencyException)
+        {
+            return Result<HubDto>.Failure(
+                Error.Conflict(
+                    "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                    "Hub was updated by another request. Please refresh and retry."));
+        }
 
         return Result<HubDto>.Success(hub.ToDto());
     }

@@ -36,7 +36,7 @@ public sealed class HubHandoverController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{hubId:guid}/handover/{id:guid}/checkout")]
-    [Authorize(Roles = "driver,hub_staff,admin,operations_manager")]
+    [Authorize(Roles = "driver")]
     public async Task<IActionResult> DriverCheckoutAsync(
         Guid hubId,
         Guid id,

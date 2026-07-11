@@ -21,7 +21,17 @@ internal sealed class CreateHubCommandHandler(IHubRepository hubs)
             request.ManagedBy);
 
         await hubs.AddAsync(hub, ct);
-        await hubs.SaveChangesAsync(ct);
+        try
+        {
+            await hubs.SaveChangesAsync(ct);
+        }
+        catch (HubConcurrencyException)
+        {
+            return Result<HubDto>.Failure(
+                Error.Conflict(
+                    "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                    "Hub save conflicted with another request. Please refresh and retry."));
+        }
 
         return Result<HubDto>.Success(hub.ToDto());
     }

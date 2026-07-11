@@ -26,7 +26,18 @@ internal sealed class AcknowledgeDiscrepancyCommandHandler(IHubDiscrepancyReposi
                 "Discrepancy has already been acknowledged."));
         }
 
-        await discrepancies.SaveChangesAsync(ct);
+        try
+        {
+            await discrepancies.SaveChangesAsync(ct);
+        }
+        catch (HubConcurrencyException)
+        {
+            return Result<HubDiscrepancyDto>.Failure(
+                Error.Conflict(
+                    "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                    "Discrepancy was updated by another request. Please refresh and retry."));
+        }
+
         return Result<HubDiscrepancyDto>.Success(discrepancy.ToDto());
     }
 }
