@@ -96,6 +96,28 @@ public sealed class DeliveryRouteRepositoryTests
     }
 
     [Fact]
+    public async Task GetByDriverAndDateAsync_FiltersDriverDateAndDeletedRoutesAsync()
+    {
+        using var db = CreateInMemoryContext();
+        var sut = new DeliveryRouteRepository(db);
+        var driverId = Guid.NewGuid();
+        var serviceDate = new DateOnly(2026, 7, 11);
+        var matching = await AddRouteAsync(sut, db, DateTime.UtcNow);
+        SetRouteDriver(db, matching, driverId, serviceDate);
+        var otherDriver = await AddRouteAsync(sut, db, DateTime.UtcNow);
+        SetRouteDriver(db, otherDriver, Guid.NewGuid(), serviceDate);
+        var otherDate = await AddRouteAsync(sut, db, DateTime.UtcNow);
+        SetRouteDriver(db, otherDate, driverId, serviceDate.AddDays(1));
+        var deleted = await AddRouteAsync(sut, db, DateTime.UtcNow);
+        SetRouteDriver(db, deleted, driverId, serviceDate, deleted: true);
+        await db.SaveChangesAsync();
+
+        var result = await sut.GetByDriverAndDateAsync(driverId, serviceDate, default);
+
+        result.Should().ContainSingle(route => route.Id == matching.Id);
+    }
+
+    [Fact]
     public async Task SaveAssignmentAsync_HappyPath_ReturnsTrueAsync()
     {
         using var db = CreateInMemoryContext();
@@ -170,6 +192,20 @@ public sealed class DeliveryRouteRepositoryTests
     {
         db.Entry(route).Property(r => r.VehicleId).CurrentValue = vehicleId;
         db.Entry(route).Property(r => r.Status).CurrentValue = status;
+        db.Entry(route).Property(r => r.ServiceDate).CurrentValue = serviceDate;
+        if (deleted)
+            db.Entry(route).Property(r => r.DeletedAt).CurrentValue = DateTime.UtcNow;
+    }
+
+    private static void SetRouteDriver(
+        AppDbContext db,
+        DeliveryRoute route,
+        Guid driverId,
+        DateOnly serviceDate,
+        bool deleted = false)
+    {
+        db.Entry(route).Property(r => r.DriverUserId).CurrentValue = driverId;
+        db.Entry(route).Property(r => r.Status).CurrentValue = RouteStatus.assigned;
         db.Entry(route).Property(r => r.ServiceDate).CurrentValue = serviceDate;
         if (deleted)
             db.Entry(route).Property(r => r.DeletedAt).CurrentValue = DateTime.UtcNow;

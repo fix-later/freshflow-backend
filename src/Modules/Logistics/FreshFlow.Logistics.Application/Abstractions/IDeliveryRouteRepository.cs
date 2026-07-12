@@ -7,6 +7,11 @@ public interface IDeliveryRouteRepository
 {
     public Task<DeliveryRoute?> FindByIdAsync(Guid id, CancellationToken ct);
 
+    public Task<IReadOnlyList<DeliveryRoute>> GetByDriverAndDateAsync(
+        Guid driverUserId,
+        DateOnly serviceDate,
+        CancellationToken ct);
+
     public Task<(IReadOnlyList<DeliveryRoute> Items, string? NextCursor)> GetPageAsync(
         string? cursor,
         int pageSize,

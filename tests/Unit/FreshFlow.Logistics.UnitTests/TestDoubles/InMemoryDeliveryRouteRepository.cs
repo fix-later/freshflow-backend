@@ -11,10 +11,28 @@ internal sealed class InMemoryDeliveryRouteRepository : IDeliveryRouteRepository
     public IReadOnlyList<DeliveryRoute> Routes => _routes.AsReadOnly();
     public int SaveChangesCount { get; private set; }
     public int SaveAssignmentCount { get; private set; }
+    public int GetByDriverAndDateCount { get; private set; }
     public bool SaveAssignmentResult { get; set; } = true;
 
     public Task<DeliveryRoute?> FindByIdAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_routes.FirstOrDefault(route => route.Id == id));
+
+    public Task<IReadOnlyList<DeliveryRoute>> GetByDriverAndDateAsync(
+        Guid driverUserId,
+        DateOnly serviceDate,
+        CancellationToken ct)
+    {
+        GetByDriverAndDateCount++;
+        return Task.FromResult<IReadOnlyList<DeliveryRoute>>(
+            _routes
+                .Where(route =>
+                    route.DriverUserId == driverUserId &&
+                    route.ServiceDate == serviceDate &&
+                    route.DeletedAt == null)
+                .OrderBy(route => route.CreatedAt)
+                .ToList()
+                .AsReadOnly());
+    }
 
     public Task<bool> ExistsOtherRouteForVehicleOnDateAsync(
         Guid vehicleId,

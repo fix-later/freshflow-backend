@@ -25,6 +25,8 @@ public static class DependencyInjection
         services.TryAddSingleton(config);
 
         var applicationAssembly = typeof(IVehicleRepository).Assembly;
+        services.TryAddSingleton(TimeProvider.System);
+
         services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssembly(applicationAssembly);
@@ -36,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<IVehicleRepository, VehicleRepository>();
         services.AddScoped<IDeliveryZoneRepository, DeliveryZoneRepository>();
         services.AddScoped<IDeliveryRouteRepository, DeliveryRouteRepository>();
+        services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<IDriverReader, DriverReader>();
         services.AddScoped<IMarketCoordinateReader, MarketCoordinateReader>();
         services.AddScoped<IRestaurantCoordinateReader, RestaurantCoordinateReader>();
