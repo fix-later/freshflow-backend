@@ -5,6 +5,8 @@ using FreshFlow.API.Controllers;
 using FreshFlow.Logistics.Application.Commands.AttachProofOfDelivery;
 using FreshFlow.Logistics.Application.Commands.ConfirmPickup;
 using FreshFlow.Logistics.Application.Commands.CreateProofUploadSignature;
+using FreshFlow.Logistics.Application.Commands.StartRoute;
+using FreshFlow.Logistics.Application.Commands.UpdateDeliveryStatus;
 using FreshFlow.Logistics.Application.Dtos;
 using FreshFlow.Logistics.Application.Queries.GetDriverRoutesToday;
 using FreshFlow.SharedKernel.Application;
@@ -141,6 +143,49 @@ public sealed class DriverControllerTests
     }
 
     [Fact]
+    public async Task StartRouteAsync_SendsJwtDriverIdAndReturnsOkAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var driverId = Guid.NewGuid();
+        var routeId = Guid.NewGuid();
+        sender.Send(Arg.Any<StartRouteCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<StartRouteResultDto>.Success(
+                new StartRouteResultDto(routeId, "in_progress", 2)));
+        var controller = new DriverController(sender)
+        {
+            ControllerContext = CreateContext(driverId),
+        };
+
+        var result = await controller.StartRouteAsync(routeId, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<StartRouteCommand>(command =>
+                command.RouteId == routeId &&
+                command.DriverUserId == driverId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("ROUTE_NOT_STARTABLE")]
+    [InlineData("ROUTE_HAS_NO_DELIVERIES")]
+    [InlineData("PENDING_HUB_DISCREPANCY")]
+    public async Task StartRouteAsync_Conflict_Returns409Async(string code)
+    {
+        var sender = Substitute.For<ISender>();
+        sender.Send(Arg.Any<StartRouteCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<StartRouteResultDto>.Failure(Error.Conflict(code, "conflict")));
+        var controller = new DriverController(sender)
+        {
+            ControllerContext = CreateContext(Guid.NewGuid()),
+        };
+
+        var result = await controller.StartRouteAsync(Guid.NewGuid(), default);
+
+        result.Should().BeOfType<ConflictObjectResult>();
+    }
+
+    [Fact]
     public async Task CreateProofUploadSignatureAsync_SendsJwtDriverIdAndReturnsOkAsync()
     {
         var sender = Substitute.For<ISender>();
@@ -190,6 +235,35 @@ public sealed class DriverControllerTests
                 command.DeliveryId == deliveryId &&
                 command.DriverUserId == driverId &&
                 command.ProofUrl == proofUrl),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateDeliveryStatusAsync_SendsJwtDriverIdAndReturnsOkAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var driverId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        sender.Send(Arg.Any<UpdateDeliveryStatusCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<UpdateDeliveryStatusResponse>.Success(
+                new UpdateDeliveryStatusResponse(deliveryId, Guid.NewGuid(), "arrived", DateTime.UtcNow, null)));
+        var controller = new DriverController(sender)
+        {
+            ControllerContext = CreateContext(driverId),
+        };
+
+        var result = await controller.UpdateDeliveryStatusAsync(
+            deliveryId,
+            new UpdateDeliveryStatusRequest("ARRIVED", null),
+            default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<UpdateDeliveryStatusCommand>(command =>
+                command.DeliveryId == deliveryId &&
+                command.DriverUserId == driverId &&
+                command.Status == "ARRIVED" &&
+                command.FailureReason == null),
             Arg.Any<CancellationToken>());
     }
 

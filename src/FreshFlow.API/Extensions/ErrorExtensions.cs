@@ -21,7 +21,11 @@ public static class ErrorExtensions
                         or "MARKET_PRODUCT_ALREADY_EXISTS"
                         or "ALREADY_RECEIVED"
                         or "ROUTE_NOT_ASSIGNED"
-                        or "DELIVERY_ALREADY_EXISTS")
+                        or "DELIVERY_ALREADY_EXISTS"
+                        or "ROUTE_NOT_STARTABLE"
+                        or "ROUTE_HAS_NO_DELIVERIES"
+                        or "PENDING_HUB_DISCREPANCY"
+                        or "DELIVERY_STATUS_INVALID")
             return new ConflictObjectResult(body);
 
         if (error.Code is "UNAUTHORIZED" or "INVALID_CREDENTIALS" or "INVALID_CURRENT_PASSWORD"

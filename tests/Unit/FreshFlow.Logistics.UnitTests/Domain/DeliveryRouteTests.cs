@@ -387,6 +387,71 @@ public sealed class DeliveryRouteTests
         act.Should().Throw<InvalidOperationException>();
     }
 
+    [Fact]
+    public void Start_AssignedRoute_MarksInProgress()
+    {
+        var route = ReviewedRoute();
+        route.Assign(Guid.NewGuid(), Guid.NewGuid());
+
+        route.Start();
+
+        route.Status.Should().Be(RouteStatus.in_progress);
+        route.UpdatedAt.Should().BeAfter(route.CreatedAt);
+    }
+
+    [Theory]
+    [InlineData(RouteStatus.planned)]
+    [InlineData(RouteStatus.selected)]
+    [InlineData(RouteStatus.reviewed)]
+    [InlineData(RouteStatus.in_progress)]
+    [InlineData(RouteStatus.completed)]
+    [InlineData(RouteStatus.cancelled)]
+    public void Start_NotAssigned_ThrowsInvalidOperationException(RouteStatus status)
+    {
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [MarketStop(), RestaurantStop(1)],
+            null);
+        SetStatus(route, status);
+
+        var act = route.Start;
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Complete_InProgressRoute_MarksCompleted()
+    {
+        var route = ReviewedRoute();
+        route.Assign(Guid.NewGuid(), Guid.NewGuid());
+        route.Start();
+
+        route.Complete();
+
+        route.Status.Should().Be(RouteStatus.completed);
+        route.UpdatedAt.Should().BeAfter(route.CreatedAt);
+    }
+
+    [Theory]
+    [InlineData(RouteStatus.planned)]
+    [InlineData(RouteStatus.selected)]
+    [InlineData(RouteStatus.reviewed)]
+    [InlineData(RouteStatus.assigned)]
+    [InlineData(RouteStatus.completed)]
+    [InlineData(RouteStatus.cancelled)]
+    public void Complete_NotInProgress_ThrowsInvalidOperationException(RouteStatus status)
+    {
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [MarketStop(), RestaurantStop(1)],
+            null);
+        SetStatus(route, status);
+
+        var act = route.Complete;
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
     private static DeliveryRoute OptimizedSelectedRoute()
     {
         var route = DeliveryRoute.CreateDirect(

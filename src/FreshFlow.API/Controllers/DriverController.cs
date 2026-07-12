@@ -3,6 +3,8 @@ using FreshFlow.API.Extensions;
 using FreshFlow.Logistics.Application.Commands.AttachProofOfDelivery;
 using FreshFlow.Logistics.Application.Commands.ConfirmPickup;
 using FreshFlow.Logistics.Application.Commands.CreateProofUploadSignature;
+using FreshFlow.Logistics.Application.Commands.StartRoute;
+using FreshFlow.Logistics.Application.Commands.UpdateDeliveryStatus;
 using FreshFlow.Logistics.Application.Queries.GetDriverRoutesToday;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -19,6 +21,13 @@ public sealed class DriverController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetRoutesTodayAsync(CancellationToken ct)
     {
         var result = await sender.Send(new GetDriverRoutesTodayQuery(ResolveUserId()), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPost("routes/{routeId:guid}/start")]
+    public async Task<IActionResult> StartRouteAsync(Guid routeId, CancellationToken ct)
+    {
+        var result = await sender.Send(new StartRouteCommand(routeId, ResolveUserId()), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -54,6 +63,19 @@ public sealed class DriverController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    [HttpPatch("deliveries/{deliveryId:guid}/status")]
+    public async Task<IActionResult> UpdateDeliveryStatusAsync(
+        Guid deliveryId,
+        [FromBody] UpdateDeliveryStatusRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new UpdateDeliveryStatusCommand(deliveryId, ResolveUserId(), body.Status, body.FailureReason),
+            ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     private Guid ResolveUserId()
     {
         var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -65,3 +87,5 @@ public sealed class DriverController(ISender sender) : ControllerBase
 public sealed record ConfirmPickupRequest(IReadOnlyList<Guid> OrderIds);
 
 public sealed record AttachProofOfDeliveryRequest(string ProofUrl);
+
+public sealed record UpdateDeliveryStatusRequest(string Status, string? FailureReason);
