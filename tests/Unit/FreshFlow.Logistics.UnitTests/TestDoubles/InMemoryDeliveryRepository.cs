@@ -21,6 +21,9 @@ internal sealed class InMemoryDeliveryRepository : IDeliveryRepository
     public Task<bool> ExistsForOrderAsync(Guid orderId, CancellationToken ct) =>
         Task.FromResult(_deliveries.Any(d => d.OrderId == orderId));
 
+    public Task<Delivery?> FindByIdAsync(Guid deliveryId, CancellationToken ct) =>
+        Task.FromResult(_deliveries.FirstOrDefault(d => d.Id == deliveryId));
+
     public Task<IReadOnlyList<Delivery>> GetByRouteIdsAsync(
         IReadOnlyCollection<Guid> routeIds,
         CancellationToken ct)

@@ -47,6 +47,26 @@ public sealed class DeliveryRepositoryTests
         result.Should().BeEquivalentTo([first, second]);
     }
 
+    [Fact]
+    public async Task FindByIdAsync_ReturnsTrackedDeliveryForUpdatesAsync()
+    {
+        using var db = CreateContext();
+        var sut = new DeliveryRepository(db);
+        var delivery = Delivery.Create(Guid.NewGuid(), Guid.NewGuid(), 1);
+        await sut.AddRangeAsync([delivery], default);
+        await sut.SaveChangesAsync(default);
+
+        var result = await sut.FindByIdAsync(delivery.Id, default);
+
+        result.Should().NotBeNull();
+        result!.AttachProof("https://res.cloudinary.com/demo/image/upload/pod.jpg");
+        await sut.SaveChangesAsync(default);
+        db.ChangeTracker.Clear();
+
+        var persisted = await db.Set<Delivery>().SingleAsync(d => d.Id == delivery.Id);
+        persisted.ProofUrl.Should().Be("https://res.cloudinary.com/demo/image/upload/pod.jpg");
+    }
+
     private static AppDbContext CreateContext()
     {
         _ = typeof(FreshFlow.Logistics.Infrastructure.DependencyInjection).Assembly;

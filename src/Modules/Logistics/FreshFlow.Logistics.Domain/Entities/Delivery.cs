@@ -17,6 +17,7 @@ public sealed class Delivery
     public DateTime? EstimatedArrival { get; private set; }
     public DateTime? ActualArrival { get; private set; }
     public string? FailureReason { get; private set; }
+    public string? ProofUrl { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
@@ -79,6 +80,15 @@ public sealed class Delivery
 
         Status = StatusFailed;
         FailureReason = reason.Trim();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void AttachProof(string proofUrl)
+    {
+        if (string.IsNullOrWhiteSpace(proofUrl))
+            throw new ArgumentException("Proof URL is required.", nameof(proofUrl));
+
+        ProofUrl = proofUrl.Trim();
         UpdatedAt = DateTime.UtcNow;
     }
 

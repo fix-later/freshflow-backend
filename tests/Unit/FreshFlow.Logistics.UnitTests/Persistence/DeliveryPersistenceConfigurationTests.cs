@@ -41,6 +41,12 @@ public sealed class DeliveryPersistenceConfigurationTests
         entity.FindProperty(nameof(Delivery.FailureReason))!
             .GetColumnName(table)
             .Should().Be("failure_reason");
+        entity.FindProperty(nameof(Delivery.ProofUrl))!
+            .GetColumnName(table)
+            .Should().Be("proof_url");
+        entity.FindProperty(nameof(Delivery.ProofUrl))!
+            .GetMaxLength()
+            .Should().Be(512);
 
         var foreignKey = entity.GetForeignKeys().Should().ContainSingle().Which;
         foreignKey.PrincipalEntityType.ClrType.Should().Be(typeof(DeliveryRoute));

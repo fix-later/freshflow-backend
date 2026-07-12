@@ -105,4 +105,28 @@ public sealed class DeliveryTests
         deliverAgain.Should().Throw<InvalidOperationException>();
         deliverFailed.Should().Throw<InvalidOperationException>();
     }
+
+    [Fact]
+    public void AttachProof_ValidUrl_TrimsAndSetsProofUrl()
+    {
+        var delivery = Delivery.Create(Guid.NewGuid(), Guid.NewGuid(), 1);
+        var before = delivery.UpdatedAt;
+
+        delivery.AttachProof("  https://res.cloudinary.com/demo/image/upload/pod.jpg  ");
+
+        delivery.ProofUrl.Should().Be("https://res.cloudinary.com/demo/image/upload/pod.jpg");
+        delivery.UpdatedAt.Should().BeOnOrAfter(before);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void AttachProof_EmptyUrl_ThrowsArgumentException(string proofUrl)
+    {
+        var delivery = Delivery.Create(Guid.NewGuid(), Guid.NewGuid(), 1);
+
+        Action act = () => delivery.AttachProof(proofUrl);
+
+        act.Should().Throw<ArgumentException>();
+    }
 }

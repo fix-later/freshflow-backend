@@ -52,6 +52,10 @@ internal sealed class DeliveryConfiguration : IEntityTypeConfiguration<Delivery>
         builder.Property(d => d.FailureReason)
             .HasColumnName("failure_reason");
 
+        builder.Property(d => d.ProofUrl)
+            .HasColumnName("proof_url")
+            .HasMaxLength(512);
+
         builder.Property(d => d.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();

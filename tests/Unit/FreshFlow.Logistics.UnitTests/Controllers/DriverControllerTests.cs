@@ -2,7 +2,9 @@ using System.Reflection;
 using System.Security.Claims;
 using FluentAssertions;
 using FreshFlow.API.Controllers;
+using FreshFlow.Logistics.Application.Commands.AttachProofOfDelivery;
 using FreshFlow.Logistics.Application.Commands.ConfirmPickup;
+using FreshFlow.Logistics.Application.Commands.CreateProofUploadSignature;
 using FreshFlow.Logistics.Application.Dtos;
 using FreshFlow.Logistics.Application.Queries.GetDriverRoutesToday;
 using FreshFlow.SharedKernel.Application;
@@ -136,6 +138,59 @@ public sealed class DriverControllerTests
             default);
 
         result.Should().BeOfType<UnprocessableEntityObjectResult>();
+    }
+
+    [Fact]
+    public async Task CreateProofUploadSignatureAsync_SendsJwtDriverIdAndReturnsOkAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var driverId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        sender.Send(Arg.Any<CreateProofUploadSignatureCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<UploadSignatureResponse>.Success(
+                new UploadSignatureResponse("sig", 123, "key", "cloud", "freshflow/proof-of-delivery")));
+        var controller = new DriverController(sender)
+        {
+            ControllerContext = CreateContext(driverId),
+        };
+
+        var result = await controller.CreateProofUploadSignatureAsync(deliveryId, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<CreateProofUploadSignatureCommand>(command =>
+                command.DeliveryId == deliveryId &&
+                command.DriverUserId == driverId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AttachProofOfDeliveryAsync_SendsJwtDriverIdAndReturnsOkAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var driverId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        var proofUrl = "https://res.cloudinary.com/demo/image/upload/pod.jpg";
+        sender.Send(Arg.Any<AttachProofOfDeliveryCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<AttachProofOfDeliveryResponse>.Success(
+                new AttachProofOfDeliveryResponse(deliveryId, proofUrl)));
+        var controller = new DriverController(sender)
+        {
+            ControllerContext = CreateContext(driverId),
+        };
+
+        var result = await controller.AttachProofOfDeliveryAsync(
+            deliveryId,
+            new AttachProofOfDeliveryRequest(proofUrl),
+            default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<AttachProofOfDeliveryCommand>(command =>
+                command.DeliveryId == deliveryId &&
+                command.DriverUserId == driverId &&
+                command.ProofUrl == proofUrl),
+            Arg.Any<CancellationToken>());
     }
 
     private static ControllerContext CreateContext(Guid userId) =>

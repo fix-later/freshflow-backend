@@ -15,6 +15,9 @@ internal sealed class DeliveryRepository(AppDbContext db) : IDeliveryRepository
             .AsNoTracking()
             .AnyAsync(d => d.OrderId == orderId, ct);
 
+    public Task<Delivery?> FindByIdAsync(Guid deliveryId, CancellationToken ct) =>
+        db.Set<Delivery>().FirstOrDefaultAsync(d => d.Id == deliveryId, ct);
+
     public async Task<IReadOnlyList<Delivery>> GetByRouteIdsAsync(
         IReadOnlyCollection<Guid> routeIds,
         CancellationToken ct)
