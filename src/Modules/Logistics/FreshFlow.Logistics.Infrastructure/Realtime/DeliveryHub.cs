@@ -14,8 +14,8 @@ public sealed class DeliveryHub(IRestaurantOwnerReader restaurantOwnerReader) : 
 
     public override async Task OnConnectedAsync()
     {
-        if (Context.User?.IsInRole(AdminRole) == true
-            || Context.User?.IsInRole(OperationsManagerRole) == true)
+        if (Context.User?.IsInRole(AdminRole) is true
+            || Context.User?.IsInRole(OperationsManagerRole) is true)
         {
             await Groups.AddToGroupAsync(
                 Context.ConnectionId,
@@ -23,7 +23,7 @@ public sealed class DeliveryHub(IRestaurantOwnerReader restaurantOwnerReader) : 
                 Context.ConnectionAborted);
         }
 
-        if (Context.User?.IsInRole(RestaurantRole) == true)
+        if (Context.User?.IsInRole(RestaurantRole) is true)
         {
             if (!Guid.TryParse(Context.User?.FindFirst("sub")?.Value, out var userId))
                 throw new HubException("Unable to determine caller identity.");

@@ -13,9 +13,9 @@ internal sealed class DeliveryStartedBroadcastHandler(
 {
     public async Task Handle(DeliveryStartedIntegrationEvent notification, CancellationToken cancellationToken)
     {
-        try
+        foreach (var orderId in notification.OrderIds)
         {
-            foreach (var orderId in notification.OrderIds)
+            try
             {
                 var order = await orders.FindByIdAsync(orderId, cancellationToken);
                 if (order is null)
@@ -36,13 +36,14 @@ internal sealed class DeliveryStartedBroadcastHandler(
                         notification.OccurredAt),
                     cancellationToken);
             }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogError(
-                ex,
-                "Failed to broadcast delivery-started update for RouteId={RouteId}.",
-                notification.RouteId);
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(
+                    ex,
+                    "Failed to broadcast delivery-started update for RouteId={RouteId}, OrderId={OrderId}.",
+                    notification.RouteId,
+                    orderId);
+            }
         }
     }
 }

@@ -15,4 +15,6 @@ public interface IDeliveryRepository
         CancellationToken ct);
 
     public Task SaveChangesAsync(CancellationToken ct);
+
+    public Task<bool> TrySaveChangesAsync(CancellationToken ct);
 }

@@ -13,7 +13,7 @@ internal sealed class DeliveryRepository(AppDbContext db) : IDeliveryRepository
     public async Task<bool> ExistsForOrderAsync(Guid orderId, CancellationToken ct) =>
         await db.Set<Delivery>()
             .AsNoTracking()
-            .AnyAsync(d => d.OrderId == orderId, ct);
+            .AnyAsync(d => d.OrderId == orderId && d.DeletedAt == null, ct);
 
     public Task<Delivery?> FindByIdAsync(Guid deliveryId, CancellationToken ct) =>
         db.Set<Delivery>().FirstOrDefaultAsync(d => d.Id == deliveryId, ct);
@@ -27,7 +27,7 @@ internal sealed class DeliveryRepository(AppDbContext db) : IDeliveryRepository
 
         return await db.Set<Delivery>()
             .AsNoTracking()
-            .Where(d => routeIds.Contains(d.DeliveryRouteId))
+            .Where(d => routeIds.Contains(d.DeliveryRouteId) && d.DeletedAt == null)
             .OrderBy(d => d.SequenceNumber)
             .ThenBy(d => d.Id)
             .ToListAsync(ct);
@@ -35,4 +35,17 @@ internal sealed class DeliveryRepository(AppDbContext db) : IDeliveryRepository
 
     public Task SaveChangesAsync(CancellationToken ct) =>
         db.SaveChangesAsync(ct);
+
+    public async Task<bool> TrySaveChangesAsync(CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateException ex) when (DeliveryRouteRepository.IsUniqueViolation(ex))
+        {
+            return false;
+        }
+    }
 }

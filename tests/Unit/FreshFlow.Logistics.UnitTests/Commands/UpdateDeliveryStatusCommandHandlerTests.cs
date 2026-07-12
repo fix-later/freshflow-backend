@@ -143,6 +143,26 @@ public sealed class UpdateDeliveryStatusCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_RouteNotInProgress_ReturnsConflictAsync()
+    {
+        var driverId = Guid.NewGuid();
+        var route = CreateAssignedRoute(driverId);
+        var delivery = Delivery.Create(route.Id, Guid.NewGuid(), 1);
+        var (_, deliveries, publisher, sut) = await CreateSutAsync(route, [delivery]);
+
+        var result = await sut.Handle(
+            new UpdateDeliveryStatusCommand(delivery.Id, driverId, "ARRIVED", null),
+            default);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Code.Should().Be("DELIVERY_ROUTE_NOT_IN_PROGRESS");
+        deliveries.SaveChangesCount.Should().Be(0);
+        await publisher.DidNotReceive().Publish(
+            Arg.Any<DeliveryStopUpdatedIntegrationEvent>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Handle_DeliveryNotFound_Returns404Async()
     {
         var sut = new UpdateDeliveryStatusCommandHandler(
@@ -213,6 +233,13 @@ public sealed class UpdateDeliveryStatusCommandHandlerTests
 
     private static DeliveryRoute CreateInProgressRoute(Guid driverId)
     {
+        var route = CreateAssignedRoute(driverId);
+        route.Start();
+        return route;
+    }
+
+    private static DeliveryRoute CreateAssignedRoute(Guid driverId)
+    {
         var route = DeliveryRoute.CreateDirect(
             new DateOnly(2026, 7, 11),
             [
@@ -224,7 +251,6 @@ public sealed class UpdateDeliveryStatusCommandHandlerTests
         route.Select();
         route.MarkReviewed();
         route.Assign(Guid.NewGuid(), driverId);
-        route.Start();
         return route;
     }
 }

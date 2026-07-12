@@ -94,6 +94,43 @@ public sealed class DeliveryNotificationIntegrationEventHandlerTests
     }
 
     [Fact]
+    public async Task DeliveryStarted_OneOrderWriterFails_StillPersistsRemainingOrdersAsync()
+    {
+        var routeId = Guid.NewGuid();
+        var failingOrderId = Guid.NewGuid();
+        var failingUserId = Guid.NewGuid();
+        var okOrderId = Guid.NewGuid();
+        var okUserId = Guid.NewGuid();
+        _recipients.ResolveUserIdByOrderIdAsync(failingOrderId, default).Returns(failingUserId);
+        _recipients.ResolveUserIdByOrderIdAsync(okOrderId, default).Returns(okUserId);
+        _writer.WriteAsync(
+                failingUserId,
+                Arg.Any<NotificationType>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<IReadOnlyDictionary<string, object?>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<Notification>(new InvalidOperationException("db down")));
+        SetupWriterReturn(okUserId);
+        var sut = new DeliveryStartedIntegrationEventHandler(
+            _recipients,
+            _writer,
+            Substitute.For<ILogger<DeliveryStartedIntegrationEventHandler>>());
+
+        await sut.Handle(
+            new DeliveryStartedIntegrationEvent(routeId, [failingOrderId, okOrderId], DateTime.UtcNow),
+            default);
+
+        await _writer.Received(1).WriteAsync(
+            okUserId,
+            NotificationType.delivery_update,
+            "Đơn hàng đang được giao",
+            Arg.Is<string>(body => body.Contains(okOrderId.ToString(), StringComparison.Ordinal)),
+            Arg.Any<IReadOnlyDictionary<string, object?>>(),
+            default);
+    }
+
+    [Fact]
     public async Task DeliveryCompleted_WithResolvedRecipient_PersistsDeliveryUpdateNotificationAsync()
     {
         var userId = Guid.NewGuid();

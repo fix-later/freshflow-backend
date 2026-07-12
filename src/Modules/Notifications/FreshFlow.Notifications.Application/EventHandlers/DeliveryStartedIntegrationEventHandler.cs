@@ -14,9 +14,9 @@ internal sealed class DeliveryStartedIntegrationEventHandler(
 {
     public async Task Handle(DeliveryStartedIntegrationEvent notification, CancellationToken cancellationToken)
     {
-        try
+        foreach (var orderId in notification.OrderIds)
         {
-            foreach (var orderId in notification.OrderIds)
+            try
             {
                 var userId = await recipients.ResolveUserIdByOrderIdAsync(orderId, cancellationToken);
                 if (userId is null)
@@ -41,13 +41,14 @@ internal sealed class DeliveryStartedIntegrationEventHandler(
                     },
                     cancellationToken);
             }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogError(
-                ex,
-                "Failed to persist delivery-started notifications for RouteId={RouteId}.",
-                notification.RouteId);
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(
+                    ex,
+                    "Failed to persist delivery-started notification for RouteId={RouteId}, OrderId={OrderId}.",
+                    notification.RouteId,
+                    orderId);
+            }
         }
     }
 }

@@ -11,6 +11,7 @@ internal sealed class InMemoryDeliveryRepository : IDeliveryRepository
     public int SaveChangesCount { get; private set; }
     public int GetByRouteIdsCount { get; private set; }
     public IReadOnlyCollection<Guid> LastRouteIds { get; private set; } = [];
+    public bool TrySaveChangesResult { get; set; } = true;
 
     public Task AddRangeAsync(IReadOnlyList<Delivery> deliveries, CancellationToken ct)
     {
@@ -42,5 +43,11 @@ internal sealed class InMemoryDeliveryRepository : IDeliveryRepository
     {
         SaveChangesCount++;
         return Task.CompletedTask;
+    }
+
+    public Task<bool> TrySaveChangesAsync(CancellationToken ct)
+    {
+        SaveChangesCount++;
+        return Task.FromResult(TrySaveChangesResult);
     }
 }

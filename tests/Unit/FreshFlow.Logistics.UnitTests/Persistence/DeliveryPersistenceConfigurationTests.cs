@@ -48,6 +48,9 @@ public sealed class DeliveryPersistenceConfigurationTests
         entity.FindProperty(nameof(Delivery.ProofUrl))!
             .GetMaxLength()
             .Should().Be(512);
+        entity.FindProperty(nameof(Delivery.DeletedAt))!
+            .GetColumnName(table)
+            .Should().Be("deleted_at");
 
         var foreignKey = entity.GetForeignKeys().Should().ContainSingle().Which;
         foreignKey.PrincipalEntityType.ClrType.Should().Be(typeof(DeliveryRoute));

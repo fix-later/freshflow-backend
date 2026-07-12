@@ -52,7 +52,7 @@ internal sealed class StartRouteCommandHandler(
 
         await publisher.Publish(
             new DeliveryStartedIntegrationEvent(route.Id, orderIds, DateTime.UtcNow),
-            ct);
+            CancellationToken.None);
 
         return Result<StartRouteResultDto>.Success(
             new StartRouteResultDto(route.Id, route.Status.ToString(), orderIds.Count));

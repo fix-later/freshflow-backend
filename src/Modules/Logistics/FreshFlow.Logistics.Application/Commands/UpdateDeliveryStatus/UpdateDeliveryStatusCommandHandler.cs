@@ -38,6 +38,12 @@ internal sealed class UpdateDeliveryStatusCommandHandler(
                 Error.Unauthorized("FORBIDDEN", "This delivery is not assigned to the authenticated driver."));
         }
 
+        if (route.Status != RouteStatus.in_progress)
+        {
+            return Result<UpdateDeliveryStatusResponse>.Failure(
+                Error.Conflict("DELIVERY_ROUTE_NOT_IN_PROGRESS", "Route must be in progress to update delivery status."));
+        }
+
         if (!CanTransition(delivery.Status, request.Status))
         {
             return Result<UpdateDeliveryStatusResponse>.Failure(
@@ -78,7 +84,7 @@ internal sealed class UpdateDeliveryStatusCommandHandler(
                     route.Id,
                     delivery.ActualArrival!.Value,
                     DateTime.UtcNow),
-                ct);
+                CancellationToken.None);
         }
 
         await publisher.Publish(
@@ -88,7 +94,7 @@ internal sealed class UpdateDeliveryStatusCommandHandler(
                 delivery.Id,
                 delivery.Status,
                 DateTime.UtcNow),
-            ct);
+            CancellationToken.None);
 
         return Result<UpdateDeliveryStatusResponse>.Success(
             new UpdateDeliveryStatusResponse(

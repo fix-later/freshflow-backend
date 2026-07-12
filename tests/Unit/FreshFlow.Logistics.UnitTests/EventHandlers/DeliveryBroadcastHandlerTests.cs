@@ -82,6 +82,35 @@ public sealed class DeliveryBroadcastHandlerTests
     }
 
     [Fact]
+    public async Task DeliveryStarted_OneOrderThrows_StillBroadcastsRemainingOrdersAsync()
+    {
+        var routeId = Guid.NewGuid();
+        var failingOrderId = Guid.NewGuid();
+        var okOrderId = Guid.NewGuid();
+        var okRestaurantId = Guid.NewGuid();
+        _orders.Add(failingOrderId, "AtHub", Guid.NewGuid());
+        _orders.Add(okOrderId, "AtHub", okRestaurantId);
+        _broadcast.BroadcastDeliveryStartedAsync(
+                Arg.Any<Guid>(),
+                Arg.Is<DeliveryRealtimeUpdate>(update => update.OrderId == failingOrderId),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("signalr down")));
+        var sut = new DeliveryStartedBroadcastHandler(
+            _orders,
+            _broadcast,
+            NullLogger<DeliveryStartedBroadcastHandler>.Instance);
+
+        await sut.Handle(
+            new DeliveryStartedIntegrationEvent(routeId, [failingOrderId, okOrderId], DateTime.UtcNow),
+            default);
+
+        await _broadcast.Received(1).BroadcastDeliveryStartedAsync(
+            okRestaurantId,
+            Arg.Is<DeliveryRealtimeUpdate>(update => update.OrderId == okOrderId),
+            default);
+    }
+
+    [Fact]
     public async Task DeliveryStopUpdated_WithResolvedOrder_BroadcastsStopUpdateAsync()
     {
         var routeId = Guid.NewGuid();

@@ -20,6 +20,7 @@ public sealed class Delivery
     public string? ProofUrl { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
+    public DateTime? DeletedAt { get; private set; }
 
     public static Delivery Create(
         Guid deliveryRouteId,
@@ -67,7 +68,7 @@ public sealed class Delivery
         EnsureNotTerminal();
 
         Status = StatusDelivered;
-        ActualArrival = actualArrival;
+        ActualArrival ??= actualArrival;
         UpdatedAt = DateTime.UtcNow;
     }
 

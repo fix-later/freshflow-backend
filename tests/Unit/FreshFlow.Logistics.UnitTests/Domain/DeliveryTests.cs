@@ -58,11 +58,23 @@ public sealed class DeliveryTests
     }
 
     [Fact]
-    public void MarkDelivered_ArrivedDelivery_SetsDelivered()
+    public void MarkDelivered_ArrivedDelivery_PreservesArrivedTimestamp()
+    {
+        var delivery = Delivery.Create(Guid.NewGuid(), Guid.NewGuid(), 1);
+        delivery.MarkArrived();
+        var arrivedAt = delivery.ActualArrival;
+
+        delivery.MarkDelivered(DateTime.UtcNow.AddMinutes(5));
+
+        delivery.Status.Should().Be(Delivery.StatusDelivered);
+        delivery.ActualArrival.Should().Be(arrivedAt);
+    }
+
+    [Fact]
+    public void MarkDelivered_PendingDelivery_SetsActualArrival()
     {
         var delivery = Delivery.Create(Guid.NewGuid(), Guid.NewGuid(), 1);
         var actualArrival = DateTime.UtcNow;
-        delivery.MarkArrived();
 
         delivery.MarkDelivered(actualArrival);
 

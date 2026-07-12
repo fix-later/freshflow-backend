@@ -38,6 +38,54 @@ public sealed class ConfirmPickupCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_OrdersRequestedOutOfStopOrder_AssignsSequenceByRouteStopOrderAsync()
+    {
+        var routes = new InMemoryDeliveryRouteRepository();
+        var deliveries = new InMemoryDeliveryRepository();
+        var orders = new InMemoryOrderStatusReader();
+        var driverId = Guid.NewGuid();
+        var restaurantAId = Guid.NewGuid();
+        var restaurantBId = Guid.NewGuid();
+        var route = ReviewedRouteWithTwoRestaurants(restaurantBId, restaurantAId);
+        route.Assign(Guid.NewGuid(), driverId);
+        var orderAtRestaurantA = Guid.NewGuid();
+        var orderAtRestaurantB = Guid.NewGuid();
+        await routes.AddAsync(route, default);
+        orders.Add(orderAtRestaurantA, "AtHub", restaurantAId);
+        orders.Add(orderAtRestaurantB, "AtHub", restaurantBId);
+        var sut = new ConfirmPickupCommandHandler(routes, deliveries, orders);
+
+        var result = await sut.Handle(
+            new ConfirmPickupCommand(route.Id, driverId, [orderAtRestaurantA, orderAtRestaurantB]),
+            default);
+
+        result.IsSuccess.Should().BeTrue();
+        var byOrder = deliveries.Deliveries.ToDictionary(d => d.OrderId, d => d.SequenceNumber);
+        byOrder[orderAtRestaurantB].Should().Be(1);
+        byOrder[orderAtRestaurantA].Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Handle_ConcurrentSaveHitsUniqueViolation_ReturnsConflictAsync()
+    {
+        var routes = new InMemoryDeliveryRouteRepository();
+        var deliveries = new InMemoryDeliveryRepository { TrySaveChangesResult = false };
+        var orders = new InMemoryOrderStatusReader();
+        var driverId = Guid.NewGuid();
+        var restaurantId = Guid.NewGuid();
+        var route = AssignedRoute(driverId, restaurantId);
+        var orderId = Guid.NewGuid();
+        await routes.AddAsync(route, default);
+        orders.Add(orderId, "AtHub", restaurantId);
+        var sut = new ConfirmPickupCommandHandler(routes, deliveries, orders);
+
+        var result = await sut.Handle(new ConfirmPickupCommand(route.Id, driverId, [orderId]), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("DELIVERY_ALREADY_EXISTS");
+    }
+
+    [Fact]
     public async Task Handle_RouteMissing_ReturnsNotFoundAsync()
     {
         var sut = new ConfirmPickupCommandHandler(
@@ -173,6 +221,23 @@ public sealed class ConfirmPickupCommandHandlerTests
     {
         var route = ReviewedRoute(restaurantId);
         route.Assign(Guid.NewGuid(), driverId);
+        return route;
+    }
+
+    private static DeliveryRoute ReviewedRouteWithTwoRestaurants(Guid firstRestaurantId, Guid secondRestaurantId)
+    {
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 11),
+            [
+                new RouteStop(0, StopEntityType.market, Guid.NewGuid(), "Market", 10.1m, 106.1m, null, null),
+                new RouteStop(1, StopEntityType.restaurant, firstRestaurantId, "Restaurant A", 10.2m, 106.2m, null, null),
+                new RouteStop(2, StopEntityType.restaurant, secondRestaurantId, "Restaurant B", 10.3m, 106.3m, null, null)
+            ],
+            null);
+
+        route.Select();
+        route.ApplyOptimization(route.Stops, 12m, 30, 100m, OptimizationCriteria.cost);
+        route.MarkReviewed();
         return route;
     }
 

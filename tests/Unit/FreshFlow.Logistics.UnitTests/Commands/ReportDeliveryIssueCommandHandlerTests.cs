@@ -16,7 +16,7 @@ public sealed class ReportDeliveryIssueCommandHandlerTests
         var driverId = Guid.NewGuid();
         var route = CreateAssignedRoute(driverId);
         var delivery = Delivery.Create(route.Id, Guid.NewGuid(), 1);
-        var (deliveries, routes, issues, sut) = await CreateSutAsync(route, [delivery]);
+        var (deliveries, _, issues, sut) = await CreateSutAsync(route, [delivery]);
 
         var result = await sut.Handle(
             new ReportDeliveryIssueCommand(delivery.Id, driverId, "DAMAGED", "  box torn  "),

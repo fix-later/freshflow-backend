@@ -33,11 +33,11 @@ internal sealed class ConfirmPickupCommandHandler(
                 Error.Conflict("ROUTE_NOT_ASSIGNED", "Route must be assigned before dispatch."));
         }
 
-        var routeRestaurantIds = route.Stops
+        var restaurantStopOrders = route.Stops
             .Where(stop => stop.EntityType == StopEntityType.restaurant)
-            .Select(stop => stop.EntityId)
-            .ToHashSet();
+            .ToDictionary(stop => stop.EntityId, stop => stop.StopOrder);
 
+        var orderStopOrders = new List<(Guid OrderId, int StopOrder)>();
         foreach (var orderId in request.OrderIds)
         {
             var order = await orders.FindByIdAsync(orderId, ct);
@@ -50,7 +50,7 @@ internal sealed class ConfirmPickupCommandHandler(
                     Error.Validation("ORDER_NOT_AT_HUB", "Order must be at hub before dispatch."));
             }
 
-            if (!routeRestaurantIds.Contains(order.RestaurantId))
+            if (!restaurantStopOrders.TryGetValue(order.RestaurantId, out var stopOrder))
             {
                 return Result<ConfirmPickupResultDto>.Failure(
                     Error.Validation("ORDER_NOT_ON_ROUTE", "Order restaurant must be a stop on this route."));
@@ -61,15 +61,22 @@ internal sealed class ConfirmPickupCommandHandler(
                 return Result<ConfirmPickupResultDto>.Failure(
                     Error.Conflict("DELIVERY_ALREADY_EXISTS", "Delivery already exists for this order."));
             }
+
+            orderStopOrders.Add((orderId, stopOrder));
         }
 
-        var created = request.OrderIds
-            .Select((orderId, index) => Delivery.Create(route.Id, orderId, index + 1))
+        var created = orderStopOrders
+            .OrderBy(entry => entry.StopOrder)
+            .Select((entry, index) => Delivery.Create(route.Id, entry.OrderId, index + 1))
             .ToList()
             .AsReadOnly();
 
         await deliveries.AddRangeAsync(created, ct);
-        await deliveries.SaveChangesAsync(ct);
+        if (!await deliveries.TrySaveChangesAsync(ct))
+        {
+            return Result<ConfirmPickupResultDto>.Failure(
+                Error.Conflict("DELIVERY_ALREADY_EXISTS", "Delivery already exists for this order."));
+        }
 
         return Result<ConfirmPickupResultDto>.Success(
             new ConfirmPickupResultDto(route.Id, created.Select(d => d.Id).ToList().AsReadOnly()));
