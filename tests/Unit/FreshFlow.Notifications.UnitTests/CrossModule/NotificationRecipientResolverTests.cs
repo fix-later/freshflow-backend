@@ -46,6 +46,44 @@ public sealed class NotificationRecipientResolverTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public async Task ResolveUserIdByOrderIdAsync_ExistingOrder_ReturnsRestaurantOwnerUserIdAsync()
+    {
+        using var fixture = await SqliteFixture.CreateAsync();
+        var restaurantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        await fixture.InsertRestaurantAsync(restaurantId, userId);
+        await fixture.InsertOrderAsync(orderId, restaurantId);
+        var sut = new NotificationRecipientResolver(fixture.Context);
+
+        var result = await sut.ResolveUserIdByOrderIdAsync(orderId, default);
+
+        result.Should().Be(userId);
+    }
+
+    [Fact]
+    public async Task ResolveUserIdByOrderIdAsync_MissingOrder_ReturnsNullAsync()
+    {
+        using var fixture = await SqliteFixture.CreateAsync();
+        var sut = new NotificationRecipientResolver(fixture.Context);
+
+        var result = await sut.ResolveUserIdByOrderIdAsync(Guid.NewGuid(), default);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ResolveUserIdByOrderIdAsync_EmptyOrderId_ReturnsNullAsync()
+    {
+        using var fixture = await SqliteFixture.CreateAsync();
+        var sut = new NotificationRecipientResolver(fixture.Context);
+
+        var result = await sut.ResolveUserIdByOrderIdAsync(Guid.Empty, default);
+
+        result.Should().BeNull();
+    }
+
     private sealed class SqliteFixture : IDisposable
     {
         private readonly SqliteConnection _connection;
@@ -78,6 +116,14 @@ public sealed class NotificationRecipientResolverTests
                     status TEXT NULL
                 );
                 """);
+            await context.Database.ExecuteSqlRawAsync(
+                """
+                CREATE TABLE orders (
+                    "Id" TEXT NOT NULL,
+                    "RestaurantId" TEXT NOT NULL,
+                    "deleted_at" TEXT NULL
+                );
+                """);
 
             return new SqliteFixture(connection, context);
         }
@@ -88,6 +134,16 @@ public sealed class NotificationRecipientResolverTests
                 INSERT INTO restaurants ("Id", "UserId", status)
                 VALUES ({restaurantId}, {userId}, 'active');
                 """);
+
+        public async Task InsertOrderAsync(Guid orderId, Guid restaurantId, bool deleted = false) =>
+            await Context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                INSERT INTO orders ("Id", "RestaurantId", "deleted_at")
+                VALUES ({orderId}, {restaurantId}, {DeletedAt(deleted)});
+                """);
+
+        private static string? DeletedAt(bool deleted) =>
+            deleted ? DateTime.UtcNow.ToString("O") : null;
 
         public void Dispose()
         {

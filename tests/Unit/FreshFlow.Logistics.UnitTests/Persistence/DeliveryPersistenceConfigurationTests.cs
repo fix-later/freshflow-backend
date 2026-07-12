@@ -129,11 +129,28 @@ public sealed class DeliveryPersistenceConfigurationTests
     }
 
     [Fact]
-    public void AddLogisticsModule_RegistersDeliveryRepositoryAndOrderStatusReader()
+    public void RestaurantOwnerRow_IsKeylessSqlQueryUsingRestaurantOwnerColumns()
+    {
+        using var ctx = CreateContext();
+
+        var entity = ctx.Model.FindEntityType(typeof(RestaurantOwnerRow));
+
+        entity.Should().NotBeNull();
+        entity!.FindPrimaryKey().Should().BeNull();
+        entity.GetForeignKeys().Should().BeEmpty();
+        entity.GetSqlQuery().Should().Contain("FROM restaurants");
+        entity.GetSqlQuery().Should().Contain("\"Id\" AS \"RestaurantId\"");
+        entity.GetSqlQuery().Should().Contain("\"UserId\" AS \"UserId\"");
+    }
+
+    [Fact]
+    public void AddLogisticsModule_RegistersDeliveryRepositoryOrderStatusReaderAndRealtimeServices()
     {
         var services = new ServiceCollection();
         services.AddDbContext<AppDbContext>(options =>
             options.UseInMemoryDatabase($"logistics-delivery-di-{Guid.NewGuid()}"));
+        services.AddLogging();
+        services.AddSignalR();
 
         services.AddLogisticsModule(new ConfigurationBuilder().Build());
         using var provider = services.BuildServiceProvider();
@@ -141,6 +158,8 @@ public sealed class DeliveryPersistenceConfigurationTests
         provider.GetRequiredService<IDeliveryRepository>().Should().NotBeNull();
         provider.GetRequiredService<IDeliveryIssueRepository>().Should().NotBeNull();
         provider.GetRequiredService<IOrderStatusReader>().Should().NotBeNull();
+        provider.GetRequiredService<IRestaurantOwnerReader>().Should().NotBeNull();
+        provider.GetRequiredService<IDeliveryBroadcastService>().Should().NotBeNull();
     }
 
     private static AppDbContext CreateContext()

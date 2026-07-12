@@ -81,6 +81,15 @@ internal sealed class UpdateDeliveryStatusCommandHandler(
                 ct);
         }
 
+        await publisher.Publish(
+            new DeliveryStopUpdatedIntegrationEvent(
+                delivery.OrderId,
+                route.Id,
+                delivery.Id,
+                delivery.Status,
+                DateTime.UtcNow),
+            ct);
+
         return Result<UpdateDeliveryStatusResponse>.Success(
             new UpdateDeliveryStatusResponse(
                 delivery.Id,

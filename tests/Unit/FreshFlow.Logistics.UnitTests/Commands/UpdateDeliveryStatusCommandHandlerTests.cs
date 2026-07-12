@@ -31,6 +31,13 @@ public sealed class UpdateDeliveryStatusCommandHandlerTests
         await publisher.DidNotReceive().Publish(
             Arg.Any<DeliveryCompletedIntegrationEvent>(),
             Arg.Any<CancellationToken>());
+        await publisher.Received(1).Publish(
+            Arg.Is<DeliveryStopUpdatedIntegrationEvent>(evt =>
+                evt.OrderId == delivery.OrderId &&
+                evt.RouteId == route.Id &&
+                evt.DeliveryId == delivery.Id &&
+                evt.Status == Delivery.StatusArrived),
+            Arg.Any<CancellationToken>());
         routes.SaveChangesCount.Should().Be(0);
     }
 
@@ -75,10 +82,17 @@ public sealed class UpdateDeliveryStatusCommandHandlerTests
                 evt.RouteId == route.Id &&
                 evt.ActualArrivalAt == delivery.ActualArrival),
             Arg.Any<CancellationToken>());
+        await publisher.Received(1).Publish(
+            Arg.Is<DeliveryStopUpdatedIntegrationEvent>(evt =>
+                evt.OrderId == orderId &&
+                evt.RouteId == route.Id &&
+                evt.DeliveryId == delivery.Id &&
+                evt.Status == Delivery.StatusDelivered),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Handle_Failed_PendingDeliverySavesReasonWithoutPublishingAsync()
+    public async Task Handle_Failed_PendingDeliverySavesReasonWithoutPublishingCompletionAsync()
     {
         var driverId = Guid.NewGuid();
         var route = CreateInProgressRoute(driverId);
@@ -95,6 +109,13 @@ public sealed class UpdateDeliveryStatusCommandHandlerTests
         deliveries.SaveChangesCount.Should().Be(1);
         await publisher.DidNotReceive().Publish(
             Arg.Any<DeliveryCompletedIntegrationEvent>(),
+            Arg.Any<CancellationToken>());
+        await publisher.Received(1).Publish(
+            Arg.Is<DeliveryStopUpdatedIntegrationEvent>(evt =>
+                evt.OrderId == delivery.OrderId &&
+                evt.RouteId == route.Id &&
+                evt.DeliveryId == delivery.Id &&
+                evt.Status == Delivery.StatusFailed),
             Arg.Any<CancellationToken>());
     }
 
@@ -115,6 +136,9 @@ public sealed class UpdateDeliveryStatusCommandHandlerTests
         deliveries.GetByRouteIdsCount.Should().Be(0);
         await publisher.DidNotReceive().Publish(
             Arg.Any<DeliveryCompletedIntegrationEvent>(),
+            Arg.Any<CancellationToken>());
+        await publisher.DidNotReceive().Publish(
+            Arg.Any<DeliveryStopUpdatedIntegrationEvent>(),
             Arg.Any<CancellationToken>());
     }
 

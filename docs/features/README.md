@@ -53,7 +53,7 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 
 | Doc | Loại | Trạng thái |
 |---|---|---|
-| [AUDIT-2026-07-11 del backend plan](./delivery/AUDIT-2026-07-11-del-backend-plan.md) | Audit / Plan | 🟡 6 BE keys 315/317/319/321/323/325; 315+317+319+321+323 committed; 325 CODED chờ commit |
+| [AUDIT-2026-07-11 del backend plan](./delivery/AUDIT-2026-07-11-del-backend-plan.md) | Audit / Plan | ✅ Hoàn thành 6/6 (315/317/319/321/323/325 committed) |
 
 ## auth-catalog — Auth / Profile / Catalog
 
