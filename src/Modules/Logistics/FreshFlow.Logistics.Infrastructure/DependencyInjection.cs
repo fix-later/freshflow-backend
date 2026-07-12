@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IDeliveryRouteRepository, DeliveryRouteRepository>();
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<IDriverReader, DriverReader>();
+        services.AddScoped<IOrderStatusReader, OrderStatusReader>();
         services.AddScoped<IMarketCoordinateReader, MarketCoordinateReader>();
         services.AddScoped<IRestaurantCoordinateReader, RestaurantCoordinateReader>();
         services.AddScoped<IVehicleCapacityPolicy, VehicleCapacityPolicy>();

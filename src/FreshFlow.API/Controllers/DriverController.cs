@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
+using FreshFlow.Logistics.Application.Commands.ConfirmPickup;
 using FreshFlow.Logistics.Application.Queries.GetDriverRoutesToday;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -19,6 +20,18 @@ public sealed class DriverController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    [HttpPost("routes/{routeId:guid}/confirm-pickup")]
+    public async Task<IActionResult> ConfirmPickupAsync(
+        Guid routeId,
+        [FromBody] ConfirmPickupRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new ConfirmPickupCommand(routeId, ResolveUserId(), body.OrderIds), ct);
+        return result.IsSuccess
+            ? Created($"/api/v1/driver/routes/{routeId}/confirm-pickup", ApiResponse.Ok(result.Value))
+            : result.Error.ToActionResult();
+    }
+
     private Guid ResolveUserId()
     {
         var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -26,3 +39,5 @@ public sealed class DriverController(ISender sender) : ControllerBase
         return Guid.Parse(raw!);
     }
 }
+
+public sealed record ConfirmPickupRequest(IReadOnlyList<Guid> OrderIds);

@@ -56,7 +56,24 @@ public sealed class DeliveryPersistenceConfigurationTests
     }
 
     [Fact]
-    public void AddLogisticsModule_RegistersDeliveryRepository()
+    public void OrderStatusRow_IsKeylessSqlQueryUsingOrdersColumns()
+    {
+        using var ctx = CreateContext();
+
+        var entity = ctx.Model.FindEntityType(typeof(OrderStatusRow));
+
+        entity.Should().NotBeNull();
+        entity!.FindPrimaryKey().Should().BeNull();
+        entity.GetForeignKeys().Should().BeEmpty();
+        entity.GetSqlQuery().Should().Contain("FROM orders");
+        entity.GetSqlQuery().Should().Contain("\"Id\" AS \"OrderId\"");
+        entity.GetSqlQuery().Should().Contain("\"Status\" AS \"Status\"");
+        entity.GetSqlQuery().Should().Contain("\"RestaurantId\" AS \"RestaurantId\"");
+        entity.GetSqlQuery().Should().Contain("\"deleted_at\" IS NULL");
+    }
+
+    [Fact]
+    public void AddLogisticsModule_RegistersDeliveryRepositoryAndOrderStatusReader()
     {
         var services = new ServiceCollection();
         services.AddDbContext<AppDbContext>(options =>
@@ -66,6 +83,7 @@ public sealed class DeliveryPersistenceConfigurationTests
         using var provider = services.BuildServiceProvider();
 
         provider.GetRequiredService<IDeliveryRepository>().Should().NotBeNull();
+        provider.GetRequiredService<IOrderStatusReader>().Should().NotBeNull();
     }
 
     private static AppDbContext CreateContext()
