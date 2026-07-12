@@ -5,6 +5,7 @@ using FreshFlow.Logistics.Domain.Entities;
 using FreshFlow.Logistics.Infrastructure;
 using FreshFlow.Logistics.Infrastructure.CrossModule;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -62,6 +63,55 @@ public sealed class DeliveryPersistenceConfigurationTests
     }
 
     [Fact]
+    public void DeliveryIssueConfiguration_UsesSnakeCaseColumnsChecksIndexAndDeliveryForeignKey()
+    {
+        using var ctx = CreateContext();
+        var entity = ctx.Model.FindEntityType(typeof(DeliveryIssue));
+        var table = StoreObjectIdentifier.Table("delivery_issues", null);
+
+        entity.Should().NotBeNull();
+        entity!.GetTableName().Should().Be("delivery_issues");
+        entity.FindProperty(nameof(DeliveryIssue.DeliveryId))!
+            .GetColumnName(table)
+            .Should().Be("delivery_id");
+        entity.FindProperty(nameof(DeliveryIssue.IssueType))!
+            .GetColumnName(table)
+            .Should().Be("issue_type");
+        entity.FindProperty(nameof(DeliveryIssue.Description))!
+            .GetColumnName(table)
+            .Should().Be("description");
+        entity.FindProperty(nameof(DeliveryIssue.Status))!
+            .GetColumnName(table)
+            .Should().Be("status");
+        entity.FindProperty(nameof(DeliveryIssue.ReportedBy))!
+            .GetColumnName(table)
+            .Should().Be("reported_by");
+        entity.FindProperty(nameof(DeliveryIssue.DeletedAt))!
+            .GetColumnName(table)
+            .Should().Be("deleted_at");
+
+        entity.FindProperty(nameof(DeliveryIssue.IssueType))!
+            .GetMaxLength()
+            .Should().Be(30);
+        entity.FindProperty(nameof(DeliveryIssue.Status))!
+            .GetMaxLength()
+            .Should().Be(20);
+
+        var foreignKey = entity.GetForeignKeys().Should().ContainSingle().Which;
+        foreignKey.PrincipalEntityType.ClrType.Should().Be(typeof(Delivery));
+        foreignKey.GetConstraintName().Should().Be("fk_delivery_issues_delivery");
+
+        entity.GetIndexes().Should().Contain(i =>
+            i.GetDatabaseName() == "idx_delivery_issues_delivery_id");
+
+        var designEntity = ctx.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(DeliveryIssue));
+        designEntity.Should().NotBeNull();
+        var checkConstraints = designEntity!.GetCheckConstraints();
+        checkConstraints.Should().Contain(c => c.Name == "ck_delivery_issues_type");
+        checkConstraints.Should().Contain(c => c.Name == "ck_delivery_issues_status");
+    }
+
+    [Fact]
     public void OrderStatusRow_IsKeylessSqlQueryUsingOrdersColumns()
     {
         using var ctx = CreateContext();
@@ -89,6 +139,7 @@ public sealed class DeliveryPersistenceConfigurationTests
         using var provider = services.BuildServiceProvider();
 
         provider.GetRequiredService<IDeliveryRepository>().Should().NotBeNull();
+        provider.GetRequiredService<IDeliveryIssueRepository>().Should().NotBeNull();
         provider.GetRequiredService<IOrderStatusReader>().Should().NotBeNull();
     }
 

@@ -5,6 +5,7 @@ using FreshFlow.API.Controllers;
 using FreshFlow.Logistics.Application.Commands.AttachProofOfDelivery;
 using FreshFlow.Logistics.Application.Commands.ConfirmPickup;
 using FreshFlow.Logistics.Application.Commands.CreateProofUploadSignature;
+using FreshFlow.Logistics.Application.Commands.ReportDeliveryIssue;
 using FreshFlow.Logistics.Application.Commands.StartRoute;
 using FreshFlow.Logistics.Application.Commands.UpdateDeliveryStatus;
 using FreshFlow.Logistics.Application.Dtos;
@@ -264,6 +265,41 @@ public sealed class DriverControllerTests
                 command.DriverUserId == driverId &&
                 command.Status == "ARRIVED" &&
                 command.FailureReason == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ReportDeliveryIssueAsync_SendsJwtDriverIdAndReturnsCreatedAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var driverId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        sender.Send(Arg.Any<ReportDeliveryIssueCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<DeliveryIssueDto>.Success(
+                new DeliveryIssueDto(
+                    Guid.NewGuid(),
+                    deliveryId,
+                    "damaged",
+                    "box torn",
+                    "open",
+                    DateTime.UtcNow)));
+        var controller = new DriverController(sender)
+        {
+            ControllerContext = CreateContext(driverId),
+        };
+
+        var result = await controller.ReportDeliveryIssueAsync(
+            deliveryId,
+            new ReportDeliveryIssueRequest("DAMAGED", "box torn"),
+            default);
+
+        result.Should().BeOfType<CreatedResult>();
+        await sender.Received(1).Send(
+            Arg.Is<ReportDeliveryIssueCommand>(command =>
+                command.DeliveryId == deliveryId &&
+                command.DriverUserId == driverId &&
+                command.IssueType == "DAMAGED" &&
+                command.Description == "box torn"),
             Arg.Any<CancellationToken>());
     }
 

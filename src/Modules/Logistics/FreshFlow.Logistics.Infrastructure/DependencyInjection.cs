@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<IDeliveryZoneRepository, DeliveryZoneRepository>();
         services.AddScoped<IDeliveryRouteRepository, DeliveryRouteRepository>();
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
+        services.AddScoped<IDeliveryIssueRepository, DeliveryIssueRepository>();
         services.AddScoped<IDriverReader, DriverReader>();
         services.AddScoped<IHubDiscrepancyStatusReader, HubDiscrepancyStatusReader>();
         services.AddScoped<IOrderStatusReader, OrderStatusReader>();

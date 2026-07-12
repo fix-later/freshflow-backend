@@ -3,6 +3,7 @@ using FreshFlow.API.Extensions;
 using FreshFlow.Logistics.Application.Commands.AttachProofOfDelivery;
 using FreshFlow.Logistics.Application.Commands.ConfirmPickup;
 using FreshFlow.Logistics.Application.Commands.CreateProofUploadSignature;
+using FreshFlow.Logistics.Application.Commands.ReportDeliveryIssue;
 using FreshFlow.Logistics.Application.Commands.StartRoute;
 using FreshFlow.Logistics.Application.Commands.UpdateDeliveryStatus;
 using FreshFlow.Logistics.Application.Queries.GetDriverRoutesToday;
@@ -74,6 +75,23 @@ public sealed class DriverController(ISender sender) : ControllerBase
             ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPost("deliveries/{deliveryId:guid}/issues")]
+    public async Task<IActionResult> ReportDeliveryIssueAsync(
+        Guid deliveryId,
+        [FromBody] ReportDeliveryIssueRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new ReportDeliveryIssueCommand(deliveryId, ResolveUserId(), body.IssueType, body.Description),
+            ct);
+
+        return result.IsSuccess
+            ? Created(
+                $"/api/v1/driver/deliveries/{deliveryId}/issues/{result.Value.Id}",
+                ApiResponse.Ok(result.Value))
+            : result.Error.ToActionResult();
     }
 
     private Guid ResolveUserId()
