@@ -10,6 +10,7 @@ using FreshFlow.Auth.Application.Commands.Admin.UnlockUser;
 using FreshFlow.Auth.Application.Queries.GetMarketAssignments;
 using FreshFlow.Auth.Application.Queries.GetRoles;
 using FreshFlow.Auth.Application.Queries.GetUsers;
+using FreshFlow.Infrastructure.Persistence.Audit;
 using FreshFlow.Orders.Application.Commands.SetRestaurantCreditLimit;
 using FreshFlow.Orders.Application.Commands.SettleRestaurantCredit;
 using FreshFlow.Orders.Application.Commands.UpdateOperationalSettings;
@@ -216,6 +217,26 @@ public sealed class AdminController(ISender sender) : ControllerBase
         [FromBody] UpdatePricingSettingsRequest body, CancellationToken ct)
     {
         var result = await sender.Send(new UpdatePricingSettingsCommand(body.PriceAlertThresholdPercent), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    // ── Audit Log (Admin) ──────────────────────────────────────────────────────
+
+    /// <summary>GET /api/v1/admin/audit-logs — filter by actor/action/entity/time.</summary>
+    [HttpGet("audit-logs")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetAuditLogsAsync(
+        [FromQuery] Guid? actorId,
+        [FromQuery] string? action,
+        [FromQuery] string? entityType,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var result = await sender.Send(
+            new GetAuditLogsQuery(actorId, action, entityType, from, to, page, pageSize), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
