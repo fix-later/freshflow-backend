@@ -15,6 +15,8 @@ using FreshFlow.Orders.Application.Commands.SettleRestaurantCredit;
 using FreshFlow.Orders.Application.Commands.UpdateOperationalSettings;
 using FreshFlow.Orders.Application.Queries.GetOperationalSettings;
 using FreshFlow.Orders.Domain.Enums;
+using FreshFlow.Pricing.Application.Commands.UpdatePricingSettings;
+using FreshFlow.Pricing.Application.Queries.GetPricingSettings;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -196,6 +198,27 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    // ── Pricing Settings (Admin) ──────────────────────────────────────────────
+
+    /// <summary>GET /api/v1/admin/pricing-settings</summary>
+    [HttpGet("pricing-settings")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetPricingSettingsAsync(CancellationToken ct)
+    {
+        var result = await sender.Send(new GetPricingSettingsQuery(), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>PUT /api/v1/admin/pricing-settings</summary>
+    [HttpPut("pricing-settings")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> UpdatePricingSettingsAsync(
+        [FromBody] UpdatePricingSettingsRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(new UpdatePricingSettingsCommand(body.PriceAlertThresholdPercent), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     // ── Market Assignments (Admin + Operations Manager) ───────────────────────
 
     /// <summary>
@@ -242,3 +265,4 @@ public sealed record SettleCreditRequest(decimal Amount, string? PaymentMethod, 
 public sealed record SetCreditLimitRequest(decimal CreditLimit, string? Note);
 public sealed record UpdateOperationalSettingsRequest(
     TimeOnly DailyCutoffTime, bool BatchingEnabled, string DefaultRouteType);
+public sealed record UpdatePricingSettingsRequest(decimal PriceAlertThresholdPercent);

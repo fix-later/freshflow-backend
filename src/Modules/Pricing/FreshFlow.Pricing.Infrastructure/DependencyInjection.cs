@@ -53,6 +53,7 @@ public static class DependencyInjection
         // Repositories
         services.AddScoped<IMarketProductRepository, MarketProductRepository>();
         services.AddScoped<IPriceSnapshotRepository, PriceSnapshotRepository>();
+        services.AddScoped<IPricingSettingsRepository, PricingSettingsRepository>();
 
         // Cross-module read services
         services.AddScoped<IAssignedMarketReader, AssignedMarketReader>();
