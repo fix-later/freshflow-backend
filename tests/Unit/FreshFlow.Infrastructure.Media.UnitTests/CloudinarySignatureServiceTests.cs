@@ -1,4 +1,5 @@
-using CloudinaryDotNet;
+using System.Security.Cryptography;
+using System.Text;
 using FluentAssertions;
 using FreshFlow.Infrastructure.Media;
 using FreshFlow.SharedKernel.Application;
@@ -29,19 +30,15 @@ public sealed class CloudinarySignatureServiceTests
     }
 
     [Fact]
-    public void Sign_MatchesCloudinarySdkComputationForSameParameters()
+    public void Sign_UsesCloudinaryCanonicalParameterOrder()
     {
         var timestamp = new DateTimeOffset(2026, 7, 10, 8, 0, 0, TimeSpan.Zero);
         var sut = CreateSut(new FixedTimeProvider(timestamp));
 
         var result = sut.Sign(new CloudinarySignatureRequest("avatars"));
 
-        var cloudinary = new Cloudinary(new Account(Settings.CloudName, Settings.ApiKey, Settings.ApiSecret));
-        var expectedSignature = cloudinary.Api.SignParameters(new Dictionary<string, object>
-        {
-            ["timestamp"] = timestamp.ToUnixTimeSeconds(),
-            ["folder"] = "avatars"
-        });
+        var expectedSignature = ComputeSha1(
+            $"folder=avatars&timestamp={timestamp.ToUnixTimeSeconds()}{Settings.ApiSecret}");
 
         result.Signature.Should().Be(expectedSignature);
     }
@@ -85,13 +82,8 @@ public sealed class CloudinarySignatureServiceTests
                 ["public_id"] = "user-123"
             }));
 
-        var cloudinary = new Cloudinary(new Account(Settings.CloudName, Settings.ApiKey, Settings.ApiSecret));
-        var expectedSignature = cloudinary.Api.SignParameters(new Dictionary<string, object>
-        {
-            ["timestamp"] = timestamp.ToUnixTimeSeconds(),
-            ["folder"] = "avatars",
-            ["public_id"] = "user-123"
-        });
+        var expectedSignature = ComputeSha1(
+            $"folder=avatars&public_id=user-123&timestamp={timestamp.ToUnixTimeSeconds()}{Settings.ApiSecret}");
 
         result.Timestamp.Should().Be(timestamp.ToUnixTimeSeconds());
         result.Folder.Should().Be("avatars");
@@ -126,6 +118,9 @@ public sealed class CloudinarySignatureServiceTests
 
     private static CloudinarySignatureService CreateSut(TimeProvider timeProvider) =>
         new(Options.Create(Settings), timeProvider);
+
+    private static string ComputeSha1(string value) =>
+        Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
