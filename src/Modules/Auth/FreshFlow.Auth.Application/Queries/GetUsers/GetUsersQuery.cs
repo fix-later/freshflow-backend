@@ -7,4 +7,5 @@ public sealed record GetUsersQuery(
     bool? IsActive,
     string? Search,
     int Page = 1,
-    int PageSize = 20) : IQuery<GetUsersResponse>;
+    int PageSize = 20,
+    string? RestaurantStatus = null) : IQuery<GetUsersResponse>;

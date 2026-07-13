@@ -22,5 +22,5 @@ public interface IUserRepository
     public Task SaveChangesAsync(CancellationToken ct);
     public Task<(IReadOnlyList<User> Data, int Total)> GetPagedAsync(
         string? role, bool? isActive, string? search,
-        int page, int pageSize, CancellationToken ct);
+        int page, int pageSize, string? restaurantStatus, CancellationToken ct);
 }

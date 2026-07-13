@@ -8,6 +8,8 @@ public sealed record UserSummaryDto(
     string Role,
     bool IsActive,
     bool? IsApproved,
+    Guid? RestaurantId,
+    string? RestaurantStatus,
     DateTime CreatedAt);
 
 public sealed record PaginationMeta(int Page, int PageSize, int Total);

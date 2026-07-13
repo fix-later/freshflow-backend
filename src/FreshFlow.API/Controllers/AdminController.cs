@@ -5,6 +5,7 @@ using FreshFlow.Auth.Application.Commands.Admin.ApproveRestaurant;
 using FreshFlow.Auth.Application.Commands.Admin.AssignRole;
 using FreshFlow.Auth.Application.Commands.Admin.CreateUser;
 using FreshFlow.Auth.Application.Commands.Admin.ReplaceMarketAssignments;
+using FreshFlow.Auth.Application.Commands.Admin.SuspendRestaurant;
 using FreshFlow.Auth.Application.Commands.Admin.UnlockUser;
 using FreshFlow.Auth.Application.Queries.GetMarketAssignments;
 using FreshFlow.Auth.Application.Queries.GetRoles;
@@ -41,9 +42,11 @@ public sealed class AdminController(ISender sender) : ControllerBase
         [FromQuery] string? search,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
+        [FromQuery] string? restaurantStatus = null,
         CancellationToken ct = default)
     {
-        var result = await sender.Send(new GetUsersQuery(role, isActive, search, page, pageSize), ct);
+        var result = await sender.Send(
+            new GetUsersQuery(role, isActive, search, page, pageSize, restaurantStatus), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -87,6 +90,27 @@ public sealed class AdminController(ISender sender) : ControllerBase
     [HttpPatch("restaurants/{restaurantId:guid}/approve")]
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> ApproveRestaurantAsync(Guid restaurantId, CancellationToken ct)
+    {
+        var result = await sender.Send(new ApproveRestaurantCommand(restaurantId), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPatch("restaurants/{restaurantId:guid}/suspend")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> SuspendRestaurantAsync(Guid restaurantId, CancellationToken ct)
+    {
+        var result = await sender.Send(new SuspendRestaurantCommand(restaurantId), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>
+    /// PATCH /api/v1/admin/restaurants/{restaurantId}/reactivate
+    /// Restores a suspended restaurant to active. Reuses ApproveRestaurantCommand, which already
+    /// transitions any non-active restaurant (pending or suspended) to active.
+    /// </summary>
+    [HttpPatch("restaurants/{restaurantId:guid}/reactivate")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> ReactivateRestaurantAsync(Guid restaurantId, CancellationToken ct)
     {
         var result = await sender.Send(new ApproveRestaurantCommand(restaurantId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
