@@ -9,7 +9,8 @@ namespace FreshFlow.Orders.Application.Commands.ConfirmOrder;
 internal sealed class ConfirmOrderCommandHandler(
     IOrderRepository orderRepository,
     IRestaurantReader restaurantReader,
-    ICreditService creditService)
+    ICreditService creditService,
+    IOperationalSettingsRepository operationalSettings)
     : IRequestHandler<ConfirmOrderCommand, Result<OrderDto>>
 {
     public Task<Result<OrderDto>> Handle(ConfirmOrderCommand request, CancellationToken cancellationToken) =>
@@ -36,7 +37,9 @@ internal sealed class ConfirmOrderCommandHandler(
         if (canChargeResult.IsFailure)
             return Result<OrderDto>.Failure(canChargeResult.Error);
 
-        var evaluation = OrderConfirmationEvaluator.Evaluate(order, canChargeResult.Value, confirmedAtUtc);
+        var settings = await operationalSettings.GetAsync(cancellationToken);
+        var evaluation = OrderConfirmationEvaluator.Evaluate(
+            order, canChargeResult.Value, confirmedAtUtc, settings.DailyCutoffTime.ToTimeSpan());
         if (evaluation.Issues.Count > 0)
             return Result<OrderDto>.Failure(evaluation.Issues[0]);
 

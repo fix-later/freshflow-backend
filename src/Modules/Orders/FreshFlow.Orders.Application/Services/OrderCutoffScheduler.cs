@@ -10,12 +10,15 @@ namespace FreshFlow.Orders.Application.Services;
 /// </summary>
 public static class OrderCutoffScheduler
 {
-    private static readonly TimeSpan CutoffLocalTime = TimeSpan.FromHours(22);
+    /// <summary>Fallback used when no admin-configured cutoff (operational_settings, SCRUM-355) is supplied.</summary>
+    public static readonly TimeSpan DefaultCutoffLocalTime = TimeSpan.FromHours(22);
+
     private static readonly TimeZoneInfo VietnamTimeZone = ResolveVietnamTimeZone();
 
-    public static DateTime? ResolveScheduledFor(DateTime confirmedAtUtc, DateTime? requestedScheduledFor)
+    public static DateTime? ResolveScheduledFor(
+        DateTime confirmedAtUtc, DateTime? requestedScheduledFor, TimeSpan? cutoffLocalTime = null)
     {
-        var earliestValidUtc = ResolveEarliestValidDelivery(confirmedAtUtc);
+        var earliestValidUtc = ResolveEarliestValidDelivery(confirmedAtUtc, cutoffLocalTime ?? DefaultCutoffLocalTime);
 
         if (requestedScheduledFor is null || requestedScheduledFor < earliestValidUtc)
             return earliestValidUtc;
@@ -40,10 +43,10 @@ public static class OrderCutoffScheduler
         return scheduledFor <= upperBoundUtc;
     }
 
-    private static DateTime ResolveEarliestValidDelivery(DateTime confirmedAtUtc)
+    private static DateTime ResolveEarliestValidDelivery(DateTime confirmedAtUtc, TimeSpan cutoffLocalTime)
     {
         var confirmedAtLocal = TimeZoneInfo.ConvertTimeFromUtc(confirmedAtUtc, VietnamTimeZone);
-        var isPastCutoff = confirmedAtLocal.TimeOfDay >= CutoffLocalTime;
+        var isPastCutoff = confirmedAtLocal.TimeOfDay >= cutoffLocalTime;
         var earliestValidOffsetDays = isPastCutoff ? 2 : 1;
         var earliestValidLocalDate = confirmedAtLocal.Date.AddDays(earliestValidOffsetDays);
 

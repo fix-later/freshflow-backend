@@ -9,7 +9,8 @@ namespace FreshFlow.Orders.Application.Queries.PreviewOrderConfirmation;
 internal sealed class PreviewOrderConfirmationQueryHandler(
     IOrderRepository orderRepository,
     IRestaurantReader restaurantReader,
-    ICreditService creditService)
+    ICreditService creditService,
+    IOperationalSettingsRepository operationalSettings)
     : IRequestHandler<PreviewOrderConfirmationQuery, Result<OrderConfirmationPreviewDto>>
 {
     public Task<Result<OrderConfirmationPreviewDto>> Handle(
@@ -44,7 +45,9 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
                 RemainingCreditAfter: null));
         }
 
-        var evaluation = OrderConfirmationEvaluator.Evaluate(order, canChargeResult.Value, nowUtc);
+        var settings = await operationalSettings.GetAsync(cancellationToken);
+        var evaluation = OrderConfirmationEvaluator.Evaluate(
+            order, canChargeResult.Value, nowUtc, settings.DailyCutoffTime.ToTimeSpan());
         var issues = evaluation.Issues
             .Select(error => new PreviewIssueDto(error.Code, error.Message))
             .ToList();

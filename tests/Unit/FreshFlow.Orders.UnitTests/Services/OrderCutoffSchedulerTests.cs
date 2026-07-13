@@ -112,4 +112,24 @@ public sealed class OrderCutoffSchedulerTests
 
         result.Should().BeTrue();
     }
+
+    [Fact]
+    public void ResolveScheduledFor_CustomCutoffEarlierThanDefault_UsesCustomCutoff()
+    {
+        // BeforeCutoffUtc == 21:59 local — past a custom 21:00 cutoff even though it's before the
+        // 22:00 default, proving the configured cutoff (SCRUM-355) is honored over the fallback.
+        var result = OrderCutoffScheduler.ResolveScheduledFor(
+            BeforeCutoffUtc, requestedScheduledFor: null, cutoffLocalTime: TimeSpan.FromHours(21));
+
+        result.Should().Be(DPlus2Utc);
+    }
+
+    [Fact]
+    public void ResolveScheduledFor_NullCutoff_FallsBackToDefault()
+    {
+        var result = OrderCutoffScheduler.ResolveScheduledFor(
+            BeforeCutoffUtc, requestedScheduledFor: null, cutoffLocalTime: null);
+
+        result.Should().Be(DPlus1Utc);
+    }
 }

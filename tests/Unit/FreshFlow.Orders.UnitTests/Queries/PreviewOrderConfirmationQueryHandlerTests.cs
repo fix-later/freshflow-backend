@@ -16,6 +16,7 @@ public sealed class PreviewOrderConfirmationQueryHandlerTests
     private readonly IOrderRepository _orderRepository = Substitute.For<IOrderRepository>();
     private readonly IRestaurantReader _restaurantReader = Substitute.For<IRestaurantReader>();
     private readonly ICreditService _creditService = Substitute.For<ICreditService>();
+    private readonly IOperationalSettingsRepository _operationalSettings = Substitute.For<IOperationalSettingsRepository>();
 
     private readonly PreviewOrderConfirmationQueryHandler _sut;
 
@@ -26,7 +27,11 @@ public sealed class PreviewOrderConfirmationQueryHandlerTests
 
     public PreviewOrderConfirmationQueryHandlerTests()
     {
-        _sut = new PreviewOrderConfirmationQueryHandler(_orderRepository, _restaurantReader, _creditService);
+        _sut = new PreviewOrderConfirmationQueryHandler(
+            _orderRepository, _restaurantReader, _creditService, _operationalSettings);
+
+        _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
+            .Returns(OperationalSettings.CreateDefault());
 
         _restaurantReader.FindByUserIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));

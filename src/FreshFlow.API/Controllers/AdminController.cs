@@ -12,6 +12,8 @@ using FreshFlow.Auth.Application.Queries.GetRoles;
 using FreshFlow.Auth.Application.Queries.GetUsers;
 using FreshFlow.Orders.Application.Commands.SetRestaurantCreditLimit;
 using FreshFlow.Orders.Application.Commands.SettleRestaurantCredit;
+using FreshFlow.Orders.Application.Commands.UpdateOperationalSettings;
+using FreshFlow.Orders.Application.Queries.GetOperationalSettings;
 using FreshFlow.Orders.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -171,6 +173,29 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    // ── Operational Settings (Admin) ──────────────────────────────────────────
+
+    /// <summary>GET /api/v1/admin/operational-settings</summary>
+    [HttpGet("operational-settings")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetOperationalSettingsAsync(CancellationToken ct)
+    {
+        var result = await sender.Send(new GetOperationalSettingsQuery(), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>PUT /api/v1/admin/operational-settings</summary>
+    [HttpPut("operational-settings")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> UpdateOperationalSettingsAsync(
+        [FromBody] UpdateOperationalSettingsRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new UpdateOperationalSettingsCommand(body.DailyCutoffTime, body.BatchingEnabled, body.DefaultRouteType),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     // ── Market Assignments (Admin + Operations Manager) ───────────────────────
 
     /// <summary>
@@ -215,3 +240,5 @@ public sealed record AssignRoleRequest(string RoleName);
 public sealed record ReplaceMarketAssignmentsRequest(IReadOnlyList<Guid> MarketIds);
 public sealed record SettleCreditRequest(decimal Amount, string? PaymentMethod, string? Reference, string? Note);
 public sealed record SetCreditLimitRequest(decimal CreditLimit, string? Note);
+public sealed record UpdateOperationalSettingsRequest(
+    TimeOnly DailyCutoffTime, bool BatchingEnabled, string DefaultRouteType);
