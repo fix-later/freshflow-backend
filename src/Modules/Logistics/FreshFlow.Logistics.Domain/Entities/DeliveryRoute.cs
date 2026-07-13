@@ -159,4 +159,22 @@ public sealed class DeliveryRoute
         Status = RouteStatus.assigned;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    public void Start()
+    {
+        if (Status != RouteStatus.assigned)
+            throw new InvalidOperationException("Only assigned routes can be started.");
+
+        Status = RouteStatus.in_progress;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Complete()
+    {
+        if (Status != RouteStatus.in_progress)
+            throw new InvalidOperationException("Only in-progress routes can be completed.");
+
+        Status = RouteStatus.completed;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

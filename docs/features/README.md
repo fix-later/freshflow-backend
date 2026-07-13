@@ -47,7 +47,13 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 
 | Doc | Loại | Trạng thái |
 |---|---|---|
-| [AUDIT-2026-07-10 hub backend plan](./hub/AUDIT-2026-07-10-hub-backend-plan.md) | Audit / Plan | ⬜ 6 task BE chưa bắt đầu |
+| [AUDIT-2026-07-10 hub backend plan](./hub/AUDIT-2026-07-10-hub-backend-plan.md) | Audit / Plan | ✅ Hoàn thành 6/6 (286/288/290/292/294 committed+reviewed, 296 đóng Option A), merged PR #22 |
+
+## delivery — Delivery Execution (epic DEL, module Logistics — driver last-mile)
+
+| Doc | Loại | Trạng thái |
+|---|---|---|
+| [AUDIT-2026-07-11 del backend plan](./delivery/AUDIT-2026-07-11-del-backend-plan.md) | Audit / Plan | ✅ Hoàn thành 6/6 (315/317/319/321/323/325 committed) |
 
 ## auth-catalog — Auth / Profile / Catalog
 

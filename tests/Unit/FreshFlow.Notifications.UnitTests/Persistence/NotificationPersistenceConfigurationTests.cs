@@ -124,6 +124,20 @@ public sealed class NotificationPersistenceConfigurationTests
     }
 
     [Fact]
+    public void Model_RegistersNotificationOrderRecipientProjectionAsKeyless()
+    {
+        using var ctx = CreateContext();
+
+        var entity = ctx.Model.FindEntityType(typeof(NotificationOrderRecipientRow));
+
+        entity.Should().NotBeNull();
+        entity!.FindPrimaryKey().Should().BeNull();
+        entity.GetSqlQuery().Should().Contain("FROM orders");
+        entity.GetSqlQuery().Should().Contain("JOIN restaurants");
+        entity.GetSqlQuery().Should().Contain("\"deleted_at\" IS NULL");
+    }
+
+    [Fact]
     public void AddNotificationsModule_RegistersNotificationServices()
     {
         var services = new ServiceCollection();

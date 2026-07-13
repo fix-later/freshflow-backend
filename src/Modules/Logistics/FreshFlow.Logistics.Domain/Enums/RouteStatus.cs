@@ -6,5 +6,7 @@ public enum RouteStatus
     selected,
     reviewed,
     assigned,
+    in_progress,
+    completed,
     cancelled
 }
