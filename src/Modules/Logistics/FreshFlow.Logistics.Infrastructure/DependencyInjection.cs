@@ -6,6 +6,7 @@ using FreshFlow.Logistics.Application.Behaviors;
 using FreshFlow.Logistics.Infrastructure.Configuration;
 using FreshFlow.Logistics.Infrastructure.CrossModule;
 using FreshFlow.Logistics.Infrastructure.Optimization;
+using FreshFlow.Logistics.Infrastructure.Realtime;
 using FreshFlow.Logistics.Infrastructure.Repositories;
 using MediatR;
 using Microsoft.Extensions.Configuration;
@@ -25,6 +26,8 @@ public static class DependencyInjection
         services.TryAddSingleton(config);
 
         var applicationAssembly = typeof(IVehicleRepository).Assembly;
+        services.TryAddSingleton(TimeProvider.System);
+
         services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssembly(applicationAssembly);
@@ -36,7 +39,13 @@ public static class DependencyInjection
         services.AddScoped<IVehicleRepository, VehicleRepository>();
         services.AddScoped<IDeliveryZoneRepository, DeliveryZoneRepository>();
         services.AddScoped<IDeliveryRouteRepository, DeliveryRouteRepository>();
+        services.AddScoped<IDeliveryRepository, DeliveryRepository>();
+        services.AddScoped<IDeliveryIssueRepository, DeliveryIssueRepository>();
+        services.AddScoped<IDeliveryBroadcastService, DeliveryBroadcastService>();
         services.AddScoped<IDriverReader, DriverReader>();
+        services.AddScoped<IHubDiscrepancyStatusReader, HubDiscrepancyStatusReader>();
+        services.AddScoped<IOrderStatusReader, OrderStatusReader>();
+        services.AddScoped<IRestaurantOwnerReader, RestaurantOwnerReader>();
         services.AddScoped<IMarketCoordinateReader, MarketCoordinateReader>();
         services.AddScoped<IRestaurantCoordinateReader, RestaurantCoordinateReader>();
         services.AddScoped<IVehicleCapacityPolicy, VehicleCapacityPolicy>();

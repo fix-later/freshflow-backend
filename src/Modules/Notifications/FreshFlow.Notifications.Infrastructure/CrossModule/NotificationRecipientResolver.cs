@@ -17,4 +17,16 @@ internal sealed class NotificationRecipientResolver(AppDbContext db) : INotifica
             .Select(r => (Guid?)r.UserId)
             .FirstOrDefaultAsync(ct);
     }
+
+    public async Task<Guid?> ResolveUserIdByOrderIdAsync(Guid orderId, CancellationToken ct)
+    {
+        if (orderId == Guid.Empty)
+            return null;
+
+        return await db.Set<NotificationOrderRecipientRow>()
+            .AsNoTracking()
+            .Where(r => r.OrderId == orderId)
+            .Select(r => (Guid?)r.UserId)
+            .FirstOrDefaultAsync(ct);
+    }
 }
