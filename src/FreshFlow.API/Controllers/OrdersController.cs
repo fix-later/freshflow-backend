@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Orders.Application.Commands.AddOrderItem;
+using FreshFlow.Orders.Application.Commands.AdvanceOrderStatus;
 using FreshFlow.Orders.Application.Commands.CancelOrder;
 using FreshFlow.Orders.Application.Commands.CancelScheduledOrder;
 using FreshFlow.Orders.Application.Commands.ConfirmOrder;
@@ -303,6 +304,25 @@ public sealed class OrdersController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    /// <summary>
+    /// POST /api/v1/orders/{orderId}/advance-status — ops bridge that advances a confirmed order
+    /// through the pre-hub pipeline (batched → picked_up → at_hub) so the delivery flow can run
+    /// end-to-end. Delivering/Delivered stay owned by Logistics delivery events.
+    /// </summary>
+    [HttpPost("{orderId:guid}/advance-status")]
+    [Authorize(Roles = "admin,operations_manager")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> AdvanceOrderStatusAsync(
+        Guid orderId, [FromBody] AdvanceOrderStatusRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(new AdvanceOrderStatusCommand(orderId, body.Status), ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     /// <summary>PATCH /api/v1/orders/{orderId}/receipt — UC-ORD-18: confirms receipt of a delivered order.</summary>
     [HttpPatch("{orderId:guid}/receipt")]
     [Authorize(Roles = "restaurant")]
@@ -460,6 +480,8 @@ public sealed record AddOrderItemRequest(Guid MarketProductId, int Quantity);
 public sealed record UpdateOrderItemRequest(int Quantity);
 
 public sealed record CancelOrderRequest(string? Reason);
+
+public sealed record AdvanceOrderStatusRequest(string Status);
 
 public sealed record RecordActualQuantityRequest(decimal ActualQuantity);
 
