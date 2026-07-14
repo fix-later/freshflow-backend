@@ -23,6 +23,7 @@ using FreshFlow.Procurement.Application.Commands.AssignAgent;
 using FreshFlow.Procurement.Application.Commands.GenerateManifest;
 using FreshFlow.Procurement.Application.Commands.RunAutoBatch;
 using FreshFlow.Procurement.Application.Queries.GetProcurementBatches;
+using FreshFlow.Procurement.Application.Queries.GetProcurementProgress;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -214,6 +215,19 @@ public sealed class AdminController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(
             new GetProcurementBatchesQuery(page, pageSize),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("order-groups/progress")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetOrderGroupsProgressAsync(
+        [FromQuery] DateOnly? date,
+        [FromQuery] string? status,
+        CancellationToken ct = default)
+    {
+        var result = await sender.Send(
+            new GetProcurementProgressQuery(date, status),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
