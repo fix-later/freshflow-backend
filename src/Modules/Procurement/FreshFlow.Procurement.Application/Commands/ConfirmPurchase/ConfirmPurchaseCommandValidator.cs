@@ -8,7 +8,7 @@ internal sealed class ConfirmPurchaseCommandValidator : AbstractValidator<Confir
     {
         RuleFor(command => command.BatchId).NotEmpty();
         RuleFor(command => command.AgentUserId).NotEmpty();
-        RuleFor(command => command.Lines).NotEmpty();
+        RuleFor(command => command.Lines).NotNull();
         RuleFor(command => command.Lines)
             .Must(lines => lines
                 .Select(line => line.MarketProductId)

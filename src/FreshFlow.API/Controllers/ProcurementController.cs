@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Procurement.Application.Commands.ConfirmPurchase;
+using FreshFlow.Procurement.Application.Commands.CreateExceptionProofUploadSignature;
 using FreshFlow.Procurement.Application.Commands.HandoverBatch;
+using FreshFlow.Procurement.Application.Commands.ReportException;
 using FreshFlow.Procurement.Application.Queries.GetAssignedProcurementTask;
 using FreshFlow.Procurement.Application.Queries.GetAssignedProcurementTasks;
 using MediatR;
@@ -72,6 +74,44 @@ public sealed class ProcurementController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    [HttpPost("tasks/{batchId:guid}/exceptions")]
+    public async Task<IActionResult> ReportExceptionAsync(
+        Guid batchId,
+        [FromBody] ReportProcurementExceptionRequest body,
+        CancellationToken ct)
+    {
+        if (!TryResolveUserId(out var agentUserId))
+            return Unauthorized();
+
+        var result = await sender.Send(
+            new ReportExceptionCommand(
+                batchId,
+                agentUserId,
+                body.MarketProductId,
+                body.Type,
+                body.ReportedQuantity,
+                body.Note,
+                body.ProofImageUrl),
+            ct);
+        return result.IsSuccess
+            ? Created($"/api/v1/procurement/tasks/{batchId}", ApiResponse.Ok(result.Value))
+            : result.Error.ToActionResult();
+    }
+
+    [HttpPost("tasks/{batchId:guid}/exceptions/upload-signature")]
+    public async Task<IActionResult> CreateExceptionProofUploadSignatureAsync(
+        Guid batchId,
+        CancellationToken ct)
+    {
+        if (!TryResolveUserId(out var agentUserId))
+            return Unauthorized();
+
+        var result = await sender.Send(
+            new CreateExceptionProofUploadSignatureCommand(batchId, agentUserId),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     private bool TryResolveUserId(out Guid userId)
     {
         var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -81,5 +121,12 @@ public sealed class ProcurementController(ISender sender) : ControllerBase
 }
 
 public sealed record ConfirmPurchaseRequest(IReadOnlyList<PurchaseLineDto> Lines);
+
+public sealed record ReportProcurementExceptionRequest(
+    Guid MarketProductId,
+    string Type,
+    int ReportedQuantity,
+    string? Note,
+    string? ProofImageUrl);
 
 public sealed record HandoverRequest(Guid? HubId);

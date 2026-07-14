@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Procurement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace FreshFlow.Procurement.UnitTests.Persistence;
 
@@ -54,5 +55,17 @@ public sealed class ProcurementPersistenceConfigurationTests
             index.IsUnique &&
             index.GetDatabaseName() == "ux_procurement_batch_orders_order_active" &&
             index.GetFilter() == "\"deleted_at\" IS NULL");
+        var exception = db.Model.FindEntityType(typeof(ProcurementException))!;
+        exception.FindProperty(nameof(ProcurementException.Id))!.ValueGenerated
+            .Should().Be(ValueGenerated.Never);
+        exception.GetTableName().Should().Be("procurement_exceptions");
+        exception.FindProperty(nameof(ProcurementException.MarketProductId))!
+            .GetColumnName().Should().Be("market_product_id");
+        exception.FindProperty(nameof(ProcurementException.ProofImageUrl))!
+            .GetColumnName().Should().Be("proof_image_url");
+        exception.FindProperty(nameof(ProcurementException.DeletedAt))!
+            .GetColumnName().Should().Be("deleted_at");
+        exception.GetIndexes().Should().ContainSingle(index =>
+            index.GetDatabaseName() == "idx_procurement_exceptions_batch_id");
     }
 }

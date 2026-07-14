@@ -66,6 +66,14 @@ internal sealed class ProcurementBatchConfiguration : IEntityTypeConfiguration<P
         builder.Metadata.FindNavigation(nameof(ProcurementBatch.Orders))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
+        builder.HasMany(batch => batch.Exceptions)
+            .WithOne()
+            .HasForeignKey(exception => exception.ProcurementBatchId)
+            .OnDelete(DeleteBehavior.Cascade)
+            .HasConstraintName("fk_procurement_exceptions_batch");
+        builder.Metadata.FindNavigation(nameof(ProcurementBatch.Exceptions))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+
         builder.HasIndex(batch => batch.AssignedAgentUserId)
             .HasFilter("\"assigned_agent_user_id\" IS NOT NULL")
             .HasDatabaseName("ix_procurement_batches_assigned_agent");

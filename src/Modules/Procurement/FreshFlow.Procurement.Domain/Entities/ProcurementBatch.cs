@@ -9,6 +9,7 @@ public sealed class ProcurementBatch : AggregateRoot
 {
     private readonly List<ProcurementBatchItem> _items = [];
     private readonly List<ProcurementBatchOrder> _orders = [];
+    private readonly List<ProcurementException> _exceptions = [];
 
     private ProcurementBatch() { }
 
@@ -24,6 +25,7 @@ public sealed class ProcurementBatch : AggregateRoot
 
     public IReadOnlyCollection<ProcurementBatchItem> Items => _items.AsReadOnly();
     public IReadOnlyCollection<ProcurementBatchOrder> Orders => _orders.AsReadOnly();
+    public IReadOnlyCollection<ProcurementException> Exceptions => _exceptions.AsReadOnly();
 
     public static Result<ProcurementBatch> Build(
         DateOnly batchDate,
@@ -183,13 +185,23 @@ public sealed class ProcurementBatch : AggregateRoot
                 $"Procurement batch '{Id}' has already been handed off."));
         }
 
+        var exemptProductIds = _exceptions
+            .Where(exception =>
+                !exception.IsDeleted &&
+                exception.Type == ProcurementExceptionType.Unavailable)
+            .Select(exception => exception.MarketProductId)
+            .ToHashSet();
+        var requiredItems = _items
+            .Where(item => !exemptProductIds.Contains(item.MarketProductId))
+            .ToList();
+
         if (lines is null ||
-            lines.Count != _items.Count ||
-            _items.Any(item => !lines.ContainsKey(item.MarketProductId)))
+            lines.Count != requiredItems.Count ||
+            requiredItems.Any(item => !lines.ContainsKey(item.MarketProductId)))
         {
             return Result.Failure(Error.Validation(
                 "PURCHASE_LINES_MISMATCH",
-                "Purchase confirmation must contain exactly one line for every batch item."));
+                "Purchase confirmation must contain exactly one line for every non-exempt batch item."));
         }
 
         if (lines.Values.Any(line => line.ActualQuantity <= 0 || line.ActualUnitPrice <= 0))
@@ -201,6 +213,12 @@ public sealed class ProcurementBatch : AggregateRoot
 
         foreach (var item in _items)
         {
+            if (exemptProductIds.Contains(item.MarketProductId))
+            {
+                item.ClearPurchase();
+                continue;
+            }
+
             var line = lines[item.MarketProductId];
             item.ConfirmPurchase(line.ActualQuantity, line.ActualUnitPrice, capturedAtUtc);
         }
@@ -211,6 +229,56 @@ public sealed class ProcurementBatch : AggregateRoot
             Id,
             MarketId,
             capturedAtUtc));
+
+        return Result.Success();
+    }
+
+    public Result ReportException(
+        Guid marketProductId,
+        ProcurementExceptionType type,
+        int reportedQuantity,
+        string? note,
+        string? proofImageUrl,
+        Guid reportedByUserId,
+        DateTime reportedAtUtc)
+    {
+        if (Status is not ProcurementBatchStatus.Manifested and not ProcurementBatchStatus.Purchasing)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_NOT_REPORTABLE",
+                $"Procurement batch '{Id}' cannot accept exceptions from status '{Status}'."));
+        }
+
+        if (_items.All(item => item.MarketProductId != marketProductId))
+        {
+            return Result.Failure(Error.Validation(
+                "PRODUCT_NOT_IN_BATCH",
+                $"Market product '{marketProductId}' is not part of procurement batch '{Id}'."));
+        }
+
+        if (reportedQuantity < 0)
+        {
+            return Result.Failure(Error.Validation(
+                "INVALID_EXCEPTION_QUANTITY",
+                "Reported quantity cannot be negative."));
+        }
+
+        var exception = new ProcurementException(
+            Id,
+            marketProductId,
+            type,
+            reportedQuantity,
+            note,
+            proofImageUrl,
+            reportedByUserId,
+            reportedAtUtc);
+        _exceptions.Add(exception);
+        UpdatedAt = reportedAtUtc;
+        RaiseDomainEvent(new ProcurementExceptionReportedDomainEvent(
+            Id,
+            exception.Id,
+            marketProductId,
+            type));
 
         return Result.Success();
     }

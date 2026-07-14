@@ -35,4 +35,11 @@ public sealed class ProcurementBatchItem : BaseEntity
         ActualUnitPrice = actualUnitPrice;
         PurchasedAt = purchasedAt;
     }
+
+    internal void ClearPurchase()
+    {
+        ActualQuantity = null;
+        ActualUnitPrice = null;
+        PurchasedAt = null;
+    }
 }

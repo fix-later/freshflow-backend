@@ -35,6 +35,7 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
         db.Set<ProcurementBatch>()
             .Include(batch => batch.Items)
             .Include(batch => batch.Orders)
+            .Include(batch => batch.Exceptions)
             .SingleOrDefaultAsync(
                 batch => batch.Id == batchId && batch.DeletedAt == null,
                 ct);
@@ -55,6 +56,7 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
             .AsNoTracking()
             .Include(batch => batch.Items)
             .Include(batch => batch.Orders)
+            .Include(batch => batch.Exceptions)
             .Where(batch => batch.DeletedAt == null);
 
         var total = await query.CountAsync(ct);
@@ -78,6 +80,7 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
             .AsNoTracking()
             .Include(batch => batch.Items)
             .Include(batch => batch.Orders)
+            .Include(batch => batch.Exceptions)
             .Where(batch =>
                 batch.DeletedAt == null &&
                 batch.AssignedAgentUserId == agentUserId);
@@ -91,5 +94,29 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
             .ToListAsync(ct);
 
         return (result.AsReadOnly(), total);
+    }
+
+    public Task<DateOnly?> GetLatestCycleDateAsync(CancellationToken ct) =>
+        db.Set<ProcurementBatch>()
+            .AsNoTracking()
+            .Where(batch => batch.DeletedAt == null)
+            .Select(batch => (DateOnly?)batch.BatchDate)
+            .MaxAsync(ct);
+
+    public async Task<IReadOnlyList<ProcurementBatch>> ListByDateAsync(
+        DateOnly date,
+        CancellationToken ct)
+    {
+        var result = await db.Set<ProcurementBatch>()
+            .AsNoTracking()
+            .Include(batch => batch.Items)
+            .Include(batch => batch.Orders)
+            .Include(batch => batch.Exceptions)
+            .Where(batch => batch.DeletedAt == null && batch.BatchDate == date)
+            .OrderByDescending(batch => batch.BatchDate)
+            .ThenBy(batch => batch.MarketId)
+            .ToListAsync(ct);
+
+        return result.AsReadOnly();
     }
 }
