@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
+using FreshFlow.Procurement.Application.Commands.ConfirmPurchase;
+using FreshFlow.Procurement.Application.Commands.HandoverBatch;
 using FreshFlow.Procurement.Application.Queries.GetAssignedProcurementTask;
 using FreshFlow.Procurement.Application.Queries.GetAssignedProcurementTasks;
 using MediatR;
@@ -40,6 +42,36 @@ public sealed class ProcurementController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    [HttpPatch("tasks/{batchId:guid}/purchase")]
+    public async Task<IActionResult> ConfirmPurchaseAsync(
+        Guid batchId,
+        [FromBody] ConfirmPurchaseRequest body,
+        CancellationToken ct)
+    {
+        if (!TryResolveUserId(out var agentUserId))
+            return Unauthorized();
+
+        var result = await sender.Send(
+            new ConfirmPurchaseCommand(batchId, agentUserId, body.Lines),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPatch("tasks/{batchId:guid}/handover")]
+    public async Task<IActionResult> HandoverAsync(
+        Guid batchId,
+        [FromBody] HandoverRequest body,
+        CancellationToken ct)
+    {
+        if (!TryResolveUserId(out var agentUserId))
+            return Unauthorized();
+
+        var result = await sender.Send(
+            new HandoverBatchCommand(batchId, agentUserId, body.HubId),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     private bool TryResolveUserId(out Guid userId)
     {
         var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -47,3 +79,7 @@ public sealed class ProcurementController(ISender sender) : ControllerBase
         return Guid.TryParse(raw, out userId);
     }
 }
+
+public sealed record ConfirmPurchaseRequest(IReadOnlyList<PurchaseLineDto> Lines);
+
+public sealed record HandoverRequest(Guid? HubId);

@@ -33,6 +33,10 @@ internal sealed class ProcurementBatchConfiguration : IEntityTypeConfiguration<P
             .HasColumnName("assigned_agent_user_id");
         builder.Property(batch => batch.AssignedAt)
             .HasColumnName("assigned_at");
+        builder.Property(batch => batch.HandedOffAt)
+            .HasColumnName("handed_off_at");
+        builder.Property(batch => batch.HubId)
+            .HasColumnName("hub_id");
         builder.Property(batch => batch.TotalItemCount)
             .HasColumnName("total_item_count")
             .IsRequired();

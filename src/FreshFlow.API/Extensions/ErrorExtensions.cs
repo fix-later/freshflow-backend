@@ -29,6 +29,8 @@ public static class ErrorExtensions
                         or "ORDER_ALREADY_IN_ACTIVE_GROUP"
                         or "BATCH_NOT_MANIFESTABLE"
                         or "BATCH_NOT_MANIFESTED"
+                        or "BATCH_ALREADY_HANDED_OFF"
+                        or "BATCH_NOT_PURCHASED"
                         or "BATCH_ALREADY_IN_PROGRESS")
             return new ConflictObjectResult(body);
 
@@ -73,6 +75,8 @@ public static class ErrorExtensions
                         or "REFERENCE_PRICE_MISSING"
                         or "INVALID_AGENT"
                         or "AGENT_NOT_ELIGIBLE"
+                        or "PURCHASE_LINES_MISMATCH"
+                        or "INVALID_PURCHASE_LINE"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 

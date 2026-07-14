@@ -18,6 +18,8 @@ public sealed class ProcurementBatch : AggregateRoot
     public DateTime? ManifestedAt { get; private set; }
     public Guid? AssignedAgentUserId { get; private set; }
     public DateTime? AssignedAt { get; private set; }
+    public DateTime? HandedOffAt { get; private set; }
+    public Guid? HubId { get; private set; }
     public int TotalItemCount { get; private set; }
 
     public IReadOnlyCollection<ProcurementBatchItem> Items => _items.AsReadOnly();
@@ -159,6 +161,91 @@ public sealed class ProcurementBatch : AggregateRoot
             MarketId,
             agentUserId,
             assignedAtUtc));
+
+        return Result.Success();
+    }
+
+    public Result ConfirmPurchase(
+        IReadOnlyDictionary<Guid, (int ActualQuantity, decimal ActualUnitPrice)> lines,
+        DateTime capturedAtUtc)
+    {
+        if (Status == ProcurementBatchStatus.Built)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_NOT_MANIFESTED",
+                $"Procurement batch '{Id}' must be manifested before purchase confirmation."));
+        }
+
+        if (Status == ProcurementBatchStatus.HandedOff)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_ALREADY_HANDED_OFF",
+                $"Procurement batch '{Id}' has already been handed off."));
+        }
+
+        if (lines is null ||
+            lines.Count != _items.Count ||
+            _items.Any(item => !lines.ContainsKey(item.MarketProductId)))
+        {
+            return Result.Failure(Error.Validation(
+                "PURCHASE_LINES_MISMATCH",
+                "Purchase confirmation must contain exactly one line for every batch item."));
+        }
+
+        if (lines.Values.Any(line => line.ActualQuantity <= 0 || line.ActualUnitPrice <= 0))
+        {
+            return Result.Failure(Error.Validation(
+                "INVALID_PURCHASE_LINE",
+                "Actual quantity and unit price must be greater than zero."));
+        }
+
+        foreach (var item in _items)
+        {
+            var line = lines[item.MarketProductId];
+            item.ConfirmPurchase(line.ActualQuantity, line.ActualUnitPrice, capturedAtUtc);
+        }
+
+        Status = ProcurementBatchStatus.Purchasing;
+        UpdatedAt = capturedAtUtc;
+        RaiseDomainEvent(new ProcurementPurchaseConfirmedDomainEvent(
+            Id,
+            MarketId,
+            capturedAtUtc));
+
+        return Result.Success();
+    }
+
+    public Result HandoverToHub(Guid? hubId, DateTime capturedAtUtc)
+    {
+        if (Status == ProcurementBatchStatus.HandedOff)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_ALREADY_HANDED_OFF",
+                $"Procurement batch '{Id}' has already been handed off."));
+        }
+
+        if (Status != ProcurementBatchStatus.Purchasing)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_NOT_PURCHASED",
+                $"Procurement batch '{Id}' must be purchased before handover."));
+        }
+
+        Status = ProcurementBatchStatus.HandedOff;
+        HandedOffAt = capturedAtUtc;
+        HubId = hubId;
+        UpdatedAt = capturedAtUtc;
+        var coveredOrderIds = _orders
+            .Select(order => order.OrderId)
+            .Distinct()
+            .ToList()
+            .AsReadOnly();
+        RaiseDomainEvent(new ProcurementBatchHandedOffDomainEvent(
+            Id,
+            MarketId,
+            hubId,
+            capturedAtUtc,
+            coveredOrderIds));
 
         return Result.Success();
     }

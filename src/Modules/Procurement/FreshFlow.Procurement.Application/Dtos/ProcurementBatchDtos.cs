@@ -14,6 +14,8 @@ public sealed record ProcurementBatchDto(
     DateTime? ManifestedAt,
     Guid? AssignedAgentUserId,
     DateTime? AssignedAt,
+    DateTime? HandedOffAt,
+    Guid? HubId,
     int TotalItemCount,
     IReadOnlyList<ProcurementBatchItemDto> Items,
     IReadOnlyList<ProcurementBatchMemberDto> Members);
@@ -22,7 +24,10 @@ public sealed record ProcurementBatchItemDto(
     Guid MarketProductId,
     string ProductNameSnapshot,
     int TotalQuantity,
-    decimal? ReferenceUnitPrice);
+    decimal? ReferenceUnitPrice,
+    int? ActualQuantity,
+    decimal? ActualUnitPrice,
+    DateTime? PurchasedAt);
 
 public sealed record ProcurementBatchMemberDto(
     Guid OrderId,
@@ -46,12 +51,17 @@ internal static class ProcurementBatchDtoMapper
             batch.ManifestedAt,
             batch.AssignedAgentUserId,
             batch.AssignedAt,
+            batch.HandedOffAt,
+            batch.HubId,
             batch.TotalItemCount,
             batch.Items.Select(item => new ProcurementBatchItemDto(
                     item.MarketProductId,
                     item.ProductNameSnapshot,
                     item.TotalQuantity,
-                    item.ReferenceUnitPrice))
+                    item.ReferenceUnitPrice,
+                    item.ActualQuantity,
+                    item.ActualUnitPrice,
+                    item.PurchasedAt))
                 .ToList()
                 .AsReadOnly(),
             batch.Orders.Select(link => new ProcurementBatchMemberDto(
