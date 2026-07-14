@@ -1,5 +1,7 @@
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Domain.Aggregates;
+using FreshFlow.Auth.Domain.Enums;
+using FreshFlow.Auth.Infrastructure.CrossModule;
 using FreshFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -49,7 +51,7 @@ internal sealed class UserRepository(AppDbContext db) : IUserRepository
 
     public async Task<(IReadOnlyList<User> Data, int Total)> GetPagedAsync(
         string? role, bool? isActive, string? search,
-        int page, int pageSize, CancellationToken ct)
+        int page, int pageSize, string? restaurantStatus, CancellationToken ct)
     {
         var query = db.Set<User>().Include(u => u.Role).AsQueryable();
 
@@ -64,6 +66,9 @@ internal sealed class UserRepository(AppDbContext db) : IUserRepository
             var s = search.Trim().ToLowerInvariant();
             query = query.Where(u => u.Email.Contains(s) || (u.Phone != null && u.Phone.Contains(s)));
         }
+
+        if (Enum.TryParse<RestaurantStatus>(restaurantStatus, ignoreCase: true, out var status))
+            query = query.Where(u => db.Set<RestaurantRow>().Any(r => r.UserId == u.Id && r.Status == status));
 
         var total = await query.CountAsync(ct);
         var data = await query

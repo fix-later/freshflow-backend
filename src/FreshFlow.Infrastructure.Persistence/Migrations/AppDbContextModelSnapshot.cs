@@ -1246,6 +1246,57 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("assistant_conversations", (string)null);
                 });
 
+            modelBuilder.Entity("FreshFlow.Infrastructure.Persistence.Entities.AuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Details")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("details");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("entity_type");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Action");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("EntityType");
+
+                    b.ToTable("audit_logs", (string)null);
+                });
+
             modelBuilder.Entity("FreshFlow.Logistics.Domain.Entities.Delivery", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2014,6 +2065,40 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("credit_transactions", (string)null);
                 });
 
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.OperationalSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("BatchingEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("batching_enabled");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<TimeOnly>("DailyCutoffTime")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("daily_cutoff_time");
+
+                    b.Property<string>("DefaultRouteType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("default_route_type");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("operational_settings", (string)null);
+                });
+
             modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.Order", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2415,6 +2500,26 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("idx_price_snapshots_recorded_at");
 
                     b.ToTable("price_snapshots", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Pricing.Domain.Entities.PricingSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("PriceAlertThresholdPercent")
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("pricing_settings", (string)null);
                 });
 
             modelBuilder.Entity("FreshFlow.Pricing.Infrastructure.CrossModule.MarketRow", b =>

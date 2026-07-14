@@ -42,6 +42,7 @@ public static class DependencyInjection
         services.AddScoped<IScheduledOrderRepository, ScheduledOrderRepository>();
         services.AddScoped<ICreditRepository, CreditRepository>();
         services.AddScoped<ICreditStatementRepository, CreditStatementRepository>();
+        services.AddScoped<IOperationalSettingsRepository, OperationalSettingsRepository>();
 
         // Application services
         services.AddScoped<ICreditService, CreditService>();

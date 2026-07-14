@@ -20,7 +20,7 @@ namespace FreshFlow.Orders.Application.Services;
 internal static class OrderConfirmationEvaluator
 {
     public static OrderConfirmationEvaluation Evaluate(
-        Order order, CreditCheckDto creditCheck, DateTime nowUtc)
+        Order order, CreditCheckDto creditCheck, DateTime nowUtc, TimeSpan? cutoffLocalTime = null)
     {
         var issues = new List<Error>();
 
@@ -32,7 +32,7 @@ internal static class OrderConfirmationEvaluator
         // can originate from creditCheck itself, but it's threaded through for the preview's
         // RemainingCreditAfter calculation.
 
-        var resolvedScheduledFor = OrderCutoffScheduler.ResolveScheduledFor(nowUtc, order.ScheduledFor);
+        var resolvedScheduledFor = OrderCutoffScheduler.ResolveScheduledFor(nowUtc, order.ScheduledFor, cutoffLocalTime);
         if (resolvedScheduledFor is not null
             && !OrderCutoffScheduler.IsWithinDeliveryWindow(nowUtc, resolvedScheduledFor.Value))
         {

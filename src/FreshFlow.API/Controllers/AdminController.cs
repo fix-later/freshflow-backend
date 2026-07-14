@@ -4,14 +4,21 @@ using FreshFlow.Auth.Application.Commands.Admin.ActivateUser;
 using FreshFlow.Auth.Application.Commands.Admin.ApproveRestaurant;
 using FreshFlow.Auth.Application.Commands.Admin.AssignRole;
 using FreshFlow.Auth.Application.Commands.Admin.CreateUser;
+using FreshFlow.Auth.Application.Commands.Admin.ReactivateRestaurant;
 using FreshFlow.Auth.Application.Commands.Admin.ReplaceMarketAssignments;
+using FreshFlow.Auth.Application.Commands.Admin.SuspendRestaurant;
 using FreshFlow.Auth.Application.Commands.Admin.UnlockUser;
 using FreshFlow.Auth.Application.Queries.GetMarketAssignments;
 using FreshFlow.Auth.Application.Queries.GetRoles;
 using FreshFlow.Auth.Application.Queries.GetUsers;
+using FreshFlow.Infrastructure.Persistence.Audit;
 using FreshFlow.Orders.Application.Commands.SetRestaurantCreditLimit;
 using FreshFlow.Orders.Application.Commands.SettleRestaurantCredit;
+using FreshFlow.Orders.Application.Commands.UpdateOperationalSettings;
+using FreshFlow.Orders.Application.Queries.GetOperationalSettings;
 using FreshFlow.Orders.Domain.Enums;
+using FreshFlow.Pricing.Application.Commands.UpdatePricingSettings;
+using FreshFlow.Pricing.Application.Queries.GetPricingSettings;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -41,9 +48,11 @@ public sealed class AdminController(ISender sender) : ControllerBase
         [FromQuery] string? search,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
+        [FromQuery] string? restaurantStatus = null,
         CancellationToken ct = default)
     {
-        var result = await sender.Send(new GetUsersQuery(role, isActive, search, page, pageSize), ct);
+        var result = await sender.Send(
+            new GetUsersQuery(role, isActive, search, page, pageSize, restaurantStatus), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -89,6 +98,27 @@ public sealed class AdminController(ISender sender) : ControllerBase
     public async Task<IActionResult> ApproveRestaurantAsync(Guid restaurantId, CancellationToken ct)
     {
         var result = await sender.Send(new ApproveRestaurantCommand(restaurantId), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPatch("restaurants/{restaurantId:guid}/suspend")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> SuspendRestaurantAsync(Guid restaurantId, CancellationToken ct)
+    {
+        var result = await sender.Send(new SuspendRestaurantCommand(restaurantId), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>
+    /// PATCH /api/v1/admin/restaurants/{restaurantId}/reactivate
+    /// Restores a suspended restaurant to active. Only accepts restaurants currently in the
+    /// Suspended state — a pending-approval account cannot be activated through this path.
+    /// </summary>
+    [HttpPatch("restaurants/{restaurantId:guid}/reactivate")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> ReactivateRestaurantAsync(Guid restaurantId, CancellationToken ct)
+    {
+        var result = await sender.Send(new ReactivateRestaurantCommand(restaurantId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -147,6 +177,70 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    // ── Operational Settings (Admin) ──────────────────────────────────────────
+
+    /// <summary>GET /api/v1/admin/operational-settings</summary>
+    [HttpGet("operational-settings")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetOperationalSettingsAsync(CancellationToken ct)
+    {
+        var result = await sender.Send(new GetOperationalSettingsQuery(), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>PUT /api/v1/admin/operational-settings</summary>
+    [HttpPut("operational-settings")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> UpdateOperationalSettingsAsync(
+        [FromBody] UpdateOperationalSettingsRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new UpdateOperationalSettingsCommand(body.DailyCutoffTime, body.BatchingEnabled, body.DefaultRouteType),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    // ── Pricing Settings (Admin) ──────────────────────────────────────────────
+
+    /// <summary>GET /api/v1/admin/pricing-settings</summary>
+    [HttpGet("pricing-settings")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetPricingSettingsAsync(CancellationToken ct)
+    {
+        var result = await sender.Send(new GetPricingSettingsQuery(), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>PUT /api/v1/admin/pricing-settings</summary>
+    [HttpPut("pricing-settings")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> UpdatePricingSettingsAsync(
+        [FromBody] UpdatePricingSettingsRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(new UpdatePricingSettingsCommand(body.PriceAlertThresholdPercent), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    // ── Audit Log (Admin) ──────────────────────────────────────────────────────
+
+    /// <summary>GET /api/v1/admin/audit-logs — filter by actor/action/entity/time.</summary>
+    [HttpGet("audit-logs")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetAuditLogsAsync(
+        [FromQuery] Guid? actorId,
+        [FromQuery] string? action,
+        [FromQuery] string? entityType,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var result = await sender.Send(
+            new GetAuditLogsQuery(actorId, action, entityType, from, to, page, pageSize), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     // ── Market Assignments (Admin + Operations Manager) ───────────────────────
 
     /// <summary>
@@ -191,3 +285,6 @@ public sealed record AssignRoleRequest(string RoleName);
 public sealed record ReplaceMarketAssignmentsRequest(IReadOnlyList<Guid> MarketIds);
 public sealed record SettleCreditRequest(decimal Amount, string? PaymentMethod, string? Reference, string? Note);
 public sealed record SetCreditLimitRequest(decimal CreditLimit, string? Note);
+public sealed record UpdateOperationalSettingsRequest(
+    TimeOnly DailyCutoffTime, bool BatchingEnabled, string DefaultRouteType);
+public sealed record UpdatePricingSettingsRequest(decimal PriceAlertThresholdPercent);

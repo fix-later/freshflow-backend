@@ -22,7 +22,7 @@ public sealed class GetUsersQueryHandlerTests
     public async Task Handle_NoFilters_ReturnsPaginatedUsers()
     {
         var users = new List<User> { User.Create("a@test.com", "h", new Role("driver", "Driver")) };
-        _users.GetPagedAsync(null, null, null, 1, 20, default).Returns((users, 1));
+        _users.GetPagedAsync(null, null, null, 1, 20, null, default).Returns((users, 1));
 
         var result = await _sut.Handle(new GetUsersQuery(null, null, null), default);
 
@@ -35,14 +35,29 @@ public sealed class GetUsersQueryHandlerTests
     public async Task Handle_RestaurantUser_IncludesIsApproved()
     {
         var user = User.Create("r@test.com", "h", new Role("restaurant", "Restaurant"));
-        _users.GetPagedAsync(null, null, null, 1, 20, default)
+        var restaurantId = Guid.NewGuid();
+        _users.GetPagedAsync(null, null, null, 1, 20, null, default)
             .Returns((new List<User> { user }, 1));
         _restaurants.FindByUserIdAsync(user.Id, default)
-            .Returns(new RestaurantDto(Guid.NewGuid(), "Test", RestaurantStatus.Active, DateTime.UtcNow, user.Id));
+            .Returns(new RestaurantDto(restaurantId, "Test", RestaurantStatus.Active, DateTime.UtcNow, user.Id));
 
         var result = await _sut.Handle(new GetUsersQuery(null, null, null), default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Data[0].IsApproved.Should().BeTrue();
+        result.Value.Data[0].RestaurantId.Should().Be(restaurantId);
+        result.Value.Data[0].RestaurantStatus.Should().Be("active");
+    }
+
+    [Fact]
+    public async Task Handle_RestaurantStatusFilter_PassesThroughToRepository()
+    {
+        _users.GetPagedAsync(null, null, null, 1, 20, "pending", default)
+            .Returns((new List<User>(), 0));
+
+        var result = await _sut.Handle(new GetUsersQuery(null, null, null, RestaurantStatus: "pending"), default);
+
+        result.IsSuccess.Should().BeTrue();
+        await _users.Received(1).GetPagedAsync(null, null, null, 1, 20, "pending", default);
     }
 }

@@ -35,4 +35,25 @@ public sealed class GetUsersQueryValidatorTests
         var result = await _sut.ValidateAsync(new GetUsersQuery(null, null, null, Page: 1, PageSize: 20));
         result.IsValid.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("pending")]
+    [InlineData("active")]
+    [InlineData("suspended")]
+    [InlineData("PENDING")]
+    public async Task Validate_ValidRestaurantStatus_Passes(string status)
+    {
+        var result = await _sut.ValidateAsync(
+            new GetUsersQuery(null, null, null, Page: 1, PageSize: 20, RestaurantStatus: status));
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_InvalidRestaurantStatus_Fails()
+    {
+        var result = await _sut.ValidateAsync(
+            new GetUsersQuery(null, null, null, Page: 1, PageSize: 20, RestaurantStatus: "rejected"));
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(GetUsersQuery.RestaurantStatus));
+    }
 }

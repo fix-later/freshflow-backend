@@ -1,3 +1,7 @@
+using FluentValidation;
+using FreshFlow.Infrastructure.Persistence.Behaviors;
+using FreshFlow.SharedKernel.Application;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -5,8 +9,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace FreshFlow.Infrastructure.Persistence;
 
 /// <summary>
-/// Registers shared persistence services: <see cref="AppDbContext"/> and the
-/// <see cref="DomainEventDispatchInterceptor"/> that dispatches domain events post-commit.
+/// Registers shared persistence services: <see cref="AppDbContext"/>, the
+/// <see cref="DomainEventDispatchInterceptor"/> that dispatches domain events post-commit,
+/// and the audit log writer + its integration-event consumers (SCRUM-359b) — audit isn't
+/// owned by any single module, so it's registered here rather than in a module's DI.
 /// </summary>
 public static class DependencyInjection
 {
@@ -28,6 +34,14 @@ public static class DependencyInjection
             opt.UseNpgsql(connectionString);
             opt.AddInterceptors(sp.GetRequiredService<DomainEventDispatchInterceptor>());
         });
+
+        services.AddScoped<IAuditLogWriter, AuditLogWriter>();
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);
+            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+        });
+        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: true);
 
         return services;
     }

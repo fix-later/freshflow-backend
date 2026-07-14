@@ -16,6 +16,7 @@ public sealed class ConfirmOrderCommandHandlerTests
     private readonly IOrderRepository _orderRepository = Substitute.For<IOrderRepository>();
     private readonly IRestaurantReader _restaurantReader = Substitute.For<IRestaurantReader>();
     private readonly ICreditService _creditService = Substitute.For<ICreditService>();
+    private readonly IOperationalSettingsRepository _operationalSettings = Substitute.For<IOperationalSettingsRepository>();
 
     private readonly ConfirmOrderCommandHandler _sut;
 
@@ -26,7 +27,10 @@ public sealed class ConfirmOrderCommandHandlerTests
 
     public ConfirmOrderCommandHandlerTests()
     {
-        _sut = new ConfirmOrderCommandHandler(_orderRepository, _restaurantReader, _creditService);
+        _sut = new ConfirmOrderCommandHandler(_orderRepository, _restaurantReader, _creditService, _operationalSettings);
+
+        _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
+            .Returns(OperationalSettings.CreateDefault());
 
         _restaurantReader.FindByUserIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
@@ -69,6 +73,24 @@ public sealed class ConfirmOrderCommandHandlerTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("FORBIDDEN");
+        await _creditService.DidNotReceive().CanChargeAsync(
+            Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_SuspendedRestaurant_ReturnsNotActiveWithoutChargingAsync()
+    {
+        var order = NewDraftOrderWithItem();
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        // Restaurant was suspended after the draft was created → IsApproved is now false.
+        _restaurantReader.FindByUserIdAsync(UserId, Arg.Any<CancellationToken>())
+            .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: false));
+
+        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("RESTAURANT_NOT_ACTIVE");
+        order.Status.Should().Be(OrderStatus.Draft);
         await _creditService.DidNotReceive().CanChargeAsync(
             Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<CancellationToken>());
     }
@@ -191,6 +213,24 @@ public sealed class ConfirmOrderCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         order.ScheduledFor.Should().NotBeNull();
         order.ScheduledFor!.Value.Should().BeAfter(confirmedAtUtc);
+    }
+
+    [Fact]
+    public async Task Handle_CustomCutoffFromSettings_UsesConfiguredCutoffAsync()
+    {
+        // 21:59 Vietnam time (14:59 UTC) is before the 22:00 default cutoff but past a
+        // configured 21:00 cutoff — proves the handler reads operational_settings, not the
+        // hardcoded default.
+        var confirmedAtUtc = new DateTime(2026, 6, 18, 14, 59, 0, DateTimeKind.Utc);
+        _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
+            .Returns(new OperationalSettings(new TimeOnly(21, 0), true, "hub_relay"));
+        var order = NewDraftOrderWithItem(scheduledFor: null);
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default, confirmedAtUtc);
+
+        result.IsSuccess.Should().BeTrue();
+        order.ScheduledFor.Should().Be(new DateTime(2026, 6, 19, 17, 0, 0, DateTimeKind.Utc));
     }
 
     [Fact]

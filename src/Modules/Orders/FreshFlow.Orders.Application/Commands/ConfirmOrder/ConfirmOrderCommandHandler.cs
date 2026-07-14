@@ -9,7 +9,8 @@ namespace FreshFlow.Orders.Application.Commands.ConfirmOrder;
 internal sealed class ConfirmOrderCommandHandler(
     IOrderRepository orderRepository,
     IRestaurantReader restaurantReader,
-    ICreditService creditService)
+    ICreditService creditService,
+    IOperationalSettingsRepository operationalSettings)
     : IRequestHandler<ConfirmOrderCommand, Result<OrderDto>>
 {
     public Task<Result<OrderDto>> Handle(ConfirmOrderCommand request, CancellationToken cancellationToken) =>
@@ -27,6 +28,12 @@ internal sealed class ConfirmOrderCommandHandler(
             return Result<OrderDto>.Failure(
                 Error.Unauthorized("FORBIDDEN", "This order does not belong to the authenticated restaurant."));
 
+        // A suspended (or not-yet-approved) restaurant must not place orders, even on drafts that
+        // existed before suspension. IsApproved is true only while the restaurant status is active.
+        if (!restaurant.IsApproved)
+            return Result<OrderDto>.Failure(
+                Error.Unauthorized("RESTAURANT_NOT_ACTIVE", "A suspended or unapproved restaurant cannot confirm orders."));
+
         var canConfirmResult = order.CanConfirm();
         if (canConfirmResult.IsFailure)
             return Result<OrderDto>.Failure(canConfirmResult.Error);
@@ -36,7 +43,9 @@ internal sealed class ConfirmOrderCommandHandler(
         if (canChargeResult.IsFailure)
             return Result<OrderDto>.Failure(canChargeResult.Error);
 
-        var evaluation = OrderConfirmationEvaluator.Evaluate(order, canChargeResult.Value, confirmedAtUtc);
+        var settings = await operationalSettings.GetAsync(cancellationToken);
+        var evaluation = OrderConfirmationEvaluator.Evaluate(
+            order, canChargeResult.Value, confirmedAtUtc, settings.DailyCutoffTime.ToTimeSpan());
         if (evaluation.Issues.Count > 0)
             return Result<OrderDto>.Failure(evaluation.Issues[0]);
 
