@@ -2593,6 +2593,284 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToSqlQuery("SELECT \"UserId\", \"MarketId\" FROM user_market_assignments");
                 });
 
+            modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid?>("AssignedAgentUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_agent_user_id");
+
+                    b.Property<DateTime?>("AssignedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("assigned_at");
+
+                    b.Property<DateOnly>("BatchDate")
+                        .HasColumnType("date")
+                        .HasColumnName("batch_date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<DateTime?>("ManifestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("manifested_at");
+
+                    b.Property<Guid>("MarketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("market_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Built")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TotalItemCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_item_count");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedAgentUserId")
+                        .HasDatabaseName("ix_procurement_batches_assigned_agent")
+                        .HasFilter("\"assigned_agent_user_id\" IS NOT NULL");
+
+                    b.HasIndex("BatchDate", "MarketId")
+                        .HasDatabaseName("idx_procurement_batches_batch_date_market_id");
+
+                    b.ToTable("procurement_batches", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementBatchItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid>("MarketProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("market_product_id");
+
+                    b.Property<Guid>("ProcurementBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("procurement_batch_id");
+
+                    b.Property<string>("ProductNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("product_name_snapshot");
+
+                    b.Property<decimal?>("ReferenceUnitPrice")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("reference_unit_price");
+
+                    b.Property<int>("TotalQuantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_quantity");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProcurementBatchId")
+                        .HasDatabaseName("idx_procurement_batch_items_batch_id");
+
+                    b.ToTable("procurement_batch_items", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementBatchOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<Guid>("ProcurementBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("procurement_batch_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_procurement_batch_orders_order_active")
+                        .HasFilter("\"deleted_at\" IS NULL");
+
+                    b.HasIndex("ProcurementBatchId")
+                        .HasDatabaseName("idx_procurement_batch_orders_batch_id");
+
+                    b.ToTable("procurement_batch_orders", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.ConfirmedOrderItemRow", b =>
+                {
+                    b.Property<Guid>("MarketProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("MarketProductId");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("OrderId");
+
+                    b.Property<string>("ProductNameSnapshot")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ProductNameSnapshot");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("Quantity");
+
+                    b.ToTable((string)null);
+
+                    b.ToView("order_items", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.ConfirmedOrderRow", b =>
+                {
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Id");
+
+                    b.Property<DateTime?>("ScheduledFor")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ScheduledFor");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("Status");
+
+                    b.ToTable((string)null);
+
+                    b.ToView("orders", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.MarketAgentUserRow", b =>
+                {
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RoleName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT u.\"Id\", u.\"RoleId\", r.\"Name\" AS \"RoleName\", u.\"IsActive\", u.\"DeletedAt\"\nFROM users AS u\nINNER JOIN roles AS r ON u.\"RoleId\" = r.\"Id\"");
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.MarketProductMarketRow", b =>
+                {
+                    b.Property<decimal>("CurrentPrice")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("CurrentPrice");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Id");
+
+                    b.Property<Guid>("MarketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("MarketId");
+
+                    b.ToTable((string)null);
+
+                    b.ToView("market_products", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.OperationalSettingsRow", b =>
+                {
+                    b.Property<bool>("BatchingEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("batching_enabled");
+
+                    b.Property<TimeOnly>("DailyCutoffTime")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("daily_cutoff_time");
+
+                    b.ToTable((string)null);
+
+                    b.ToView("operational_settings", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.UserMarketAssignmentRow", b =>
+                {
+                    b.Property<Guid>("MarketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT \"UserId\", \"MarketId\" FROM user_market_assignments");
+                });
+
             modelBuilder.Entity("FreshFlow.Auth.Domain.Aggregates.User", b =>
                 {
                     b.HasOne("FreshFlow.Auth.Domain.Entities.Role", "Role")
@@ -2814,6 +3092,26 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_price_snapshots_market_product");
                 });
 
+            modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementBatchItem", b =>
+                {
+                    b.HasOne("FreshFlow.Procurement.Domain.Entities.ProcurementBatch", null)
+                        .WithMany("Items")
+                        .HasForeignKey("ProcurementBatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_procurement_batch_items_batch");
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementBatchOrder", b =>
+                {
+                    b.HasOne("FreshFlow.Procurement.Domain.Entities.ProcurementBatch", null)
+                        .WithMany("Orders")
+                        .HasForeignKey("ProcurementBatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_procurement_batch_orders_batch");
+                });
+
             modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.CreditStatement", b =>
                 {
                     b.Navigation("Lines");
@@ -2822,6 +3120,13 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.Order", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementBatch", b =>
+                {
+                    b.Navigation("Items");
+
+                    b.Navigation("Orders");
                 });
 #pragma warning restore 612, 618
         }

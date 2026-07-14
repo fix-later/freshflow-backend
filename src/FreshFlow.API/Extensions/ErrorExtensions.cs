@@ -25,7 +25,11 @@ public static class ErrorExtensions
                         or "ROUTE_NOT_STARTABLE"
                         or "ROUTE_HAS_NO_DELIVERIES"
                         or "PENDING_HUB_DISCREPANCY"
-                        or "DELIVERY_STATUS_INVALID")
+                        or "DELIVERY_STATUS_INVALID"
+                        or "ORDER_ALREADY_IN_ACTIVE_GROUP"
+                        or "BATCH_NOT_MANIFESTABLE"
+                        or "BATCH_NOT_MANIFESTED"
+                        or "BATCH_ALREADY_IN_PROGRESS")
             return new ConflictObjectResult(body);
 
         if (error.Code is "UNAUTHORIZED" or "INVALID_CREDENTIALS" or "INVALID_CURRENT_PASSWORD"
@@ -64,7 +68,11 @@ public static class ErrorExtensions
                         or "ORDER_ITEM_NOT_IN_INBOUND"
                         or "OUTBOUND_ROUTE_INVALID" or "ROUTE_HAS_NO_DRIVER"
                         or "DRIVER_ROUTE_MISMATCH" or "ORDER_NOT_AT_HUB"
-                        or "ORDER_NOT_ON_ROUTE"
+                        or "ORDER_NOT_ON_ROUTE" or "MARKET_PRODUCT_NOT_FOUND"
+                        or "INVALID_PROCUREMENT_BATCH"
+                        or "REFERENCE_PRICE_MISSING"
+                        or "INVALID_AGENT"
+                        or "AGENT_NOT_ELIGIBLE"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 

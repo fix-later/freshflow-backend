@@ -45,6 +45,11 @@
     <Project Path="src/Modules/Pricing/FreshFlow.Pricing.Domain/FreshFlow.Pricing.Domain.csproj" />
     <Project Path="src/Modules/Pricing/FreshFlow.Pricing.Infrastructure/FreshFlow.Pricing.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Procurement/">
+    <Project Path="src/Modules/Procurement/FreshFlow.Procurement.Application/FreshFlow.Procurement.Application.csproj" />
+    <Project Path="src/Modules/Procurement/FreshFlow.Procurement.Domain/FreshFlow.Procurement.Domain.csproj" />
+    <Project Path="src/Modules/Procurement/FreshFlow.Procurement.Infrastructure/FreshFlow.Procurement.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/Shared/">
     <Project Path="src/Shared/FreshFlow.Contracts/FreshFlow.Contracts.csproj" />
     <Project Path="src/Shared/FreshFlow.SharedKernel/FreshFlow.SharedKernel.csproj" />
@@ -64,5 +69,6 @@
     <Project Path="tests/Unit/FreshFlow.Notifications.UnitTests/FreshFlow.Notifications.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Orders.UnitTests/FreshFlow.Orders.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Pricing.UnitTests/FreshFlow.Pricing.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Procurement.UnitTests/FreshFlow.Procurement.UnitTests.csproj" />
   </Folder>
 </Solution>

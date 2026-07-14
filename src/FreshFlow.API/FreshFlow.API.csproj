@@ -28,6 +28,7 @@
     <ProjectReference Include="..\Modules\Auth\FreshFlow.Auth.Infrastructure\FreshFlow.Auth.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Catalog\FreshFlow.Catalog.Infrastructure\FreshFlow.Catalog.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Pricing\FreshFlow.Pricing.Infrastructure\FreshFlow.Pricing.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Procurement\FreshFlow.Procurement.Infrastructure\FreshFlow.Procurement.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Orders\FreshFlow.Orders.Infrastructure\FreshFlow.Orders.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Logistics\FreshFlow.Logistics.Infrastructure\FreshFlow.Logistics.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Hub\FreshFlow.Hub.Infrastructure\FreshFlow.Hub.Infrastructure.csproj" />
