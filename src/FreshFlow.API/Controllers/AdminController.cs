@@ -19,6 +19,10 @@ using FreshFlow.Orders.Application.Queries.GetOperationalSettings;
 using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Pricing.Application.Commands.UpdatePricingSettings;
 using FreshFlow.Pricing.Application.Queries.GetPricingSettings;
+using FreshFlow.Procurement.Application.Commands.AssignAgent;
+using FreshFlow.Procurement.Application.Commands.GenerateManifest;
+using FreshFlow.Procurement.Application.Commands.RunAutoBatch;
+using FreshFlow.Procurement.Application.Queries.GetProcurementBatches;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -199,6 +203,56 @@ public sealed class AdminController(ISender sender) : ControllerBase
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
+    // ── Procurement Batches (Admin) ─────────────────────────────────────────
+
+    [HttpGet("order-groups")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetOrderGroupsAsync(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var result = await sender.Send(
+            new GetProcurementBatchesQuery(page, pageSize),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPost("order-groups/auto-batch")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> RunAutoBatchAsync(
+        [FromBody] RunAutoBatchRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new RunAutoBatchCommand(
+                body.TargetDate,
+                body.DryRun ?? false,
+                body.Force ?? false),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPost("order-groups/{batchId:guid}/manifest")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GenerateManifestAsync(Guid batchId, CancellationToken ct)
+    {
+        var result = await sender.Send(new GenerateManifestCommand(batchId), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPost("order-groups/{batchId:guid}/agent")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> AssignMarketAgentAsync(
+        Guid batchId,
+        [FromBody] AssignAgentRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new AssignAgentCommand(batchId, body.AgentUserId),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
 
     // ── Pricing Settings (Admin) ──────────────────────────────────────────────
 
@@ -282,9 +336,11 @@ public sealed class AdminController(ISender sender) : ControllerBase
 
 public sealed record ActivateRequest(bool IsActive);
 public sealed record AssignRoleRequest(string RoleName);
+public sealed record AssignAgentRequest(Guid AgentUserId);
 public sealed record ReplaceMarketAssignmentsRequest(IReadOnlyList<Guid> MarketIds);
 public sealed record SettleCreditRequest(decimal Amount, string? PaymentMethod, string? Reference, string? Note);
 public sealed record SetCreditLimitRequest(decimal CreditLimit, string? Note);
 public sealed record UpdateOperationalSettingsRequest(
     TimeOnly DailyCutoffTime, bool BatchingEnabled, string DefaultRouteType);
 public sealed record UpdatePricingSettingsRequest(decimal PriceAlertThresholdPercent);
+public sealed record RunAutoBatchRequest(DateOnly? TargetDate, bool? DryRun, bool? Force);
