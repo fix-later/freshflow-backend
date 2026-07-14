@@ -4,6 +4,7 @@ using FreshFlow.Auth.Application.Commands.Admin.ActivateUser;
 using FreshFlow.Auth.Application.Commands.Admin.ApproveRestaurant;
 using FreshFlow.Auth.Application.Commands.Admin.AssignRole;
 using FreshFlow.Auth.Application.Commands.Admin.CreateUser;
+using FreshFlow.Auth.Application.Commands.Admin.ReactivateRestaurant;
 using FreshFlow.Auth.Application.Commands.Admin.ReplaceMarketAssignments;
 using FreshFlow.Auth.Application.Commands.Admin.SuspendRestaurant;
 using FreshFlow.Auth.Application.Commands.Admin.UnlockUser;
@@ -110,14 +111,14 @@ public sealed class AdminController(ISender sender) : ControllerBase
 
     /// <summary>
     /// PATCH /api/v1/admin/restaurants/{restaurantId}/reactivate
-    /// Restores a suspended restaurant to active. Reuses ApproveRestaurantCommand, which already
-    /// transitions any non-active restaurant (pending or suspended) to active.
+    /// Restores a suspended restaurant to active. Only accepts restaurants currently in the
+    /// Suspended state — a pending-approval account cannot be activated through this path.
     /// </summary>
     [HttpPatch("restaurants/{restaurantId:guid}/reactivate")]
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> ReactivateRestaurantAsync(Guid restaurantId, CancellationToken ct)
     {
-        var result = await sender.Send(new ApproveRestaurantCommand(restaurantId), ct);
+        var result = await sender.Send(new ReactivateRestaurantCommand(restaurantId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 

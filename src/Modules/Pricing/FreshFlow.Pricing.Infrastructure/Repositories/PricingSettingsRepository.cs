@@ -13,17 +13,29 @@ internal sealed class PricingSettingsRepository(AppDbContext db) : IPricingSetti
     public async Task<PricingSettings> UpsertAsync(decimal priceAlertThresholdPercent, CancellationToken ct)
     {
         var existing = await db.Set<PricingSettings>().FirstOrDefaultAsync(ct);
-        if (existing is null)
-        {
-            existing = new PricingSettings(priceAlertThresholdPercent);
-            db.Set<PricingSettings>().Add(existing);
-        }
-        else
+        if (existing is not null)
         {
             existing.Update(priceAlertThresholdPercent);
+            await db.SaveChangesAsync(ct);
+            return existing;
         }
 
-        await db.SaveChangesAsync(ct);
-        return existing;
+        var created = new PricingSettings(priceAlertThresholdPercent);
+        db.Set<PricingSettings>().Add(created);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return created;
+        }
+        catch (DbUpdateException)
+        {
+            // Lost the first-insert race against the singleton unique index — reload the winning
+            // row and apply this update onto it instead of leaving a duplicate/failed row.
+            db.Entry(created).State = EntityState.Detached;
+            var winner = await db.Set<PricingSettings>().FirstAsync(ct);
+            winner.Update(priceAlertThresholdPercent);
+            await db.SaveChangesAsync(ct);
+            return winner;
+        }
     }
 }

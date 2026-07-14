@@ -16,7 +16,9 @@ internal sealed class PricingSettingsConfiguration : IEntityTypeConfiguration<Pr
             .IsRequired()
             .HasColumnType("numeric(5,2)");
         builder.Property(s => s.CreatedAt).IsRequired();
-        builder.Property(s => s.UpdatedAt).IsRequired();
+        // UpdatedAt is a concurrency token: Update() bumps it, so a concurrent admin edit is
+        // detected as a lost update instead of silently overwriting.
+        builder.Property(s => s.UpdatedAt).IsRequired().IsConcurrencyToken();
 
         builder.Ignore(s => s.DeletedAt);
         builder.Ignore(s => s.IsDeleted);

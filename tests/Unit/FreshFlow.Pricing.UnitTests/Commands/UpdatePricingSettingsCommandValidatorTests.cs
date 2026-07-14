@@ -12,7 +12,7 @@ public sealed class UpdatePricingSettingsCommandValidatorTests
     [InlineData(0.01)]
     [InlineData(10.00)]
     [InlineData(100)]
-    public async Task Validate_InRangeThreshold_Passes(decimal threshold)
+    public async Task Validate_InRangeThreshold_PassesAsync(decimal threshold)
     {
         var result = await _sut.ValidateAsync(new UpdatePricingSettingsCommand(threshold));
 
@@ -23,7 +23,7 @@ public sealed class UpdatePricingSettingsCommandValidatorTests
     [InlineData(0)]
     [InlineData(-1)]
     [InlineData(100.01)]
-    public async Task Validate_OutOfRangeThreshold_Fails(decimal threshold)
+    public async Task Validate_OutOfRangeThreshold_FailsAsync(decimal threshold)
     {
         var result = await _sut.ValidateAsync(new UpdatePricingSettingsCommand(threshold));
 

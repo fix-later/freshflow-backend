@@ -14,17 +14,29 @@ internal sealed class OperationalSettingsRepository(AppDbContext db) : IOperatio
         TimeOnly dailyCutoffTime, bool batchingEnabled, string defaultRouteType, CancellationToken ct)
     {
         var existing = await db.Set<OperationalSettings>().FirstOrDefaultAsync(ct);
-        if (existing is null)
-        {
-            existing = new OperationalSettings(dailyCutoffTime, batchingEnabled, defaultRouteType);
-            db.Set<OperationalSettings>().Add(existing);
-        }
-        else
+        if (existing is not null)
         {
             existing.Update(dailyCutoffTime, batchingEnabled, defaultRouteType);
+            await db.SaveChangesAsync(ct);
+            return existing;
         }
 
-        await db.SaveChangesAsync(ct);
-        return existing;
+        var created = new OperationalSettings(dailyCutoffTime, batchingEnabled, defaultRouteType);
+        db.Set<OperationalSettings>().Add(created);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return created;
+        }
+        catch (DbUpdateException)
+        {
+            // Lost the first-insert race against the singleton unique index — reload the winning
+            // row and apply this update onto it instead of leaving a duplicate/failed row.
+            db.Entry(created).State = EntityState.Detached;
+            var winner = await db.Set<OperationalSettings>().FirstAsync(ct);
+            winner.Update(dailyCutoffTime, batchingEnabled, defaultRouteType);
+            await db.SaveChangesAsync(ct);
+            return winner;
+        }
     }
 }

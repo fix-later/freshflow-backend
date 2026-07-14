@@ -28,6 +28,12 @@ internal sealed class ConfirmOrderCommandHandler(
             return Result<OrderDto>.Failure(
                 Error.Unauthorized("FORBIDDEN", "This order does not belong to the authenticated restaurant."));
 
+        // A suspended (or not-yet-approved) restaurant must not place orders, even on drafts that
+        // existed before suspension. IsApproved is true only while the restaurant status is active.
+        if (!restaurant.IsApproved)
+            return Result<OrderDto>.Failure(
+                Error.Unauthorized("RESTAURANT_NOT_ACTIVE", "A suspended or unapproved restaurant cannot confirm orders."));
+
         var canConfirmResult = order.CanConfirm();
         if (canConfirmResult.IsFailure)
             return Result<OrderDto>.Failure(canConfirmResult.Error);

@@ -13,19 +13,29 @@ internal sealed class GetAuditLogsQueryHandler(AppDbContext db)
         var query = db.Set<AuditLog>().AsNoTracking().AsQueryable();
 
         if (request.ActorId.HasValue)
-            query = query.Where(a => a.ActorId == request.ActorId.Value);
+        {
+            var actorId = request.ActorId.Value;
+            query = query.Where(a => a.ActorId == actorId);
+        }
         if (!string.IsNullOrWhiteSpace(request.Action))
             query = query.Where(a => a.Action == request.Action);
         if (!string.IsNullOrWhiteSpace(request.EntityType))
             query = query.Where(a => a.EntityType == request.EntityType);
         if (request.From.HasValue)
-            query = query.Where(a => a.OccurredAt >= request.From.Value);
+        {
+            var from = request.From.Value;
+            query = query.Where(a => a.OccurredAt >= from);
+        }
         if (request.To.HasValue)
-            query = query.Where(a => a.OccurredAt <= request.To.Value);
+        {
+            var to = request.To.Value;
+            query = query.Where(a => a.OccurredAt <= to);
+        }
 
         var total = await query.CountAsync(ct);
         var data = await query
             .OrderByDescending(a => a.OccurredAt)
+            .ThenByDescending(a => a.Id)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
             .Select(a => new AuditLogDto(

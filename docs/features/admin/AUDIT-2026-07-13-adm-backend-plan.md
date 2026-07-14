@@ -38,6 +38,7 @@ Domain/Application may not reference another module).
 5. Branch: new `SCRUM-353-ADM-admin-config` from `dev`.
 
 ## Task breakdown
+
 | Task | Ticket | Module | Type | Summary |
 |------|--------|--------|------|---------|
 | T1 | SCRUM-353 | Auth | gap-only | Suspend/Reactivate restaurant + pending-approval/status filter on restaurant list. Verify existing endpoints first; add only true gaps. |
@@ -49,4 +50,4 @@ Domain/Application may not reference another module).
 
 ## Progress log
 - 2026-07-13 — Plan approved by supervisor; branch `SCRUM-353-ADM-admin-config` created from dev. Tasks T1–T5 created. SCRUM-361 closed as already-covered (verify-only).
-- 2026-07-14 — T1–T5 all implemented + PASSED review (T5 SCRUM-359b last, reviewed by reviewer). Full suite green (2245+ tests incl. new FreshFlow.Infrastructure.Persistence.UnitTests 11/11, IntegrationTests 120/120), build 0 errors, format clean. Uncommitted in working tree — awaiting Jira keys + commit order from user. Open follow-up: GetAuditLogsQueryHandler validates Page/PageSize inline instead of a FluentValidation validator (LOW, non-blocking).
+- 2026-07-14 — T1–T5 all implemented + PASSED review (T5 SCRUM-359b last, reviewed by reviewer). Full suite green (2245+ tests incl. new FreshFlow.Infrastructure.Persistence.UnitTests 11/11, IntegrationTests 120/120), build 0 errors, format clean. Uncommitted in working tree — awaiting Jira keys + commit order from user. (Page/PageSize are enforced by GetAuditLogsQueryValidator.)

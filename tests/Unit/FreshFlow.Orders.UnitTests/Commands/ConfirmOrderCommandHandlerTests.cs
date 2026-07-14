@@ -78,6 +78,24 @@ public sealed class ConfirmOrderCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_SuspendedRestaurant_ReturnsNotActiveWithoutChargingAsync()
+    {
+        var order = NewDraftOrderWithItem();
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        // Restaurant was suspended after the draft was created → IsApproved is now false.
+        _restaurantReader.FindByUserIdAsync(UserId, Arg.Any<CancellationToken>())
+            .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: false));
+
+        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("RESTAURANT_NOT_ACTIVE");
+        order.Status.Should().Be(OrderStatus.Draft);
+        await _creditService.DidNotReceive().CanChargeAsync(
+            Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Handle_CreditLimitExceeded_ReturnsCreditErrorWithoutConfirmingAsync()
     {
         var order = NewDraftOrderWithItem();
