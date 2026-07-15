@@ -265,6 +265,232 @@ public sealed class ProcurementBatchTests
         batch.DomainEvents.Should().BeEmpty();
     }
 
+    [Fact]
+    public void ConfirmPurchase_ManifestedBatch_SetsActualsTransitionsAndRaisesEvent()
+    {
+        var firstProductId = Guid.NewGuid();
+        var secondProductId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(firstProductId, secondProductId);
+        var capturedAt = new DateTime(2026, 7, 15, 3, 0, 0, DateTimeKind.Utc);
+        batch.ClearDomainEvents();
+
+        var result = batch.ConfirmPurchase(
+            new Dictionary<Guid, (int, decimal)>
+            {
+                [firstProductId] = (4, 12_000m),
+                [secondProductId] = (7, 8_500m)
+            },
+            capturedAt);
+
+        result.IsSuccess.Should().BeTrue();
+        batch.Status.Should().Be(ProcurementBatchStatus.Purchasing);
+        batch.UpdatedAt.Should().Be(capturedAt);
+        batch.Items.Should().Contain(item =>
+            item.MarketProductId == firstProductId &&
+            item.ActualQuantity == 4 &&
+            item.ActualUnitPrice == 12_000m &&
+            item.PurchasedAt == capturedAt);
+        batch.Items.Should().Contain(item =>
+            item.MarketProductId == secondProductId &&
+            item.ActualQuantity == 7 &&
+            item.ActualUnitPrice == 8_500m &&
+            item.PurchasedAt == capturedAt);
+        var domainEvent = batch.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<ProcurementPurchaseConfirmedDomainEvent>().Subject;
+        domainEvent.BatchId.Should().Be(batch.Id);
+        domainEvent.MarketId.Should().Be(batch.MarketId);
+        domainEvent.ConfirmedAt.Should().Be(capturedAt);
+    }
+
+    [Fact]
+    public void ConfirmPurchase_PurchasingBatch_OverwritesActuals()
+    {
+        var productId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(productId);
+        var firstCapture = new DateTime(2026, 7, 15, 3, 0, 0, DateTimeKind.Utc);
+        var secondCapture = firstCapture.AddMinutes(10);
+        batch.ConfirmPurchase(
+            new Dictionary<Guid, (int, decimal)> { [productId] = (2, 10_000m) },
+            firstCapture);
+        batch.ClearDomainEvents();
+
+        var result = batch.ConfirmPurchase(
+            new Dictionary<Guid, (int, decimal)> { [productId] = (3, 11_000m) },
+            secondCapture);
+
+        result.IsSuccess.Should().BeTrue();
+        batch.Status.Should().Be(ProcurementBatchStatus.Purchasing);
+        var item = batch.Items.Should().ContainSingle().Subject;
+        item.ActualQuantity.Should().Be(3);
+        item.ActualUnitPrice.Should().Be(11_000m);
+        item.PurchasedAt.Should().Be(secondCapture);
+        batch.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<ProcurementPurchaseConfirmedDomainEvent>();
+    }
+
+    [Fact]
+    public void ConfirmPurchase_BuiltBatch_ReturnsNotManifestedConflict()
+    {
+        var productId = Guid.NewGuid();
+        var batch = BuildBatch(productId);
+        batch.ClearDomainEvents();
+
+        var result = batch.ConfirmPurchase(
+            new Dictionary<Guid, (int, decimal)> { [productId] = (2, 10_000m) },
+            DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("BATCH_NOT_MANIFESTED");
+        batch.Status.Should().Be(ProcurementBatchStatus.Built);
+        batch.Items.Should().OnlyContain(item => item.ActualQuantity == null);
+        batch.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ConfirmPurchase_HandedOffBatch_ReturnsConflict()
+    {
+        var productId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(productId);
+        typeof(ProcurementBatch).GetProperty(nameof(ProcurementBatch.Status))!
+            .SetValue(batch, ProcurementBatchStatus.HandedOff);
+        batch.ClearDomainEvents();
+
+        var result = batch.ConfirmPurchase(
+            new Dictionary<Guid, (int, decimal)> { [productId] = (2, 10_000m) },
+            DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("BATCH_ALREADY_HANDED_OFF");
+        batch.Items.Should().OnlyContain(item => item.ActualQuantity == null);
+        batch.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ConfirmPurchase_MissingLine_ReturnsValidation()
+    {
+        var firstProductId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(firstProductId, Guid.NewGuid());
+        batch.ClearDomainEvents();
+
+        var result = batch.ConfirmPurchase(
+            new Dictionary<Guid, (int, decimal)> { [firstProductId] = (2, 10_000m) },
+            DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("PURCHASE_LINES_MISMATCH");
+        batch.Items.Should().OnlyContain(item => item.ActualQuantity == null);
+    }
+
+    [Fact]
+    public void ConfirmPurchase_ExtraLine_ReturnsValidation()
+    {
+        var productId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(productId);
+        batch.ClearDomainEvents();
+
+        var result = batch.ConfirmPurchase(
+            new Dictionary<Guid, (int, decimal)>
+            {
+                [productId] = (2, 10_000m),
+                [Guid.NewGuid()] = (1, 5_000m)
+            },
+            DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("PURCHASE_LINES_MISMATCH");
+        batch.Items.Should().OnlyContain(item => item.ActualQuantity == null);
+    }
+
+    [Theory]
+    [InlineData(0, 10_000)]
+    [InlineData(-1, 10_000)]
+    [InlineData(2, 0)]
+    [InlineData(2, -1)]
+    public void ConfirmPurchase_InvalidValues_ReturnsValidation(
+        int actualQuantity,
+        decimal actualUnitPrice)
+    {
+        var productId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(productId);
+        batch.ClearDomainEvents();
+
+        var result = batch.ConfirmPurchase(
+            new Dictionary<Guid, (int, decimal)>
+            {
+                [productId] = (actualQuantity, actualUnitPrice)
+            },
+            DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INVALID_PURCHASE_LINE");
+        batch.Items.Should().OnlyContain(item => item.ActualQuantity == null);
+    }
+
+    [Fact]
+    public void HandoverToHub_PurchasingBatch_SetsTraceabilityAndRaisesEvent()
+    {
+        var batch = BuildPurchasingBatch(Guid.NewGuid(), Guid.NewGuid());
+        var hubId = Guid.NewGuid();
+        var handedOffAt = new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc);
+        var coveredOrderIds = batch.Orders.Select(order => order.OrderId).ToArray();
+        batch.ClearDomainEvents();
+
+        var result = batch.HandoverToHub(hubId, handedOffAt);
+
+        result.IsSuccess.Should().BeTrue();
+        batch.Status.Should().Be(ProcurementBatchStatus.HandedOff);
+        batch.HandedOffAt.Should().Be(handedOffAt);
+        batch.HubId.Should().Be(hubId);
+        batch.UpdatedAt.Should().Be(handedOffAt);
+        var domainEvent = batch.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<ProcurementBatchHandedOffDomainEvent>().Subject;
+        domainEvent.BatchId.Should().Be(batch.Id);
+        domainEvent.MarketId.Should().Be(batch.MarketId);
+        domainEvent.HubId.Should().Be(hubId);
+        domainEvent.HandedOffAt.Should().Be(handedOffAt);
+        domainEvent.CoveredOrderIds.Should().BeEquivalentTo(coveredOrderIds);
+    }
+
+    [Theory]
+    [InlineData(ProcurementBatchStatus.Built)]
+    [InlineData(ProcurementBatchStatus.Manifested)]
+    public void HandoverToHub_NotPurchased_ReturnsConflict(ProcurementBatchStatus status)
+    {
+        var productId = Guid.NewGuid();
+        var batch = status == ProcurementBatchStatus.Built
+            ? BuildBatch(productId)
+            : BuildManifestedBatch(productId);
+        batch.ClearDomainEvents();
+
+        var result = batch.HandoverToHub(Guid.NewGuid(), DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("BATCH_NOT_PURCHASED");
+        batch.Status.Should().Be(status);
+        batch.HandedOffAt.Should().BeNull();
+        batch.HubId.Should().BeNull();
+        batch.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void HandoverToHub_HandedOffBatch_ReturnsConflict()
+    {
+        var batch = BuildPurchasingBatch(Guid.NewGuid());
+        var firstHubId = Guid.NewGuid();
+        var firstHandover = new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc);
+        batch.HandoverToHub(firstHubId, firstHandover);
+        batch.ClearDomainEvents();
+
+        var result = batch.HandoverToHub(Guid.NewGuid(), firstHandover.AddMinutes(5));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("BATCH_ALREADY_HANDED_OFF");
+        batch.Status.Should().Be(ProcurementBatchStatus.HandedOff);
+        batch.HandedOffAt.Should().Be(firstHandover);
+        batch.HubId.Should().Be(firstHubId);
+        batch.DomainEvents.Should().BeEmpty();
+    }
+
     private static ProcurementBatch BuildManifestedBatch()
     {
         var productId = Guid.NewGuid();
@@ -272,6 +498,26 @@ public sealed class ProcurementBatchTests
         batch.Manifest(
             new Dictionary<Guid, decimal> { [productId] = 10_000m },
             new DateTime(2026, 7, 15, 1, 0, 0, DateTimeKind.Utc));
+        return batch;
+    }
+
+    private static ProcurementBatch BuildManifestedBatch(params Guid[] marketProductIds)
+    {
+        var batch = BuildBatch(marketProductIds);
+        batch.Manifest(
+            marketProductIds.ToDictionary(id => id, _ => 10_000m),
+            new DateTime(2026, 7, 15, 1, 0, 0, DateTimeKind.Utc));
+        return batch;
+    }
+
+    private static ProcurementBatch BuildPurchasingBatch(params Guid[] marketProductIds)
+    {
+        var batch = BuildManifestedBatch(marketProductIds);
+        batch.ConfirmPurchase(
+            marketProductIds.ToDictionary(
+                id => id,
+                _ => (ActualQuantity: 2, ActualUnitPrice: 10_000m)),
+            new DateTime(2026, 7, 15, 3, 0, 0, DateTimeKind.Utc));
         return batch;
     }
 

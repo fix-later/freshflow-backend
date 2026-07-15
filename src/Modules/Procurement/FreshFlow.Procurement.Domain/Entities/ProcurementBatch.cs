@@ -9,6 +9,7 @@ public sealed class ProcurementBatch : AggregateRoot
 {
     private readonly List<ProcurementBatchItem> _items = [];
     private readonly List<ProcurementBatchOrder> _orders = [];
+    private readonly List<ProcurementException> _exceptions = [];
 
     private ProcurementBatch() { }
 
@@ -18,10 +19,13 @@ public sealed class ProcurementBatch : AggregateRoot
     public DateTime? ManifestedAt { get; private set; }
     public Guid? AssignedAgentUserId { get; private set; }
     public DateTime? AssignedAt { get; private set; }
+    public DateTime? HandedOffAt { get; private set; }
+    public Guid? HubId { get; private set; }
     public int TotalItemCount { get; private set; }
 
     public IReadOnlyCollection<ProcurementBatchItem> Items => _items.AsReadOnly();
     public IReadOnlyCollection<ProcurementBatchOrder> Orders => _orders.AsReadOnly();
+    public IReadOnlyCollection<ProcurementException> Exceptions => _exceptions.AsReadOnly();
 
     public static Result<ProcurementBatch> Build(
         DateOnly batchDate,
@@ -159,6 +163,157 @@ public sealed class ProcurementBatch : AggregateRoot
             MarketId,
             agentUserId,
             assignedAtUtc));
+
+        return Result.Success();
+    }
+
+    public Result ConfirmPurchase(
+        IReadOnlyDictionary<Guid, (int ActualQuantity, decimal ActualUnitPrice)> lines,
+        DateTime capturedAtUtc)
+    {
+        if (Status == ProcurementBatchStatus.Built)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_NOT_MANIFESTED",
+                $"Procurement batch '{Id}' must be manifested before purchase confirmation."));
+        }
+
+        if (Status == ProcurementBatchStatus.HandedOff)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_ALREADY_HANDED_OFF",
+                $"Procurement batch '{Id}' has already been handed off."));
+        }
+
+        var exemptProductIds = _exceptions
+            .Where(exception =>
+                !exception.IsDeleted &&
+                exception.Type == ProcurementExceptionType.Unavailable)
+            .Select(exception => exception.MarketProductId)
+            .ToHashSet();
+        var requiredItems = _items
+            .Where(item => !exemptProductIds.Contains(item.MarketProductId))
+            .ToList();
+
+        if (lines is null ||
+            lines.Count != requiredItems.Count ||
+            requiredItems.Any(item => !lines.ContainsKey(item.MarketProductId)))
+        {
+            return Result.Failure(Error.Validation(
+                "PURCHASE_LINES_MISMATCH",
+                "Purchase confirmation must contain exactly one line for every non-exempt batch item."));
+        }
+
+        if (lines.Values.Any(line => line.ActualQuantity <= 0 || line.ActualUnitPrice <= 0))
+        {
+            return Result.Failure(Error.Validation(
+                "INVALID_PURCHASE_LINE",
+                "Actual quantity and unit price must be greater than zero."));
+        }
+
+        foreach (var item in _items)
+        {
+            if (exemptProductIds.Contains(item.MarketProductId))
+            {
+                item.ClearPurchase();
+                continue;
+            }
+
+            var line = lines[item.MarketProductId];
+            item.ConfirmPurchase(line.ActualQuantity, line.ActualUnitPrice, capturedAtUtc);
+        }
+
+        Status = ProcurementBatchStatus.Purchasing;
+        UpdatedAt = capturedAtUtc;
+        RaiseDomainEvent(new ProcurementPurchaseConfirmedDomainEvent(
+            Id,
+            MarketId,
+            capturedAtUtc));
+
+        return Result.Success();
+    }
+
+    public Result ReportException(
+        Guid marketProductId,
+        ProcurementExceptionType type,
+        int reportedQuantity,
+        string? note,
+        string? proofImageUrl,
+        Guid reportedByUserId,
+        DateTime reportedAtUtc)
+    {
+        if (Status is not ProcurementBatchStatus.Manifested and not ProcurementBatchStatus.Purchasing)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_NOT_REPORTABLE",
+                $"Procurement batch '{Id}' cannot accept exceptions from status '{Status}'."));
+        }
+
+        if (_items.All(item => item.MarketProductId != marketProductId))
+        {
+            return Result.Failure(Error.Validation(
+                "PRODUCT_NOT_IN_BATCH",
+                $"Market product '{marketProductId}' is not part of procurement batch '{Id}'."));
+        }
+
+        if (reportedQuantity < 0)
+        {
+            return Result.Failure(Error.Validation(
+                "INVALID_EXCEPTION_QUANTITY",
+                "Reported quantity cannot be negative."));
+        }
+
+        var exception = new ProcurementException(
+            Id,
+            marketProductId,
+            type,
+            reportedQuantity,
+            note,
+            proofImageUrl,
+            reportedByUserId,
+            reportedAtUtc);
+        _exceptions.Add(exception);
+        UpdatedAt = reportedAtUtc;
+        RaiseDomainEvent(new ProcurementExceptionReportedDomainEvent(
+            Id,
+            exception.Id,
+            marketProductId,
+            type));
+
+        return Result.Success();
+    }
+
+    public Result HandoverToHub(Guid? hubId, DateTime capturedAtUtc)
+    {
+        if (Status == ProcurementBatchStatus.HandedOff)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_ALREADY_HANDED_OFF",
+                $"Procurement batch '{Id}' has already been handed off."));
+        }
+
+        if (Status != ProcurementBatchStatus.Purchasing)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_NOT_PURCHASED",
+                $"Procurement batch '{Id}' must be purchased before handover."));
+        }
+
+        Status = ProcurementBatchStatus.HandedOff;
+        HandedOffAt = capturedAtUtc;
+        HubId = hubId;
+        UpdatedAt = capturedAtUtc;
+        var coveredOrderIds = _orders
+            .Select(order => order.OrderId)
+            .Distinct()
+            .ToList()
+            .AsReadOnly();
+        RaiseDomainEvent(new ProcurementBatchHandedOffDomainEvent(
+            Id,
+            MarketId,
+            hubId,
+            capturedAtUtc,
+            coveredOrderIds));
 
         return Result.Success();
     }

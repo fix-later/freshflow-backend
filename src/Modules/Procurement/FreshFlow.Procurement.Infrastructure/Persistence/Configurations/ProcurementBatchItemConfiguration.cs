@@ -30,6 +30,13 @@ internal sealed class ProcurementBatchItemConfiguration : IEntityTypeConfigurati
         builder.Property(item => item.ReferenceUnitPrice)
             .HasColumnName("reference_unit_price")
             .HasColumnType("numeric(12,2)");
+        builder.Property(item => item.ActualQuantity)
+            .HasColumnName("actual_quantity");
+        builder.Property(item => item.ActualUnitPrice)
+            .HasColumnName("actual_unit_price")
+            .HasColumnType("numeric(12,2)");
+        builder.Property(item => item.PurchasedAt)
+            .HasColumnName("purchased_at");
         builder.Property(item => item.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();

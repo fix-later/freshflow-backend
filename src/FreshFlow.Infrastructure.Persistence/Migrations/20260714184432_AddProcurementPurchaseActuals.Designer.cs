@@ -3,6 +3,7 @@ using System;
 using FreshFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FreshFlow.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260714184432_AddProcurementPurchaseActuals")]
+    partial class AddProcurementPurchaseActuals
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2621,14 +2624,6 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
-                    b.Property<DateTime?>("HandedOffAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("handed_off_at");
-
-                    b.Property<Guid?>("HubId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("hub_id");
-
                     b.Property<DateTime?>("ManifestedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("manifested_at");
@@ -2767,70 +2762,6 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("idx_procurement_batch_orders_batch_id");
 
                     b.ToTable("procurement_batch_orders", (string)null);
-                });
-
-            modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementException", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid>("MarketProductId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("market_product_id");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("note");
-
-                    b.Property<Guid>("ProcurementBatchId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("procurement_batch_id");
-
-                    b.Property<string>("ProofImageUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("proof_image_url");
-
-                    b.Property<DateTime>("ReportedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("reported_at");
-
-                    b.Property<Guid>("ReportedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("reported_by_user_id");
-
-                    b.Property<int>("ReportedQuantity")
-                        .HasColumnType("integer")
-                        .HasColumnName("reported_quantity");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("type");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProcurementBatchId")
-                        .HasDatabaseName("idx_procurement_exceptions_batch_id");
-
-                    b.ToTable("procurement_exceptions", (string)null);
                 });
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.ConfirmedOrderItemRow", b =>
@@ -3196,16 +3127,6 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_procurement_batch_orders_batch");
                 });
 
-            modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementException", b =>
-                {
-                    b.HasOne("FreshFlow.Procurement.Domain.Entities.ProcurementBatch", null)
-                        .WithMany("Exceptions")
-                        .HasForeignKey("ProcurementBatchId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_procurement_exceptions_batch");
-                });
-
             modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.CreditStatement", b =>
                 {
                     b.Navigation("Lines");
@@ -3218,8 +3139,6 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementBatch", b =>
                 {
-                    b.Navigation("Exceptions");
-
                     b.Navigation("Items");
 
                     b.Navigation("Orders");

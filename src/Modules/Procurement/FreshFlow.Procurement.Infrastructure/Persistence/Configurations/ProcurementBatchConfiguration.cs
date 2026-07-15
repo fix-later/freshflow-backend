@@ -33,6 +33,10 @@ internal sealed class ProcurementBatchConfiguration : IEntityTypeConfiguration<P
             .HasColumnName("assigned_agent_user_id");
         builder.Property(batch => batch.AssignedAt)
             .HasColumnName("assigned_at");
+        builder.Property(batch => batch.HandedOffAt)
+            .HasColumnName("handed_off_at");
+        builder.Property(batch => batch.HubId)
+            .HasColumnName("hub_id");
         builder.Property(batch => batch.TotalItemCount)
             .HasColumnName("total_item_count")
             .IsRequired();
@@ -60,6 +64,14 @@ internal sealed class ProcurementBatchConfiguration : IEntityTypeConfiguration<P
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_procurement_batch_orders_batch");
         builder.Metadata.FindNavigation(nameof(ProcurementBatch.Orders))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasMany(batch => batch.Exceptions)
+            .WithOne()
+            .HasForeignKey(exception => exception.ProcurementBatchId)
+            .OnDelete(DeleteBehavior.Cascade)
+            .HasConstraintName("fk_procurement_exceptions_batch");
+        builder.Metadata.FindNavigation(nameof(ProcurementBatch.Exceptions))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasIndex(batch => batch.AssignedAgentUserId)

@@ -24,4 +24,10 @@ public interface IProcurementBatchRepository
         int page,
         int pageSize,
         CancellationToken ct);
+
+    public Task<DateOnly?> GetLatestCycleDateAsync(CancellationToken ct);
+
+    public Task<IReadOnlyList<ProcurementBatch>> ListByDateAsync(
+        DateOnly date,
+        CancellationToken ct);
 }

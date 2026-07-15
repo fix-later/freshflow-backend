@@ -14,19 +14,35 @@ public sealed record ProcurementBatchDto(
     DateTime? ManifestedAt,
     Guid? AssignedAgentUserId,
     DateTime? AssignedAt,
+    DateTime? HandedOffAt,
+    Guid? HubId,
     int TotalItemCount,
     IReadOnlyList<ProcurementBatchItemDto> Items,
-    IReadOnlyList<ProcurementBatchMemberDto> Members);
+    IReadOnlyList<ProcurementBatchMemberDto> Members,
+    IReadOnlyList<ProcurementExceptionDto> Exceptions);
 
 public sealed record ProcurementBatchItemDto(
     Guid MarketProductId,
     string ProductNameSnapshot,
     int TotalQuantity,
-    decimal? ReferenceUnitPrice);
+    decimal? ReferenceUnitPrice,
+    int? ActualQuantity,
+    decimal? ActualUnitPrice,
+    DateTime? PurchasedAt);
 
 public sealed record ProcurementBatchMemberDto(
     Guid OrderId,
     string Status);
+
+public sealed record ProcurementExceptionDto(
+    Guid Id,
+    Guid MarketProductId,
+    string Type,
+    int ReportedQuantity,
+    string? Note,
+    string? ProofImageUrl,
+    Guid ReportedByUserId,
+    DateTime ReportedAt);
 
 public sealed record ProcurementBatchPaginationDto(
     int Total,
@@ -46,17 +62,35 @@ internal static class ProcurementBatchDtoMapper
             batch.ManifestedAt,
             batch.AssignedAgentUserId,
             batch.AssignedAt,
+            batch.HandedOffAt,
+            batch.HubId,
             batch.TotalItemCount,
             batch.Items.Select(item => new ProcurementBatchItemDto(
                     item.MarketProductId,
                     item.ProductNameSnapshot,
                     item.TotalQuantity,
-                    item.ReferenceUnitPrice))
+                    item.ReferenceUnitPrice,
+                    item.ActualQuantity,
+                    item.ActualUnitPrice,
+                    item.PurchasedAt))
                 .ToList()
                 .AsReadOnly(),
             batch.Orders.Select(link => new ProcurementBatchMemberDto(
                     link.OrderId,
                     orderStatuses.GetValueOrDefault(link.OrderId, "Unknown")))
+                .ToList()
+                .AsReadOnly(),
+            batch.Exceptions
+                .Where(exception => !exception.IsDeleted)
+                .Select(exception => new ProcurementExceptionDto(
+                    exception.Id,
+                    exception.MarketProductId,
+                    exception.Type.ToString(),
+                    exception.ReportedQuantity,
+                    exception.Note,
+                    exception.ProofImageUrl,
+                    exception.ReportedByUserId,
+                    exception.ReportedAt))
                 .ToList()
                 .AsReadOnly());
 }

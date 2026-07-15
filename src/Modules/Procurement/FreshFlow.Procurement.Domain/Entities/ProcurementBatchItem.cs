@@ -23,6 +23,23 @@ public sealed class ProcurementBatchItem : BaseEntity
     public string ProductNameSnapshot { get; private set; } = string.Empty;
     public int TotalQuantity { get; private set; }
     public decimal? ReferenceUnitPrice { get; private set; }
+    public int? ActualQuantity { get; private set; }
+    public decimal? ActualUnitPrice { get; private set; }
+    public DateTime? PurchasedAt { get; private set; }
 
     internal void SetReferencePrice(decimal price) => ReferenceUnitPrice = price;
+
+    internal void ConfirmPurchase(int actualQuantity, decimal actualUnitPrice, DateTime purchasedAt)
+    {
+        ActualQuantity = actualQuantity;
+        ActualUnitPrice = actualUnitPrice;
+        PurchasedAt = purchasedAt;
+    }
+
+    internal void ClearPurchase()
+    {
+        ActualQuantity = null;
+        ActualUnitPrice = null;
+        PurchasedAt = null;
+    }
 }
