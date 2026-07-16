@@ -1,5 +1,7 @@
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
 using FreshFlow.Analytics.Application.Queries.GetDeliveryPerformance;
+using FreshFlow.Analytics.Application.Queries.GetDemandHeatmap;
+using FreshFlow.Analytics.Application.Queries.GetDemandTimeDistribution;
 using FreshFlow.Analytics.Application.Queries.GetHubThroughput;
 using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
@@ -91,6 +93,28 @@ public sealed class AnalyticsController(ISender sender) : ControllerBase
         CancellationToken ct)
     {
         var result = await sender.Send(new GetDeliveryPerformanceQuery(from, to), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("demand-heatmap")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetDemandHeatmapAsync(
+        [FromQuery, BindRequired] DateOnly from,
+        [FromQuery, BindRequired] DateOnly to,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new GetDemandHeatmapQuery(from, to), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("demand-heatmap/time-distribution")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetDemandTimeDistributionAsync(
+        [FromQuery, BindRequired] DateOnly from,
+        [FromQuery, BindRequired] DateOnly to,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new GetDemandTimeDistributionQuery(from, to), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 }

@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<IProcurementMetricsReader, ProcurementMetricsReader>();
         services.AddScoped<IHubThroughputReader, HubThroughputReader>();
         services.AddScoped<IDeliveryPerformanceReader, DeliveryPerformanceReader>();
+        services.AddScoped<IDemandHeatmapReader, DemandHeatmapReader>();
 
         return services;
     }

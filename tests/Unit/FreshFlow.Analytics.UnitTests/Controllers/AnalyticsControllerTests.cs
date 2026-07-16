@@ -3,6 +3,8 @@ using FluentAssertions;
 using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
 using FreshFlow.Analytics.Application.Queries.GetDeliveryPerformance;
+using FreshFlow.Analytics.Application.Queries.GetDemandHeatmap;
+using FreshFlow.Analytics.Application.Queries.GetDemandTimeDistribution;
 using FreshFlow.Analytics.Application.Queries.GetHubThroughput;
 using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
@@ -267,6 +269,52 @@ public sealed class AnalyticsControllerTests
         response.Should().BeOfType<OkObjectResult>();
         await sender.Received(1).Send(
             Arg.Is<GetDeliveryPerformanceQuery>(query =>
+                query.From == from && query.To == to),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(nameof(AnalyticsController.GetDemandHeatmapAsync))]
+    [InlineData(nameof(AnalyticsController.GetDemandTimeDistributionAsync))]
+    public void DemandHeatmapEndpoints_RequireOperationsRoleAndDateBounds(string methodName)
+    {
+        var method = typeof(AnalyticsController).GetMethod(methodName)!;
+        var authorize = method.GetCustomAttribute<AuthorizeAttribute>();
+        var parameters = method.GetParameters();
+
+        authorize.Should().NotBeNull();
+        authorize!.Roles.Should().Be("admin,operations_manager");
+        authorize.Roles.Should().NotContain("restaurant");
+        parameters.Single(parameter => parameter.Name == "from")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+        parameters.Single(parameter => parameter.Name == "to")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task DemandHeatmapEndpoints_SendQueriesAndReturnOkAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var from = new DateOnly(2026, 7, 1);
+        var to = new DateOnly(2026, 7, 16);
+        sender.Send(Arg.Any<GetDemandHeatmapQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<DemandHeatmapPointDto>>.Success(
+                Array.Empty<DemandHeatmapPointDto>()));
+        sender.Send(Arg.Any<GetDemandTimeDistributionQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<TimeDistributionCellDto>>.Success(
+                Array.Empty<TimeDistributionCellDto>()));
+        var controller = new AnalyticsController(sender);
+
+        var heatmapResponse = await controller.GetDemandHeatmapAsync(from, to, default);
+        var timeResponse = await controller.GetDemandTimeDistributionAsync(from, to, default);
+
+        heatmapResponse.Should().BeOfType<OkObjectResult>();
+        timeResponse.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<GetDemandHeatmapQuery>(query => query.From == from && query.To == to),
+            Arg.Any<CancellationToken>());
+        await sender.Received(1).Send(
+            Arg.Is<GetDemandTimeDistributionQuery>(query =>
                 query.From == from && query.To == to),
             Arg.Any<CancellationToken>());
     }
