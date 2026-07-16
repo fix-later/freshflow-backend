@@ -1,4 +1,5 @@
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
+using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
 using FreshFlow.API.Extensions;
 using MediatR;
@@ -34,6 +35,21 @@ public sealed class AnalyticsController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(
             new GetPriceTrendsQuery(marketProductIds, from, to, interval),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("order-metrics")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetOrderMetricsAsync(
+        [FromQuery, BindRequired] DateOnly from,
+        [FromQuery, BindRequired] DateOnly to,
+        [FromQuery] Guid? restaurantId,
+        [FromQuery] string? groupBy,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new GetOrderMetricsQuery(from, to, restaurantId, groupBy),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }

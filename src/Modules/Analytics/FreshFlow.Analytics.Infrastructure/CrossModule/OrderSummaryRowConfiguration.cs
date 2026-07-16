@@ -12,6 +12,7 @@ internal sealed class OrderSummaryRowConfiguration : IEntityTypeConfiguration<Or
             """
             SELECT
                 "Id" AS "OrderId",
+                "RestaurantId" AS "RestaurantId",
                 "Status" AS "Status",
                 "TotalAmount" AS "TotalAmount",
                 "CreatedAt" AS "CreatedAt",

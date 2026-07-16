@@ -2,12 +2,14 @@ using System.Reflection;
 using FluentAssertions;
 using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
+using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
 using FreshFlow.API.Controllers;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using NSubstitute;
 
 namespace FreshFlow.Analytics.UnitTests.Controllers;
@@ -82,6 +84,54 @@ public sealed class AnalyticsControllerTests
             Arg.Is<GetPriceTrendsQuery>(query =>
                 query.MarketProductIds.SequenceEqual(new[] { marketProductId }) &&
                 query.From == from && query.To == to && query.Interval == "hourly"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void OrderMetrics_RequiresOperationsRoleAndRequiredDateBounds()
+    {
+        var method = typeof(AnalyticsController)
+            .GetMethod(nameof(AnalyticsController.GetOrderMetricsAsync))!;
+        var authorize = method.GetCustomAttribute<AuthorizeAttribute>();
+        var parameters = method.GetParameters();
+
+        authorize.Should().NotBeNull();
+        authorize!.Roles.Should().Be("admin,operations_manager");
+        authorize.Roles.Should().NotContain("restaurant");
+        parameters.Single(parameter => parameter.Name == "from")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+        parameters.Single(parameter => parameter.Name == "to")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetOrderMetricsAsync_SendsQueryAndReturnsOkAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var restaurantId = Guid.NewGuid();
+        var from = new DateOnly(2026, 7, 1);
+        var to = new DateOnly(2026, 7, 16);
+        var dto = new OrderMetricsDto(
+            new OrderMetricsSummaryDto(0, 0m, 0m, 0, 0m, 0, new Dictionary<string, int>()),
+            []);
+        sender.Send(Arg.Any<GetOrderMetricsQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<OrderMetricsDto>.Success(dto));
+        var controller = new AnalyticsController(sender);
+
+        var response = await controller.GetOrderMetricsAsync(
+            from,
+            to,
+            restaurantId,
+            "week",
+            default);
+
+        response.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<GetOrderMetricsQuery>(query =>
+                query.From == from &&
+                query.To == to &&
+                query.RestaurantId == restaurantId &&
+                query.GroupBy == "week"),
             Arg.Any<CancellationToken>());
     }
 }

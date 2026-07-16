@@ -1,4 +1,5 @@
 using FreshFlow.Analytics.Application.Abstractions;
+using FreshFlow.Analytics.Application.Common;
 using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
@@ -10,17 +11,13 @@ internal sealed class GetDashboardOverviewQueryHandler(
     TimeProvider timeProvider)
     : IRequestHandler<GetDashboardOverviewQuery, Result<DashboardOverviewDto>>
 {
-    private static readonly TimeZoneInfo VietnamTimeZone = ResolveVietnamTimeZone();
-
     public async Task<Result<DashboardOverviewDto>> Handle(
         GetDashboardOverviewQuery request,
         CancellationToken ct)
     {
         var date = request.Date ?? DateOnly.FromDateTime(
-            TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), VietnamTimeZone).DateTime);
-        var localStart = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
-        var startUtc = TimeZoneInfo.ConvertTimeToUtc(localStart, VietnamTimeZone);
-        var endUtc = TimeZoneInfo.ConvertTimeToUtc(localStart.AddDays(1), VietnamTimeZone);
+            TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), VietnamTime.Zone).DateTime);
+        var (startUtc, endUtc) = VietnamTime.GetUtcBounds(date, date);
         var data = await reader.ReadAsync(date, startUtc, endUtc, ct);
         var onTimeRate = data.DeliveriesToday == 0
             ? 0m
@@ -37,17 +34,4 @@ internal sealed class GetDashboardOverviewQueryHandler(
             data.HubInboundKgToday,
             data.HubOutboundKgToday));
     }
-
-    private static TimeZoneInfo ResolveVietnamTimeZone()
-    {
-        try
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
-        }
-        catch (TimeZoneNotFoundException)
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
-        }
-    }
 }
-

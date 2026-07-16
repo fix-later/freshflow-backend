@@ -1,4 +1,5 @@
 using FreshFlow.Analytics.Application.Abstractions;
+using FreshFlow.Analytics.Application.Common;
 using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
@@ -10,7 +11,6 @@ internal sealed class GetPriceTrendsQueryHandler(IPriceTrendReader reader)
 {
     private const string DailyInterval = "daily";
     private const string HourlyInterval = "hourly";
-    private static readonly TimeZoneInfo VietnamTimeZone = ResolveVietnamTimeZone();
     private static readonly DateOnly LatestDateWith12MonthsRemaining =
         DateOnly.MaxValue.AddMonths(-12);
 
@@ -24,12 +24,7 @@ internal sealed class GetPriceTrendsQueryHandler(IPriceTrendReader reader)
         var interval = spansMoreThanTwelveMonths
             ? DailyInterval
             : request.Interval?.ToLowerInvariant() ?? DailyInterval;
-        var localStart = request.From.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
-        var localEnd = request.To == DateOnly.MaxValue
-            ? DateTime.MaxValue
-            : request.To.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
-        var startUtc = TimeZoneInfo.ConvertTimeToUtc(localStart, VietnamTimeZone);
-        var endUtc = TimeZoneInfo.ConvertTimeToUtc(localEnd, VietnamTimeZone);
+        var (startUtc, endUtc) = VietnamTime.GetUtcBounds(request.From, request.To);
         var requestedIds = request.MarketProductIds.Distinct().ToArray();
         var data = await reader.ReadAsync(requestedIds, startUtc, endUtc, ct);
         var detailsById = data.MarketProducts.ToDictionary(detail => detail.MarketProductId);
@@ -55,7 +50,7 @@ internal sealed class GetPriceTrendsQueryHandler(IPriceTrendReader reader)
                 {
                     var aggregate = Aggregate(group);
                     return new PriceTrendPointDto(
-                        new DateTimeOffset(group.Key, VietnamTimeZone.GetUtcOffset(group.Key)),
+                        new DateTimeOffset(group.Key, VietnamTime.Zone.GetUtcOffset(group.Key)),
                         aggregate.AvgPrice,
                         aggregate.MinPrice,
                         aggregate.MaxPrice,
@@ -82,7 +77,7 @@ internal sealed class GetPriceTrendsQueryHandler(IPriceTrendReader reader)
     private static DateTime ToLocalBucket(DateTime bucketStartUtc, string interval)
     {
         var utc = DateTime.SpecifyKind(bucketStartUtc, DateTimeKind.Utc);
-        var local = TimeZoneInfo.ConvertTimeFromUtc(utc, VietnamTimeZone);
+        var local = TimeZoneInfo.ConvertTimeFromUtc(utc, VietnamTime.Zone);
         return interval == HourlyInterval
             ? new DateTime(local.Year, local.Month, local.Day, local.Hour, 0, 0, DateTimeKind.Unspecified)
             : new DateTime(local.Year, local.Month, local.Day, 0, 0, 0, DateTimeKind.Unspecified);
@@ -114,18 +109,6 @@ internal sealed class GetPriceTrendsQueryHandler(IPriceTrendReader reader)
             avgPrice,
             snapshotCount,
             volatility);
-    }
-
-    private static TimeZoneInfo ResolveVietnamTimeZone()
-    {
-        try
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
-        }
-        catch (TimeZoneNotFoundException)
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
-        }
     }
 
     private sealed record PriceAggregate(

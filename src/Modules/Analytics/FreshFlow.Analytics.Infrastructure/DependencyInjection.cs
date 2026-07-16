@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(applicationAssembly, includeInternalTypes: true);
         services.AddScoped<IDashboardOverviewReader, DashboardOverviewReader>();
         services.AddScoped<IPriceTrendReader, PriceTrendReader>();
+        services.AddScoped<IOrderMetricsReader, OrderMetricsReader>();
 
         return services;
     }

@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
+using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
 using FreshFlow.Analytics.Infrastructure;
 using FreshFlow.Infrastructure.Persistence;
@@ -37,6 +38,13 @@ public sealed class DependencyInjectionTests
             .GetRequiredService<IRequestHandler<
                 GetPriceTrendsQuery,
                 Result<PriceTrendsDto>>>()
+            .Should()
+            .NotBeNull();
+
+        scope.ServiceProvider
+            .GetRequiredService<IRequestHandler<
+                GetOrderMetricsQuery,
+                Result<OrderMetricsDto>>>()
             .Should()
             .NotBeNull();
     }
