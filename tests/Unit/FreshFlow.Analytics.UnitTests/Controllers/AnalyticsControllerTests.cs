@@ -4,6 +4,7 @@ using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
 using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
+using FreshFlow.Analytics.Application.Queries.GetProcurementMetrics;
 using FreshFlow.API.Controllers;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
@@ -134,5 +135,61 @@ public sealed class AnalyticsControllerTests
                 query.GroupBy == "week"),
             Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public void ProcurementMetrics_RequiresOperationsRoleAndRequiredDateBounds()
+    {
+        var method = typeof(AnalyticsController)
+            .GetMethod(nameof(AnalyticsController.GetProcurementMetricsAsync))!;
+        var authorize = method.GetCustomAttribute<AuthorizeAttribute>();
+        var parameters = method.GetParameters();
+
+        authorize.Should().NotBeNull();
+        authorize!.Roles.Should().Be("admin,operations_manager");
+        authorize.Roles.Should().NotContain("restaurant");
+        parameters.Single(parameter => parameter.Name == "from")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+        parameters.Single(parameter => parameter.Name == "to")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetProcurementMetricsAsync_SendsQueryAndReturnsOkAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var marketId = Guid.NewGuid();
+        var from = new DateOnly(2026, 7, 1);
+        var to = new DateOnly(2026, 7, 16);
+        var dto = new ProcurementMetricsDto(
+            0,
+            new Dictionary<string, int>(),
+            0m,
+            0,
+            0,
+            0,
+            0m,
+            null,
+            null,
+            0,
+            new Dictionary<string, int>());
+        sender.Send(Arg.Any<GetProcurementMetricsQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<ProcurementMetricsDto>.Success(dto));
+        var controller = new AnalyticsController(sender);
+
+        var response = await controller.GetProcurementMetricsAsync(
+            from,
+            to,
+            marketId,
+            default);
+
+        response.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<GetProcurementMetricsQuery>(query =>
+                query.From == from &&
+                query.To == to &&
+                query.MarketId == marketId),
+            Arg.Any<CancellationToken>());
+    }
+
 }
 

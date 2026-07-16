@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<IDashboardOverviewReader, DashboardOverviewReader>();
         services.AddScoped<IPriceTrendReader, PriceTrendReader>();
         services.AddScoped<IOrderMetricsReader, OrderMetricsReader>();
+        services.AddScoped<IProcurementMetricsReader, ProcurementMetricsReader>();
 
         return services;
     }

@@ -1,6 +1,7 @@
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
 using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
+using FreshFlow.Analytics.Application.Queries.GetProcurementMetrics;
 using FreshFlow.API.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -50,6 +51,20 @@ public sealed class AnalyticsController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(
             new GetOrderMetricsQuery(from, to, restaurantId, groupBy),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("procurement-metrics")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetProcurementMetricsAsync(
+        [FromQuery, BindRequired] DateOnly from,
+        [FromQuery, BindRequired] DateOnly to,
+        [FromQuery] Guid? marketId,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new GetProcurementMetricsQuery(from, to, marketId),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }

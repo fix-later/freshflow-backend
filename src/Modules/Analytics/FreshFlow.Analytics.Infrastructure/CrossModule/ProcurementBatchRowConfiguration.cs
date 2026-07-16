@@ -13,7 +13,10 @@ internal sealed class ProcurementBatchRowConfiguration : IEntityTypeConfiguratio
             SELECT
                 id AS "BatchId",
                 batch_date AS "BatchDate",
-                status AS "Status"
+                market_id AS "MarketId",
+                status AS "Status",
+                manifested_at AS "ManifestedAt",
+                handed_off_at AS "HandedOffAt"
             FROM procurement_batches
             WHERE deleted_at IS NULL
             """);
