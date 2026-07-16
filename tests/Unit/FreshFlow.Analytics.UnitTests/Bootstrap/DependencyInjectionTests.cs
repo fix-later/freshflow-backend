@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
+using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
 using FreshFlow.Analytics.Infrastructure;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.SharedKernel.Application;
@@ -15,7 +16,7 @@ namespace FreshFlow.Analytics.UnitTests.Bootstrap;
 public sealed class DependencyInjectionTests
 {
     [Fact]
-    public void AddAnalyticsModule_ResolvesOverviewHandler()
+    public void AddAnalyticsModule_ResolvesAnalyticsHandlers()
     {
         var services = new ServiceCollection();
         services.AddDbContext<AppDbContext>(options =>
@@ -29,6 +30,13 @@ public sealed class DependencyInjectionTests
             .GetRequiredService<IRequestHandler<
                 GetDashboardOverviewQuery,
                 Result<DashboardOverviewDto>>>()
+            .Should()
+            .NotBeNull();
+
+        scope.ServiceProvider
+            .GetRequiredService<IRequestHandler<
+                GetPriceTrendsQuery,
+                Result<PriceTrendsDto>>>()
             .Should()
             .NotBeNull();
     }
