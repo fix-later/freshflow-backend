@@ -12,9 +12,11 @@ internal sealed class DeliveryRowConfiguration : IEntityTypeConfiguration<Delive
             """
             SELECT
                 id AS "DeliveryId",
+                delivery_route_id AS "DeliveryRouteId",
                 status AS "Status",
                 estimated_arrival AS "EstimatedArrival",
-                actual_arrival AS "ActualArrival"
+                actual_arrival AS "ActualArrival",
+                updated_at AS "UpdatedAt"
             FROM deliveries
             WHERE deleted_at IS NULL
             """);

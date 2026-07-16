@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentAssertions;
 using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
+using FreshFlow.Analytics.Application.Queries.GetDeliveryPerformance;
 using FreshFlow.Analytics.Application.Queries.GetHubThroughput;
 using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
@@ -229,6 +230,44 @@ public sealed class AnalyticsControllerTests
         await sender.Received(1).Send(
             Arg.Is<GetHubThroughputQuery>(query =>
                 query.From == from && query.To == to && query.HubId == hubId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void DeliveryPerformance_RequiresOperationsRoleAndRequiredDateBounds()
+    {
+        var method = typeof(AnalyticsController)
+            .GetMethod(nameof(AnalyticsController.GetDeliveryPerformanceAsync))!;
+        var authorize = method.GetCustomAttribute<AuthorizeAttribute>();
+        var parameters = method.GetParameters();
+
+        authorize.Should().NotBeNull();
+        authorize!.Roles.Should().Be("admin,operations_manager");
+        authorize.Roles.Should().NotContain("restaurant");
+        authorize.Roles.Should().NotContain("driver");
+        parameters.Single(parameter => parameter.Name == "from")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+        parameters.Single(parameter => parameter.Name == "to")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetDeliveryPerformanceAsync_SendsQueryAndReturnsOkAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var from = new DateOnly(2026, 7, 1);
+        var to = new DateOnly(2026, 7, 16);
+        var dto = new DeliveryPerformanceDto(0, 0, 0, 0m, 0, null, 0, null, 0);
+        sender.Send(Arg.Any<GetDeliveryPerformanceQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<DeliveryPerformanceDto>.Success(dto));
+        var controller = new AnalyticsController(sender);
+
+        var response = await controller.GetDeliveryPerformanceAsync(from, to, default);
+
+        response.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<GetDeliveryPerformanceQuery>(query =>
+                query.From == from && query.To == to),
             Arg.Any<CancellationToken>());
     }
 }

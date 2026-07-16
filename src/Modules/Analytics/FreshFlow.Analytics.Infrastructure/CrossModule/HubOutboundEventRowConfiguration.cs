@@ -13,6 +13,7 @@ internal sealed class HubOutboundEventRowConfiguration : IEntityTypeConfiguratio
             SELECT
                 id AS "OutboundEventId",
                 hub_id AS "HubId",
+                destination_route_id AS "DestinationRouteId",
                 total_quantity_kg AS "TotalQuantityKg",
                 dispatched_at AS "DispatchedAt"
             FROM hub_outbound_events

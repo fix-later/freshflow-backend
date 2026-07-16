@@ -1,4 +1,5 @@
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
+using FreshFlow.Analytics.Application.Queries.GetDeliveryPerformance;
 using FreshFlow.Analytics.Application.Queries.GetHubThroughput;
 using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
@@ -79,6 +80,17 @@ public sealed class AnalyticsController(ISender sender) : ControllerBase
         CancellationToken ct)
     {
         var result = await sender.Send(new GetHubThroughputQuery(from, to, hubId), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("delivery-performance")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetDeliveryPerformanceAsync(
+        [FromQuery, BindRequired] DateOnly from,
+        [FromQuery, BindRequired] DateOnly to,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new GetDeliveryPerformanceQuery(from, to), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 }
