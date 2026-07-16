@@ -10,6 +10,7 @@ using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
 using FreshFlow.Analytics.Application.Queries.GetProcurementMetrics;
 using FreshFlow.API.Controllers;
+using FreshFlow.Infrastructure.Persistence.Audit;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -316,6 +317,46 @@ public sealed class AnalyticsControllerTests
         await sender.Received(1).Send(
             Arg.Is<GetDemandTimeDistributionQuery>(query =>
                 query.From == from && query.To == to),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void RecentActivities_RequiresOperationsRoleWithoutRestaurant()
+    {
+        var authorize = typeof(AnalyticsController)
+            .GetMethod(nameof(AnalyticsController.GetRecentActivitiesAsync))!
+            .GetCustomAttribute<AuthorizeAttribute>();
+
+        authorize.Should().NotBeNull();
+        authorize!.Roles.Should().Be("admin,operations_manager");
+        authorize.Roles.Should().NotContain("restaurant");
+    }
+
+    [Fact]
+    public async Task GetRecentActivitiesAsync_ForwardsExistingAuditQueryAndReturnsOkAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        sender.Send(Arg.Any<GetAuditLogsQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<AuditLogPageDto>.Success(new AuditLogPageDto([], 2, 10, 0)));
+        var controller = new AnalyticsController(sender);
+
+        var response = await controller.GetRecentActivitiesAsync(
+            "order",
+            "order_confirmed",
+            2,
+            10,
+            default);
+
+        response.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<GetAuditLogsQuery>(query =>
+                query.ActorId == null &&
+                query.Action == "order_confirmed" &&
+                query.EntityType == "order" &&
+                query.From == null &&
+                query.To == null &&
+                query.Page == 2 &&
+                query.PageSize == 10),
             Arg.Any<CancellationToken>());
     }
 }

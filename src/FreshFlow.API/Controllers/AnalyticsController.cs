@@ -7,6 +7,7 @@ using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
 using FreshFlow.Analytics.Application.Queries.GetProcurementMetrics;
 using FreshFlow.API.Extensions;
+using FreshFlow.Infrastructure.Persistence.Audit;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -115,6 +116,21 @@ public sealed class AnalyticsController(ISender sender) : ControllerBase
         CancellationToken ct)
     {
         var result = await sender.Send(new GetDemandTimeDistributionQuery(from, to), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("recent-activities")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetRecentActivitiesAsync(
+        [FromQuery] string? entityType,
+        [FromQuery] string? action,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var result = await sender.Send(
+            new GetAuditLogsQuery(null, action, entityType, null, null, page, pageSize),
+            ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 }

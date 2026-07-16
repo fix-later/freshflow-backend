@@ -9,7 +9,9 @@ using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
 using FreshFlow.Analytics.Application.Queries.GetProcurementMetrics;
 using FreshFlow.Analytics.Infrastructure;
+using FreshFlow.Contracts;
 using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Infrastructure.Persistence.Audit;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -85,6 +87,63 @@ public sealed class DependencyInjectionTests
             .GetRequiredService<IRequestHandler<
                 GetDemandTimeDistributionQuery,
                 Result<IReadOnlyList<TimeDistributionCellDto>>>>()
+            .Should()
+            .NotBeNull();
+    }
+
+    [Fact]
+    public void AddPersistence_ResolvesAuditQueryAndAllRecentActivityHandlers()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] =
+                    "Host=localhost;Database=freshflow_test;Username=test;Password=test",
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddPersistence(configuration);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        scope.ServiceProvider
+            .GetRequiredService<IRequestHandler<
+                GetAuditLogsQuery,
+                Result<AuditLogPageDto>>>()
+            .Should()
+            .NotBeNull();
+        scope.ServiceProvider
+            .GetRequiredService<INotificationHandler<OrderConfirmedIntegrationEvent>>()
+            .Should()
+            .NotBeNull();
+        scope.ServiceProvider
+            .GetRequiredService<INotificationHandler<ProcurementBatchBuiltIntegrationEvent>>()
+            .Should()
+            .NotBeNull();
+        scope.ServiceProvider
+            .GetRequiredService<INotificationHandler<ProcurementManifestGeneratedIntegrationEvent>>()
+            .Should()
+            .NotBeNull();
+        scope.ServiceProvider
+            .GetRequiredService<INotificationHandler<ProcurementAgentAssignedIntegrationEvent>>()
+            .Should()
+            .NotBeNull();
+        scope.ServiceProvider
+            .GetRequiredService<INotificationHandler<ProcurementBatchHandedOffIntegrationEvent>>()
+            .Should()
+            .NotBeNull();
+        scope.ServiceProvider
+            .GetRequiredService<INotificationHandler<DeliveryStartedIntegrationEvent>>()
+            .Should()
+            .NotBeNull();
+        scope.ServiceProvider
+            .GetRequiredService<INotificationHandler<DeliveryCompletedIntegrationEvent>>()
+            .Should()
+            .NotBeNull();
+        scope.ServiceProvider
+            .GetRequiredService<INotificationHandler<HubDiscrepancyRecordedIntegrationEvent>>()
             .Should()
             .NotBeNull();
     }

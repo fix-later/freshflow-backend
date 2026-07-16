@@ -5,6 +5,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace FreshFlow.Infrastructure.Persistence;
 
@@ -35,6 +36,7 @@ public static class DependencyInjection
             opt.AddInterceptors(sp.GetRequiredService<DomainEventDispatchInterceptor>());
         });
 
+        services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IAuditLogWriter, AuditLogWriter>();
         services.AddMediatR(cfg =>
         {
