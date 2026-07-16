@@ -12,6 +12,7 @@ internal sealed class HubInboundEventRowConfiguration : IEntityTypeConfiguration
             """
             SELECT
                 id AS "InboundEventId",
+                hub_id AS "HubId",
                 status AS "Status",
                 total_quantity_kg AS "TotalQuantityKg",
                 arrived_at AS "ArrivedAt"

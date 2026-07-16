@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IPriceTrendReader, PriceTrendReader>();
         services.AddScoped<IOrderMetricsReader, OrderMetricsReader>();
         services.AddScoped<IProcurementMetricsReader, ProcurementMetricsReader>();
+        services.AddScoped<IHubThroughputReader, HubThroughputReader>();
 
         return services;
     }

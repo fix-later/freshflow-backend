@@ -1,4 +1,5 @@
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
+using FreshFlow.Analytics.Application.Queries.GetHubThroughput;
 using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
 using FreshFlow.Analytics.Application.Queries.GetProcurementMetrics;
@@ -66,6 +67,18 @@ public sealed class AnalyticsController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new GetProcurementMetricsQuery(from, to, marketId),
             ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("hub-throughput")]
+    [Authorize(Roles = "admin,operations_manager,hub_staff")]
+    public async Task<IActionResult> GetHubThroughputAsync(
+        [FromQuery, BindRequired] DateOnly from,
+        [FromQuery, BindRequired] DateOnly to,
+        [FromQuery] Guid? hubId,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new GetHubThroughputQuery(from, to, hubId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 }

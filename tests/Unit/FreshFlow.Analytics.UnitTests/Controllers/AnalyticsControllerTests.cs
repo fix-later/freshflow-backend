@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentAssertions;
 using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
+using FreshFlow.Analytics.Application.Queries.GetHubThroughput;
 using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
 using FreshFlow.Analytics.Application.Queries.GetProcurementMetrics;
@@ -191,5 +192,44 @@ public sealed class AnalyticsControllerTests
             Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public void HubThroughput_AllowsHubStaffAndRequiresDateBounds()
+    {
+        var method = typeof(AnalyticsController)
+            .GetMethod(nameof(AnalyticsController.GetHubThroughputAsync))!;
+        var authorize = method.GetCustomAttribute<AuthorizeAttribute>();
+        var parameters = method.GetParameters();
+
+        authorize.Should().NotBeNull();
+        authorize!.Roles.Should().Be("admin,operations_manager,hub_staff");
+        authorize.Roles.Should().NotContain("restaurant");
+        parameters.Single(parameter => parameter.Name == "from")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+        parameters.Single(parameter => parameter.Name == "to")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetHubThroughputAsync_SendsQueryAndReturnsOkAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var hubId = Guid.NewGuid();
+        var from = new DateOnly(2026, 7, 1);
+        var to = new DateOnly(2026, 7, 16);
+        var dto = new HubThroughputDto(
+            new HubThroughputSummaryDto(0m, 0m, 0m, 0, 0, new Dictionary<string, int>()),
+            []);
+        sender.Send(Arg.Any<GetHubThroughputQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<HubThroughputDto>.Success(dto));
+        var controller = new AnalyticsController(sender);
+
+        var response = await controller.GetHubThroughputAsync(from, to, hubId, default);
+
+        response.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<GetHubThroughputQuery>(query =>
+                query.From == from && query.To == to && query.HubId == hubId),
+            Arg.Any<CancellationToken>());
+    }
 }
 

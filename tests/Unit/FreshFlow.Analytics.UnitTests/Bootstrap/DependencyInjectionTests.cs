@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
+using FreshFlow.Analytics.Application.Queries.GetHubThroughput;
 using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
 using FreshFlow.Analytics.Application.Queries.GetProcurementMetrics;
@@ -53,6 +54,13 @@ public sealed class DependencyInjectionTests
             .GetRequiredService<IRequestHandler<
                 GetProcurementMetricsQuery,
                 Result<ProcurementMetricsDto>>>()
+            .Should()
+            .NotBeNull();
+
+        scope.ServiceProvider
+            .GetRequiredService<IRequestHandler<
+                GetHubThroughputQuery,
+                Result<HubThroughputDto>>>()
             .Should()
             .NotBeNull();
     }
