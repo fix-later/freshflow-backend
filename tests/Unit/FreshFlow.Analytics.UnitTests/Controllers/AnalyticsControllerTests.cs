@@ -1,6 +1,7 @@
 using System.Reflection;
 using FluentAssertions;
 using FreshFlow.Analytics.Application.Dtos;
+using FreshFlow.Analytics.Application.Queries.ExportAnalytics;
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
 using FreshFlow.Analytics.Application.Queries.GetDeliveryPerformance;
 using FreshFlow.Analytics.Application.Queries.GetDemandHeatmap;
@@ -14,6 +15,7 @@ using FreshFlow.Infrastructure.Persistence.Audit;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using NSubstitute;
@@ -357,6 +359,65 @@ public sealed class AnalyticsControllerTests
                 query.To == null &&
                 query.Page == 2 &&
                 query.PageSize == 10),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void Export_RequiresOperationsRoleAndRequiredParameters()
+    {
+        var method = typeof(AnalyticsController)
+            .GetMethod(nameof(AnalyticsController.ExportAsync))!;
+        var authorize = method.GetCustomAttribute<AuthorizeAttribute>();
+        var parameters = method.GetParameters();
+
+        authorize.Should().NotBeNull();
+        authorize!.Roles.Should().Be("admin,operations_manager");
+        authorize.Roles.Should().NotContain("restaurant");
+        parameters.Single(parameter => parameter.Name == "dataset")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+        parameters.Single(parameter => parameter.Name == "from")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+        parameters.Single(parameter => parameter.Name == "to")
+            .GetCustomAttribute<BindRequiredAttribute>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task ExportAsync_SendsQueryAndReturnsDownloadAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var marketProductId = Guid.NewGuid();
+        var from = new DateOnly(2026, 7, 1);
+        var to = new DateOnly(2026, 7, 16);
+        var content = new byte[] { 1, 2, 3 };
+        sender.Send(Arg.Any<ExportAnalyticsQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<CsvExportDto>.Success(
+                new CsvExportDto("analytics.csv", "text/csv", content)));
+        var controller = new AnalyticsController(sender);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
+
+        var response = await controller.ExportAsync(
+            "price-history",
+            from,
+            to,
+            [marketProductId],
+            null,
+            default);
+
+        var file = response.Should().BeOfType<FileContentResult>().Subject;
+        file.FileContents.Should().BeEquivalentTo(content);
+        file.ContentType.Should().Be("text/csv");
+        controller.Response.Headers.ContentDisposition.ToString()
+            .Should().Be("attachment; filename=\"analytics.csv\"");
+        await sender.Received(1).Send(
+            Arg.Is<ExportAnalyticsQuery>(query =>
+                query.Dataset == "price-history" &&
+                query.From == from &&
+                query.To == to &&
+                query.MarketProductIds.SequenceEqual(new[] { marketProductId }) &&
+                query.Format == null),
             Arg.Any<CancellationToken>());
     }
 }

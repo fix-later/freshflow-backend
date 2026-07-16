@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreshFlow.Analytics.Application.Dtos;
+using FreshFlow.Analytics.Application.Queries.ExportAnalytics;
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
 using FreshFlow.Analytics.Application.Queries.GetDeliveryPerformance;
 using FreshFlow.Analytics.Application.Queries.GetDemandHeatmap;
@@ -27,6 +28,7 @@ public sealed class DependencyInjectionTests
     public void AddAnalyticsModule_ResolvesAnalyticsHandlers()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddDbContext<AppDbContext>(options =>
             options.UseInMemoryDatabase(Guid.NewGuid().ToString()));
         services.AddAnalyticsModule(new ConfigurationBuilder().Build());
@@ -87,6 +89,13 @@ public sealed class DependencyInjectionTests
             .GetRequiredService<IRequestHandler<
                 GetDemandTimeDistributionQuery,
                 Result<IReadOnlyList<TimeDistributionCellDto>>>>()
+            .Should()
+            .NotBeNull();
+
+        scope.ServiceProvider
+            .GetRequiredService<IRequestHandler<
+                ExportAnalyticsQuery,
+                Result<CsvExportDto>>>()
             .Should()
             .NotBeNull();
     }

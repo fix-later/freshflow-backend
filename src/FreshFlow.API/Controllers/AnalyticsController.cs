@@ -1,3 +1,4 @@
+using FreshFlow.Analytics.Application.Queries.ExportAnalytics;
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
 using FreshFlow.Analytics.Application.Queries.GetDeliveryPerformance;
 using FreshFlow.Analytics.Application.Queries.GetDemandHeatmap;
@@ -132,6 +133,27 @@ public sealed class AnalyticsController(ISender sender) : ControllerBase
             new GetAuditLogsQuery(null, action, entityType, null, null, page, pageSize),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("export")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> ExportAsync(
+        [FromQuery, BindRequired] string dataset,
+        [FromQuery, BindRequired] DateOnly from,
+        [FromQuery, BindRequired] DateOnly to,
+        [FromQuery(Name = "marketProductId")] Guid[] marketProductIds,
+        [FromQuery] string? format,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new ExportAnalyticsQuery(dataset, from, to, marketProductIds, format),
+            ct);
+        if (result.IsFailure)
+            return result.Error.ToActionResult();
+
+        Response.Headers.ContentDisposition =
+            $"attachment; filename=\"{result.Value.FileName}\"";
+        return File(result.Value.Content, result.Value.ContentType);
     }
 }
 
