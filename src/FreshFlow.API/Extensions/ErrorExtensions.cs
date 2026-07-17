@@ -31,7 +31,9 @@ public static class ErrorExtensions
                         or "BATCH_NOT_MANIFESTED"
                         or "BATCH_ALREADY_HANDED_OFF"
                         or "BATCH_NOT_PURCHASED"
-                        or "BATCH_ALREADY_IN_PROGRESS")
+                        or "BATCH_ALREADY_IN_PROGRESS"
+                        or "BATCH_NOT_CANCELLABLE"
+                        or "BATCH_CANCELLED")
             return new ConflictObjectResult(body);
 
         if (error.Code is "UNAUTHORIZED" or "INVALID_CREDENTIALS" or "INVALID_CURRENT_PASSWORD"

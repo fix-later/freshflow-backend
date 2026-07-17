@@ -1,4 +1,5 @@
 using FreshFlow.Procurement.Domain.Entities;
+using FreshFlow.Procurement.Domain.Enums;
 
 namespace FreshFlow.Procurement.Application.Dtos;
 
@@ -19,7 +20,10 @@ public sealed record ProcurementBatchDto(
     int TotalItemCount,
     IReadOnlyList<ProcurementBatchItemDto> Items,
     IReadOnlyList<ProcurementBatchMemberDto> Members,
-    IReadOnlyList<ProcurementExceptionDto> Exceptions);
+    IReadOnlyList<ProcurementExceptionDto> Exceptions,
+    bool IsCompleted,
+    DateTime? CancelledAt,
+    string? CancellationReason);
 
 public sealed record ProcurementBatchItemDto(
     Guid MarketProductId,
@@ -51,6 +55,21 @@ public sealed record ProcurementBatchPaginationDto(
 
 internal static class ProcurementBatchDtoMapper
 {
+    /// <summary>Order statuses that need no further work from a session's point of view.</summary>
+    private static readonly string[] SettledOrderStatuses = ["Delivered", "Cancelled"];
+
+    /// <summary>
+    /// A session is done once every order it covers is settled — the whole point being that
+    /// callers never have to walk the orders themselves. Derived, not stored: the roll-up follows
+    /// the orders, which move long after Procurement's own status stops at HandedOff.
+    /// </summary>
+    private static bool IsCompleted(
+        ProcurementBatch batch,
+        IReadOnlyDictionary<Guid, string> orderStatuses) =>
+        batch.Status == ProcurementBatchStatus.Cancelled ||
+        (batch.Orders.Count > 0 && batch.Orders.All(link =>
+            SettledOrderStatuses.Contains(orderStatuses.GetValueOrDefault(link.OrderId))));
+
     public static ProcurementBatchDto Map(
         ProcurementBatch batch,
         IReadOnlyDictionary<Guid, string> orderStatuses) =>
@@ -92,5 +111,8 @@ internal static class ProcurementBatchDtoMapper
                     exception.ReportedByUserId,
                     exception.ReportedAt))
                 .ToList()
-                .AsReadOnly());
+                .AsReadOnly(),
+            IsCompleted(batch, orderStatuses),
+            batch.CancelledAt,
+            batch.CancellationReason);
 }

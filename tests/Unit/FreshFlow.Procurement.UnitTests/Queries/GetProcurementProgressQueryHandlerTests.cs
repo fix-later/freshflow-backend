@@ -43,7 +43,8 @@ public sealed class GetProcurementProgressQueryHandlerTests
                 ["Built"] = 1,
                 ["Manifested"] = 1,
                 ["Purchasing"] = 1,
-                ["HandedOff"] = 1
+                ["HandedOff"] = 1,
+                ["Cancelled"] = 0
             },
             TotalItems = 5,
             ItemsPurchased = 2,

@@ -169,6 +169,25 @@ public sealed class Order : AggregateRoot
             return Result.Failure(Error.Conflict(
                 "ORDER_NOT_CANCELLABLE", $"An order in status '{Status}' cannot be cancelled."));
 
+        return CancelInternal(reason);
+    }
+
+    /// <summary>
+    /// Cancels the order because the whole market session it belongs to was cancelled. Allowed from
+    /// Batched, unlike <see cref="Cancel"/>: a session only cancels before its agent buys anything,
+    /// so a batched order is still safe to drop. Nobody may cancel a batched order on its own.
+    /// </summary>
+    public Result CancelWithSession(string? reason)
+    {
+        if (Status is not OrderStatus.Confirmed and not OrderStatus.Batched)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_CANCELLABLE", $"An order in status '{Status}' cannot be cancelled."));
+
+        return CancelInternal(reason);
+    }
+
+    private Result CancelInternal(string? reason)
+    {
         TransitionTo(OrderStatus.Cancelled);
         CancelledAt = DateTime.UtcNow;
         CancellationReason = reason;
@@ -229,6 +248,11 @@ public sealed class Order : AggregateRoot
     /// </summary>
     public Result AdvanceStatus(OrderStatus next)
     {
+        // Cancelling must go through Cancel() so the reason, timestamp and debt waiver are recorded.
+        if (next == OrderStatus.Cancelled)
+            return Result.Failure(Error.Conflict(
+                "ORDER_INVALID_TRANSITION", "Use Cancel to cancel an order."));
+
         if (!AllowedTransitions.TryGetValue(Status, out var allowed) || !allowed.Contains(next))
             return Result.Failure(Error.Conflict(
                 "ORDER_INVALID_TRANSITION", $"Cannot transition order from '{Status}' to '{next}'."));
