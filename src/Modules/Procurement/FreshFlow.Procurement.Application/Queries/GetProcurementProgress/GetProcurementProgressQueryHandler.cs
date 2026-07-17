@@ -74,6 +74,12 @@ internal sealed class GetProcurementProgressQueryHandler(
         var itemsPurchased = batch.Items.Count(item => item.ActualQuantity is not null);
         var exceptionCount = batch.Exceptions.Count(exception => !exception.IsDeleted);
 
+        // A cancelled session's unbought items are not work anyone still owes, so they must stay out
+        // of the pending totals this endpoint exists to report.
+        var itemsPending = batch.Status == ProcurementBatchStatus.Cancelled
+            ? 0
+            : batch.Items.Count - itemsPurchased;
+
         return new ProcurementBatchProgressDto(
             batch.Id,
             batch.MarketId,
@@ -82,7 +88,7 @@ internal sealed class GetProcurementProgressQueryHandler(
             batch.HubId,
             batch.Items.Count,
             itemsPurchased,
-            batch.Items.Count - itemsPurchased,
+            itemsPending,
             exceptionCount,
             batch.Orders.Count,
             batch.ManifestedAt,
