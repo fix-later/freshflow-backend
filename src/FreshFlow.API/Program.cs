@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using FluentValidation;
+using FreshFlow.Analytics.Infrastructure;
 using FreshFlow.API.Assistant;
 using FreshFlow.API.Swagger;
 using FreshFlow.Auth.Infrastructure;
@@ -193,6 +194,7 @@ builder.Services.AddProcurementModule(builder.Configuration);
 builder.Services.AddLogisticsModule(builder.Configuration);
 builder.Services.AddNotificationsModule(builder.Configuration);
 builder.Services.AddHubModule(builder.Configuration);
+builder.Services.AddAnalyticsModule(builder.Configuration);
 builder.Services.AddMediaModule(builder.Configuration);
 
 // ── AI Shopping Assistant (Tầng 2 — host-layer orchestration) ──

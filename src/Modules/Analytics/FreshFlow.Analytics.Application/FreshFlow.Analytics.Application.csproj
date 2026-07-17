@@ -1,6 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="MediatR" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FreshFlow.Analytics.Domain\FreshFlow.Analytics.Domain.csproj" />
     <ProjectReference Include="..\..\..\Shared\FreshFlow.SharedKernel\FreshFlow.SharedKernel.csproj" />
     <ProjectReference Include="..\..\..\Shared\FreshFlow.Contracts\FreshFlow.Contracts.csproj" />

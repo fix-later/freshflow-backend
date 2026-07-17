@@ -22,6 +22,284 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.DeliveryRouteVehicleRow", b =>
+                {
+                    b.Property<decimal>("CapacityKg")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("DeliveryRouteId")
+                        .HasColumnType("uuid");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    dr.id AS \"DeliveryRouteId\",\n    v.capacity_kg AS \"CapacityKg\"\nFROM delivery_routes dr\nJOIN vehicles v ON v.id = dr.vehicle_id\nWHERE dr.deleted_at IS NULL\n  AND v.deleted_at IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.DeliveryRow", b =>
+                {
+                    b.Property<DateTime?>("ActualArrival")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DeliveryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeliveryRouteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("EstimatedArrival")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    id AS \"DeliveryId\",\n    delivery_route_id AS \"DeliveryRouteId\",\n    status AS \"Status\",\n    estimated_arrival AS \"EstimatedArrival\",\n    actual_arrival AS \"ActualArrival\",\n    updated_at AS \"UpdatedAt\"\nFROM deliveries\nWHERE deleted_at IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.HandoverDepartureRow", b =>
+                {
+                    b.Property<Guid>("DeliveryRouteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("DriverConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    delivery_route_id AS \"DeliveryRouteId\",\n    MIN(driver_confirmed_at) AS \"DriverConfirmedAt\"\nFROM hub_handover_events\nWHERE status = 'CHECKED_OUT'\n  AND driver_confirmed_at IS NOT NULL\n  AND deleted_at IS NULL\nGROUP BY delivery_route_id");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.HubInboundEventRow", b =>
+                {
+                    b.Property<DateTime>("ArrivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HubId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InboundEventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("TotalQuantityKg")
+                        .HasColumnType("numeric");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    id AS \"InboundEventId\",\n    hub_id AS \"HubId\",\n    status AS \"Status\",\n    total_quantity_kg AS \"TotalQuantityKg\",\n    arrived_at AS \"ArrivedAt\"\nFROM hub_inbound_events\nWHERE deleted_at IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.HubOutboundEventRow", b =>
+                {
+                    b.Property<Guid>("DestinationRouteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("DispatchedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HubId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OutboundEventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("TotalQuantityKg")
+                        .HasColumnType("numeric");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    id AS \"OutboundEventId\",\n    hub_id AS \"HubId\",\n    destination_route_id AS \"DestinationRouteId\",\n    total_quantity_kg AS \"TotalQuantityKg\",\n    dispatched_at AS \"DispatchedAt\"\nFROM hub_outbound_events\nWHERE deleted_at IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.HubRow", b =>
+                {
+                    b.Property<Guid>("HubId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("HubName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    id AS \"HubId\",\n    name AS \"HubName\"\nFROM hubs\nWHERE deleted_at IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.MarketProductDetailRow", b =>
+                {
+                    b.Property<string>("MarketName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("MarketProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    mp.\"Id\" AS \"MarketProductId\",\n    p.\"Name\" AS \"ProductName\",\n    m.\"Name\" AS \"MarketName\"\nFROM market_products mp\nJOIN products p ON p.\"Id\" = mp.\"ProductId\"\nJOIN markets m ON m.\"Id\" = mp.\"MarketId\"\nWHERE mp.\"deleted_at\" IS NULL\n  AND p.\"DeletedAt\" IS NULL\n  AND m.\"DeletedAt\" IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.OrderItemCategoryRow", b =>
+                {
+                    b.Property<string>("CategoryName")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    oi.\"OrderId\" AS \"OrderId\",\n    oi.\"Quantity\" AS \"Quantity\",\n    c.\"Name\" AS \"CategoryName\"\nFROM order_items oi\nINNER JOIN market_products mp ON oi.\"MarketProductId\" = mp.\"Id\"\nINNER JOIN products p ON mp.\"ProductId\" = p.\"Id\"\nLEFT JOIN product_categories c ON p.\"CategoryId\" = c.\"Id\"\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.OrderSummaryRow", b =>
+                {
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("numeric");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    \"Id\" AS \"OrderId\",\n    \"RestaurantId\" AS \"RestaurantId\",\n    \"Status\" AS \"Status\",\n    \"TotalAmount\" AS \"TotalAmount\",\n    \"CreatedAt\" AS \"CreatedAt\",\n    \"CancelledAt\" AS \"CancelledAt\"\nFROM orders\nWHERE \"deleted_at\" IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.PriceSnapshotRow", b =>
+                {
+                    b.Property<decimal>("AvgPrice")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("BucketStartUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MarketProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("MaxPrice")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("MinPrice")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("PriceVolatility")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("SnapshotCount")
+                        .HasColumnType("integer");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    \"MarketProductId\" AS \"MarketProductId\",\n    date_trunc('hour', \"RecordedAt\", 'UTC') AS \"BucketStartUtc\",\n    MIN(\"Price\") AS \"MinPrice\",\n    MAX(\"Price\") AS \"MaxPrice\",\n    AVG(\"Price\") AS \"AvgPrice\",\n    COUNT(*)::integer AS \"SnapshotCount\",\n    stddev_samp(\"Price\") AS \"PriceVolatility\"\nFROM price_snapshots\nGROUP BY \"MarketProductId\", date_trunc('hour', \"RecordedAt\", 'UTC')");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.ProcurementBatchItemRow", b =>
+                {
+                    b.Property<int?>("ActualQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("ActualUnitPrice")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("ProcurementBatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("ReferenceUnitPrice")
+                        .HasColumnType("numeric");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    procurement_batch_id AS \"ProcurementBatchId\",\n    reference_unit_price AS \"ReferenceUnitPrice\",\n    actual_quantity AS \"ActualQuantity\",\n    actual_unit_price AS \"ActualUnitPrice\"\nFROM procurement_batch_items\nWHERE deleted_at IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.ProcurementBatchRow", b =>
+                {
+                    b.Property<DateOnly>("BatchDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("HandedOffAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ManifestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MarketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    id AS \"BatchId\",\n    batch_date AS \"BatchDate\",\n    market_id AS \"MarketId\",\n    status AS \"Status\",\n    manifested_at AS \"ManifestedAt\",\n    handed_off_at AS \"HandedOffAt\"\nFROM procurement_batches\nWHERE deleted_at IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.ProcurementExceptionRow", b =>
+                {
+                    b.Property<Guid>("ProcurementBatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    procurement_batch_id AS \"ProcurementBatchId\",\n    type AS \"Type\"\nFROM procurement_exceptions\nWHERE deleted_at IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.RestaurantCoordinateRow", b =>
+                {
+                    b.Property<decimal?>("Latitude")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT da.\"RestaurantId\", r.\"Name\" AS \"Name\", da.\"Latitude\", da.\"Longitude\"\nFROM delivery_addresses da\nJOIN restaurants r ON r.\"Id\" = da.\"RestaurantId\"\nWHERE da.\"IsDefault\" = true AND da.\"DeletedAt\" IS NULL AND r.status = 'active'");
+                });
+
             modelBuilder.Entity("FreshFlow.Auth.Domain.Aggregates.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2772,7 +3050,6 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementException", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");

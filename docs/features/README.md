@@ -55,6 +55,12 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 |---|---|---|
 | [AUDIT-2026-07-11 del backend plan](./delivery/AUDIT-2026-07-11-del-backend-plan.md) | Audit / Plan | ✅ Hoàn thành 6/6 (315/317/319/321/323/325 committed) |
 
+## analytics — Operations Dashboard & Analytics (epic SCRUM-301, module Analytics)
+
+| Doc | Loại | Trạng thái |
+|---|---|---|
+| [AUDIT-2026-07-16 ana backend plan](./analytics/AUDIT-2026-07-16-ana-backend-plan.md) | Audit / Plan | ⬜ 9 task chưa bắt đầu (phủ 10 UC); chờ supervisor chốt §7 |
+
 ## auth-catalog — Auth / Profile / Catalog
 
 | Doc | Loại |
