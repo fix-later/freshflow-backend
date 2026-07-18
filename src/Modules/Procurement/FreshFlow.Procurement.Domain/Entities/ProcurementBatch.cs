@@ -22,6 +22,8 @@ public sealed class ProcurementBatch : AggregateRoot
     public DateTime? HandedOffAt { get; private set; }
     public Guid? HubId { get; private set; }
     public int TotalItemCount { get; private set; }
+    public DateTime? CancelledAt { get; private set; }
+    public string? CancellationReason { get; private set; }
 
     public IReadOnlyCollection<ProcurementBatchItem> Items => _items.AsReadOnly();
     public IReadOnlyCollection<ProcurementBatchOrder> Orders => _orders.AsReadOnly();
@@ -155,6 +157,13 @@ public sealed class ProcurementBatch : AggregateRoot
                 $"Procurement batch '{Id}' is already in progress."));
         }
 
+        if (Status == ProcurementBatchStatus.Cancelled)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_CANCELLED",
+                $"Procurement batch '{Id}' has been cancelled."));
+        }
+
         AssignedAgentUserId = agentUserId;
         AssignedAt = assignedAtUtc;
         UpdatedAt = assignedAtUtc;
@@ -183,6 +192,13 @@ public sealed class ProcurementBatch : AggregateRoot
             return Result.Failure(Error.Conflict(
                 "BATCH_ALREADY_HANDED_OFF",
                 $"Procurement batch '{Id}' has already been handed off."));
+        }
+
+        if (Status == ProcurementBatchStatus.Cancelled)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_CANCELLED",
+                $"Procurement batch '{Id}' has been cancelled."));
         }
 
         var exemptProductIds = _exceptions
@@ -279,6 +295,38 @@ public sealed class ProcurementBatch : AggregateRoot
             exception.Id,
             marketProductId,
             type));
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Cancels the whole session and every order it covers. Only allowed before the agent has
+    /// bought anything — once money is spent the shortfall goes through <see cref="ReportException"/>.
+    /// </summary>
+    public Result Cancel(string? reason, DateTime capturedAtUtc)
+    {
+        if (Status is not ProcurementBatchStatus.Built and not ProcurementBatchStatus.Manifested)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_NOT_CANCELLABLE",
+                $"Procurement batch '{Id}' cannot be cancelled from status '{Status}'."));
+        }
+
+        Status = ProcurementBatchStatus.Cancelled;
+        CancelledAt = capturedAtUtc;
+        CancellationReason = reason;
+        UpdatedAt = capturedAtUtc;
+        var coveredOrderIds = _orders
+            .Select(order => order.OrderId)
+            .Distinct()
+            .ToList()
+            .AsReadOnly();
+        RaiseDomainEvent(new ProcurementBatchCancelledDomainEvent(
+            Id,
+            MarketId,
+            reason,
+            capturedAtUtc,
+            coveredOrderIds));
 
         return Result.Success();
     }

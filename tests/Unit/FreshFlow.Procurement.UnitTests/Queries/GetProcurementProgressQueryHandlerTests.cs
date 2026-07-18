@@ -43,7 +43,8 @@ public sealed class GetProcurementProgressQueryHandlerTests
                 ["Built"] = 1,
                 ["Manifested"] = 1,
                 ["Purchasing"] = 1,
-                ["HandedOff"] = 1
+                ["HandedOff"] = 1,
+                ["Cancelled"] = 0
             },
             TotalItems = 5,
             ItemsPurchased = 2,
@@ -157,6 +158,26 @@ public sealed class GetProcurementProgressQueryHandlerTests
         result.Error.Code.Should().Be("INVALID_BATCH_STATUS");
         await repository.DidNotReceiveWithAnyArgs()
             .ListByDateAsync(default, default);
+    }
+
+    [Fact]
+    public async Task Handle_CancelledBatch_ReportsNoPendingItemsAsync()
+    {
+        var batch = BuildBatch(ProcurementBatchStatus.Built);
+        batch.Cancel("Market closed", CapturedAt);
+        var repository = Substitute.For<IProcurementBatchRepository>();
+        repository.ListByDateAsync(CycleDate, default)
+            .Returns((IReadOnlyList<ProcurementBatch>)new[] { batch });
+        var handler = new GetProcurementProgressQueryHandler(repository);
+
+        var result = await handler.Handle(
+            new GetProcurementProgressQuery(CycleDate, null),
+            default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Batches.Single().ItemsTotal.Should().Be(1);
+        result.Value.Batches.Single().ItemsPending.Should().Be(0);
+        result.Value.Summary.ItemsPending.Should().Be(0);
     }
 
     [Fact]

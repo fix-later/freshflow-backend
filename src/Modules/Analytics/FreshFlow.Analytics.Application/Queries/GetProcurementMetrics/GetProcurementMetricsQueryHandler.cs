@@ -9,12 +9,19 @@ internal sealed class GetProcurementMetricsQueryHandler(IProcurementMetricsReade
     : IRequestHandler<GetProcurementMetricsQuery, Result<ProcurementMetricsDto>>
 {
     private const string HandedOffStatus = "HandedOff";
+
+    /// <summary>
+    /// Must list every ProcurementBatchStatus value: TotalBatches sums the observed rows, so a
+    /// status missing here makes StatusCounts stop adding up to it. Strings, not the enum, because
+    /// Analytics may not reference the Procurement module.
+    /// </summary>
     private static readonly string[] BatchStatuses =
     [
         "Built",
         "Manifested",
         "Purchasing",
-        HandedOffStatus
+        HandedOffStatus,
+        "Cancelled"
     ];
     private static readonly string[] ExceptionTypes =
     [

@@ -67,6 +67,30 @@ public sealed class GetProcurementMetricsQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_CancelledBatches_CountsThemSoStatusCountsSumToTotalAsync()
+    {
+        var reader = new StubProcurementMetricsReader(new ProcurementMetricsReadModel(
+            [
+                new("Built", 2),
+                new("HandedOff", 1),
+                new("Cancelled", 3)
+            ],
+            5,
+            3,
+            1_050m,
+            null,
+            null,
+            []));
+        var sender = CreateSender(reader);
+
+        var result = await sender.Send(new GetProcurementMetricsQuery(From, To, null));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.StatusCounts["Cancelled"].Should().Be(3);
+        result.Value.StatusCounts.Values.Sum().Should().Be(result.Value.TotalBatches);
+    }
+
+    [Fact]
     public async Task Handle_NoBatches_ReturnsZerosNullSamplesAndAllKeysAsync()
     {
         var sender = CreateSender(new StubProcurementMetricsReader(EmptyMetrics()));
@@ -83,7 +107,7 @@ public sealed class GetProcurementMetricsQueryHandlerTests
         result.Value.PriceVariancePercent.Should().BeNull();
         result.Value.AvgLeadTimeMinutes.Should().BeNull();
         result.Value.ExceptionCount.Should().Be(0);
-        result.Value.StatusCounts.Should().HaveCount(4);
+        result.Value.StatusCounts.Should().HaveCount(5);
         result.Value.StatusCounts.Values.Should().OnlyContain(count => count == 0);
         result.Value.ExceptionsByType.Should().HaveCount(4);
         result.Value.ExceptionsByType.Values.Should().OnlyContain(count => count == 0);

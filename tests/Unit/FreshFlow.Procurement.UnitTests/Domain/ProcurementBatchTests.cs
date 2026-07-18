@@ -491,6 +491,98 @@ public sealed class ProcurementBatchTests
         batch.DomainEvents.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData(ProcurementBatchStatus.Built)]
+    [InlineData(ProcurementBatchStatus.Manifested)]
+    public void Cancel_BeforePurchase_CancelsSessionAndRaisesEventCoveringEveryOrder(
+        ProcurementBatchStatus status)
+    {
+        var productId = Guid.NewGuid();
+        var batch = status == ProcurementBatchStatus.Built
+            ? BuildBatch(productId, Guid.NewGuid())
+            : BuildManifestedBatch(productId, Guid.NewGuid());
+        var cancelledAt = new DateTime(2026, 7, 15, 2, 0, 0, DateTimeKind.Utc);
+        var coveredOrderIds = batch.Orders.Select(order => order.OrderId).ToArray();
+        batch.ClearDomainEvents();
+
+        var result = batch.Cancel("Market closed unexpectedly", cancelledAt);
+
+        result.IsSuccess.Should().BeTrue();
+        batch.Status.Should().Be(ProcurementBatchStatus.Cancelled);
+        batch.CancelledAt.Should().Be(cancelledAt);
+        batch.CancellationReason.Should().Be("Market closed unexpectedly");
+        batch.UpdatedAt.Should().Be(cancelledAt);
+        var domainEvent = batch.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<ProcurementBatchCancelledDomainEvent>().Subject;
+        domainEvent.BatchId.Should().Be(batch.Id);
+        domainEvent.MarketId.Should().Be(batch.MarketId);
+        domainEvent.Reason.Should().Be("Market closed unexpectedly");
+        domainEvent.CancelledAt.Should().Be(cancelledAt);
+        domainEvent.CoveredOrderIds.Should().BeEquivalentTo(coveredOrderIds);
+    }
+
+    [Fact]
+    public void Cancel_PurchasedBatch_ReturnsConflict()
+    {
+        var batch = BuildPurchasingBatch(Guid.NewGuid());
+        batch.ClearDomainEvents();
+
+        var result = batch.Cancel("Too late", DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("BATCH_NOT_CANCELLABLE");
+        batch.Status.Should().Be(ProcurementBatchStatus.Purchasing);
+        batch.CancelledAt.Should().BeNull();
+        batch.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Cancel_HandedOffBatch_ReturnsConflict()
+    {
+        var batch = BuildPurchasingBatch(Guid.NewGuid());
+        batch.HandoverToHub(Guid.NewGuid(), new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc));
+        batch.ClearDomainEvents();
+
+        var result = batch.Cancel("Too late", DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("BATCH_NOT_CANCELLABLE");
+        batch.Status.Should().Be(ProcurementBatchStatus.HandedOff);
+        batch.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AssignAgent_CancelledBatch_ReturnsConflict()
+    {
+        var batch = BuildManifestedBatch(Guid.NewGuid());
+        batch.Cancel("Market closed", new DateTime(2026, 7, 15, 2, 0, 0, DateTimeKind.Utc));
+
+        var result = batch.AssignAgent(Guid.NewGuid(), DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("BATCH_CANCELLED");
+        batch.AssignedAgentUserId.Should().BeNull();
+    }
+
+    [Fact]
+    public void ConfirmPurchase_CancelledBatch_ReturnsConflict()
+    {
+        var productId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(productId);
+        batch.Cancel("Market closed", new DateTime(2026, 7, 15, 2, 0, 0, DateTimeKind.Utc));
+
+        var result = batch.ConfirmPurchase(
+            new Dictionary<Guid, (int ActualQuantity, decimal ActualUnitPrice)>
+            {
+                [productId] = (2, 10_000m)
+            },
+            DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("BATCH_CANCELLED");
+        batch.Status.Should().Be(ProcurementBatchStatus.Cancelled);
+    }
+
     private static ProcurementBatch BuildManifestedBatch()
     {
         var productId = Guid.NewGuid();

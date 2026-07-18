@@ -629,6 +629,141 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         return route.Id;
     }
 
+    [Fact]
+    public async Task CancelOrderGroup_BuiltBatch_CancelsEveryCoveredOrderAsync()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+        var restaurantId = await CreateRestaurantAsync();
+        var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1);
+        var seed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+        await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/auto-batch",
+            new { targetDate, dryRun = false, force = false });
+        var batchId = await BatchIdCoveringAsync(seed.OrderId);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/admin/order-groups/{batchId}/cancel",
+            new { reason = "Market closed unexpectedly" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<Envelope<ProcurementBatchDto>>();
+        body!.Data!.Status.Should().Be("Cancelled");
+        body.Data.CancellationReason.Should().Be("Market closed unexpectedly");
+        body.Data.IsCompleted.Should().BeTrue();
+
+        // The whole point: the order goes down with the session, nobody cancels it by hand.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var batch = await db.Set<ProcurementBatch>()
+            .AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == batchId);
+        batch.Status.Should().Be(ProcurementBatchStatus.Cancelled);
+        batch.CancelledAt.Should().NotBeNull();
+        var order = await db.Set<Order>()
+            .AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == seed.OrderId);
+        order.Status.Should().Be(OrderStatus.Cancelled);
+        order.CancellationReason.Should().Be("Market closed unexpectedly");
+        order.PaymentStatus.Should().Be(OrderPaymentStatus.Waived);
+    }
+
+    [Fact]
+    public async Task CancelOrderGroup_PurchasedBatch_ReturnsConflictAndKeepsOrdersAsync()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+        var restaurantId = await CreateRestaurantAsync();
+        var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1);
+        var seed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+        await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/auto-batch",
+            new { targetDate, dryRun = false, force = false });
+        var batchId = await BatchIdCoveringAsync(seed.OrderId);
+        await SetBatchStatusForTestAsync(batchId, ProcurementBatchStatus.Purchasing);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/admin/order-groups/{batchId}/cancel",
+            new { reason = "Too late" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var order = await db.Set<Order>()
+            .AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == seed.OrderId);
+        order.Status.Should().Be(OrderStatus.Batched);
+    }
+
+    [Fact]
+    public async Task CancelOrderGroup_OrderAlreadyPickedUp_ReturnsConflictAndKeepsSessionLiveAsync()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+        var restaurantId = await CreateRestaurantAsync();
+        var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1);
+        var seed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+        await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/auto-batch",
+            new { targetDate, dryRun = false, force = false });
+        var batchId = await BatchIdCoveringAsync(seed.OrderId);
+        // An order can be advanced on its own while its batch still sits at Built. Cancelling the
+        // session anyway would strand it: cancelled session, live order.
+        await SetOrderStatusForTestAsync(seed.OrderId, OrderStatus.PickedUp);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/admin/order-groups/{batchId}/cancel",
+            new { reason = "Market closed unexpectedly" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var batch = await db.Set<ProcurementBatch>()
+            .AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == batchId);
+        batch.Status.Should().Be(ProcurementBatchStatus.Built);
+        batch.CancelledAt.Should().BeNull();
+        var order = await db.Set<Order>()
+            .AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == seed.OrderId);
+        order.Status.Should().Be(OrderStatus.PickedUp);
+    }
+
+    private async Task SetOrderStatusForTestAsync(Guid orderId, OrderStatus status)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var order = await db.Set<Order>()
+            .SingleAsync(candidate => candidate.Id == orderId);
+        db.Entry(order).Property(nameof(Order.Status)).CurrentValue = status;
+        await db.SaveChangesAsync();
+    }
+
+    // Tests in this class share one database, so never look up "the" batch — find the one
+    // covering this test's own order.
+    private async Task<Guid> BatchIdCoveringAsync(Guid orderId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var link = await db.Set<ProcurementBatchOrder>()
+            .AsNoTracking()
+            .SingleAsync(candidate => candidate.OrderId == orderId);
+        return link.ProcurementBatchId;
+    }
+
+    private async Task SetBatchStatusForTestAsync(Guid batchId, ProcurementBatchStatus status)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var batch = await db.Set<ProcurementBatch>()
+            .SingleAsync(candidate => candidate.Id == batchId);
+        db.Entry(batch).Property(nameof(ProcurementBatch.Status)).CurrentValue = status;
+        await db.SaveChangesAsync();
+    }
+
     private async Task AssertOrderAndBatchStateAsync(
         Guid orderId,
         OrderStatus expectedStatus,

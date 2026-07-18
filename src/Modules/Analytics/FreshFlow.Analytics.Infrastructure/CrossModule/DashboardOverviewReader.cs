@@ -10,6 +10,7 @@ internal sealed class DashboardOverviewReader(AppDbContext db) : IDashboardOverv
     private const string OrderStatusConfirmed = "Confirmed";
     private const string OrderStatusCancelled = "Cancelled";
     private const string ProcurementStatusCompleted = "HandedOff";
+    private const string ProcurementStatusCancelled = "Cancelled";
     private const string DeliveryStatusDelivered = "delivered";
     private const string HubInboundStatusArrived = "ARRIVED_AT_HUB";
 
@@ -45,7 +46,11 @@ internal sealed class DashboardOverviewReader(AppDbContext db) : IDashboardOverv
 
         var activeProcurementBatches = await db.Set<ProcurementBatchRow>()
             .AsNoTracking()
-            .CountAsync(row => row.BatchDate == date && row.Status != ProcurementStatusCompleted, ct);
+            .CountAsync(row =>
+                row.BatchDate == date &&
+                row.Status != ProcurementStatusCompleted &&
+                row.Status != ProcurementStatusCancelled,
+                ct);
 
         var deliveries = await db.Set<DeliveryRow>()
             .AsNoTracking()

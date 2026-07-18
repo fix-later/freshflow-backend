@@ -20,6 +20,7 @@ using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Pricing.Application.Commands.UpdatePricingSettings;
 using FreshFlow.Pricing.Application.Queries.GetPricingSettings;
 using FreshFlow.Procurement.Application.Commands.AssignAgent;
+using FreshFlow.Procurement.Application.Commands.CancelBatch;
 using FreshFlow.Procurement.Application.Commands.GenerateManifest;
 using FreshFlow.Procurement.Application.Commands.RunAutoBatch;
 using FreshFlow.Procurement.Application.Queries.GetProcurementBatches;
@@ -268,6 +269,21 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    /// <summary>
+    /// POST /api/v1/admin/order-groups/{batchId}/cancel — cancels the session and every order it
+    /// covers. Only allowed before the agent has bought anything.
+    /// </summary>
+    [HttpPost("order-groups/{batchId:guid}/cancel")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> CancelOrderGroupAsync(
+        Guid batchId,
+        [FromBody] CancelOrderGroupRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new CancelBatchCommand(batchId, body.Reason), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     // ── Pricing Settings (Admin) ──────────────────────────────────────────────
 
     /// <summary>GET /api/v1/admin/pricing-settings</summary>
@@ -358,3 +374,4 @@ public sealed record UpdateOperationalSettingsRequest(
     TimeOnly DailyCutoffTime, bool BatchingEnabled, string DefaultRouteType);
 public sealed record UpdatePricingSettingsRequest(decimal PriceAlertThresholdPercent);
 public sealed record RunAutoBatchRequest(DateOnly? TargetDate, bool? DryRun, bool? Force);
+public sealed record CancelOrderGroupRequest(string? Reason);

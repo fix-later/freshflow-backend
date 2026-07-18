@@ -455,6 +455,64 @@ public sealed class OrderTests
             .Which.NewStatus.Should().Be(OrderStatus.Cancelled);
     }
 
+    [Theory]
+    [InlineData(OrderStatus.Confirmed)]
+    [InlineData(OrderStatus.Batched)]
+    public void CancelWithSession_ConfirmedOrBatchedOrder_CancelsAndWaivesDebt(OrderStatus status)
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 1, unitPrice: 20_000m);
+        SetStatusForTest(order, status);
+
+        // Act
+        var result = order.CancelWithSession("Phiên chợ bị hủy");
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        order.Status.Should().Be(OrderStatus.Cancelled);
+        order.CancellationReason.Should().Be("Phiên chợ bị hủy");
+        order.DomainEvents.OfType<OrderCancelledDomainEvent>().Should().ContainSingle();
+    }
+
+    [Theory]
+    [InlineData(OrderStatus.PickedUp)]
+    [InlineData(OrderStatus.AtHub)]
+    [InlineData(OrderStatus.Delivering)]
+    [InlineData(OrderStatus.Delivered)]
+    [InlineData(OrderStatus.Cancelled)]
+    public void CancelWithSession_AfterPickup_ReturnsOrderNotCancellable(OrderStatus status)
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 1, unitPrice: 20_000m);
+        SetStatusForTest(order, status);
+
+        // Act
+        var result = order.CancelWithSession("test");
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_NOT_CANCELLABLE");
+    }
+
+    [Fact]
+    public void AdvanceStatus_ToCancelled_ReturnsInvalidTransition()
+    {
+        // Arrange — cancelling must go through Cancel so the debt waiver is not skipped.
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 1, unitPrice: 20_000m);
+        order.Confirm();
+
+        // Act
+        var result = order.AdvanceStatus(OrderStatus.Cancelled);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_INVALID_TRANSITION");
+        order.Status.Should().Be(OrderStatus.Confirmed);
+    }
+
     // ── RecordActualQuantity ────────────────────────────────────────────────
 
     [Fact]
