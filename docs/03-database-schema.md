@@ -1,14 +1,14 @@
 # FreshFlow (FFX) — Database Schema
 
-**Version:** 1.1  
-**Date:** 2026-05-09 (design) · **Reconciled with code:** 2026-06-29  
+**Version:** 1.2  
+**Date:** 2026-05-09 (design) · **Reconciled with code:** 2026-07-18  
 **Project:** FreshFlow – Intermediary Platform for Food Procurement and Logistics Optimization  
 **Status:** Partially implemented — see Sync Status below  
 **Based on:** Requirements Specification v1.0 + System Architecture v1.0
 
 ---
 
-## ⚙️ Sync Status (reviewed 2026-06-30)
+## ⚙️ Sync Status (reviewed 2026-07-18)
 
 > **Physical source of truth:** EF Core migrations plus the model snapshot at
 > `src/FreshFlow.Infrastructure.Persistence/Migrations/AppDbContextModelSnapshot.cs`.
@@ -17,20 +17,32 @@
 > migration script because the current EF schema uses mixed PascalCase/snake_case column
 > names unless a configuration explicitly maps a column.
 
-**Implemented today** (Auth, Catalog, Pricing, Orders, Assistant, Notifications):
+**Implemented today — 45 tables.**
+
+Auth / Catalog / Pricing / Orders / Assistant / Notifications:
 `roles`, `users`, `refresh_tokens`, `password_reset_tokens`, `verification_codes`,
 `user_market_assignments`, `driver_profiles`, `restaurants`, `delivery_addresses`,
 `product_categories`, `units_of_measurement`, `products`, `markets`, `market_products`,
 `price_snapshots`, `orders`, `order_items`, `scheduled_orders`, `order_issues`,
-`restaurant_credit`, `credit_transactions`, `assistant_conversations`,
-`notifications`, `notification_devices` (epic NOT SCRUM-300).
+`restaurant_credit`, `credit_transactions`, `credit_statements`, `credit_statement_lines`,
+`assistant_conversations`, `notifications`, `notification_devices`.
 
-**Planned — NOT yet in the database** (kept below for roadmap, marked `[PLANNED]`):
-`system_config`, `order_groups`, `order_status_history`, `restaurant_members`,
-`price_alert_subscriptions`, `invoices`, `invoice_orders`, `payments`, `refunds`,
-`procurement_*`, `hubs`, `hub_*`, `cross_dock_transfers`, `vehicles`, `delivery_routes`,
-`route_stops`, `deliveries`, `notification_templates`,
-`analytics_aggregations`, `export_jobs`.
+Procurement / Hub / Logistics / Admin — **added after this document was last reconciled;
+DDL is in [section 2bis](#2bis-tables-added-after-the-original-design-generated-from-migrations-2026-07-18)**:
+`procurement_batches`, `procurement_batch_items`, `procurement_batch_orders`,
+`procurement_exceptions`, `hubs`, `hub_inbound_events`, `hub_outbound_events`,
+`hub_discrepancies`, `hub_handover_events`, `cross_dock_transfers`, `vehicles`,
+`delivery_routes`, `deliveries`, `delivery_issues`, `delivery_zones`, `hub_inventory`,
+`audit_logs`, `operational_settings`, `pricing_settings`.
+
+**Planned — NOT in the database** (kept below for roadmap, marked `[PLANNED]`):
+`system_config` (superseded by `operational_settings` + `pricing_settings`),
+`order_groups` (superseded by `procurement_batches`), `order_status_history`,
+`restaurant_members` (removed per DEC-003), `price_alert_subscriptions`,
+`invoices`, `invoice_orders`, `payments`, `refunds` (all superseded by the credit model),
+`route_stops` (route stops are stored as JSONB on `delivery_routes`, not a child table),
+`notification_templates`, `analytics_aggregations`, `export_jobs`
+(Analytics owns **no** tables — it reads other modules through keyless Row seams).
 
 **Key deltas vs the original design (reflected in the implementation notes below):**
 - IDs and `CreatedAt`/`UpdatedAt` are mostly assigned by the application/domain model
@@ -1027,6 +1039,288 @@ CREATE TABLE export_jobs (
 
 > **No triggers policy:** current migrations do not create PostgreSQL triggers. See
 > [Section 4.4](#44-no-triggers-policy) for the current implementation note.
+
+---
+
+
+---
+
+## 2bis. Tables added after the original design (generated from migrations 2026-07-18)
+
+> The DDL in this section was extracted from `dotnet ef migrations script`, so it is the
+> **physical** schema, not the logical rewrite used in section 2. `ALTER TABLE ... ADD`
+> statements from later migrations are folded into the column list where noted.
+
+### 2.x Procurement
+
+Owned by the Procurement module. A **market session is a `procurement_batches` row** — there is no separate session entity. `status` is PascalCase (`Built`/`Manifested`/`Purchasing`/`HandedOff`/`Cancelled`).
+
+```sql
+CREATE TABLE procurement_batches (
+    id uuid NOT NULL DEFAULT (gen_random_uuid()),
+    batch_date date NOT NULL,
+    market_id uuid NOT NULL,
+    status character varying(20) NOT NULL DEFAULT 'Built',
+    total_item_count integer NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT "PK_procurement_batches" PRIMARY KEY (id)
+);
+
+-- added by later migrations:
+ALTER TABLE procurement_batches ADD manifested_at timestamp with time zone;
+ALTER TABLE procurement_batches ADD assigned_agent_user_id uuid;
+ALTER TABLE procurement_batches ADD assigned_at timestamp with time zone;
+ALTER TABLE procurement_batches ADD handed_off_at timestamp with time zone;
+ALTER TABLE procurement_batches ADD hub_id uuid;
+ALTER TABLE procurement_batches ADD cancellation_reason character varying(500);
+ALTER TABLE procurement_batches ADD cancelled_at timestamp with time zone;
+CREATE INDEX idx_procurement_batches_batch_date_market_id ON procurement_batches (batch_date, market_id);
+CREATE INDEX ix_procurement_batches_assigned_agent ON procurement_batches (assigned_agent_user_id) WHERE "assigned_agent_user_id" IS NOT NULL;
+```
+
+```sql
+CREATE TABLE procurement_batch_items (
+    id uuid NOT NULL DEFAULT (gen_random_uuid()),
+    procurement_batch_id uuid NOT NULL,
+    market_product_id uuid NOT NULL,
+    product_name_snapshot character varying(200) NOT NULL,
+    total_quantity integer NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT "PK_procurement_batch_items" PRIMARY KEY (id),
+    CONSTRAINT fk_procurement_batch_items_batch FOREIGN KEY (procurement_batch_id) REFERENCES procurement_batches (id) ON DELETE CASCADE
+);
+
+-- added by later migrations:
+ALTER TABLE procurement_batch_items ADD reference_unit_price numeric(12,2);
+ALTER TABLE procurement_batch_items ADD actual_quantity integer;
+ALTER TABLE procurement_batch_items ADD actual_unit_price numeric(12,2);
+ALTER TABLE procurement_batch_items ADD purchased_at timestamp with time zone;
+CREATE INDEX idx_procurement_batch_items_batch_id ON procurement_batch_items (procurement_batch_id);
+```
+
+```sql
+CREATE TABLE procurement_batch_orders (
+    id uuid NOT NULL DEFAULT (gen_random_uuid()),
+    procurement_batch_id uuid NOT NULL,
+    order_id uuid NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT "PK_procurement_batch_orders" PRIMARY KEY (id),
+    CONSTRAINT fk_procurement_batch_orders_batch FOREIGN KEY (procurement_batch_id) REFERENCES procurement_batches (id) ON DELETE CASCADE
+);
+CREATE INDEX idx_procurement_batch_orders_batch_id ON procurement_batch_orders (procurement_batch_id);
+CREATE UNIQUE INDEX ux_procurement_batch_orders_order_active ON procurement_batch_orders (order_id) WHERE "deleted_at" IS NULL;
+```
+
+```sql
+CREATE TABLE procurement_exceptions (
+    id uuid NOT NULL DEFAULT (gen_random_uuid()),
+    procurement_batch_id uuid NOT NULL,
+    market_product_id uuid NOT NULL,
+    type character varying(20) NOT NULL,
+    reported_quantity integer NOT NULL,
+    note character varying(500),
+    proof_image_url character varying(500),
+    reported_by_user_id uuid NOT NULL,
+    reported_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT "PK_procurement_exceptions" PRIMARY KEY (id),
+    CONSTRAINT fk_procurement_exceptions_batch FOREIGN KEY (procurement_batch_id) REFERENCES procurement_batches (id) ON DELETE CASCADE
+);
+CREATE INDEX idx_procurement_exceptions_batch_id ON procurement_exceptions (procurement_batch_id);
+```
+
+### 2.y Credit statements
+
+Owned by Orders. A statement is an **immutable snapshot** — it has no `deleted_at` and is never updated after generation.
+
+```sql
+CREATE TABLE credit_statements (
+    id uuid NOT NULL,
+    restaurant_id uuid NOT NULL,
+    period_start timestamp with time zone NOT NULL,
+    period_end timestamp with time zone NOT NULL,
+    opening_balance numeric(14,2) NOT NULL,
+    closing_balance numeric(14,2) NOT NULL,
+    total_charges numeric(14,2) NOT NULL,
+    total_settlements numeric(14,2) NOT NULL,
+    total_refunds numeric(14,2) NOT NULL,
+    generated_at timestamp with time zone NOT NULL,
+    CONSTRAINT "PK_credit_statements" PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX uq_credit_statements_restaurant_id_period_start ON credit_statements (restaurant_id, period_start);
+```
+
+```sql
+CREATE TABLE credit_statement_lines (
+    id uuid NOT NULL,
+    credit_statement_id uuid NOT NULL,
+    transaction_id uuid NOT NULL,
+    type character varying(20) NOT NULL,
+    amount numeric(14,2) NOT NULL,
+    balance_after numeric(14,2) NOT NULL,
+    occurred_at timestamp with time zone NOT NULL,
+    note character varying(500),
+    reference character varying(200),
+    CONSTRAINT "PK_credit_statement_lines" PRIMARY KEY (id),
+    CONSTRAINT fk_credit_statement_lines_statement FOREIGN KEY (credit_statement_id) REFERENCES credit_statements (id) ON DELETE CASCADE
+);
+CREATE INDEX idx_credit_statement_lines_statement_id ON credit_statement_lines (credit_statement_id);
+```
+
+### 2.z Hub — discrepancy & handover
+
+Owned by Hub. Status values are **SCREAMING_SNAKE_CASE** and are enforced by real DB `CHECK` constraints (unlike most older tables, where CHECKs are documentation only).
+
+```sql
+CREATE TABLE hub_discrepancies (
+    id uuid NOT NULL,
+    hub_id uuid NOT NULL,
+    inbound_event_id uuid NOT NULL,
+    order_id uuid NOT NULL,
+    order_item_id uuid NOT NULL,
+    affected_quantity numeric(10,2) NOT NULL,
+    condition_status character varying(20) NOT NULL,
+    notes character varying(1000),
+    status character varying(20) NOT NULL DEFAULT 'OPEN',
+    acknowledged_by uuid,
+    acknowledged_at timestamp with time zone,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT "PK_hub_discrepancies" PRIMARY KEY (id),
+    CONSTRAINT ck_hub_discrepancies_affected_quantity_positive CHECK (affected_quantity > 0),
+    CONSTRAINT ck_hub_discrepancies_condition_status CHECK (condition_status IN ('MISSING', 'DAMAGED', 'PARTIAL')),
+    CONSTRAINT ck_hub_discrepancies_status CHECK (status IN ('OPEN', 'ACKNOWLEDGED')),
+    CONSTRAINT fk_hub_discrepancies_hub FOREIGN KEY (hub_id) REFERENCES hubs (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_hub_discrepancies_inbound_event FOREIGN KEY (inbound_event_id) REFERENCES hub_inbound_events (id) ON DELETE RESTRICT
+);
+CREATE INDEX idx_hub_discrepancies_created_at ON hub_discrepancies (created_at);
+CREATE INDEX idx_hub_discrepancies_hub_id ON hub_discrepancies (hub_id);
+CREATE INDEX idx_hub_discrepancies_inbound_event_id ON hub_discrepancies (inbound_event_id);
+CREATE INDEX idx_hub_discrepancies_order_id ON hub_discrepancies (order_id);
+CREATE INDEX idx_hub_discrepancies_order_item_id ON hub_discrepancies (order_item_id);
+CREATE INDEX idx_hub_discrepancies_status ON hub_discrepancies (status);
+```
+
+```sql
+CREATE TABLE hub_handover_events (
+    id uuid NOT NULL,
+    hub_id uuid NOT NULL,
+    delivery_route_id uuid NOT NULL,
+    driver_user_id uuid NOT NULL,
+    outbound_event_id uuid,
+    status character varying(32) NOT NULL DEFAULT 'PENDING_CHECKOUT',
+    handed_over_by uuid NOT NULL,
+    handed_over_at timestamp with time zone NOT NULL,
+    driver_confirmed_at timestamp with time zone,
+    notes character varying(1000),
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT "PK_hub_handover_events" PRIMARY KEY (id),
+    CONSTRAINT ck_hub_handover_events_status CHECK (status IN ('PENDING_CHECKOUT','CHECKED_OUT')),
+    CONSTRAINT fk_hub_handover_events_hub FOREIGN KEY (hub_id) REFERENCES hubs (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_hub_handover_events_outbound_event FOREIGN KEY (outbound_event_id) REFERENCES hub_outbound_events (id) ON DELETE RESTRICT
+);
+CREATE INDEX idx_hub_handover_events_created_at ON hub_handover_events (created_at);
+CREATE INDEX idx_hub_handover_events_delivery_route_id ON hub_handover_events (delivery_route_id);
+CREATE INDEX idx_hub_handover_events_driver_user_id ON hub_handover_events (driver_user_id);
+CREATE INDEX idx_hub_handover_events_hub_id ON hub_handover_events (hub_id);
+CREATE INDEX idx_hub_handover_events_outbound_event_id ON hub_handover_events (outbound_event_id);
+```
+
+### 2.aa Logistics — zones & issues
+
+Owned by Logistics. Values here are **lowercase**, also enforced by real `CHECK` constraints.
+
+```sql
+CREATE TABLE delivery_zones (
+    id uuid NOT NULL,
+    code character varying(50) NOT NULL,
+    name character varying(200) NOT NULL,
+    description character varying(500),
+    is_active boolean NOT NULL DEFAULT TRUE,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT "PK_delivery_zones" PRIMARY KEY (id)
+);
+CREATE INDEX idx_delivery_zones_is_active ON delivery_zones (is_active);
+CREATE UNIQUE INDEX ux_delivery_zones_code_active ON delivery_zones (code) WHERE deleted_at IS NULL;
+```
+
+```sql
+CREATE TABLE delivery_issues (
+    id uuid NOT NULL,
+    delivery_id uuid NOT NULL,
+    issue_type character varying(30) NOT NULL,
+    description text NOT NULL,
+    status character varying(20) NOT NULL,
+    reported_by uuid NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT "PK_delivery_issues" PRIMARY KEY (id),
+    CONSTRAINT ck_delivery_issues_status CHECK (status IN ('open','resolved')),
+    CONSTRAINT ck_delivery_issues_type CHECK (issue_type IN ('undeliverable','damaged','customer_rejected','other')),
+    CONSTRAINT fk_delivery_issues_delivery FOREIGN KEY (delivery_id) REFERENCES deliveries (id) ON DELETE RESTRICT
+);
+CREATE INDEX idx_delivery_issues_delivery_id ON delivery_issues (delivery_id);
+```
+
+### 2.bb Admin & settings
+
+`audit_logs` is append-only (no `deleted_at`). `operational_settings` and `pricing_settings` are **singleton tables** — a unique index on the constant expression `(true)` allows exactly one row. Note `pricing_settings` uses quoted **PascalCase** columns while `operational_settings` is snake_case.
+
+```sql
+CREATE TABLE audit_logs (
+    id uuid NOT NULL,
+    actor_id uuid,
+    action character varying(100) NOT NULL,
+    entity_type character varying(50) NOT NULL,
+    entity_id uuid NOT NULL,
+    details jsonb,
+    occurred_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT "PK_audit_logs" PRIMARY KEY (id)
+);
+CREATE INDEX "IX_audit_logs_action" ON audit_logs (action);
+CREATE INDEX "IX_audit_logs_actor_id" ON audit_logs (actor_id);
+CREATE INDEX "IX_audit_logs_created_at" ON audit_logs (created_at);
+CREATE INDEX "IX_audit_logs_entity_type" ON audit_logs (entity_type);
+```
+
+```sql
+CREATE TABLE operational_settings (
+    id uuid NOT NULL,
+    daily_cutoff_time time without time zone NOT NULL,
+    batching_enabled boolean NOT NULL,
+    default_route_type character varying(20) NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    CONSTRAINT "PK_operational_settings" PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX ix_operational_settings_singleton ON operational_settings ((true));
+```
+
+```sql
+CREATE TABLE pricing_settings (
+    "Id" uuid NOT NULL,
+    "PriceAlertThresholdPercent" numeric(5,2) NOT NULL,
+    "CreatedAt" timestamp with time zone NOT NULL,
+    "UpdatedAt" timestamp with time zone NOT NULL,
+    CONSTRAINT "PK_pricing_settings" PRIMARY KEY ("Id")
+);
+CREATE UNIQUE INDEX ix_pricing_settings_singleton ON pricing_settings ((true));
+```
 
 ---
 

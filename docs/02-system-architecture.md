@@ -1,10 +1,19 @@
 # FreshFlow (FFX) — System Architecture Document
 
-**Version:** 1.0  
-**Date:** 2026-05-09  
+**Version:** 1.1  
+**Date:** 2026-05-09 (design) · **Reconciled with code:** 2026-07-18  
 **Project:** FreshFlow – Intermediary Platform for Food Procurement and Logistics Optimization  
-**Status:** Approved for Implementation  
+**Status:** Implemented — nine modules live  
 **Based on:** Requirements Specification v1.0
+
+> **Reconciliation note (2026-07-18).** Where this document and the code disagree, the code
+> wins. Known corrections already folded in:
+> - **Nine** modules, not seven — Catalog (§3.8) and Procurement (§3.9) were added.
+> - **No SignalR Redis backplane** exists (`AddSignalR()` is registered plain). §4.2 is target
+>   design; the deployment is single-instance. `SignalR__UseRedis` is dead configuration.
+> - The three SignalR hubs live in their **owning** modules, not in Notifications (§3.7).
+> - Notifications owns two tables (`notifications`, `notification_devices`); the original
+>   "Data Owned: None" was wrong.
 
 ---
 
@@ -165,7 +174,7 @@ sequenceDiagram
 
 ### 3.0 Clean Architecture per Module (Microservice-Ready)
 
-Each of the seven modules is a **separate set of .NET projects** following Clean Architecture layer rules. The structure is designed so that any module can be extracted into an independent microservice with only three changes: (1) promote its Infrastructure project's `AddXModule()` to a standalone `Program.cs`, (2) swap MediatR integration-event handlers for a message bus consumer (e.g., RabbitMQ), and (3) split the shared `AppDbContext` into a per-module context.
+Each of the nine modules (Auth, Catalog, Pricing, Orders, Procurement, Logistics, Notifications, Hub, Analytics) is a **separate set of .NET projects** following Clean Architecture layer rules. The structure is designed so that any module can be extracted into an independent microservice with only three changes: (1) promote its Infrastructure project's `AddXModule()` to a standalone `Program.cs`, (2) swap MediatR integration-event handlers for a message bus consumer (e.g., RabbitMQ), and (3) split the shared `AppDbContext` into a per-module context.
 
 #### Project dependency rules (enforced by .csproj references)
 
@@ -210,7 +219,7 @@ A single `AppDbContext` is used for the monolith phase. Each module's Infrastruc
 
 ---
 
-The ASP.NET Core application host wires all seven modules together. Each module's Infrastructure project exposes an `AddXModule(this IServiceCollection services, IConfiguration config)` extension method that registers all its internal services, repositories, background jobs, and EF entity configurations. The host's `Program.cs` calls each of these and nothing else.
+The ASP.NET Core application host wires all nine modules together. Each module's Infrastructure project exposes an `AddXModule(this IServiceCollection services, IConfiguration config)` extension method that registers all its internal services, repositories, background jobs, and EF entity configurations. The host's `Program.cs` calls each of these and nothing else.
 
 ---
 
@@ -423,27 +432,79 @@ The ASP.NET Core application host wires all seven modules together. Each module'
 
 ### 3.7 Notifications Module
 
-**Responsibility:** Owns and manages all three SignalR hubs, handles client group membership (join/leave), and provides the broadcast service interfaces that other modules call to push real-time events.
+> ⚠️ **Rewritten 2026-07-18 — the original design put all three SignalR hubs in this module.
+> They were implemented in their owning modules instead.** Notifications is now a persistence
+> + push module, not the SignalR owner.
+
+**Responsibility:** Persists in-app notifications, manages push-device registrations, and
+retries failed pushes. Consumes integration events from other modules; owns no business rules
+about *when* something is worth notifying beyond the event it received.
 
 **Internal Components:**
-- `PricingHub` — SignalR hub at `/hubs/pricing`; manages `market:{marketId}` and `kiosk:{marketId}` group membership; broadcasts `PriceUpdated` events
-- `OrderHub` — SignalR hub at `/hubs/orders`; manages `restaurant:{restaurantId}` and `admin:all` group membership; broadcasts `OrderStatusChanged` and `OrderGrouped` events
-- `DeliveryHub` — SignalR hub at `/hubs/delivery`; manages `restaurant:{restaurantId}` group membership; broadcasts `DeliveryStatusChanged`, `DeliveryStarted`, `DeliveryCompleted`, and `RouteOptimized` events
-- `PricingBroadcastService` — implements `IPricingBroadcastService`; called by Pricing module; publishes to `IHubContext<PricingHub>`
-- `OrderBroadcastService` — implements `IOrderBroadcastService`; called by Orders module; publishes to `IHubContext<OrderHub>`
-- `DeliveryBroadcastService` — implements `IDeliveryBroadcastService`; called by Logistics module; publishes to `IHubContext<DeliveryHub>`
-- `HubAuthorizationFilter` — validates JWT on SignalR negotiate; enforces group access restrictions (e.g., Kiosk Staff cannot join `market:` groups for markets they are not assigned to; restaurants cannot join other restaurants' personal groups)
-- `ConnectionTracker` — optional in-memory registry of active connection IDs per user for diagnostics; not relied upon for correctness (SignalR manages group membership internally)
+- `NotificationWriter` (`INotificationWriter`) — the single write path; every event handler goes through it
+- `NotificationRecipientResolver` (`INotificationRecipientResolver`) — resolves a recipient user from an order/restaurant via a keyless cross-module Row seam
+- `IPushSender` — outbound push abstraction
+- `NotificationRetryService` + `NotificationRetryHostedService` — background retry of `failed` sends
+- Event handlers: `OrderConfirmed`, `OrderCancelled`, `DeliveryStarted`, `DeliveryCompleted`, `CreditLimitThresholdReached`, `RestaurantRefundIssued`
+- Commands/queries: `RegisterDevice`, `UnregisterDevice`, `MarkNotificationRead`, `ListNotifications`
 
-**External Dependencies:** None. The Notifications module is a pure output channel — it receives calls from other modules via interfaces and forwards them to SignalR. It does not call other module services.
+**External Dependencies:** none by project reference. Recipient lookups use the keyless Row
+seam (`CrossModule/`), never another module's projects.
 
-**Data Owned:** None. The Notifications module has no persistent data ownership. SignalR group state is managed internally by SignalR + Redis backplane. Connection lifecycle events are logged but not stored in a module-owned table.
+**Data Owned:** `notifications`, `notification_devices`.
+
+**SignalR is NOT owned here.** Each hub lives in its owning module's
+`Infrastructure/Realtime/` folder:
+
+| Hub | Location | Route |
+|---|---|---|
+| `PricingHub` | `Pricing.Infrastructure/Realtime/` | `/hubs/pricing` |
+| `OrderHub` | `Orders.Infrastructure/Realtime/` | `/hubs/orders` |
+| `DeliveryHub` | `Logistics.Infrastructure/Realtime/` | `/hubs/delivery` |
+
+Groups actually in use: `market:{marketId}`, `restaurant:{restaurantId}`, `admin:orders`,
+`admin:delivery`.
 
 **Cross-Module Rules:**
-- The Notifications module must NOT contain any business logic. It must not decide when to send an event — only how to send it. The decision of when to broadcast belongs to the calling module.
-- The Notifications module must NOT directly query the database to determine recipients. Recipient group names must be provided by the calling module.
-- All three `IBroadcastService` interfaces must be registered in the DI container during application startup; modules inject the interface, not the concrete hub type.
-- The Notifications module must NOT block the calling module's request cycle. All `SendAsync` calls to SignalR must use `fire-and-forget` dispatch (no `await` in the hot path, or dispatched to a background task).
+- Notifications must NOT decide *when* an event happens — it reacts to integration events only.
+- Recipient resolution goes through the Row seam, filtered on `deleted_at`.
+- All writes go through `INotificationWriter` so retry/telemetry stay in one place.
+
+---
+
+### 3.8 Catalog Module
+
+**Responsibility:** Reference data — product categories, units of measure, products, markets,
+and the market–product join that Pricing writes prices onto.
+
+**Data Owned:** `product_categories`, `units`, `products`, `markets`, `market_products`.
+
+**Note:** `market_products` is written by Catalog (creation) and by Pricing (price/quantity
+updates). Column casing on this table is **mixed** — `"Id"`, `"ProductId"`, `"MarketId"` are
+quoted PascalCase but `"deleted_at"` is snake_case.
+
+---
+
+### 3.9 Procurement Module
+
+**Responsibility:** Batches confirmed orders into market sessions (procurement batches),
+generates the shopping manifest, assigns a market agent, and tracks purchase → exception →
+handover through to the hub.
+
+**Internal Components:**
+- `ProcurementBatchingHostedService` — background batching job
+- Commands: `RunAutoBatch`, `GenerateManifest`, `AssignAgent`, `ConfirmPurchase`, `ReportException`, `Handover`, `CancelBatch`
+- Queries: `GetProcurementBatches`, `GetProcurementProgress`, agent task queries
+
+**Data Owned:** `procurement_batches`, `procurement_batch_items`, `procurement_batch_orders`,
+`procurement_exceptions`.
+
+**Cross-Module Rules:**
+- There is **no separate "session" entity** — a market session *is* a `ProcurementBatch`.
+- Cancelling a batch raises `ProcurementBatchCancelledIntegrationEvent`; Orders cancels every
+  covered order. The command refuses to cancel if any covered order has advanced past
+  `Batched`, which would strand a live order under a cancelled session.
+- `Cancelled` is terminal and must be excluded from every read-side "active"/"pending" rollup.
 
 ---
 
@@ -487,7 +548,7 @@ All three hubs are authenticated — the negotiate endpoint requires a valid JWT
 
 ---
 
-### 4.2 Redis Pub/Sub for Scale-Out
+### 4.2 Redis Pub/Sub for Scale-Out `[PLANNED — not implemented]`
 
 When the ASP.NET Core API runs as multiple container instances (horizontal scaling), a SignalR broadcast issued on instance A can only reach clients connected to instance A. Clients connected to instance B will miss the event unless a backplane coordinates between instances.
 
@@ -501,7 +562,18 @@ When the ASP.NET Core API runs as multiple container instances (horizontal scali
 | `signalr:orders:{restaurantId}` | Order status change events for a specific restaurant | OrderHub (via SignalR backplane) |
 | `signalr:delivery:{restaurantId}` | Delivery status events for a specific restaurant | DeliveryHub (via SignalR backplane) |
 
-**Note:** The channel naming above describes the logical grouping. The ASP.NET Core SignalR Redis backplane implementation manages the actual channel names internally; the channel names listed reflect the SignalR group names that map to Redis channels. Developers do not publish to these channels directly — the backplane handles it automatically when `Clients.Group(name).SendAsync(...)` is called.
+> ⚠️ **Not implemented as described.** `Program.cs` calls a plain `AddSignalR()` — there is
+> **no Redis backplane**. Redis is used for the Pricing board cache and route cache only, not
+> for SignalR scale-out. The deployment is therefore **single-instance**: group state lives in
+> that instance's memory and a second instance would not see the first instance's broadcasts.
+>
+> The `SignalR:UseRedis` key still sits in `appsettings.json` but **no code reads it** — it is
+> dead configuration, not a working switch.
+>
+> The channel naming below is the logical grouping only. Adding a backplane
+> (`AddStackExchangeRedis()`) is the remaining work before horizontal scale-out is possible.
+>
+> **The scale-out scenario that follows is target design, not current behaviour.**
 
 **Scale-out scenario:**
 1. Kiosk Staff sends `PATCH /price` — routed by Nginx to instance A.
@@ -541,7 +613,7 @@ On reconnect, clients must:
 | Event | Server Behavior | Client Responsibility |
 |-------|----------------|----------------------|
 | **Initial connect** | SignalR validates JWT on negotiate. Accepts connection and records `connectionId`. | Send JWT in `access_token` query param. Invoke group join methods. |
-| **Client joins group** | `Groups.AddToGroupAsync(connectionId, groupName)` — stored in Redis backplane. | Call hub method or rely on auto-join based on JWT claims. |
+| **Client joins group** | `Groups.AddToGroupAsync(connectionId, groupName)` — held in process memory (no backplane). | Call hub method or rely on auto-join based on JWT claims. |
 | **Disconnect (clean)** | SignalR removes `connectionId` from all groups automatically. No action needed. | Implement reconnection with exponential backoff. |
 | **Disconnect (network drop)** | Same as clean disconnect — SignalR detects ping timeout and removes from groups. | Same reconnection logic. Re-fetch state via REST after reconnect. |
 | **Reconnect** | New `connectionId` issued. Client must re-join groups explicitly (groups are not persisted per user). | Re-authenticate if token expired. Re-join groups. Re-fetch current state via REST. |
@@ -559,7 +631,7 @@ On reconnect, clients must:
 | JWT access token validation | Stateless — no cache | N/A | N/A | N/A | JWTs are validated by signature verification (asymmetric key or HMAC shared secret). No token lookup needed. Access token revocation before expiry is not supported in v1 — 15-minute TTL is the revocation window. |
 | Refresh token | PostgreSQL `refresh_tokens` table | Queried by `token_hash` (indexed) | Until `expires_at` (7 days) | Immediately invalidated on use (rotation); entire family invalidated on reuse detection; explicit `POST /api/auth/logout` | Stored in PostgreSQL, not Redis, because family invalidation and audit logging require persistent, strongly consistent storage. |
 | Computed delivery route | Redis String | `route:{SHA256(sorted stops + criterion)}` | 1 hour | Vehicle re-assignment (explicit cache delete in `DeliveryScheduleService`); stop list change (key naturally changes with new hash) | The hash includes the sorted stop entity IDs and the optimization criterion. Different criteria produce different keys. Cache prevents re-computation of identical route requests. |
-| SignalR group membership | SignalR internal + Redis backplane | Managed by ASP.NET Core SignalR | Session lifetime (connection lifetime) | Automatically cleared on disconnect; explicitly cleared via `Groups.RemoveFromGroupAsync` on clean leave | Not directly accessed by application code. The Redis backplane stores this state to enable multi-instance coordination. |
+| SignalR group membership | SignalR internal, **in-process memory** | Managed by ASP.NET Core SignalR | Session lifetime (connection lifetime) | Automatically cleared on disconnect; explicitly cleared via `Groups.RemoveFromGroupAsync` on clean leave | Not directly accessed by application code. No Redis backplane is registered, so this state is not shared across instances. |
 | Analytics aggregations | Redis String | `analytics:{type}:{date}` | 15 minutes | Data change in source tables (explicit key delete on write to relevant tables) or TTL expiry — whichever comes first | Pre-aggregated by `AnalyticsAggregationJob`. On cache miss, query falls back to `analytics_aggregations` PostgreSQL table, then to live query as last resort. Admin-only endpoints. |
 | Price trend time series | Redis String | `analytics:price-trend:{productId}:{marketId}:{from}:{to}` | 15 minutes | TTL expiry or new price snapshot written for the product/market | Cached only for common dashboard date ranges. Parameterized requests with arbitrary `from`/`to` values bypass cache and query PostgreSQL read replica directly. |
 
@@ -683,7 +755,7 @@ volumes:
 | `Jwt__SecretKey` | HMAC-SHA256 signing key for JWT. Minimum 256-bit (32 bytes). Must be stored in a secrets manager in production. |
 | `Jwt__AccessTokenTTL` | Access token lifetime in seconds. Default: `900` (15 minutes). |
 | `Jwt__RefreshTokenTTL` | Refresh token lifetime in seconds. Default: `604800` (7 days). |
-| `SignalR__UseRedis` | `true` or `false`. When `true`, configures SignalR to use Redis backplane. Set to `false` for single-instance local development to avoid Redis dependency for SignalR. |
+| ~~`SignalR__UseRedis`~~ | **Dead setting.** Present in `appsettings.json` but read by no code — `AddSignalR()` is registered unconditionally without a backplane. |
 | `SEED_ADMIN_EMAIL` | Email address for the bootstrapped admin account (GA-010). Read once by the database seed script at startup. |
 | `SEED_ADMIN_PASSWORD` | Temporary password for the bootstrapped admin account. Hashed with bcrypt work factor ≥ 12 before storage. |
 

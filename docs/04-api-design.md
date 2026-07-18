@@ -1,14 +1,14 @@
 # FreshFlow (FFX) — API Design Document
 
-**Version:** 1.1  
-**Date:** 2026-05-09 (design) · **Reconciled with code:** 2026-06-30  
+**Version:** 1.2  
+**Date:** 2026-05-09 (design) · **Reconciled with code:** 2026-07-18  
 **Project:** FreshFlow – Intermediary Platform for Food Procurement and Logistics Optimization  
 **Status:** Partially implemented — see Sync Status below  
 **Based on:** Requirements Specification v1.0 + System Architecture v1.0 + Database Schema v1.0
 
 ---
 
-## ⚙️ Sync Status (reviewed 2026-06-30)
+## ⚙️ Sync Status (reviewed 2026-07-18)
 
 > **Physical source of truth:** the ASP.NET Core controllers under
 > `src/FreshFlow.API/Controllers/` and the SignalR hub mappings in
@@ -23,22 +23,33 @@
 >   request/response examples for implemented endpoints are illustrative — the
 >   binding contract is the code (and the generated Swagger/OpenAPI document).
 
-**Implemented modules:** Auth, Profile, Admin, Restaurant Profile, Restaurant Credit (B2B công nợ),
-Catalog (Categories, Units, Products, Markets/Market-Products), Pricing, Orders (+ Scheduled Orders),
-AI Assistant, and the `PricingHub` / `OrderHub` real-time hubs.
+**Implemented modules (163 routes across 23 controllers):** Auth, Profile, Admin, Restaurant
+Profile, Restaurant Credit (B2B công nợ), Catalog (Categories, Units, Products,
+Markets/Market-Products), Pricing, Orders (+ Scheduled Orders), Procurement, Hub operations,
+Logistics (routes / vehicles / delivery zones), Delivery (driver last mile), Notifications,
+Analytics, AI Assistant, and the `PricingHub` / `OrderHub` / `DeliveryHub` real-time hubs.
 
-**Not yet implemented (`[PLANNED]`):** Logistics (routes/vehicles), Hub operations,
-Analytics, `order-groups` + auto-batch, `system-config`, `DeliveryHub`, and the generic
-`PATCH /orders/{orderId}/status` (superseded by explicit lifecycle actions).
+**Not yet implemented (`[PLANNED]`):** payment/refund gateway endpoints (superseded by the
+credit model), asynchronous analytics export jobs, and hub inventory snapshots.
 
-**Key deltas vs the v1.0 design:**
-- The Payment/Billing gateway endpoints are superseded by a **B2B credit / công nợ** model
-  (`/restaurants/{id}/credit`, `/admin/.../credit/settle|limit`).
+**Key deltas vs the v1.0 design — Sections 3–6 still carry the old paths in places:**
+
+| v1.0 design path | Actual implemented path |
+|---|---|
+| `POST/GET /order-groups` | `GET /admin/order-groups`, `POST /admin/order-groups/auto-batch` |
+| `GET/POST /routes`, `/routes/calculate` | `/logistics/routes`, `/logistics/routes/calculate` |
+| `GET/POST /vehicles` | `/logistics/vehicles` |
+| `GET/PATCH /admin/system-config` | split into `/admin/operational-settings` + `/admin/pricing-settings` |
+| `PATCH /orders/{orderId}/status` | `POST /orders/{orderId}/advance-status` (+ explicit `confirm`, `cancel`, `receipt`) |
+| `PATCH /admin/users/{userId}/status` | `PATCH /admin/users/{userId}/activate` |
+| `POST /analytics/export` + `GET /analytics/export/{id}/status` | `GET /analytics/export` (synchronous CSV, no job queue) |
+| `GET /hubs/{hubId}/inventory` | not implemented — use `/hubs/{hubId}/inbound` / `/outbound` |
+| Payment / refund gateway endpoints | superseded by **B2B credit / công nợ** (`/restaurants/{id}/credit`, `/admin/.../credit/settle\|limit`) |
+
 - Catalog was normalized — new `/categories` and `/units` endpoints; `/products` and
   `/markets` gained full CRUD beyond the original read-only design.
-- The order lifecycle is modeled with explicit actions (draft → items → confirm → receipt →
-  issues / reorder) instead of a single `PATCH .../status`.
-- `PATCH /admin/users/{id}/status` was implemented as `PATCH /admin/users/{id}/activate`.
+- Hub, Logistics and Analytics are **implemented**, not `[PLANNED]` — Sections 4.3–4.5 predate
+  them and describe a different route shape. Trust Part A.
 
 ---
 
@@ -50,9 +61,9 @@ Analytics, `order-groups` + auto-batch, `system-config`, `DeliveryHub`, and the 
 4. [Domain Endpoints](#4-domain-endpoints)
    - 4.1 [Pricing Domain](#41-pricing-domain)
    - 4.2 [Orders Domain](#42-orders-domain)
-   - 4.3 [Logistics Domain `[PLANNED]`](#43-logistics-domain-planned)
-   - 4.4 [Hub Domain `[PLANNED]`](#44-hub-domain-planned)
-   - 4.5 [Analytics Domain `[PLANNED]`](#45-analytics-domain-planned)
+   - 4.3 [Logistics Domain `[CHANGED]`](#43-logistics-domain-changed--implemented-under-logistics)
+   - 4.4 [Hub Domain `[CHANGED]`](#44-hub-domain-changed--implemented-different-verbs)
+   - 4.5 [Analytics Domain `[CHANGED]`](#45-analytics-domain-changed--implemented-synchronous-export)
    - 4.6 [Admin Domain](#46-admin-domain)
 5. [SignalR Hubs](#5-signalr-hubs)
 6. [Validation Rules](#6-validation-rules)
@@ -207,7 +218,7 @@ generated Swagger document.
 ### A1. Authentication — `AuthController` (`/auth`)
 
 | Method | Path | Auth |
-|--------|------|------|
+|--------|------|----|
 | POST | `/auth/register` | Anonymous |
 | POST | `/auth/login` | Anonymous |
 | POST | `/auth/refresh` | Anonymous |
@@ -221,14 +232,15 @@ generated Swagger document.
 ### A2. Profile — `ProfileController` (`/profile`)
 
 | Method | Path | Auth |
-|--------|------|------|
+|--------|------|----|
 | GET | `/profile/me` | Auth |
 | PUT | `/profile/me` | Auth |
+| POST | `/profile/me/avatar/upload-signature` | Auth |
 
 ### A3. Admin — `AdminController` (`/admin`)
 
 | Method | Path | Roles |
-|--------|------|-------|
+|--------|------|-----|
 | POST | `/admin/users` | admin |
 | GET | `/admin/users` | admin |
 | PATCH | `/admin/users/{userId}/activate` | admin |
@@ -236,18 +248,32 @@ generated Swagger document.
 | GET | `/admin/roles` | admin |
 | PATCH | `/admin/users/{userId}/role` | admin |
 | PATCH | `/admin/restaurants/{restaurantId}/approve` | admin |
+| PATCH | `/admin/restaurants/{restaurantId}/suspend` | admin |
+| PATCH | `/admin/restaurants/{restaurantId}/reactivate` | admin |
 | POST | `/admin/restaurants/{restaurantId}/credit/settle` | admin |
 | PUT | `/admin/restaurants/{restaurantId}/credit/limit` | admin |
+| GET | `/admin/operational-settings` | admin |
+| PUT | `/admin/operational-settings` | admin |
+| GET | `/admin/order-groups` | admin |
+| GET | `/admin/order-groups/progress` | admin |
+| POST | `/admin/order-groups/auto-batch` | admin |
+| POST | `/admin/order-groups/{batchId}/manifest` | admin |
+| POST | `/admin/order-groups/{batchId}/agent` | admin |
+| POST | `/admin/order-groups/{batchId}/cancel` | admin |
+| GET | `/admin/pricing-settings` | admin |
+| PUT | `/admin/pricing-settings` | admin |
+| GET | `/admin/audit-logs` | admin |
 | GET | `/admin/users/{userId}/market-assignments` | admin, operations_manager |
 | PUT | `/admin/users/{userId}/market-assignments` | admin, operations_manager |
 
-### A4. Restaurant Profile — `RestaurantProfileController` (`/restaurants`)
+### A4. Restaurant Profile — `RestaurantProfileController` (`/restaurants/me`)
 
 | Method | Path | Roles |
-|--------|------|-------|
+|--------|------|-----|
 | GET | `/restaurants/me/approval-status` | restaurant |
 | GET | `/restaurants/me/profile` | restaurant |
 | PUT | `/restaurants/me/profile` | restaurant |
+| POST | `/restaurants/me/business-license/upload-signature` | restaurant |
 | GET | `/restaurants/me/delivery-addresses` | restaurant |
 | POST | `/restaurants/me/delivery-addresses` | restaurant |
 | PUT | `/restaurants/me/delivery-addresses/{id}` | restaurant |
@@ -256,14 +282,17 @@ generated Swagger document.
 ### A5. Restaurant Credit (B2B công nợ) — `RestaurantCreditController` (`/restaurants/{restaurantId}/credit`)
 
 | Method | Path | Roles |
-|--------|------|-------|
+|--------|------|-----|
 | GET | `/restaurants/{restaurantId}/credit` | admin, restaurant |
 | GET | `/restaurants/{restaurantId}/credit/transactions` | admin, restaurant |
+| POST | `/restaurants/{restaurantId}/credit/statements/generate` | admin, restaurant |
+| GET | `/restaurants/{restaurantId}/credit/statements/{statementId}` | admin, restaurant |
+| GET | `/restaurants/{restaurantId}/credit/statements` | admin, restaurant |
 
 ### A6. Catalog — Categories — `CategoriesController` (`/categories`)
 
 | Method | Path | Roles |
-|--------|------|-------|
+|--------|------|-----|
 | GET | `/categories` | Auth |
 | GET | `/categories/{id}` | Auth |
 | POST | `/categories` | admin |
@@ -273,7 +302,7 @@ generated Swagger document.
 ### A7. Catalog — Units — `UnitsController` (`/units`)
 
 | Method | Path | Roles |
-|--------|------|-------|
+|--------|------|-----|
 | GET | `/units` | Auth |
 | GET | `/units/{id}` | Auth |
 | POST | `/units` | admin |
@@ -283,17 +312,18 @@ generated Swagger document.
 ### A8. Catalog — Products — `ProductsController` (`/products`)
 
 | Method | Path | Roles |
-|--------|------|-------|
+|--------|------|-----|
+| POST | `/products` | admin |
+| POST | `/products/image/upload-signature` | admin |
 | GET | `/products` | admin, operations_manager, market_agent, hub_staff, restaurant |
 | GET | `/products/{id}` | admin, operations_manager, market_agent, hub_staff, restaurant |
-| POST | `/products` | admin |
 | PUT | `/products/{id}` | admin |
 | PATCH | `/products/{id}/deactivate` | admin |
 
 ### A9. Markets & Market Products — `MarketsController` (`/markets`)
 
 | Method | Path | Roles |
-|--------|------|-------|
+|--------|------|-----|
 | GET | `/markets` | Auth |
 | GET | `/markets/{id}` | Auth |
 | POST | `/markets` | admin |
@@ -309,53 +339,167 @@ generated Swagger document.
 ### A10. Pricing — `PricingController` (`/pricing`)
 
 | Method | Path | Roles |
-|--------|------|-------|
+|--------|------|-----|
 | GET | `/pricing/assigned-markets` | market_agent |
 
 ### A11. Orders — `OrdersController` (`/orders`)
 
-Base roles for the controller: `admin, operations_manager, restaurant` (overridden per action).
-
 | Method | Path | Roles |
-|--------|------|-------|
+|--------|------|-----|
 | GET | `/orders` | admin, operations_manager, restaurant |
 | GET | `/orders/history` | admin, operations_manager, restaurant |
-| GET | `/orders/{orderId}` | admin, operations_manager, restaurant |
-| POST | `/orders` | restaurant |
-| POST | `/orders/{orderId}/items` | restaurant |
-| PUT | `/orders/{orderId}/items/{itemId}` | restaurant |
-| DELETE | `/orders/{orderId}/items/{itemId}` | restaurant |
-| GET | `/orders/{orderId}/confirm-preview` | restaurant |
-| POST | `/orders/{orderId}/confirm` | restaurant |
-| PATCH | `/orders/{orderId}/cancel` | admin, restaurant |
-| PATCH | `/orders/{orderId}/items/{itemId}/actual-quantity` | admin, operations_manager |
-| PATCH | `/orders/{orderId}/receipt` | restaurant |
-| POST | `/orders/{orderId}/issues` | restaurant |
-| POST | `/orders/{orderId}/reorder` | restaurant |
-
-### A12. Scheduled Orders — `OrdersController` (`/orders/scheduled`)
-
-| Method | Path | Roles |
-|--------|------|-------|
 | GET | `/orders/scheduled` | admin, restaurant |
 | GET | `/orders/scheduled/{scheduledOrderId}` | admin, restaurant |
 | GET | `/orders/scheduled/{scheduledOrderId}/instances` | admin, restaurant |
+| GET | `/orders/{orderId}` | admin, operations_manager, restaurant |
+| POST | `/orders` | restaurant |
 | POST | `/orders/scheduled` | restaurant |
+| POST | `/orders/{orderId}/items` | restaurant |
+| PUT | `/orders/{orderId}/items/{itemId}` | restaurant |
+| DELETE | `/orders/{orderId}/items/{itemId}` | restaurant |
+| POST | `/orders/{orderId}/confirm` | restaurant |
+| GET | `/orders/{orderId}/confirm-preview` | restaurant |
+| PATCH | `/orders/{orderId}/cancel` | admin, restaurant |
+| PATCH | `/orders/{orderId}/items/{itemId}/actual-quantity` | admin, operations_manager |
+| POST | `/orders/{orderId}/advance-status` | admin, operations_manager |
+| PATCH | `/orders/{orderId}/receipt` | restaurant |
+| POST | `/orders/{orderId}/issues` | restaurant |
+| POST | `/orders/{orderId}/reorder` | restaurant |
 | PATCH | `/orders/scheduled/{scheduledOrderId}` | admin, restaurant |
 | PATCH | `/orders/scheduled/{scheduledOrderId}/cancel` | admin, restaurant |
 
-### A13. AI Shopping Assistant — `AssistantController` (`/assistant`)
+### A12. Procurement — Agent tasks — `ProcurementController` (`/procurement`)
 
 | Method | Path | Roles |
-|--------|------|-------|
+|--------|------|-----|
+| GET | `/procurement/tasks` | market_agent |
+| GET | `/procurement/tasks/{batchId}` | market_agent |
+| PATCH | `/procurement/tasks/{batchId}/purchase` | market_agent |
+| PATCH | `/procurement/tasks/{batchId}/handover` | market_agent |
+| POST | `/procurement/tasks/{batchId}/exceptions` | market_agent |
+| POST | `/procurement/tasks/{batchId}/exceptions/upload-signature` | market_agent |
+
+### A13. Hub — Master data — `HubsController` (`/hubs`)
+
+| Method | Path | Roles |
+|--------|------|-----|
+| POST | `/hubs` | admin, operations_manager |
+| GET | `/hubs` | admin, operations_manager |
+| GET | `/hubs/{id}` | admin, operations_manager |
+| PATCH | `/hubs/{id}` | admin, operations_manager |
+| DELETE | `/hubs/{id}` | admin, operations_manager |
+
+### A14. Hub — Inbound, discrepancy, cross-dock, outbound — `HubInboundController` (`/hubs/{hubId}`)
+
+| Method | Path | Roles |
+|--------|------|-----|
+| POST | `/hubs/{hubId}/inbound` | hub_staff, admin, operations_manager |
+| POST | `/hubs/scan` | hub_staff, admin, operations_manager |
+| GET | `/hubs/{hubId}/pending-inbound` | hub_staff, admin, operations_manager |
+| GET | `/hubs/{hubId}/inbound` | hub_staff, admin, operations_manager |
+| POST | `/hubs/{hubId}/inbound/{inboundId}/discrepancy` | hub_staff, admin, operations_manager |
+| GET | `/hubs/{hubId}/discrepancies` | hub_staff, admin, operations_manager |
+| POST | `/hubs/{hubId}/discrepancies/{discrepancyId}/acknowledge` | admin, operations_manager |
+| POST | `/hubs/{hubId}/cross-dock` | hub_staff, admin, operations_manager |
+| GET | `/hubs/{hubId}/cross-dock` | hub_staff, admin, operations_manager |
+| POST | `/hubs/{hubId}/outbound` | hub_staff, admin, operations_manager |
+| GET | `/hubs/{hubId}/outbound` | hub_staff, admin, operations_manager |
+
+### A15. Hub — Handover to driver — `HubHandoverController` (`/hubs/{hubId}/handover`)
+
+| Method | Path | Roles |
+|--------|------|-----|
+| POST | `/hubs/{hubId}/handover` | hub_staff, admin, operations_manager |
+| POST | `/hubs/{hubId}/handover/{id}/checkout` | driver |
+| GET | `/hubs/{hubId}/handovers` | hub_staff, admin, operations_manager |
+
+### A16. Logistics — Route planning — `RoutesController` (`/logistics/routes`)
+
+| Method | Path | Roles |
+|--------|------|-----|
+| POST | `/logistics/routes/calculate` | admin, operations_manager |
+| POST | `/logistics/routes/{id}/select` | admin, operations_manager |
+| POST | `/logistics/routes/{id}/optimize` | admin, operations_manager |
+| POST | `/logistics/routes/{id}/review` | admin, operations_manager |
+| POST | `/logistics/routes/{id}/assign-vehicle` | admin, operations_manager |
+| GET | `/logistics/routes` | admin, operations_manager |
+| GET | `/logistics/routes/{routeId}/eligibility` | admin, operations_manager |
+| GET | `/logistics/routes/{id}` | admin, operations_manager |
+
+### A17. Logistics — Vehicles — `VehiclesController` (`/logistics/vehicles`)
+
+| Method | Path | Roles |
+|--------|------|-----|
+| POST | `/logistics/vehicles` | admin, operations_manager |
+| GET | `/logistics/vehicles` | admin, operations_manager |
+| GET | `/logistics/vehicles/{id}` | admin, operations_manager |
+| PUT | `/logistics/vehicles/{id}` | admin, operations_manager |
+| DELETE | `/logistics/vehicles/{id}` | admin, operations_manager |
+
+### A18. Logistics — Delivery zones — `DeliveryZonesController` (`/logistics/delivery-zones`)
+
+| Method | Path | Roles |
+|--------|------|-----|
+| POST | `/logistics/delivery-zones` | admin, operations_manager |
+| GET | `/logistics/delivery-zones` | admin, operations_manager |
+| GET | `/logistics/delivery-zones/{id}` | admin, operations_manager |
+| PUT | `/logistics/delivery-zones/{id}` | admin, operations_manager |
+| DELETE | `/logistics/delivery-zones/{id}` | admin, operations_manager |
+
+### A19. Delivery — Driver last mile — `DriverController` (`/driver`)
+
+| Method | Path | Roles |
+|--------|------|-----|
+| GET | `/driver/routes/today` | driver |
+| POST | `/driver/routes/{routeId}/start` | driver |
+| POST | `/driver/routes/{routeId}/confirm-pickup` | driver |
+| POST | `/driver/deliveries/{deliveryId}/proof-of-delivery/upload-signature` | driver |
+| PUT | `/driver/deliveries/{deliveryId}/proof-of-delivery` | driver |
+| PATCH | `/driver/deliveries/{deliveryId}/status` | driver |
+| POST | `/driver/deliveries/{deliveryId}/issues` | driver |
+
+### A20. Notifications — `NotificationController` / `NotificationDeviceController` (`/notifications`)
+
+| Method | Path | Auth |
+|--------|------|----|
+| GET | `/notifications` | Auth |
+| PATCH | `/notifications/{id}/read` | Auth |
+| POST | `/notifications/devices` | Auth |
+| DELETE | `/notifications/devices` | Auth |
+
+### A21. Analytics — `AnalyticsController` (`/analytics`)
+
+| Method | Path | Roles |
+|--------|------|-----|
+| GET | `/analytics/overview` | admin, operations_manager |
+| GET | `/analytics/price-trends` | admin, operations_manager, restaurant |
+| GET | `/analytics/order-metrics` | admin, operations_manager |
+| GET | `/analytics/procurement-metrics` | admin, operations_manager |
+| GET | `/analytics/hub-throughput` | admin, operations_manager, hub_staff |
+| GET | `/analytics/delivery-performance` | admin, operations_manager |
+| GET | `/analytics/demand-heatmap` | admin, operations_manager |
+| GET | `/analytics/demand-heatmap/time-distribution` | admin, operations_manager |
+| GET | `/analytics/recent-activities` | admin, operations_manager |
+| GET | `/analytics/export` | admin, operations_manager |
+
+### A22. AI Shopping Assistant — `AssistantController` (`/assistant`)
+
+| Method | Path | Roles |
+|--------|------|-----|
 | POST | `/assistant/chat` | restaurant |
 
-### A14. Real-time Hubs — `Program.cs`
+### A23. Real-time Hubs — `Program.cs`
 
-| Hub | Path | Notes |
-|-----|------|-------|
-| `PricingHub` | `/hubs/pricing` | JWT via `?access_token=` on negotiate |
-| `OrderHub` | `/hubs/orders` | JWT via `?access_token=` on negotiate |
+| Hub | Route | Owning module | Groups |
+|-----|-------|---------------|--------|
+| `PricingHub` | `/hubs/pricing` | Pricing.Infrastructure/Realtime | `market:{marketId}` |
+| `OrderHub` | `/hubs/orders` | Orders.Infrastructure/Realtime | `restaurant:{restaurantId}`, `admin:orders` |
+| `DeliveryHub` | `/hubs/delivery` | Logistics.Infrastructure/Realtime | `admin:delivery` |
+
+Registered with a plain `AddSignalR()` — in-memory, **no Redis backplane** (single-instance).
+Clients authenticate with the JWT in the `access_token` query string during negotiate.
+
+<!-- generated: 163 routes -->
 
 ---
 
@@ -761,8 +905,10 @@ Admin-managed user creation, role assignment, account status, and account unlock
 > **Pricing (4.1), Orders (4.2), and Admin (4.6)** are implemented but have evolved — the
 > live routes, paths, and roles are those in Part A; individual endpoints here that were
 > dropped or changed are tagged `[PLANNED]`, `[SUPERSEDED]`, or `[CHANGED]`.
-> **Logistics (4.3), Hub (4.4), and Analytics (4.5)** are entirely `[PLANNED]` (no controllers
-> exist yet). Catalog endpoints (`/categories`, `/units`, `/products`, `/markets`),
+> **Logistics (4.3), Hub (4.4), and Analytics (4.5)** are now **implemented**, but under
+> different routes than designed here (`/logistics/...` prefix, `/hubs/{hubId}/...` inbound
+> and handover verbs, synchronous `GET /analytics/export`). Treat 4.3–4.5 as design intent
+> only and read the real paths from Part A (A13–A21). Catalog endpoints (`/categories`, `/units`, `/products`, `/markets`),
 > Profile, Restaurant Profile, Restaurant Credit, and the AI Assistant are implemented but
 > were added after v1.0 — they are catalogued in Part A (detailed bodies live in Swagger).
 
@@ -1446,7 +1592,7 @@ Advances or updates the status of an order according to the order state machine.
 
 ---
 
-#### GET /api/v1/order-groups `[PLANNED]`
+#### GET /api/v1/order-groups `[CHANGED → GET /api/v1/admin/order-groups]`
 
 **Role:** Admin only
 
@@ -1492,7 +1638,7 @@ Returns a paginated list of all order groups with summary information.
 
 ---
 
-#### POST /api/v1/order-groups `[PLANNED]`
+#### POST /api/v1/order-groups `[CHANGED → POST /api/v1/admin/order-groups/auto-batch]`
 
 **Role:** Admin only
 
@@ -1549,7 +1695,7 @@ Creates a new order group and associates the specified orders with it. All order
 
 ---
 
-#### POST /api/v1/admin/order-groups/auto-batch `[PLANNED]`
+#### POST /api/v1/admin/order-groups/auto-batch `[IMPLEMENTED]`
 
 **Role:** Admin only
 
@@ -1664,7 +1810,12 @@ Returns the list of active scheduled orders (recurring order templates) for the 
 
 ---
 
-### 4.3 Logistics Domain `[PLANNED]`
+### 4.3 Logistics Domain `[CHANGED — implemented under /logistics]`
+
+> Implemented as `RoutesController`, `VehiclesController`, `DeliveryZonesController` and
+> `DriverController`. Every path below gained a `/logistics` prefix (`/routes` →
+> `/logistics/routes`, `/vehicles` → `/logistics/vehicles`); driver last-mile actions live
+> under `/driver`. See Part A **A16–A19** for the live surface.
 
 #### Endpoint Summary
 
@@ -1941,7 +2092,14 @@ Returns a paginated list of all registered vehicles.
 
 ---
 
-### 4.4 Hub Domain `[PLANNED]`
+### 4.4 Hub Domain `[CHANGED — implemented, different verbs]`
+
+> Implemented as `HubsController`, `HubInboundController` and `HubHandoverController`.
+> `GET /hubs/{hubId}/inventory` was never built — hub stock is derived from the
+> inbound/outbound event log instead. See Part A **A13–A15**.
+>
+> ⚠️ `hub_*` status values are SCREAMING_CASE in code (`PENDING`, `ARRIVED_AT_HUB`,
+> `CHECKED_OUT`), not the lowercase values shown below.
 
 #### Endpoint Summary
 
@@ -2254,7 +2412,12 @@ Returns the current inventory state for a specific hub — all products with the
 
 ---
 
-### 4.5 Analytics Domain `[PLANNED]`
+### 4.5 Analytics Domain `[CHANGED — implemented, synchronous export]`
+
+> Implemented as `AnalyticsController` (read-only module, owns no tables). The asynchronous
+> export job (`POST /analytics/export` + `GET /analytics/export/{id}/status`) was **not**
+> built — export is a single synchronous `GET /analytics/export` returning CSV. See Part A
+> **A21**.
 
 #### Endpoint Summary
 
@@ -2918,7 +3081,7 @@ Approves a restaurant profile by changing `restaurants.status` from `PENDING_APP
 
 ---
 
-#### GET /api/v1/admin/system-config `[PLANNED]`
+#### GET /api/v1/admin/system-config `[SUPERSEDED → GET /admin/operational-settings + GET /admin/pricing-settings]`
 
 **Role:** Admin only
 
@@ -2948,7 +3111,7 @@ Returns all system-wide configurable parameters.
 
 ---
 
-#### PATCH /api/v1/admin/system-config `[PLANNED]`
+#### PATCH /api/v1/admin/system-config `[SUPERSEDED → PUT /admin/operational-settings + PUT /admin/pricing-settings]`
 
 **Role:** Admin only
 
@@ -3124,7 +3287,7 @@ Broadcast to `restaurant:{restaurantId}` when one of the restaurant's orders is 
 
 ---
 
-### 5.4 DeliveryHub `[PLANNED]`
+### 5.4 DeliveryHub `[IMPLEMENTED]`
 
 **Route:** `/hubs/delivery`
 

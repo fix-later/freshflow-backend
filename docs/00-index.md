@@ -1,9 +1,9 @@
 # FreshFlow Documentation Index
 
 **Project:** FreshFlow (FFX) — B2B Food Procurement and Logistics Optimization Platform  
-**Version:** 1.0  
-**Date:** 2026-05-09  
-**Status:** Pre-implementation analysis complete — Ready for implementation
+**Version:** 1.1  
+**Date:** 2026-05-09 (design) · **Reconciled with code:** 2026-07-18  
+**Status:** Implemented and under active feature work — 9 modules, 163 API routes, 45 tables
 
 ---
 
@@ -12,7 +12,7 @@
 | # | Document | Description | Lines | Status |
 |---|---|---|---|---|
 | 01 | [01-requirements-spec.md](./01-requirements-spec.md) | Functional & non-functional requirements, gaps, glossary | 283 | Complete |
-| 02 | [02-system-architecture.md](./02-system-architecture.md) | Architecture pattern, component diagrams, module breakdown, caching, deployment | 713 | Complete |
+| 02 | [02-system-architecture.md](./02-system-architecture.md) | Architecture pattern, component diagrams, module breakdown, caching, deployment (reconciled w/ code 2026-07-18) | — | Current |
 | 02A | [02A-system-overview-diagrams.md](./diagrams/02A-system-overview-diagrams.md) | Current backend system overview diagrams, runtime wiring, flows, deployment view, Draw.io source | — | Current |
 | 02B | [02B-state-machine-diagrams.md](./diagrams/02B-state-machine-diagrams.md) | State machine cho các entity chính (Order, Restaurant, User, RefreshToken...); Draw.io source | — | Current |
 | 02C | [02C-activity-diagrams.md](./diagrams/02C-activity-diagrams.md) | Activity/flowchart các luồng nghiệp vụ chính (có Actor, swimlane); Draw.io source | — | Current |
@@ -24,8 +24,9 @@
 | 03A" | [03-database-schema.logical.dbml](./database/03-database-schema.logical.dbml) | Logical ERD: attributes, keys, every meaningful relationship, tech-agnostic (reconciled 2026-07-03) | — | Current |
 | 03B | [03B-database-erd.md](./database/03B-database-erd.md) | Mermaid ERD for implemented tables only, compact crow's-foot view | — | Current |
 | 03C | [03C-table-descriptions.md](./database/03C-table-descriptions.md) | Chức năng nghiệp vụ của từng bảng (Part A + Part B + danh sách đã loại bỏ theo DEC) | — | Current |
-| 04 | [04-api-design.md](./04-api-design.md) | REST endpoints, SignalR hubs, validation rules, RBAC matrix; Part A implemented surface + Part B planned (reconciled w/ code 2026-06-30) | — | Current |
+| 04 | [04-api-design.md](./04-api-design.md) | REST endpoints, SignalR hubs, validation rules, RBAC matrix; Part A = all 163 implemented routes + Part B planned (reconciled w/ code 2026-07-18) | — | Current |
 | 05 | [05-implementation-plan.md](./05-implementation-plan.md) | 50-task breakdown, critical path, MVP scope, folder structure, coding standards | 912 | Complete |
+| — | [enums.md](./enums.md) | Enum-like API values for the frontend, with the per-module casing rules (reconciled 2026-07-18) | — | Current |
 | — | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | Cross-reference gaps, inconsistencies, readiness assessment | — | Complete |
 
 > **Feature working docs** (survey/audit/context/design/tasks per feature) sống ở [`features/`](./features/README.md) — tách khỏi bộ spec core này để dễ tracking.
@@ -40,7 +41,7 @@
 
 1. **Start with 01** — understand what the system must do before touching any code. Pay special attention to Section 3 (Gaps & Assumptions) — these are active decisions that shape the implementation.
 
-2. **Read 02 next** — understand the overall shape of the system: Modular Monolith, 7 ASP.NET Core modules, SignalR with Redis backplane, Docker Compose deployment.
+2. **Read 02 next** — understand the overall shape of the system: Modular Monolith, **9** ASP.NET Core modules, SignalR **without** a Redis backplane (single-instance), Docker Compose deployment.
 
 3. **Skim 03** — familiarize yourself with the database schema. The most important tables for Day 1 are `users`, `refresh_tokens`, `market_products`, and `price_snapshots`.
 
@@ -129,7 +130,7 @@ Route calculation uses a custom nearest-neighbor heuristic with 2-opt improvemen
 | # | Risk | Severity | Mitigation |
 |---|---|---|---|
 | R-001 | Redis unavailability breaks SignalR backplane and price caching simultaneously | High | Redis AOF persistence enabled; Docker healthcheck restarts Redis on failure; API degrades gracefully (reads from PostgreSQL if Redis miss) |
-| R-002 | `price_snapshots` table grows unboundedly (high-frequency writes from kiosk staff) | High | Monthly range partitioning on `recorded_at`; background job creates next month's partition on the 25th; old partitions can be archived or dropped per retention policy |
+| R-002 | `price_snapshots` table grows unboundedly (high-frequency writes from kiosk staff) | High | **Mitigation NOT implemented.** `price_snapshots` is a plain table with ordinary indexes — no `PARTITION BY RANGE`, no child partitions, no `PartitionMaintenanceJob`. Monthly range partitioning on `recorded_at` remains target design only. |
 | R-003 | Concurrent price updates from two kiosk staff members at the same market cause lost updates | Medium | Last-write-wins with `updated_at` timestamp comparison; HTTP 409 on detected conflict; flagged in GA-004 — optimistic concurrency to be implemented in `PricingService` |
 | R-004 | Route calculation exceeds 3-second SLA as order volumes grow (more stops per route) | Medium | Hard limit of 20 stops per route (FR-LOG-006); route results cached in Redis with SHA-256 key; OR-Tools as upgrade path if heuristic becomes bottleneck |
 | R-005 | Restaurant approval flow (GA-009) not fully specified — could block restaurant onboarding | Low | Assumption: Admin manually approves restaurants via `PATCH /api/v1/admin/restaurants/{id}/approve`; default behavior is unapproved (cannot place orders) until Admin approves |
