@@ -38,8 +38,6 @@ internal sealed class ProcurementBatchCancelledIntegrationEventHandler(
                         cancellation.Error.Code);
                     continue;
                 }
-
-                await orders.SaveChangesAsync(cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -50,5 +48,10 @@ internal sealed class ProcurementBatchCancelledIntegrationEventHandler(
                     notification.BatchId);
             }
         }
+
+        // One save for the whole batch: a per-order save leaves the failed order still
+        // tracked, so every later iteration retries it and cascades. Let this throw so
+        // the caller retries the handler as a unit.
+        await orders.SaveChangesAsync(cancellationToken);
     }
 }
