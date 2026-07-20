@@ -18,6 +18,17 @@ public sealed class CreditStatementPeriodCalculatorTests
     }
 
     [Fact]
+    public void ResolveDueDate_IsPeriodEndPlusPaymentTermDays()
+    {
+        var (_, periodEnd) = CreditStatementPeriodCalculator.ResolvePeriod(2026, 6);
+
+        var dueDate = CreditStatementPeriodCalculator.ResolveDueDate(periodEnd);
+
+        dueDate.Should().Be(periodEnd.AddDays(CreditStatementPeriodCalculator.PaymentTermDays));
+        dueDate.Should().Be(new DateTime(2026, 7, 15, 17, 0, 0, DateTimeKind.Utc)); // 2026-06-30T17:00Z + 15d
+    }
+
+    [Fact]
     public void ResolvePeriod_December_RollsOverToNextYearForPeriodEnd()
     {
         var (periodStart, periodEnd) = CreditStatementPeriodCalculator.ResolvePeriod(2026, 12);

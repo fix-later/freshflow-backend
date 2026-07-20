@@ -29,4 +29,17 @@ internal sealed class NotificationRecipientResolver(AppDbContext db) : INotifica
             .Select(r => (Guid?)r.UserId)
             .FirstOrDefaultAsync(ct);
     }
+
+    public async Task<NotificationRecipient?> ResolveRecipientByRestaurantIdAsync(
+        Guid restaurantId, CancellationToken ct)
+    {
+        if (restaurantId == Guid.Empty)
+            return null;
+
+        return await db.Set<NotificationRecipientRow>()
+            .AsNoTracking()
+            .Where(r => r.RestaurantId == restaurantId)
+            .Select(r => new NotificationRecipient(r.UserId, r.Email))
+            .FirstOrDefaultAsync(ct);
+    }
 }

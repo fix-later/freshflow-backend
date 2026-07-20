@@ -1,14 +1,17 @@
+using FreshFlow.Contracts;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Dtos;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
+using MediatR;
 
 namespace FreshFlow.Orders.Application.Services;
 
 public sealed class CreditStatementGenerationService(
     ICreditStatementRepository statementRepository,
-    ICreditRepository creditRepository) : ICreditStatementGenerationService
+    ICreditRepository creditRepository,
+    IPublisher publisher) : ICreditStatementGenerationService
 {
     public async Task<Result<CreditStatementDto>> GenerateAsync(
         Guid restaurantId, int year, int month, CancellationToken ct)
@@ -45,6 +48,20 @@ public sealed class CreditStatementGenerationService(
                     "STATEMENT_GENERATION_CONFLICT",
                     "The statement could not be generated due to a concurrent request."));
         }
+
+        // Published only here — the newly-generated path — so an idempotent re-generate or a
+        // race loser (both returned above) never re-notifies. Fires after the commit
+        // succeeded, so the notification only goes out for a statement that actually exists.
+        await publisher.Publish(
+            new CreditStatementGeneratedIntegrationEvent(
+                statement.RestaurantId,
+                statement.Id,
+                statement.PeriodStart,
+                statement.PeriodEnd,
+                statement.ClosingBalance,
+                CreditStatementPeriodCalculator.ResolveDueDate(statement.PeriodEnd),
+                statement.GeneratedAt),
+            ct);
 
         return Result<CreditStatementDto>.Success(CreditStatementDtoMapper.ToDto(statement));
     }

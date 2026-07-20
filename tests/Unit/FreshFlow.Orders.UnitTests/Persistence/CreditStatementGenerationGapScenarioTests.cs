@@ -4,7 +4,9 @@ using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Orders.Infrastructure.Repositories;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 
 namespace FreshFlow.Orders.UnitTests.Persistence;
 
@@ -32,7 +34,8 @@ public sealed class CreditStatementGenerationGapScenarioTests
         var ctx = new AppDbContext(options);
         var creditRepository = new CreditRepository(ctx);
         var statementRepository = new CreditStatementRepository(ctx);
-        var sut = new CreditStatementGenerationService(statementRepository, creditRepository);
+        var sut = new CreditStatementGenerationService(
+            statementRepository, creditRepository, Substitute.For<IPublisher>());
         return (sut, ctx);
     }
 

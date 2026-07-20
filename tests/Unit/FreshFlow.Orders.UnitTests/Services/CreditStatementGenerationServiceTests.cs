@@ -1,8 +1,10 @@
 using FluentAssertions;
+using FreshFlow.Contracts;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
+using MediatR;
 using NSubstitute;
 
 namespace FreshFlow.Orders.UnitTests.Services;
@@ -12,6 +14,7 @@ public sealed class CreditStatementGenerationServiceTests
 {
     private readonly ICreditStatementRepository _statementRepository = Substitute.For<ICreditStatementRepository>();
     private readonly ICreditRepository _creditRepository = Substitute.For<ICreditRepository>();
+    private readonly IPublisher _publisher = Substitute.For<IPublisher>();
     private readonly CreditStatementGenerationService _sut;
 
     private static readonly Guid RestaurantId = Guid.NewGuid();
@@ -32,7 +35,7 @@ public sealed class CreditStatementGenerationServiceTests
                 Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(0m);
 
-        _sut = new CreditStatementGenerationService(_statementRepository, _creditRepository);
+        _sut = new CreditStatementGenerationService(_statementRepository, _creditRepository, _publisher);
     }
 
     [Fact]
@@ -146,6 +149,9 @@ public sealed class CreditStatementGenerationServiceTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Id.Should().Be(raced.Id);
+        // The race winner already published — the loser must not re-notify.
+        await _publisher.DidNotReceive().Publish(
+            Arg.Any<CreditStatementGeneratedIntegrationEvent>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -158,5 +164,34 @@ public sealed class CreditStatementGenerationServiceTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("STATEMENT_GENERATION_CONFLICT");
+    }
+
+    [Fact]
+    public async Task GenerateAsync_NewlyGenerated_PublishesStatementGeneratedEventAsync()
+    {
+        var result = await _sut.GenerateAsync(RestaurantId, ClosedYear, ClosedMonth, default);
+
+        result.IsSuccess.Should().BeTrue();
+        await _publisher.Received(1).Publish(
+            Arg.Is<CreditStatementGeneratedIntegrationEvent>(e =>
+                e.RestaurantId == RestaurantId && e.StatementId == result.Value.Id),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GenerateAsync_IdempotentReturnOfExistingStatement_DoesNotPublishAsync()
+    {
+        var existing = new CreditStatement(
+            RestaurantId,
+            new DateTime(2020, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2020, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+            0m, 0m, 0m, 0m, []);
+        _statementRepository.FindByPeriodAsync(RestaurantId, Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns(existing);
+
+        await _sut.GenerateAsync(RestaurantId, ClosedYear, ClosedMonth, default);
+
+        await _publisher.DidNotReceive().Publish(
+            Arg.Any<CreditStatementGeneratedIntegrationEvent>(), Arg.Any<CancellationToken>());
     }
 }

@@ -12,4 +12,5 @@ public sealed record CreditStatementDto(
     decimal TotalSettlements,
     decimal TotalRefunds,
     DateTime GeneratedAt,
+    DateTime DueDate,
     IReadOnlyList<CreditStatementLineDto> Lines);
