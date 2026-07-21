@@ -18,33 +18,40 @@ public sealed class DeactivateCategoryCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ActiveCategory_DeactivatesAndReturnsDto()
+    public async Task Handle_CategoryWithoutActiveChildren_DeactivatesAndReturnsDto()
     {
-        // Arrange
         var category = new ProductCategory("Rau củ");
-        category.IsActive.Should().BeTrue();
         _categories.FindByIdAsync(category.Id, default).Returns(category);
+        _categories.HasChildrenAsync(category.Id, true, default).Returns(false);
 
-        // Act
         var result = await _sut.Handle(new DeactivateCategoryCommand(category.Id), default);
 
-        // Assert
         result.IsSuccess.Should().BeTrue();
         result.Value.IsActive.Should().BeFalse();
         await _categories.Received(1).SaveChangesAsync(default);
     }
 
     [Fact]
+    public async Task Handle_CategoryWithActiveChildren_ReturnsConflict()
+    {
+        var category = new ProductCategory("Rau củ");
+        _categories.FindByIdAsync(category.Id, default).Returns(category);
+        _categories.HasChildrenAsync(category.Id, true, default).Returns(true);
+
+        var result = await _sut.Handle(new DeactivateCategoryCommand(category.Id), default);
+
+        result.Error.Code.Should().Be("CATEGORY_HAS_ACTIVE_CHILDREN");
+        await _categories.DidNotReceive().SaveChangesAsync(default);
+    }
+
+    [Fact]
     public async Task Handle_NonExistentCategory_ReturnsNotFound()
     {
-        // Arrange
         var id = Guid.NewGuid();
         _categories.FindByIdAsync(id, default).Returns((ProductCategory?)null);
 
-        // Act
         var result = await _sut.Handle(new DeactivateCategoryCommand(id), default);
 
-        // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("CATEGORY_NOT_FOUND");
         await _categories.DidNotReceive().SaveChangesAsync(default);

@@ -64,9 +64,10 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 
 ## auth-catalog — Auth / Profile / Catalog
 
-| Doc | Loại |
-|---|---|
-| [AUDIT-2026-06-10 auth-profile-catalog](./auth-catalog/AUDIT-2026-06-10-auth-profile-catalog.md) | Audit |
+| Doc | Loại | Trạng thái |
+|---|---|---|
+| [AUDIT-2026-06-10 auth-profile-catalog](./auth-catalog/AUDIT-2026-06-10-auth-profile-catalog.md) | Audit | ✅ |
+| [AUDIT-2026-07-21 category hierarchy plan](./auth-catalog/AUDIT-2026-07-21-category-hierarchy-plan.md) | Audit / Plan | ⏳ Chờ Jira key |
 
 ---
 

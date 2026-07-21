@@ -15,6 +15,7 @@ public static class ErrorExtensions
         if (error.Code is "EMAIL_ALREADY_EXISTS" or "PHONE_ALREADY_EXISTS"
                         or "REFRESH_TOKEN_REUSE" or "ALREADY_APPROVED"
                         or "CATEGORY_NAME_CONFLICT" or "UNIT_NAME_CONFLICT"
+                        or "CATEGORY_HAS_ACTIVE_CHILDREN"
                         or "DELIVERY_ZONE_CODE_EXISTS"
                         or "PLATE_NUMBER_DUPLICATE"
                         or "VEHICLE_NOT_AVAILABLE"
@@ -57,6 +58,7 @@ public static class ErrorExtensions
 
         if (error.Code is "CHANNEL_NOT_SUPPORTED" or "CANNOT_DEACTIVATE_SELF" or "INVALID_MARKET"
                         or "INVALID_ASSIGNMENT_TARGET" or "INVALID_UNIT" or "INVALID_CATEGORY"
+                        or "INVALID_CATEGORY_PARENT"
                         or "INVALID_PRICE" or "INVALID_QUANTITY"
                         or "RESTAURANT_NOT_APPROVED" or "INVALID_PRODUCT" or "INSUFFICIENT_STOCK"
                         or "ORDER_EMPTY" or "INVALID_AMOUNT" or "CREDIT_LIMIT_EXCEEDED"

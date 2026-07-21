@@ -16,7 +16,19 @@ internal sealed class CreateCategoryCommandHandler(IProductCategoryRepository ca
             return Result<CategoryDto>.Failure(
                 Error.Conflict("CATEGORY_NAME_CONFLICT", $"An active category named '{request.Name}' already exists."));
 
-        var category = new ProductCategory(request.Name);
+        if (request.ParentId is Guid parentId)
+        {
+            var parent = await categories.FindByIdAsync(parentId, ct);
+            if (parent is null)
+                return Result<CategoryDto>.Failure(
+                    new Error("CATEGORY_PARENT_NOT_FOUND", $"Category parent '{parentId}' was not found."));
+
+            if (!parent.IsActive || parent.ParentId is not null)
+                return Result<CategoryDto>.Failure(
+                    Error.Validation("INVALID_CATEGORY_PARENT", "Category parent must be an active root category."));
+        }
+
+        var category = new ProductCategory(request.Name, request.ParentId);
         await categories.AddAsync(category, ct);
         await categories.SaveChangesAsync(ct);
 

@@ -16,6 +16,11 @@ internal sealed class ProductCategoryRepository(AppDbContext db) : IProductCateg
             .AsNoTracking()
             .AnyAsync(c => c.Name == name && c.IsActive && c.DeletedAt == null, ct);
 
+    public Task<bool> HasChildrenAsync(Guid parentId, bool activeOnly, CancellationToken ct) =>
+        db.Set<ProductCategory>()
+            .AsNoTracking()
+            .AnyAsync(c => c.ParentId == parentId && c.DeletedAt == null && (!activeOnly || c.IsActive), ct);
+
     public async Task<IReadOnlyList<ProductCategory>> GetAllAsync(bool activeOnly, CancellationToken ct)
     {
         var query = db.Set<ProductCategory>()
