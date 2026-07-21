@@ -1,8 +1,12 @@
 using FluentAssertions;
+using FreshFlow.Contracts;
 using FreshFlow.Orders.Application.Abstractions;
+using FreshFlow.Orders.Application.Dtos;
 using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
+using MediatR;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 
 namespace FreshFlow.Orders.UnitTests.Services;
@@ -12,6 +16,8 @@ public sealed class CreditStatementGenerationServiceTests
 {
     private readonly ICreditStatementRepository _statementRepository = Substitute.For<ICreditStatementRepository>();
     private readonly ICreditRepository _creditRepository = Substitute.For<ICreditRepository>();
+    private readonly IStatementPdfRenderer _pdfRenderer = Substitute.For<IStatementPdfRenderer>();
+    private readonly IPublisher _publisher = Substitute.For<IPublisher>();
     private readonly CreditStatementGenerationService _sut;
 
     private static readonly Guid RestaurantId = Guid.NewGuid();
@@ -31,8 +37,14 @@ public sealed class CreditStatementGenerationServiceTests
         _creditRepository.GetNetBalanceMovementBeforeAsync(
                 Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(0m);
+        _pdfRenderer.Render(Arg.Any<CreditStatementDto>()).Returns([1, 2, 3]);
 
-        _sut = new CreditStatementGenerationService(_statementRepository, _creditRepository);
+        _sut = new CreditStatementGenerationService(
+            _statementRepository,
+            _creditRepository,
+            _pdfRenderer,
+            _publisher,
+            Substitute.For<ILogger<CreditStatementGenerationService>>());
     }
 
     [Fact]
@@ -146,6 +158,9 @@ public sealed class CreditStatementGenerationServiceTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Id.Should().Be(raced.Id);
+        // The race winner already published — the loser must not re-notify.
+        await _publisher.DidNotReceive().Publish(
+            Arg.Any<CreditStatementGeneratedIntegrationEvent>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -158,5 +173,77 @@ public sealed class CreditStatementGenerationServiceTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("STATEMENT_GENERATION_CONFLICT");
+    }
+
+    [Fact]
+    public async Task GenerateAsync_NewlyGenerated_PublishesStatementGeneratedEventAsync()
+    {
+        var result = await _sut.GenerateAsync(RestaurantId, ClosedYear, ClosedMonth, default);
+
+        result.IsSuccess.Should().BeTrue();
+        await _publisher.Received(1).Publish(
+            Arg.Is<CreditStatementGeneratedIntegrationEvent>(e =>
+                e.RestaurantId == RestaurantId && e.StatementId == result.Value.Id),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GenerateAsync_NewlyGenerated_EventCarriesTheRenderedPdfAsync()
+    {
+        var pdfBytes = new byte[] { 1, 2, 3, 4 };
+        _pdfRenderer.Render(Arg.Any<CreditStatementDto>()).Returns(pdfBytes);
+
+        await _sut.GenerateAsync(RestaurantId, ClosedYear, ClosedMonth, default);
+
+        await _publisher.Received(1).Publish(
+            Arg.Is<CreditStatementGeneratedIntegrationEvent>(e =>
+                e.StatementPdf == pdfBytes && e.StatementPdfFileName == $"statement-{ClosedYear}-{ClosedMonth:D2}.pdf"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GenerateAsync_PdfRenderThrows_StillPublishesWithNullPdfAsync()
+    {
+        // Rendering is best-effort — a failure must never block statement generation or its
+        // notification, it only means the email goes out without an attachment.
+        _pdfRenderer.Render(Arg.Any<CreditStatementDto>()).Returns(_ => throw new InvalidOperationException("boom"));
+
+        var result = await _sut.GenerateAsync(RestaurantId, ClosedYear, ClosedMonth, default);
+
+        result.IsSuccess.Should().BeTrue();
+        await _publisher.Received(1).Publish(
+            Arg.Is<CreditStatementGeneratedIntegrationEvent>(e =>
+                e.StatementPdf == null && e.StatementPdfFileName == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GenerateAsync_PublisherThrows_StillReturnsCommittedStatementAsync()
+    {
+        _publisher.Publish(
+                Arg.Any<CreditStatementGeneratedIntegrationEvent>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("notification infrastructure down")));
+
+        var result = await _sut.GenerateAsync(RestaurantId, ClosedYear, ClosedMonth, default);
+
+        result.IsSuccess.Should().BeTrue();
+        await _statementRepository.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GenerateAsync_IdempotentReturnOfExistingStatement_DoesNotPublishAsync()
+    {
+        var existing = new CreditStatement(
+            RestaurantId,
+            new DateTime(2020, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2020, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+            0m, 0m, 0m, 0m, []);
+        _statementRepository.FindByPeriodAsync(RestaurantId, Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns(existing);
+
+        await _sut.GenerateAsync(RestaurantId, ClosedYear, ClosedMonth, default);
+
+        await _publisher.DidNotReceive().Publish(
+            Arg.Any<CreditStatementGeneratedIntegrationEvent>(), Arg.Any<CancellationToken>());
     }
 }

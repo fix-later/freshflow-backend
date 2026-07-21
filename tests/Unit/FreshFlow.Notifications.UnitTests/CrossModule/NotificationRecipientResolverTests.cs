@@ -47,6 +47,33 @@ public sealed class NotificationRecipientResolverTests
     }
 
     [Fact]
+    public async Task ResolveRecipientByRestaurantIdAsync_ExistingRestaurant_ReturnsUserIdAndEmailAsync()
+    {
+        using var fixture = await SqliteFixture.CreateAsync();
+        var restaurantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        await fixture.InsertRestaurantAsync(restaurantId, userId, "chef@example.com");
+        var sut = new NotificationRecipientResolver(fixture.Context);
+
+        var result = await sut.ResolveRecipientByRestaurantIdAsync(restaurantId, default);
+
+        result.Should().NotBeNull();
+        result!.UserId.Should().Be(userId);
+        result.Email.Should().Be("chef@example.com");
+    }
+
+    [Fact]
+    public async Task ResolveRecipientByRestaurantIdAsync_MissingRestaurant_ReturnsNullAsync()
+    {
+        using var fixture = await SqliteFixture.CreateAsync();
+        var sut = new NotificationRecipientResolver(fixture.Context);
+
+        var result = await sut.ResolveRecipientByRestaurantIdAsync(Guid.NewGuid(), default);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public async Task ResolveUserIdByOrderIdAsync_ExistingOrder_ReturnsRestaurantOwnerUserIdAsync()
     {
         using var fixture = await SqliteFixture.CreateAsync();
@@ -118,6 +145,14 @@ public sealed class NotificationRecipientResolverTests
                 """);
             await context.Database.ExecuteSqlRawAsync(
                 """
+                CREATE TABLE users (
+                    "Id" TEXT NOT NULL,
+                    "Email" TEXT NOT NULL,
+                    "DeletedAt" TEXT NULL
+                );
+                """);
+            await context.Database.ExecuteSqlRawAsync(
+                """
                 CREATE TABLE orders (
                     "Id" TEXT NOT NULL,
                     "RestaurantId" TEXT NOT NULL,
@@ -128,12 +163,19 @@ public sealed class NotificationRecipientResolverTests
             return new SqliteFixture(connection, context);
         }
 
-        public async Task InsertRestaurantAsync(Guid restaurantId, Guid userId) =>
+        public async Task InsertRestaurantAsync(Guid restaurantId, Guid userId, string email = "owner@example.com")
+        {
             await Context.Database.ExecuteSqlInterpolatedAsync(
                 $"""
                 INSERT INTO restaurants ("Id", "UserId", status)
                 VALUES ({restaurantId}, {userId}, 'active');
                 """);
+            await Context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                INSERT INTO users ("Id", "Email", "DeletedAt")
+                VALUES ({userId}, {email}, NULL);
+                """);
+        }
 
         public async Task InsertOrderAsync(Guid orderId, Guid restaurantId, bool deleted = false) =>
             await Context.Database.ExecuteSqlInterpolatedAsync(

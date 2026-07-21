@@ -1,3 +1,4 @@
+using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Domain.Entities;
 
 namespace FreshFlow.Orders.Application.Dtos;
@@ -16,6 +17,7 @@ internal static class CreditStatementDtoMapper
             statement.TotalSettlements,
             statement.TotalRefunds,
             statement.GeneratedAt,
+            CreditStatementPeriodCalculator.ResolveDueDate(statement.PeriodEnd),
             statement.Lines.Select(ToLineDto).ToList().AsReadOnly());
 
     public static CreditStatementSummaryDto ToSummaryDto(CreditStatement statement) =>

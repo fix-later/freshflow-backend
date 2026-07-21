@@ -5,6 +5,7 @@ using FreshFlow.Notifications.Application.Abstractions;
 using FreshFlow.Notifications.Application.Behaviors;
 using FreshFlow.Notifications.Application.Services;
 using FreshFlow.Notifications.Infrastructure.CrossModule;
+using FreshFlow.Notifications.Infrastructure.Email;
 using FreshFlow.Notifications.Infrastructure.Jobs;
 using FreshFlow.Notifications.Infrastructure.Push;
 using FreshFlow.Notifications.Infrastructure.Repositories;
@@ -43,6 +44,28 @@ public static class DependencyInjection
         // Application services and cross-module read projections
         services.AddScoped<INotificationWriter, NotificationWriter>();
         services.AddScoped<IPushSender, LogPushSender>();
+
+        // Email sender — real SMTP when configured (Notifications:Email:Smtp), otherwise a
+        // log-only fallback so the app runs without a mail server (SCRUM-269).
+        var smtpSection = config.GetSection("Notifications:Email:Smtp");
+        var smtpOptions = new SmtpEmailOptions
+        {
+            Host = smtpSection["Host"],
+            Port = int.TryParse(smtpSection["Port"], out var port) ? port : 587,
+            EnableSsl = !bool.TryParse(smtpSection["EnableSsl"], out var ssl) || ssl,
+            FromAddress = smtpSection["FromAddress"],
+            Username = smtpSection["Username"],
+            Password = smtpSection["Password"],
+        };
+        if (smtpOptions.IsConfigured)
+        {
+            services.AddSingleton(smtpOptions);
+            services.AddScoped<IEmailSender, SmtpEmailSender>();
+        }
+        else
+        {
+            services.AddScoped<IEmailSender, LogEmailSender>();
+        }
         services.AddScoped<INotificationRetryService, NotificationRetryService>();
         services.AddScoped<INotificationRecipientResolver, NotificationRecipientResolver>();
         services.AddHostedService<NotificationRetryHostedService>();

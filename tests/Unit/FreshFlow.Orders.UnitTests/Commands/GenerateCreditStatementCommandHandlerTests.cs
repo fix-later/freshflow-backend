@@ -62,7 +62,7 @@ public sealed class GenerateCreditStatementCommandHandlerTests
             .Returns(new RestaurantSnapshotDto(OtherRestaurantId, IsApproved: true));
         _generationService.GenerateAsync(OtherRestaurantId, 2026, 3, default)
             .Returns(Result<CreditStatementDto>.Success(
-                new CreditStatementDto(Guid.NewGuid(), OtherRestaurantId, default, default, 0, 0, 0, 0, 0, default, [])));
+                new CreditStatementDto(Guid.NewGuid(), OtherRestaurantId, default, default, 0, 0, 0, 0, 0, default, default, [])));
 
         var result = await _sut.Handle(
             new GenerateCreditStatementCommand(UserId, IsAdmin: true, OtherRestaurantId, 2026, 3), default);
@@ -76,7 +76,7 @@ public sealed class GenerateCreditStatementCommandHandlerTests
     {
         _generationService.GenerateAsync(RestaurantId, 2026, 5, default)
             .Returns(Result<CreditStatementDto>.Success(
-                new CreditStatementDto(Guid.NewGuid(), RestaurantId, default, default, 0, 0, 0, 0, 0, default, [])));
+                new CreditStatementDto(Guid.NewGuid(), RestaurantId, default, default, 0, 0, 0, 0, 0, default, default, [])));
 
         var result = await _sut.Handle(
             new GenerateCreditStatementCommand(UserId, IsAdmin: false, RestaurantId, 2026, 5), default);

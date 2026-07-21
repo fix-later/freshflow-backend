@@ -7,4 +7,5 @@ internal sealed class NotificationRecipientRow
 {
     public Guid RestaurantId { get; set; }
     public Guid UserId { get; set; }
+    public string Email { get; set; } = "";
 }

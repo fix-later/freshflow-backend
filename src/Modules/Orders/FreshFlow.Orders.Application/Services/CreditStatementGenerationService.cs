@@ -1,14 +1,20 @@
+using FreshFlow.Contracts;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Dtos;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
+using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace FreshFlow.Orders.Application.Services;
 
 public sealed class CreditStatementGenerationService(
     ICreditStatementRepository statementRepository,
-    ICreditRepository creditRepository) : ICreditStatementGenerationService
+    ICreditRepository creditRepository,
+    IStatementPdfRenderer pdfRenderer,
+    IPublisher publisher,
+    ILogger<CreditStatementGenerationService> logger) : ICreditStatementGenerationService
 {
     public async Task<Result<CreditStatementDto>> GenerateAsync(
         Guid restaurantId, int year, int month, CancellationToken ct)
@@ -46,7 +52,60 @@ public sealed class CreditStatementGenerationService(
                     "The statement could not be generated due to a concurrent request."));
         }
 
-        return Result<CreditStatementDto>.Success(CreditStatementDtoMapper.ToDto(statement));
+        var dto = CreditStatementDtoMapper.ToDto(statement);
+        var (pdfBytes, pdfFileName) = RenderPdfOrNull(dto);
+
+        // Published only here — the newly-generated path — so an idempotent re-generate or a
+        // race loser (both returned above) never re-notifies. Fires after the commit
+        // succeeded, so the notification only goes out for a statement that actually exists.
+        try
+        {
+            await publisher.Publish(
+                new CreditStatementGeneratedIntegrationEvent(
+                    statement.RestaurantId,
+                    statement.Id,
+                    statement.PeriodStart,
+                    statement.PeriodEnd,
+                    statement.ClosingBalance,
+                    CreditStatementPeriodCalculator.ResolveDueDate(statement.PeriodEnd),
+                    statement.GeneratedAt,
+                    pdfBytes,
+                    pdfFileName),
+                ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // ponytail: use an outbox if statement notifications become guaranteed delivery.
+            logger.LogError(
+                ex,
+                "Failed to publish statement notification for StatementId={StatementId} after it was committed.",
+                statement.Id);
+        }
+
+        return Result<CreditStatementDto>.Success(dto);
+    }
+
+    // PDF rendering is best-effort: a render failure must never block statement generation or
+    // its notification — it only means the email goes out without an attachment.
+    private (byte[]? Bytes, string? FileName) RenderPdfOrNull(CreditStatementDto statement)
+    {
+        try
+        {
+            var bytes = pdfRenderer.Render(statement);
+            // PeriodStart is stored UTC but represents a VN local month boundary (DEC-CRE-03) —
+            // convert back to VN before labelling the file, or a period starting "May 31 17:00
+            // UTC" (= June 1 VN) would wrongly be named for May.
+            var periodStartLocal = TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.SpecifyKind(statement.PeriodStart, DateTimeKind.Utc),
+                CreditStatementPeriodCalculator.VietnamTimeZone);
+            return (bytes, $"statement-{periodStartLocal:yyyy-MM}.pdf");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex, "Failed to render statement PDF for StatementId={StatementId}.", statement.Id);
+            return (null, null);
+        }
     }
 
     private async Task<CreditStatement> BuildStatementAsync(

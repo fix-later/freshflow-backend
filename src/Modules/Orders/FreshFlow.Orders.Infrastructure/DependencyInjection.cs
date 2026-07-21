@@ -5,6 +5,7 @@ using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Behaviors;
 using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Infrastructure.CrossModule;
+using FreshFlow.Orders.Infrastructure.Documents;
 using FreshFlow.Orders.Infrastructure.Jobs;
 using FreshFlow.Orders.Infrastructure.Realtime;
 using FreshFlow.Orders.Infrastructure.Repositories;
@@ -12,6 +13,7 @@ using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using QuestPDF.Infrastructure;
 
 namespace FreshFlow.Orders.Infrastructure;
 
@@ -24,6 +26,9 @@ public static class DependencyInjection
         // Register this assembly so AppDbContext discovers Orders EF configurations.
         EfAssemblyRegistry.Register(Assembly.GetExecutingAssembly());
         services.TryAddSingleton(config);
+
+        // QuestPDF (statement PDF export) — Community license, no native binary dependency.
+        QuestPDF.Settings.License = LicenseType.Community;
 
         // MediatR — scan Application assembly for handlers.
         var applicationAssembly = typeof(IOrderRepository).Assembly;
@@ -49,6 +54,7 @@ public static class DependencyInjection
         services.AddScoped<ICreditStatementGenerationService, CreditStatementGenerationService>();
         services.AddScoped<IScheduledOrderGenerationService, ScheduledOrderGenerationService>();
         services.AddScoped<IOrderBroadcastService, OrderBroadcastService>();
+        services.AddScoped<IStatementPdfRenderer, StatementPdfRenderer>();
         services.AddHostedService<ScheduledOrderGenerationHostedService>();
         services.AddHostedService<MonthlyCreditStatementHostedService>();
 
