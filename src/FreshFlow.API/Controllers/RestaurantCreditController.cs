@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
+using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Commands.GenerateCreditStatement;
 using FreshFlow.Orders.Application.Queries.GetCreditStatement;
 using FreshFlow.Orders.Application.Queries.GetCreditTransactions;
@@ -15,7 +16,7 @@ namespace FreshFlow.API.Controllers;
 [ApiController]
 [Route("api/v1/restaurants/{restaurantId:guid}/credit")]
 [Authorize(Roles = "admin,restaurant")]
-public sealed class RestaurantCreditController(ISender sender) : ControllerBase
+public sealed class RestaurantCreditController(ISender sender, IStatementPdfRenderer pdfRenderer) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -116,6 +117,29 @@ public sealed class RestaurantCreditController(ISender sender) : ControllerBase
             ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>
+    /// GET /api/v1/restaurants/{restaurantId}/credit/statements/{statementId}/pdf
+    /// Renders the same statement as <see cref="GetStatementAsync"/> to a downloadable PDF.
+    /// Admin or the owning restaurant only — same IDOR guard as the JSON lookup.
+    /// </summary>
+    [HttpGet("statements/{statementId:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetStatementPdfAsync(Guid restaurantId, Guid statementId, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new GetCreditStatementQuery(
+                ResolveUserId(), User.IsInRole("admin"), restaurantId, StatementId: statementId),
+            ct);
+
+        if (result.IsFailure)
+            return result.Error.ToActionResult();
+
+        var pdfBytes = pdfRenderer.Render(result.Value);
+        return File(pdfBytes, "application/pdf", $"statement-{statementId}.pdf");
     }
 
     /// <summary>

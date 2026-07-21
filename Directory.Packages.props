@@ -43,6 +43,9 @@
     <!-- Media -->
     <PackageVersion Include="CloudinaryDotNet" Version="1.29.2" />
 
+    <!-- Documents -->
+    <PackageVersion Include="QuestPDF" Version="2026.7.1" />
+
     <!-- API / docs -->
     <PackageVersion Include="Scalar.AspNetCore" Version="2.16.2" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.3" />

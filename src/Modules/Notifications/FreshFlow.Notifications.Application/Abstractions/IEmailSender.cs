@@ -10,5 +10,6 @@ namespace FreshFlow.Notifications.Application.Abstractions;
 /// </summary>
 public interface IEmailSender
 {
-    public Task<Result> SendAsync(string toEmail, string subject, string body, CancellationToken ct);
+    public Task<Result> SendAsync(
+        string toEmail, string subject, string body, CancellationToken ct, EmailAttachment? attachment = null);
 }

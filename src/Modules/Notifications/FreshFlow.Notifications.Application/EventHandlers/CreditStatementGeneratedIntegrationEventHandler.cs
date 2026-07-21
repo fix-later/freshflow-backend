@@ -37,7 +37,7 @@ internal sealed class CreditStatementGeneratedIntegrationEventHandler(
         var body = BuildBody(notification);
 
         await WriteInAppAsync(recipient, notification, body, ct);
-        await SendEmailAsync(recipient, body, ct);
+        await SendEmailAsync(recipient, body, notification, ct);
     }
 
     private async Task WriteInAppAsync(
@@ -71,11 +71,19 @@ internal sealed class CreditStatementGeneratedIntegrationEventHandler(
         }
     }
 
-    private async Task SendEmailAsync(NotificationRecipient recipient, string body, CancellationToken ct)
+    private async Task SendEmailAsync(
+        NotificationRecipient recipient,
+        string body,
+        CreditStatementGeneratedIntegrationEvent notification,
+        CancellationToken ct)
     {
+        var attachment = notification.StatementPdf is not null
+            ? new EmailAttachment(notification.StatementPdfFileName!, notification.StatementPdf, "application/pdf")
+            : null;
+
         try
         {
-            var result = await emailSender.SendAsync(recipient.Email, Title, body, ct);
+            var result = await emailSender.SendAsync(recipient.Email, Title, body, ct, attachment);
             if (result.IsFailure)
                 logger.LogWarning(
                     "Statement email to {Email} failed: {Code} {Message}",

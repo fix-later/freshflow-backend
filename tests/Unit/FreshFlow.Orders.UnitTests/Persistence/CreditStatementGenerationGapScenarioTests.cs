@@ -1,11 +1,13 @@
 using FluentAssertions;
 using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Orders.Infrastructure.Repositories;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 
 namespace FreshFlow.Orders.UnitTests.Persistence;
@@ -35,7 +37,11 @@ public sealed class CreditStatementGenerationGapScenarioTests
         var creditRepository = new CreditRepository(ctx);
         var statementRepository = new CreditStatementRepository(ctx);
         var sut = new CreditStatementGenerationService(
-            statementRepository, creditRepository, Substitute.For<IPublisher>());
+            statementRepository,
+            creditRepository,
+            Substitute.For<IStatementPdfRenderer>(),
+            Substitute.For<IPublisher>(),
+            Substitute.For<ILogger<CreditStatementGenerationService>>());
         return (sut, ctx);
     }
 

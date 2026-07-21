@@ -15,7 +15,8 @@ namespace FreshFlow.Notifications.Infrastructure.Email;
 // only if modern TLS / OAuth2 auth becomes a requirement.
 internal sealed class SmtpEmailSender(SmtpEmailOptions options, ILogger<SmtpEmailSender> logger) : IEmailSender
 {
-    public async Task<Result> SendAsync(string toEmail, string subject, string body, CancellationToken ct)
+    public async Task<Result> SendAsync(
+        string toEmail, string subject, string body, CancellationToken ct, EmailAttachment? attachment = null)
     {
         if (string.IsNullOrWhiteSpace(toEmail))
             return Result.Failure(Error.Validation("EMAIL_RECIPIENT_MISSING", "No recipient email address."));
@@ -23,6 +24,10 @@ internal sealed class SmtpEmailSender(SmtpEmailOptions options, ILogger<SmtpEmai
         try
         {
             using var message = new MailMessage(options.FromAddress!, toEmail, subject, body);
+            using var attachmentStream = attachment is not null ? new MemoryStream(attachment.Content) : null;
+            if (attachment is not null)
+                message.Attachments.Add(new Attachment(attachmentStream!, attachment.FileName, attachment.ContentType));
+
             using var client = new SmtpClient(options.Host!, options.Port)
             {
                 EnableSsl = options.EnableSsl,

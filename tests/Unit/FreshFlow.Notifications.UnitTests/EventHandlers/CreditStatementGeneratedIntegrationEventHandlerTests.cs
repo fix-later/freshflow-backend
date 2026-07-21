@@ -24,7 +24,9 @@ public sealed class CreditStatementGeneratedIntegrationEventHandlerTests
     {
         var logger = Substitute.For<ILogger<CreditStatementGeneratedIntegrationEventHandler>>();
         _sut = new CreditStatementGeneratedIntegrationEventHandler(_recipients, _writer, _emailSender, logger);
-        _emailSender.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _emailSender.SendAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                Arg.Any<EmailAttachment?>())
             .Returns(Result.Success());
         _writer.WriteAsync(
                 Arg.Any<Guid>(), Arg.Any<NotificationType>(), Arg.Any<string>(), Arg.Any<string>(),
@@ -33,7 +35,8 @@ public sealed class CreditStatementGeneratedIntegrationEventHandlerTests
                 (Guid)call[0]!, (NotificationType)call[1]!, (string)call[2]!, (string)call[3]!, null));
     }
 
-    private static CreditStatementGeneratedIntegrationEvent Event(Guid restaurantId) =>
+    private static CreditStatementGeneratedIntegrationEvent Event(
+        Guid restaurantId, byte[]? statementPdf = null, string? statementPdfFileName = null) =>
         new(
             restaurantId,
             Guid.NewGuid(),
@@ -41,7 +44,9 @@ public sealed class CreditStatementGeneratedIntegrationEventHandlerTests
             new DateTime(2026, 6, 30, 17, 0, 0, DateTimeKind.Utc),  // July VN period end
             1_500_000m,
             new DateTime(2026, 7, 15, 17, 0, 0, DateTimeKind.Utc),  // due = period end + 15d
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            statementPdf,
+            statementPdfFileName);
 
     [Fact]
     public async Task Handle_WithResolvedRecipient_WritesInAppAndSendsEmailAsync()
@@ -98,5 +103,34 @@ public sealed class CreditStatementGeneratedIntegrationEventHandlerTests
         await act.Should().NotThrowAsync();
         await _emailSender.Received(1).SendAsync(
             "owner@example.com", Arg.Any<string>(), Arg.Any<string>(), default);
+    }
+
+    [Fact]
+    public async Task Handle_EventCarriesStatementPdf_SendsEmailWithAttachmentAsync()
+    {
+        var restaurantId = Guid.NewGuid();
+        var pdfBytes = new byte[] { 1, 2, 3 };
+        _recipients.ResolveRecipientByRestaurantIdAsync(restaurantId, default)
+            .Returns(new NotificationRecipient(Guid.NewGuid(), "owner@example.com"));
+
+        await _sut.Handle(Event(restaurantId, pdfBytes, "statement-2026-06.pdf"), default);
+
+        await _emailSender.Received(1).SendAsync(
+            "owner@example.com", Arg.Any<string>(), Arg.Any<string>(), default,
+            Arg.Is<EmailAttachment>(a =>
+                a.FileName == "statement-2026-06.pdf" && a.Content == pdfBytes && a.ContentType == "application/pdf"));
+    }
+
+    [Fact]
+    public async Task Handle_EventHasNoStatementPdf_SendsEmailWithoutAttachmentAsync()
+    {
+        var restaurantId = Guid.NewGuid();
+        _recipients.ResolveRecipientByRestaurantIdAsync(restaurantId, default)
+            .Returns(new NotificationRecipient(Guid.NewGuid(), "owner@example.com"));
+
+        await _sut.Handle(Event(restaurantId), default);
+
+        await _emailSender.Received(1).SendAsync(
+            "owner@example.com", Arg.Any<string>(), Arg.Any<string>(), default, attachment: null);
     }
 }

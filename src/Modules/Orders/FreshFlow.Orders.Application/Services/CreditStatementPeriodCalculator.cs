@@ -8,7 +8,10 @@ namespace FreshFlow.Orders.Application.Services;
 /// </summary>
 public static class CreditStatementPeriodCalculator
 {
-    private static readonly TimeZoneInfo VietnamTimeZone = ResolveVietnamTimeZone();
+    /// <summary>Asia/Ho_Chi_Minh, resolved once. Shared by anything converting statement
+    /// timestamps for display (e.g. the PDF renderer) so the resolve-with-fallback logic
+    /// below lives in one place per module.</summary>
+    public static readonly TimeZoneInfo VietnamTimeZone = ResolveVietnamTimeZone();
 
     /// <summary>
     /// Soft payment term (SCRUM-269, Tier 1): the statement is due this many days after the
