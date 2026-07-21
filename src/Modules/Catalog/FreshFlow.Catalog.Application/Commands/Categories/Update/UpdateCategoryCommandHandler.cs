@@ -21,7 +21,30 @@ internal sealed class UpdateCategoryCommandHandler(IProductCategoryRepository ca
             return Result<CategoryDto>.Failure(
                 Error.Conflict("CATEGORY_NAME_CONFLICT", $"An active category named '{request.Name}' already exists."));
 
+        if (category.ParentId != request.ParentId && request.ParentId is Guid parentId)
+        {
+            if (parentId == category.Id)
+                return Result<CategoryDto>.Failure(
+                    Error.Validation("INVALID_CATEGORY_PARENT", "A category cannot be its own parent."));
+
+            var parent = await categories.FindByIdAsync(parentId, ct);
+            if (parent is null)
+                return Result<CategoryDto>.Failure(
+                    new Error("CATEGORY_PARENT_NOT_FOUND", $"Category parent '{parentId}' was not found."));
+
+            if (!parent.IsActive || parent.ParentId is not null)
+                return Result<CategoryDto>.Failure(
+                    Error.Validation("INVALID_CATEGORY_PARENT", "Category parent must be an active root category."));
+
+            if (await categories.HasChildrenAsync(category.Id, activeOnly: false, ct))
+                return Result<CategoryDto>.Failure(
+                    Error.Validation("INVALID_CATEGORY_PARENT",
+                        "A category with children cannot become a child category."));
+        }
+
         category.Rename(request.Name);
+        if (category.ParentId != request.ParentId)
+            category.ChangeParent(request.ParentId);
         await categories.SaveChangesAsync(ct);
 
         return Result<CategoryDto>.Success(category.ToDto());

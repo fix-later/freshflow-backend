@@ -6,18 +6,26 @@ public sealed class ProductCategory : AggregateRoot
 {
     private ProductCategory() { } // EF Core
 
-    public ProductCategory(string name)
+    public ProductCategory(string name, Guid? parentId = null)
     {
         Name = ValidateName(name);
+        ParentId = parentId;
         IsActive = true;
     }
 
     public string Name { get; private set; } = string.Empty;
+    public Guid? ParentId { get; private set; }
     public bool IsActive { get; private set; } = true;
 
     public void Rename(string name)
     {
         Name = ValidateName(name);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ChangeParent(Guid? parentId)
+    {
+        ParentId = parentId;
         UpdatedAt = DateTime.UtcNow;
     }
 

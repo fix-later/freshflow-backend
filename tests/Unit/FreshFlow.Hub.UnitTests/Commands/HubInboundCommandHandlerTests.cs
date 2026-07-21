@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Hub.Application.Commands.RecordInbound;
 using FreshFlow.Hub.Application.Commands.ScanInbound;
+using FreshFlow.Hub.Application.Services;
 using FreshFlow.Hub.Domain.Entities;
 using FreshFlow.Hub.UnitTests.TestDoubles;
 using HubEntity = FreshFlow.Hub.Domain.Entities.Hub;
@@ -120,7 +121,7 @@ public sealed class HubInboundCommandHandlerTests
             DateTime.UtcNow);
         await hubs.AddAsync(hub, default);
         await inbounds.AddAsync(inbound, default);
-        var sut = new ScanInboundCommandHandler(hubs, inbounds, inventory);
+        var sut = CreateScanHandler(hubs, inbounds, inventory);
 
         var result = await sut.Handle(new ScanInboundCommand(inbound.Id.ToString()), default);
 
@@ -154,7 +155,7 @@ public sealed class HubInboundCommandHandlerTests
         await hubs.AddAsync(hub, default);
         await inventory.AddAsync(existing, default);
         await inbounds.AddAsync(inbound, default);
-        var sut = new ScanInboundCommandHandler(hubs, inbounds, inventory);
+        var sut = CreateScanHandler(hubs, inbounds, inventory);
 
         var result = await sut.Handle(new ScanInboundCommand(inbound.Id.ToString()), default);
 
@@ -180,7 +181,7 @@ public sealed class HubInboundCommandHandlerTests
             ]);
         await hubs.AddAsync(hub, default);
         await inbounds.AddAsync(inbound, default);
-        var sut = new ScanInboundCommandHandler(hubs, inbounds, inventory);
+        var sut = CreateScanHandler(hubs, inbounds, inventory);
 
         var result = await sut.Handle(new ScanInboundCommand(inbound.Id.ToString()), default);
 
@@ -210,7 +211,7 @@ public sealed class HubInboundCommandHandlerTests
         await hubs.AddAsync(hub, default);
         foreach (var inbound in events)
             await inbounds.AddAsync(inbound, default);
-        var sut = new ScanInboundCommandHandler(hubs, inbounds, inventory);
+        var sut = CreateScanHandler(hubs, inbounds, inventory);
 
         foreach (var inbound in events)
         {
@@ -237,7 +238,7 @@ public sealed class HubInboundCommandHandlerTests
         var inbound = CreateInbound(hub.Id, null, 25m);
         await hubs.AddAsync(hub, default);
         await inbounds.AddAsync(inbound, default);
-        var sut = new ScanInboundCommandHandler(hubs, inbounds, inventory);
+        var sut = CreateScanHandler(hubs, inbounds, inventory);
 
         var result = await sut.Handle(new ScanInboundCommand(inbound.Id.ToString()), default);
 
@@ -256,7 +257,8 @@ public sealed class HubInboundCommandHandlerTests
         var sut = new ScanInboundCommandHandler(
             new InMemoryHubRepository(),
             new InMemoryHubInboundRepository(),
-            new InMemoryHubInventoryRepository());
+            new InMemoryHubInventoryRepository(),
+            CreateAccessChecker());
 
         var result = await sut.Handle(new ScanInboundCommand(code), default);
 
@@ -272,13 +274,52 @@ public sealed class HubInboundCommandHandlerTests
         var inbound = CreateInbound(Guid.NewGuid(), null, 10m);
         inbound.ConfirmArrival();
         await inbounds.AddAsync(inbound, default);
-        var sut = new ScanInboundCommandHandler(hubs, inbounds, new InMemoryHubInventoryRepository());
+        var sut = CreateScanHandler(hubs, inbounds, new InMemoryHubInventoryRepository());
 
         var result = await sut.Handle(new ScanInboundCommand(inbound.Id.ToString()), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("SCAN_NO_MATCH");
     }
+
+    [Fact]
+    public async Task ScanInbound_UnassignedStaff_ReturnsForbiddenBeforeMutationAsync()
+    {
+        var hubs = new InMemoryHubRepository();
+        var inbounds = new InMemoryHubInboundRepository();
+        var inventory = new InMemoryHubInventoryRepository();
+        var hub = HubEntity.Create("Other Hub", null, null, null, 1000, null);
+        var inbound = CreateInbound(hub.Id, null, 10m);
+        await hubs.AddAsync(hub, default);
+        await inbounds.AddAsync(inbound, default);
+        var sut = new ScanInboundCommandHandler(
+            hubs,
+            inbounds,
+            inventory,
+            CreateAccessChecker(allowAll: false));
+
+        var result = await sut.Handle(
+            new ScanInboundCommand(inbound.Id.ToString(), Guid.NewGuid()),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("HUB_ACCESS_DENIED");
+        inbound.Status.Should().Be(HubInboundEvent.StatusPending);
+        hub.OccupiedCapacityKg.Should().Be(0);
+        inventory.Inventory.Should().BeEmpty();
+        inbounds.SaveChangesCount.Should().Be(0);
+    }
+
+    private static ScanInboundCommandHandler CreateScanHandler(
+        InMemoryHubRepository hubs,
+        InMemoryHubInboundRepository inbounds,
+        InMemoryHubInventoryRepository inventory) =>
+        new(hubs, inbounds, inventory, CreateAccessChecker());
+
+    private static HubAccessChecker CreateAccessChecker(bool allowAll = true) =>
+        new(
+            new InMemoryHubStaffAssignmentRepository { AllowAll = allowAll },
+            new InMemoryHubStaffReader { AllowAll = true });
 
     private static HubInboundEvent CreateInbound(Guid hubId, Guid? deliveryScheduleId, decimal quantityKg) =>
         CreateInbound(

@@ -6,5 +6,5 @@ namespace FreshFlow.Catalog.Application.Mappings;
 internal static class CategoryMappings
 {
     internal static CategoryDto ToDto(this ProductCategory c) =>
-        new(c.Id, c.Name, c.IsActive, c.CreatedAt, c.UpdatedAt);
+        new(c.Id, c.Name, c.ParentId, c.IsActive, c.CreatedAt, c.UpdatedAt);
 }

@@ -37,13 +37,10 @@ internal sealed class ProductRepository(AppDbContext db) : IProductRepository
 
         if (!string.IsNullOrEmpty(category))
         {
-            // M2: support both Guid-based and legacy string-based category filtering.
-            // When the value parses as a Guid, match by CategoryId OR LegacyCategory (OR
-            // covers the transition period when both columns are populated).
-            // When the value is not a Guid, fall back to the original LegacyCategory
-            // exact-match for backward compatibility.
             query = Guid.TryParse(category, out var categoryId)
-                ? query.Where(p => p.CategoryId == categoryId || p.LegacyCategory == category)
+                ? query.Where(p => db.Set<ProductCategory>().Any(c =>
+                    c.DeletedAt == null && c.Id == p.CategoryId
+                    && (c.Id == categoryId || c.ParentId == categoryId)))
                 : query.Where(p => p.LegacyCategory == category);
         }
 

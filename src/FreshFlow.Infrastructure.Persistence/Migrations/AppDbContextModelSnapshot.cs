@@ -821,6 +821,9 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -831,6 +834,8 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.HasIndex("Name")
                         .IsUnique()
                         .HasFilter("\"DeletedAt\" IS NULL");
+
+                    b.HasIndex("ParentId");
 
                     b.ToTable("product_categories", (string)null);
                 });
@@ -1438,6 +1443,24 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("FreshFlow.Hub.Domain.Entities.HubStaffAssignment", b =>
+                {
+                    b.Property<Guid>("HubId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("hub_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("HubId", "UserId");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("idx_hub_staff_assignments_user_id");
+
+                    b.ToTable("hub_staff_assignments", (string)null);
+                });
+
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.DeliveryRouteRow", b =>
                 {
                     b.Property<Guid?>("DriverUserId")
@@ -1453,6 +1476,26 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable((string)null);
 
                     b.ToSqlQuery("SELECT id AS \"RouteId\", status AS \"Status\", driver_user_id AS \"DriverUserId\"\nFROM delivery_routes\nWHERE deleted_at IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubStaffUserRow", b =>
+                {
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RoleName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    u.\"Id\" AS \"UserId\",\n    r.\"Name\" AS \"RoleName\",\n    u.\"IsActive\" AS \"IsActive\",\n    u.\"DeletedAt\" AS \"DeletedAt\"\nFROM users AS u\nINNER JOIN roles AS r ON u.\"RoleId\" = r.\"Id\"");
                 });
 
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.OrderLookupRow", b =>
@@ -2167,6 +2210,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FreshFlow.Notifications.Infrastructure.CrossModule.NotificationRecipientRow", b =>
                 {
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<Guid>("RestaurantId")
                         .HasColumnType("uuid");
 
@@ -2175,7 +2222,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT \"Id\" AS \"RestaurantId\", \"UserId\" FROM restaurants");
+                    b.ToSqlQuery("SELECT r.\"Id\" AS \"RestaurantId\", r.\"UserId\", u.\"Email\"\nFROM restaurants r\nJOIN users u ON u.\"Id\" = r.\"UserId\"\nWHERE u.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.CreditStatement", b =>
@@ -3316,6 +3363,14 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FreshFlow.Catalog.Domain.Entities.ProductCategory", b =>
+                {
+                    b.HasOne("FreshFlow.Catalog.Domain.Entities.ProductCategory", null)
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("FreshFlow.Hub.Domain.Entities.CrossDockTransfer", b =>
                 {
                     b.HasOne("FreshFlow.Hub.Domain.Entities.Hub", null)
@@ -3394,6 +3449,16 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_hub_outbound_events_hub");
+                });
+
+            modelBuilder.Entity("FreshFlow.Hub.Domain.Entities.HubStaffAssignment", b =>
+                {
+                    b.HasOne("FreshFlow.Hub.Domain.Entities.Hub", null)
+                        .WithMany()
+                        .HasForeignKey("HubId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_hub_staff_assignments_hub");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Domain.Entities.Delivery", b =>

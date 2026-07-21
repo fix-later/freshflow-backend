@@ -1,3 +1,4 @@
+using FreshFlow.Hub.Application.Abstractions;
 using FreshFlow.Hub.Application.Dtos;
 using FreshFlow.SharedKernel.Application;
 
@@ -8,7 +9,10 @@ public sealed record RecordInboundCommand(
     Guid? SourceMarketId,
     Guid? DeliveryScheduleId,
     IReadOnlyList<HubInboundItemCommand> Items,
-    DateTime ArrivedAt) : ICommand<HubInboundDto>;
+    DateTime ArrivedAt,
+    Guid ActorUserId = default,
+    bool BypassHubAssignment = false)
+    : ICommand<HubInboundDto>, IHubAccessRequest;
 
 public sealed record HubInboundItemCommand(
     Guid MarketProductId,

@@ -1,3 +1,4 @@
+using FreshFlow.Hub.Application.Abstractions;
 using FreshFlow.Hub.Application.Dtos;
 using FreshFlow.SharedKernel.Application;
 
@@ -7,4 +8,7 @@ public sealed record ListDiscrepanciesQuery(
     Guid HubId,
     string? Status = null,
     string? Cursor = null,
-    int PageSize = 50) : IQuery<HubDiscrepancyPageDto>;
+    int PageSize = 50,
+    Guid ActorUserId = default,
+    bool BypassHubAssignment = false)
+    : IQuery<HubDiscrepancyPageDto>, IHubAccessRequest;

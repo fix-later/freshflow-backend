@@ -1,3 +1,4 @@
+using FreshFlow.Hub.Application.Abstractions;
 using FreshFlow.Hub.Application.Dtos;
 using FreshFlow.SharedKernel.Application;
 
@@ -9,4 +10,7 @@ public sealed record RecordDiscrepancyCommand(
     Guid OrderItemId,
     decimal AffectedQuantity,
     string ConditionStatus,
-    string? Notes) : ICommand<HubDiscrepancyDto>;
+    string? Notes,
+    Guid ActorUserId = default,
+    bool BypassHubAssignment = false)
+    : ICommand<HubDiscrepancyDto>, IHubAccessRequest;

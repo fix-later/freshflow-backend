@@ -38,7 +38,7 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
     public async Task<IActionResult> CreateCategoryAsync(
         [FromBody] CreateCategoryRequest body, CancellationToken ct)
     {
-        var result = await sender.Send(new CreateCategoryCommand(body.Name), ct);
+        var result = await sender.Send(new CreateCategoryCommand(body.Name, body.ParentId), ct);
         return result.IsSuccess
             ? CreatedAtAction(nameof(GetCategoryByIdAsync), new { id = result.Value.Id }, ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
@@ -50,7 +50,7 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
     public async Task<IActionResult> UpdateCategoryAsync(
         Guid id, [FromBody] UpdateCategoryRequest body, CancellationToken ct)
     {
-        var result = await sender.Send(new UpdateCategoryCommand(id, body.Name), ct);
+        var result = await sender.Send(new UpdateCategoryCommand(id, body.Name, body.ParentId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -66,6 +66,6 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
 
 // ── Request DTOs ──────────────────────────────────────────────────────────────
 
-public sealed record CreateCategoryRequest(string Name);
+public sealed record CreateCategoryRequest(string Name, Guid? ParentId);
 
-public sealed record UpdateCategoryRequest(string Name);
+public sealed record UpdateCategoryRequest(string Name, Guid? ParentId);

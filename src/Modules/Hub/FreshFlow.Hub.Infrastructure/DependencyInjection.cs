@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentValidation;
 using FreshFlow.Hub.Application.Abstractions;
 using FreshFlow.Hub.Application.Behaviors;
+using FreshFlow.Hub.Application.Services;
 using FreshFlow.Hub.Infrastructure.CrossModule;
 using FreshFlow.Hub.Infrastructure.Repositories;
 using FreshFlow.Infrastructure.Persistence;
@@ -29,6 +30,14 @@ public static class DependencyInjection
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
         });
 
+        // Every module contributes a validation behavior to the shared MediatR pipeline.
+        // Insert access enforcement first so malformed requests cannot reveal Hub validation details.
+        services.Insert(
+            0,
+            ServiceDescriptor.Transient(
+                typeof(IPipelineBehavior<,>),
+                typeof(HubAccessBehavior<,>)));
+
         services.AddValidatorsFromAssembly(applicationAssembly, includeInternalTypes: true);
 
         services.AddScoped<IHubRepository, HubRepository>();
@@ -41,6 +50,9 @@ public static class DependencyInjection
         services.AddScoped<ICrossDockRepository, CrossDockRepository>();
         services.AddScoped<IHubOutboundRepository, HubOutboundRepository>();
         services.AddScoped<IHubHandoverRepository, HubHandoverRepository>();
+        services.AddScoped<IHubStaffAssignmentRepository, HubStaffAssignmentRepository>();
+        services.AddScoped<IHubStaffReader, HubStaffReader>();
+        services.AddScoped<HubAccessChecker>();
 
         return services;
     }
