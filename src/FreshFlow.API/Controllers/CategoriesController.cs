@@ -1,4 +1,5 @@
 using FreshFlow.API.Extensions;
+using FreshFlow.Catalog.Application.Commands.Categories.Activate;
 using FreshFlow.Catalog.Application.Commands.Categories.Create;
 using FreshFlow.Catalog.Application.Commands.Categories.Deactivate;
 using FreshFlow.Catalog.Application.Commands.Categories.Update;
@@ -60,6 +61,15 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
     public async Task<IActionResult> DeactivateCategoryAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new DeactivateCategoryCommand(id), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>PATCH /api/v1/categories/{id}/activate — Admin only.</summary>
+    [HttpPatch("{id:guid}/activate")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> ActivateCategoryAsync(Guid id, CancellationToken ct)
+    {
+        var result = await sender.Send(new ActivateCategoryCommand(id), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 }
