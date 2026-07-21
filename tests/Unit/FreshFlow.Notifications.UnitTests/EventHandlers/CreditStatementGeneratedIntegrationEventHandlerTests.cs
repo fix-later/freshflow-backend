@@ -88,6 +88,23 @@ public sealed class CreditStatementGeneratedIntegrationEventHandlerTests
     }
 
     [Fact]
+    public async Task Handle_RecipientLookupThrows_SkipsBothChannelsWithoutThrowingAsync()
+    {
+        var restaurantId = Guid.NewGuid();
+        _recipients.ResolveRecipientByRestaurantIdAsync(restaurantId, default)
+            .Returns(Task.FromException<NotificationRecipient?>(new InvalidOperationException("db down")));
+
+        var act = () => _sut.Handle(Event(restaurantId), default);
+
+        await act.Should().NotThrowAsync();
+        await _writer.DidNotReceive().WriteAsync(
+            Arg.Any<Guid>(), Arg.Any<NotificationType>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<IReadOnlyDictionary<string, object?>>(), Arg.Any<CancellationToken>());
+        await _emailSender.DidNotReceive().SendAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Handle_InAppWriteThrows_StillSendsEmailAsync()
     {
         var restaurantId = Guid.NewGuid();

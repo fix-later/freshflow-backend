@@ -218,6 +218,19 @@ public sealed class CreditStatementGenerationServiceTests
     }
 
     [Fact]
+    public async Task GenerateAsync_PublisherThrows_StillReturnsCommittedStatementAsync()
+    {
+        _publisher.Publish(
+                Arg.Any<CreditStatementGeneratedIntegrationEvent>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("notification infrastructure down")));
+
+        var result = await _sut.GenerateAsync(RestaurantId, ClosedYear, ClosedMonth, default);
+
+        result.IsSuccess.Should().BeTrue();
+        await _statementRepository.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task GenerateAsync_IdempotentReturnOfExistingStatement_DoesNotPublishAsync()
     {
         var existing = new CreditStatement(

@@ -25,7 +25,21 @@ internal sealed class CreditStatementGeneratedIntegrationEventHandler(
 
     public async Task Handle(CreditStatementGeneratedIntegrationEvent notification, CancellationToken ct)
     {
-        var recipient = await recipients.ResolveRecipientByRestaurantIdAsync(notification.RestaurantId, ct);
+        NotificationRecipient? recipient;
+
+        try
+        {
+            recipient = await recipients.ResolveRecipientByRestaurantIdAsync(notification.RestaurantId, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(
+                ex,
+                "Failed to resolve statement recipient for RestaurantId={RestaurantId}.",
+                notification.RestaurantId);
+            return;
+        }
+
         if (recipient is null)
         {
             logger.LogWarning(
@@ -104,9 +118,9 @@ internal sealed class CreditStatementGeneratedIntegrationEventHandler(
         var closing = n.ClosingBalance.ToString("N0", CultureInfo.InvariantCulture);
 
         return
-            $"Sao kê kỳ {periodLocal:MM/yyyy} đã được lập. " +
+            $"Sao kê kỳ {periodLocal:MM\\/yyyy} đã được lập. " +
             $"Dư nợ cuối kỳ: {closing} đ. " +
-            $"Vui lòng thanh toán trước ngày {dueLocal:dd/MM/yyyy}.";
+            $"Vui lòng thanh toán trước ngày {dueLocal:dd\\/MM\\/yyyy}.";
     }
 
     private static TimeZoneInfo ResolveVietnamTimeZone()

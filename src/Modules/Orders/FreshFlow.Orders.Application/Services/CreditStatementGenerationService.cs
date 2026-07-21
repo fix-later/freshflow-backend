@@ -58,18 +58,29 @@ public sealed class CreditStatementGenerationService(
         // Published only here — the newly-generated path — so an idempotent re-generate or a
         // race loser (both returned above) never re-notifies. Fires after the commit
         // succeeded, so the notification only goes out for a statement that actually exists.
-        await publisher.Publish(
-            new CreditStatementGeneratedIntegrationEvent(
-                statement.RestaurantId,
-                statement.Id,
-                statement.PeriodStart,
-                statement.PeriodEnd,
-                statement.ClosingBalance,
-                CreditStatementPeriodCalculator.ResolveDueDate(statement.PeriodEnd),
-                statement.GeneratedAt,
-                pdfBytes,
-                pdfFileName),
-            ct);
+        try
+        {
+            await publisher.Publish(
+                new CreditStatementGeneratedIntegrationEvent(
+                    statement.RestaurantId,
+                    statement.Id,
+                    statement.PeriodStart,
+                    statement.PeriodEnd,
+                    statement.ClosingBalance,
+                    CreditStatementPeriodCalculator.ResolveDueDate(statement.PeriodEnd),
+                    statement.GeneratedAt,
+                    pdfBytes,
+                    pdfFileName),
+                ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // ponytail: use an outbox if statement notifications become guaranteed delivery.
+            logger.LogError(
+                ex,
+                "Failed to publish statement notification for StatementId={StatementId} after it was committed.",
+                statement.Id);
+        }
 
         return Result<CreditStatementDto>.Success(dto);
     }
