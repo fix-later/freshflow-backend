@@ -40,7 +40,7 @@ public static class ErrorExtensions
             or "TOKEN_INVALID" or "REFRESH_TOKEN_EXPIRED" or "REFRESH_TOKEN_REVOKED")
             return new UnauthorizedObjectResult(body);
 
-        if (error.Code is "FORBIDDEN" or "MARKET_ACCESS_DENIED")
+        if (error.Code is "FORBIDDEN" or "MARKET_ACCESS_DENIED" or "HUB_ACCESS_DENIED")
             return new ObjectResult(body) { StatusCode = 403 };
 
         if (error.Code is "OPTIMISTIC_CONCURRENCY_CONFLICT")

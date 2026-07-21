@@ -27,7 +27,8 @@ public sealed class HubHandoverController(ISender sender) : ControllerBase
                 body.DriverUserId,
                 body.OutboundEventId,
                 ResolveUserId(),
-                body.Notes),
+                body.Notes,
+                BypassHubAssignment()),
             ct);
 
         return result.IsSuccess
@@ -57,7 +58,14 @@ public sealed class HubHandoverController(ISender sender) : ControllerBase
         [FromQuery(Name = "page_size")] int pageSize = 50,
         CancellationToken ct = default)
     {
-        var result = await sender.Send(new ListHandoversQuery(hubId, cursor, pageSize), ct);
+        var result = await sender.Send(
+            new ListHandoversQuery(
+                hubId,
+                cursor,
+                pageSize,
+                ResolveUserId(),
+                BypassHubAssignment()),
+            ct);
         return result.IsSuccess
             ? Ok(ApiResponse.OkPaged(result.Value.Items, result.Value.PageSize, result.Value.NextCursor))
             : result.Error.ToActionResult();
@@ -69,6 +77,9 @@ public sealed class HubHandoverController(ISender sender) : ControllerBase
                   ?? User.FindFirstValue("sub");
         return Guid.Parse(raw!);
     }
+
+    private bool BypassHubAssignment() =>
+        User.IsInRole("admin") || User.IsInRole("operations_manager");
 }
 
 public sealed record CreateHandoverRequest(

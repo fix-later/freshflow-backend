@@ -76,6 +76,7 @@ public sealed class HubHandoverControllerTests
                 command.DriverUserId == driverUserId &&
                 command.OutboundEventId == outboundId &&
                 command.HandedOverBy == handedOverBy &&
+                !command.BypassHubAssignment &&
                 command.Notes == "Ready"),
             Arg.Any<CancellationToken>());
     }
@@ -125,7 +126,8 @@ public sealed class HubHandoverControllerTests
         sender.Send(Arg.Any<ListHandoversQuery>(), Arg.Any<CancellationToken>())
             .Returns(Result<HubHandoverPageDto>.Success(
                 new HubHandoverPageDto([CreateDto(hubId, Guid.NewGuid(), Guid.NewGuid())], 25, "next")));
-        var controller = CreateController(sender, Guid.NewGuid());
+        var actorUserId = Guid.NewGuid();
+        var controller = CreateController(sender, actorUserId);
 
         var result = await controller.ListHandoversAsync(hubId, "cursor", 25, default);
 
@@ -134,7 +136,9 @@ public sealed class HubHandoverControllerTests
             Arg.Is<ListHandoversQuery>(query =>
                 query.HubId == hubId &&
                 query.Cursor == "cursor" &&
-                query.PageSize == 25),
+                query.PageSize == 25 &&
+                query.ActorUserId == actorUserId &&
+                !query.BypassHubAssignment),
             Arg.Any<CancellationToken>());
     }
 
@@ -146,7 +150,8 @@ public sealed class HubHandoverControllerTests
                 HttpContext = new DefaultHttpContext
                 {
                     User = new ClaimsPrincipal(new ClaimsIdentity(
-                        [new Claim(ClaimTypes.NameIdentifier, userId.ToString())]))
+                        [new Claim(ClaimTypes.NameIdentifier, userId.ToString())],
+                        "Test"))
                 }
             }
         };

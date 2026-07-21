@@ -3,4 +3,7 @@ using FreshFlow.SharedKernel.Application;
 
 namespace FreshFlow.Hub.Application.Commands.ScanInbound;
 
-public sealed record ScanInboundCommand(string Code) : ICommand<HubInboundDto>;
+public sealed record ScanInboundCommand(
+    string Code,
+    Guid ActorUserId = default,
+    bool BypassHubAssignment = false) : ICommand<HubInboundDto>;

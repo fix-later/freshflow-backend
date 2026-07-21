@@ -37,7 +37,9 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
                     item.MarketProductId,
                     item.ProductId,
                     item.QuantityKg)).ToList().AsReadOnly(),
-                body.ArrivedAt),
+                body.ArrivedAt,
+                ResolveUserId(),
+                BypassHubAssignment()),
             ct);
 
         return result.IsSuccess
@@ -50,7 +52,9 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         [FromBody] ScanInboundRequest body,
         CancellationToken ct)
     {
-        var result = await sender.Send(new ScanInboundCommand(body.Code), ct);
+        var result = await sender.Send(
+            new ScanInboundCommand(body.Code, ResolveUserId(), BypassHubAssignment()),
+            ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -61,7 +65,14 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         [FromQuery(Name = "page_size")] int pageSize = 50,
         CancellationToken ct = default)
     {
-        var result = await sender.Send(new GetPendingInboundQuery(hubId, cursor, pageSize), ct);
+        var result = await sender.Send(
+            new GetPendingInboundQuery(
+                hubId,
+                cursor,
+                pageSize,
+                ResolveUserId(),
+                BypassHubAssignment()),
+            ct);
         return result.IsSuccess
             ? Ok(ApiResponse.OkPaged(result.Value.Items, result.Value.PageSize, result.Value.NextCursor))
             : result.Error.ToActionResult();
@@ -75,7 +86,15 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         [FromQuery(Name = "page_size")] int pageSize = 50,
         CancellationToken ct = default)
     {
-        var result = await sender.Send(new ListInboundQuery(hubId, date, cursor, pageSize), ct);
+        var result = await sender.Send(
+            new ListInboundQuery(
+                hubId,
+                date,
+                cursor,
+                pageSize,
+                ResolveUserId(),
+                BypassHubAssignment()),
+            ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -93,7 +112,9 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
                 body.OrderItemId,
                 body.AffectedQuantity,
                 body.ConditionStatus,
-                body.Notes),
+                body.Notes,
+                ResolveUserId(),
+                BypassHubAssignment()),
             ct);
 
         return result.IsSuccess
@@ -111,7 +132,15 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         [FromQuery(Name = "page_size")] int pageSize = 50,
         CancellationToken ct = default)
     {
-        var result = await sender.Send(new ListDiscrepanciesQuery(hubId, status, cursor, pageSize), ct);
+        var result = await sender.Send(
+            new ListDiscrepanciesQuery(
+                hubId,
+                status,
+                cursor,
+                pageSize,
+                ResolveUserId(),
+                BypassHubAssignment()),
+            ct);
         return result.IsSuccess
             ? Ok(ApiResponse.OkPaged(result.Value.Items, result.Value.PageSize, result.Value.NextCursor))
             : result.Error.ToActionResult();
@@ -142,7 +171,9 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
                 hubId,
                 body.InboundEventId,
                 body.OutboundRouteId,
-                body.Notes),
+                body.Notes,
+                ResolveUserId(),
+                BypassHubAssignment()),
             ct);
 
         return result.IsSuccess
@@ -158,7 +189,15 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         [FromQuery(Name = "page_size")] int pageSize = 50,
         CancellationToken ct = default)
     {
-        var result = await sender.Send(new ListCrossDockQuery(hubId, status, cursor, pageSize), ct);
+        var result = await sender.Send(
+            new ListCrossDockQuery(
+                hubId,
+                status,
+                cursor,
+                pageSize,
+                ResolveUserId(),
+                BypassHubAssignment()),
+            ct);
         return result.IsSuccess
             ? Ok(ApiResponse.OkPaged(result.Value.Items, result.Value.PageSize, result.Value.NextCursor))
             : result.Error.ToActionResult();
@@ -178,7 +217,9 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
                     item.MarketProductId,
                     item.ProductId,
                     item.QuantityKg)).ToList().AsReadOnly(),
-                body.DispatchedAt),
+                body.DispatchedAt,
+                ResolveUserId(),
+                BypassHubAssignment()),
             ct);
 
         return result.IsSuccess
@@ -194,7 +235,15 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         [FromQuery(Name = "page_size")] int pageSize = 50,
         CancellationToken ct = default)
     {
-        var result = await sender.Send(new ListOutboundQuery(hubId, date, cursor, pageSize), ct);
+        var result = await sender.Send(
+            new ListOutboundQuery(
+                hubId,
+                date,
+                cursor,
+                pageSize,
+                ResolveUserId(),
+                BypassHubAssignment()),
+            ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -204,6 +253,9 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
                   ?? User.FindFirstValue("sub");
         return Guid.Parse(raw!);
     }
+
+    private bool BypassHubAssignment() =>
+        User.IsInRole("admin") || User.IsInRole("operations_manager");
 }
 
 public sealed record RecordInboundRequest(

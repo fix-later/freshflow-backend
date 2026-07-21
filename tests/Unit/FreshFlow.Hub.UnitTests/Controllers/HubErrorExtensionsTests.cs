@@ -32,6 +32,15 @@ public sealed class HubErrorExtensionsTests
         result.Should().BeOfType<NotFoundObjectResult>();
     }
 
+    [Fact]
+    public void ToActionResult_HubAccessDenied_Returns403()
+    {
+        var result = Error.Unauthorized("HUB_ACCESS_DENIED", "denied").ToActionResult();
+
+        result.Should().BeOfType<ObjectResult>()
+            .Which.StatusCode.Should().Be(403);
+    }
+
     [Theory]
     [InlineData("INSUFFICIENT_HUB_STOCK")]
     [InlineData("INBOUND_NOT_ARRIVED")]

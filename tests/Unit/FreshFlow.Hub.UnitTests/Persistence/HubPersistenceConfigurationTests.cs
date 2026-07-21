@@ -183,6 +183,28 @@ public sealed class HubPersistenceConfigurationTests
     }
 
     [Fact]
+    public void HubStaffAssignmentConfiguration_UsesCompositeKeyHubForeignKeyAndUserIndex()
+    {
+        using var ctx = CreateContext();
+        var entity = ctx.GetService<IDesignTimeModel>().Model
+            .FindEntityType(typeof(HubStaffAssignment))!;
+        var table = StoreObjectIdentifier.Table("hub_staff_assignments", null);
+
+        entity.GetTableName().Should().Be("hub_staff_assignments");
+        entity.FindPrimaryKey()!.Properties.Select(property => property.Name)
+            .Should().Equal(nameof(HubStaffAssignment.HubId), nameof(HubStaffAssignment.UserId));
+        entity.FindProperty(nameof(HubStaffAssignment.HubId))!
+            .GetColumnName(table).Should().Be("hub_id");
+        entity.FindProperty(nameof(HubStaffAssignment.UserId))!
+            .GetColumnName(table).Should().Be("user_id");
+        entity.GetForeignKeys().Should().ContainSingle(fk =>
+            fk.PrincipalEntityType.ClrType == typeof(HubEntity) &&
+            fk.GetConstraintName() == "fk_hub_staff_assignments_hub");
+        entity.GetIndexes().Should().ContainSingle(index =>
+            index.GetDatabaseName() == "idx_hub_staff_assignments_user_id");
+    }
+
+    [Fact]
     public void AddHubModule_RegistersHubRepository()
     {
         var services = new ServiceCollection();
@@ -197,6 +219,8 @@ public sealed class HubPersistenceConfigurationTests
         provider.GetRequiredService<IHubRepository>().Should().NotBeNull();
         provider.GetRequiredService<IHubInboundRepository>().Should().NotBeNull();
         provider.GetRequiredService<IHubInventoryRepository>().Should().NotBeNull();
+        provider.GetRequiredService<IHubStaffAssignmentRepository>().Should().NotBeNull();
+        provider.GetRequiredService<IHubStaffReader>().Should().NotBeNull();
     }
 
     private static AppDbContext CreateContext()

@@ -39,7 +39,7 @@ public sealed class HubDiscrepancyControllerTests
         var orderItemId = Guid.NewGuid();
         sender.Send(Arg.Any<RecordDiscrepancyCommand>(), Arg.Any<CancellationToken>())
             .Returns(Result<HubDiscrepancyDto>.Success(CreateDto(hubId, inboundId, orderItemId)));
-        var controller = new HubInboundController(sender);
+        var controller = CreateController(sender);
 
         var result = await controller.RecordDiscrepancyAsync(
             hubId,
@@ -71,7 +71,7 @@ public sealed class HubDiscrepancyControllerTests
         var page = new HubDiscrepancyPageDto([CreateDto(hubId, Guid.NewGuid(), Guid.NewGuid())], 25, "next");
         sender.Send(Arg.Any<ListDiscrepanciesQuery>(), Arg.Any<CancellationToken>())
             .Returns(Result<HubDiscrepancyPageDto>.Success(page));
-        var controller = new HubInboundController(sender);
+        var controller = CreateController(sender);
 
         var result = await controller.ListDiscrepanciesAsync(
             hubId,
@@ -137,4 +137,18 @@ public sealed class HubDiscrepancyControllerTests
             null,
             DateTime.UtcNow,
             DateTime.UtcNow);
+
+    private static HubInboundController CreateController(ISender sender) =>
+        new(sender)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())],
+                        "Test"))
+                }
+            }
+        };
 }

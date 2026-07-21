@@ -48,6 +48,7 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 | Doc | Loại | Trạng thái |
 |---|---|---|
 | [AUDIT-2026-07-10 hub backend plan](./hub/AUDIT-2026-07-10-hub-backend-plan.md) | Audit / Plan | ✅ Hoàn thành 6/6 (286/288/290/292/294 committed+reviewed, 296 đóng Option A), merged PR #22 |
+| [AUDIT-2026-07-21 hub staff assignment plan](./hub/AUDIT-2026-07-21-hub-staff-assignment-plan.md) | Audit / Plan / Implementation | ✅ SCRUM-365 đã implement, chờ review/commit |
 
 ## delivery — Delivery Execution (epic DEL, module Logistics — driver last-mile)
 

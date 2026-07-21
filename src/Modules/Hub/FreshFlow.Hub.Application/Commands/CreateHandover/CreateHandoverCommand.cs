@@ -1,3 +1,4 @@
+using FreshFlow.Hub.Application.Abstractions;
 using FreshFlow.Hub.Application.Dtos;
 using FreshFlow.SharedKernel.Application;
 
@@ -9,4 +10,9 @@ public sealed record CreateHandoverCommand(
     Guid DriverUserId,
     Guid? OutboundEventId,
     Guid HandedOverBy,
-    string? Notes = null) : ICommand<HubHandoverDto>;
+    string? Notes = null,
+    bool BypassHubAssignment = false)
+    : ICommand<HubHandoverDto>, IHubAccessRequest
+{
+    public Guid ActorUserId => HandedOverBy;
+}

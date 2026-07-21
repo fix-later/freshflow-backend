@@ -1,6 +1,7 @@
 using FreshFlow.Hub.Application.Abstractions;
 using FreshFlow.Hub.Application.Dtos;
 using FreshFlow.Hub.Application.Mappings;
+using FreshFlow.Hub.Application.Services;
 using FreshFlow.Hub.Domain.Entities;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
@@ -10,7 +11,8 @@ namespace FreshFlow.Hub.Application.Commands.ScanInbound;
 internal sealed class ScanInboundCommandHandler(
     IHubRepository hubs,
     IHubInboundRepository inbounds,
-    IHubInventoryRepository inventory)
+    IHubInventoryRepository inventory,
+    HubAccessChecker accessChecker)
     : IRequestHandler<ScanInboundCommand, Result<HubInboundDto>>
 {
     public async Task<Result<HubInboundDto>> Handle(ScanInboundCommand request, CancellationToken ct)
@@ -25,6 +27,16 @@ internal sealed class ScanInboundCommandHandler(
         var hub = await hubs.FindByIdAsync(inbound.HubId, ct);
         if (hub is null)
             return Result<HubInboundDto>.Failure(Error.NotFound("HUB", inbound.HubId));
+
+        var accessError = await accessChecker.CheckAsync(
+            hub.Id,
+            hub.IsActive,
+            request.ActorUserId,
+            request.BypassHubAssignment,
+            ct);
+
+        if (accessError is not null)
+            return Result<HubInboundDto>.Failure(accessError);
 
         if (hub.AvailableCapacityKg < inbound.TotalQuantityKg)
         {

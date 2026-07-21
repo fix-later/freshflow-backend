@@ -18,6 +18,7 @@ using FreshFlow.Pricing.Infrastructure.Realtime;
 using FreshFlow.Procurement.Infrastructure;
 using MicroElements.Swashbuckle.FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
@@ -29,6 +30,13 @@ var builder = WebApplication.CreateBuilder(args);
 // CreatedAtAction(nameof(GetXxxAsync), ...) resolves correctly without stripping.
 builder.Services.AddControllers(options =>
     options.SuppressAsyncSuffixInActionNames = false);
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.InvalidModelStateResponseFactory = _ => new BadRequestObjectResult(
+        FreshFlow.API.ApiResponse.Err(
+            "VALIDATION_ERROR",
+            "One or more fields failed validation."));
+});
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
