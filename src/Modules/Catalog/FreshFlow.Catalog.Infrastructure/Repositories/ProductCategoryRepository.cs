@@ -2,6 +2,7 @@ using FreshFlow.Catalog.Application.Abstractions;
 using FreshFlow.Catalog.Domain.Entities;
 using FreshFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FreshFlow.Catalog.Infrastructure.Repositories;
 
@@ -14,7 +15,7 @@ internal sealed class ProductCategoryRepository(AppDbContext db) : IProductCateg
     public Task<bool> ExistsByNameAsync(string name, CancellationToken ct) =>
         db.Set<ProductCategory>()
             .AsNoTracking()
-            .AnyAsync(c => c.Name == name && c.IsActive && c.DeletedAt == null, ct);
+            .AnyAsync(c => c.Name == name && c.DeletedAt == null, ct);
 
     public Task<bool> HasChildrenAsync(Guid parentId, bool activeOnly, CancellationToken ct) =>
         db.Set<ProductCategory>()
@@ -38,6 +39,21 @@ internal sealed class ProductCategoryRepository(AppDbContext db) : IProductCateg
     public async Task AddAsync(ProductCategory category, CancellationToken ct) =>
         await db.Set<ProductCategory>().AddAsync(category, ct);
 
-    public Task SaveChangesAsync(CancellationToken ct) =>
-        db.SaveChangesAsync(ct);
+    public async Task<bool> SaveChangesAsync(CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "IX_product_categories_Name"
+            })
+        {
+            return false;
+        }
+    }
 }

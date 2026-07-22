@@ -14,6 +14,7 @@ public sealed class UpdateCategoryCommandHandlerTests
 
     public UpdateCategoryCommandHandlerTests()
     {
+        _categories.SaveChangesAsync(default).Returns(true);
         _sut = new UpdateCategoryCommandHandler(_categories);
     }
 
@@ -170,6 +171,20 @@ public sealed class UpdateCategoryCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("CATEGORY_NAME_CONFLICT");
         await _categories.DidNotReceive().SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Handle_UniqueConstraintConflict_ReturnsConflict()
+    {
+        var category = new ProductCategory("Rau củ");
+        _categories.FindByIdAsync(category.Id, default).Returns(category);
+        _categories.ExistsByNameAsync("Thịt", default).Returns(false);
+        _categories.SaveChangesAsync(default).Returns(false);
+
+        var result = await _sut.Handle(new UpdateCategoryCommand(category.Id, "Thịt"), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("CATEGORY_NAME_CONFLICT");
     }
 
     [Fact]
