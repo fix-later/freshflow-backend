@@ -14,7 +14,7 @@ internal sealed class UnitOfMeasurementRepository(AppDbContext db) : IUnitOfMeas
     public Task<bool> ExistsByNameAsync(string name, CancellationToken ct) =>
         db.Set<UnitOfMeasurement>()
             .AsNoTracking()
-            .AnyAsync(u => u.Name == name && u.IsActive && u.DeletedAt == null, ct);
+            .AnyAsync(u => u.Name == name && u.DeletedAt == null, ct);
 
     public async Task<IReadOnlyList<UnitOfMeasurement>> GetAllAsync(bool activeOnly, CancellationToken ct)
     {

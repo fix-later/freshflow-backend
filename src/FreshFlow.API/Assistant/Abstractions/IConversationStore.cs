@@ -18,6 +18,7 @@ public interface IConversationStore
     /// <summary>
     /// Creates or overwrites the conversation for <paramref name="state"/>'s session id and slides its
     /// TTL forward. History longer than the store's retention window is trimmed before this call.
+    /// Returns <c>false</c> when the session id belongs to another user.
     /// </summary>
-    public Task SaveAsync(ConversationState state, CancellationToken ct = default);
+    public Task<bool> SaveAsync(ConversationState state, CancellationToken ct = default);
 }

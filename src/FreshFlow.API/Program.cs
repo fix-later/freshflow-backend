@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 using FluentValidation;
 using FreshFlow.Analytics.Infrastructure;
 using FreshFlow.API.Assistant;
+using FreshFlow.API.Errors;
 using FreshFlow.API.Swagger;
 using FreshFlow.Auth.Infrastructure;
 using FreshFlow.Catalog.Infrastructure;
@@ -249,6 +250,15 @@ app.UseExceptionHandler(errorApp =>
                 success = false,
                 error = new { code = "UNAUTHORIZED", message = "Authentication is required or the provided credentials are invalid." }
             });
+            return;
+        }
+
+        if (DatabaseConflictMapper.TryMap(feature?.Error, out var conflict))
+        {
+            ctx.Response.StatusCode = StatusCodes.Status409Conflict;
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.WriteAsJsonAsync(
+                FreshFlow.API.ApiResponse.Err(conflict.Code, conflict.Message));
             return;
         }
 

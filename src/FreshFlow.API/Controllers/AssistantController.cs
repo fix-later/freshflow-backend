@@ -60,7 +60,10 @@ public sealed class AssistantController(
 
         var outcome = await orchestrator.RunAsync(state, request.ConfirmOrderId, ct);
 
-        await conversationStore.SaveAsync(outcome.State, ct);
+        if (!await conversationStore.SaveAsync(outcome.State, ct))
+        {
+            return NotFound(ApiResponse.Err("SESSION_NOT_FOUND", "Conversation session not found."));
+        }
 
         return Ok(ApiResponse.Ok(new AssistantChatResponse(
             outcome.Reply,

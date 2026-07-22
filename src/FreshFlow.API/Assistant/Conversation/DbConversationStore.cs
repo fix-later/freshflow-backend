@@ -3,6 +3,7 @@ using FreshFlow.API.Assistant.Abstractions;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FreshFlow.API.Assistant.Conversation;
 
@@ -40,18 +41,20 @@ public sealed class DbConversationStore(AppDbContext dbContext, TimeProvider tim
         return JsonSerializer.Deserialize<ConversationState>(row.StateJson, SerializerOptions);
     }
 
-    public async Task SaveAsync(ConversationState state, CancellationToken ct = default)
+    public async Task<bool> SaveAsync(ConversationState state, CancellationToken ct = default)
     {
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var trimmed = TrimHistory(state);
         var stateJson = JsonSerializer.Serialize(trimmed, SerializerOptions);
 
-        var row = await dbContext.Set<AssistantConversation>()
+        var conversations = dbContext.Set<AssistantConversation>();
+        var row = await conversations
             .SingleOrDefaultAsync(c => c.SessionId == state.SessionId, ct);
 
+        AssistantConversation? inserted = null;
         if (row is null)
         {
-            dbContext.Set<AssistantConversation>().Add(new AssistantConversation(
+            inserted = new AssistantConversation(
                 id: Guid.NewGuid(),
                 sessionId: state.SessionId,
                 userId: state.UserId,
@@ -59,15 +62,47 @@ public sealed class DbConversationStore(AppDbContext dbContext, TimeProvider tim
                 stateJson: stateJson,
                 createdAt: now,
                 updatedAt: now,
-                expiresAt: now + Ttl));
+                expiresAt: now + Ttl);
+            conversations.Add(inserted);
         }
         else
         {
+            if (row.UserId != state.UserId)
+                return false;
+
             row.Touch(stateJson, now, Ttl);
         }
 
-        await dbContext.SaveChangesAsync(ct);
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateException ex) when (inserted is not null && IsSessionIdConflict(ex))
+        {
+            dbContext.Entry(inserted).State = EntityState.Detached;
+
+            var winner = await conversations
+                .SingleOrDefaultAsync(c => c.SessionId == state.SessionId, ct);
+
+            if (winner is null)
+                throw;
+
+            if (winner.UserId != state.UserId)
+                return false;
+
+            winner.Touch(stateJson, now, Ttl);
+            await dbContext.SaveChangesAsync(ct);
+            return true;
+        }
     }
+
+    private static bool IsSessionIdConflict(DbUpdateException exception) =>
+        exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "IX_assistant_conversations_session_id"
+        };
 
     /// <summary>Keeps only the most recent <see cref="MaxRetainedTurns"/> turns — bounds row size over a long session.</summary>
     private static ConversationState TrimHistory(ConversationState state)

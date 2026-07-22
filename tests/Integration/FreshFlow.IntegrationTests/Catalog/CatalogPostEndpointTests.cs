@@ -150,6 +150,36 @@ public sealed class CatalogPostEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
+    public async Task CreateUnit_WithNameOfInactiveUnit_Returns409WithConflictCode()
+    {
+        await AuthorizeAsAdminAsync();
+        var name = $"Inactive Unit {Guid.NewGuid():N}";
+
+        var createResponse = await _client.PostAsJsonAsync("/api/v1/units", new
+        {
+            name,
+            abbreviation = "iu"
+        });
+        createResponse.EnsureSuccessStatusCode();
+        var created = await createResponse.Content.ReadFromJsonAsync<Envelope<CatalogItemBody>>();
+
+        var deactivateResponse = await _client.PatchAsync(
+            $"/api/v1/units/{created!.Data!.Id}/deactivate",
+            content: null);
+        deactivateResponse.EnsureSuccessStatusCode();
+
+        var duplicateResponse = await _client.PostAsJsonAsync("/api/v1/units", new
+        {
+            name,
+            abbreviation = "dup"
+        });
+
+        duplicateResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var error = await duplicateResponse.Content.ReadFromJsonAsync<ErrorEnvelope>();
+        error!.Error!.Code.Should().Be("UNIT_NAME_CONFLICT");
+    }
+
+    [Fact]
     public async Task CreateUnit_WithoutAuth_Returns401()
     {
         _client.DefaultRequestHeaders.Authorization = null;

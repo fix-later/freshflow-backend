@@ -179,4 +179,56 @@ public sealed class DbConversationStoreTests
         // Assert
         loaded!.CurrentDraftOrderId.Should().Be(draftOrderId);
     }
+
+    [Fact]
+    public async Task SaveAsync_active_session_owned_by_another_user_returns_false_without_overwrite()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var ownerState = SampleState("owned-session");
+        var otherState = ownerState with
+        {
+            UserId = Guid.NewGuid(),
+            Turns = [new ConversationTurn(ConversationRole.User, "intruder")]
+        };
+
+        await using var ctx = CreateInMemoryContext(dbName);
+        var store = CreateStore(ctx);
+
+        var ownerSaved = await store.SaveAsync(ownerState);
+        var otherSaved = await store.SaveAsync(otherState);
+        var loaded = await store.LoadAsync(ownerState.SessionId);
+
+        ownerSaved.Should().BeTrue();
+        otherSaved.Should().BeFalse();
+        loaded!.UserId.Should().Be(ownerState.UserId);
+        loaded.Turns[0].Text.Should().Be(ownerState.Turns[0].Text);
+    }
+
+    [Fact]
+    public async Task SaveAsync_expired_session_cannot_be_reassigned_to_another_user()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var first = SampleState("reused-session");
+
+        await using var ctx = CreateInMemoryContext(dbName);
+        var store = CreateStore(ctx);
+        await store.SaveAsync(first);
+
+        var row = await ctx.Set<FreshFlow.Infrastructure.Persistence.Entities.AssistantConversation>()
+            .SingleAsync(c => c.SessionId == first.SessionId);
+        row.Touch(row.StateJson, DateTime.UtcNow.AddMinutes(-31), TimeSpan.FromMinutes(30));
+        await ctx.SaveChangesAsync();
+
+        var replacement = first with
+        {
+            UserId = Guid.NewGuid(),
+            Turns = [new ConversationTurn(ConversationRole.User, "fresh start")]
+        };
+
+        var saved = await store.SaveAsync(replacement);
+
+        saved.Should().BeFalse();
+        row.UserId.Should().Be(first.UserId);
+        row.ExpiresAt.Should().BeBefore(DateTime.UtcNow);
+    }
 }
