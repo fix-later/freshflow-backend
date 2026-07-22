@@ -212,10 +212,12 @@ public sealed class AdminController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetOrderGroupsAsync(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
+        [FromQuery] DateOnly? date = null,
+        [FromQuery] Guid? marketId = null,
         CancellationToken ct = default)
     {
         var result = await sender.Send(
-            new GetProcurementBatchesQuery(page, pageSize),
+            new GetProcurementBatchesQuery(page, pageSize, date, marketId),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }

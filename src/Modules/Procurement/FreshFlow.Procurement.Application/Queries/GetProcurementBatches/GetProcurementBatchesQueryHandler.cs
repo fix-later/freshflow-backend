@@ -17,6 +17,8 @@ internal sealed class GetProcurementBatchesQueryHandler(
         var (page, total) = await batches.ListAsync(
             request.Page,
             request.PageSize,
+            request.Date,
+            request.MarketId,
             cancellationToken);
         var orderIds = page
             .SelectMany(batch => batch.Orders)

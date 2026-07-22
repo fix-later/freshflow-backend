@@ -50,6 +50,8 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
     public async Task<(IReadOnlyList<ProcurementBatch> Batches, int Total)> ListAsync(
         int page,
         int pageSize,
+        DateOnly? date,
+        Guid? marketId,
         CancellationToken ct)
     {
         var query = db.Set<ProcurementBatch>()
@@ -58,6 +60,16 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
             .Include(batch => batch.Orders)
             .Include(batch => batch.Exceptions)
             .Where(batch => batch.DeletedAt == null);
+
+        if (date is not null)
+        {
+            query = query.Where(batch => batch.BatchDate == date.Value);
+        }
+
+        if (marketId is not null)
+        {
+            query = query.Where(batch => batch.MarketId == marketId.Value);
+        }
 
         var total = await query.CountAsync(ct);
         var result = await query
