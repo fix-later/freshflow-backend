@@ -732,6 +732,91 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         order.Status.Should().Be(OrderStatus.PickedUp);
     }
 
+    [Fact]
+    public async Task GetOrderGroups_FiltersByDateAndMarketAsync()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+        var dateA = new DateOnly(2030, 1, 10);
+        var dateB = new DateOnly(2030, 1, 11);
+        var marketA = Guid.NewGuid();
+        var marketB = Guid.NewGuid();
+        var batchAId = await SeedBatchAsync(dateA, marketA);
+        var batchBId = await SeedBatchAsync(dateB, marketB);
+        try
+        {
+            var byDate = await _client.GetAsync(
+                $"/api/v1/admin/order-groups?date={dateA:yyyy-MM-dd}&pageSize=100");
+            var byDateBody = await byDate.Content
+                .ReadFromJsonAsync<Envelope<ProcurementBatchListDto>>();
+            byDateBody!.Data!.Batches.Should().Contain(batch => batch.Id == batchAId);
+            byDateBody.Data.Batches.Should().NotContain(batch => batch.Id == batchBId);
+
+            var byMarket = await _client.GetAsync(
+                $"/api/v1/admin/order-groups?marketId={marketB}&pageSize=100");
+            var byMarketBody = await byMarket.Content
+                .ReadFromJsonAsync<Envelope<ProcurementBatchListDto>>();
+            byMarketBody!.Data!.Batches.Should().Contain(batch => batch.Id == batchBId);
+            byMarketBody.Data.Batches.Should().NotContain(batch => batch.Id == batchAId);
+
+            var intersection = await _client.GetAsync(
+                $"/api/v1/admin/order-groups?date={dateA:yyyy-MM-dd}&marketId={marketA}&pageSize=100");
+            var intersectionBody = await intersection.Content
+                .ReadFromJsonAsync<Envelope<ProcurementBatchListDto>>();
+            intersectionBody!.Data!.Batches.Should().ContainSingle(batch => batch.Id == batchAId);
+
+            var mismatched = await _client.GetAsync(
+                $"/api/v1/admin/order-groups?date={dateA:yyyy-MM-dd}&marketId={marketB}&pageSize=100");
+            var mismatchedBody = await mismatched.Content
+                .ReadFromJsonAsync<Envelope<ProcurementBatchListDto>>();
+            mismatchedBody!.Data!.Batches.Should().NotContain(batch =>
+                batch.Id == batchAId || batch.Id == batchBId);
+
+            var unfiltered = await _client.GetAsync(
+                "/api/v1/admin/order-groups?pageSize=100");
+            var unfilteredBody = await unfiltered.Content
+                .ReadFromJsonAsync<Envelope<ProcurementBatchListDto>>();
+            unfilteredBody!.Data!.Batches.Should().Contain(batch => batch.Id == batchAId);
+            unfilteredBody.Data.Batches.Should().Contain(batch => batch.Id == batchBId);
+        }
+        finally
+        {
+            // AutoBatch_PersistsFlipsListsAndRejectsDoubleCoverAsync counts every row in
+            // procurement_batches across the shared test database, so batches seeded directly
+            // here must not outlive this test.
+            await RemoveBatchAsync(batchAId);
+            await RemoveBatchAsync(batchBId);
+        }
+    }
+
+    private async Task<Guid> SeedBatchAsync(DateOnly date, Guid marketId)
+    {
+        var build = ProcurementBatch.Build(
+            date,
+            marketId,
+            [(Guid.NewGuid(), "Filter Test Product", 1, Guid.NewGuid())]);
+        build.IsSuccess.Should().BeTrue();
+        build.Value.ClearDomainEvents();
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.Set<ProcurementBatch>().Add(build.Value);
+        await db.SaveChangesAsync();
+
+        return build.Value.Id;
+    }
+
+    private async Task RemoveBatchAsync(Guid batchId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var batch = await db.Set<ProcurementBatch>()
+            .SingleAsync(candidate => candidate.Id == batchId);
+        db.Set<ProcurementBatch>().Remove(batch);
+        await db.SaveChangesAsync();
+    }
+
     private async Task SetOrderStatusForTestAsync(Guid orderId, OrderStatus status)
     {
         using var scope = factory.Services.CreateScope();

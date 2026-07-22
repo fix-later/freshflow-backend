@@ -17,6 +17,8 @@ public interface IProcurementBatchRepository
     public Task<(IReadOnlyList<ProcurementBatch> Batches, int Total)> ListAsync(
         int page,
         int pageSize,
+        DateOnly? date,
+        Guid? marketId,
         CancellationToken ct);
 
     public Task<(IReadOnlyList<ProcurementBatch> Batches, int Total)> ListByAgentAsync(

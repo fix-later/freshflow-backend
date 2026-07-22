@@ -62,7 +62,7 @@ public sealed class GetAssignedProcurementTasksQueryHandlerTests
             10,
             default);
         await repository.DidNotReceiveWithAnyArgs()
-            .ListAsync(default, default, default);
+            .ListAsync(default, default, default, default, default);
     }
 
     [Fact]
