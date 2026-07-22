@@ -15,11 +15,13 @@ internal sealed class UpdateCategoryCommandHandler(IProductCategoryRepository ca
         if (category is null)
             return Result<CategoryDto>.Failure(Error.NotFound("Category", request.Id));
 
+        var name = request.Name.Trim();
+
         // Skip duplicate-name check if the name is unchanged
-        if (!string.Equals(category.Name, request.Name, StringComparison.OrdinalIgnoreCase)
-            && await categories.ExistsByNameAsync(request.Name, ct))
+        if (!string.Equals(category.Name, name, StringComparison.OrdinalIgnoreCase)
+            && await categories.ExistsByNameAsync(name, ct))
             return Result<CategoryDto>.Failure(
-                Error.Conflict("CATEGORY_NAME_CONFLICT", $"An active category named '{request.Name}' already exists."));
+                Error.Conflict("CATEGORY_NAME_CONFLICT", $"A category named '{name}' already exists."));
 
         if (category.ParentId != request.ParentId && request.ParentId is Guid parentId)
         {
@@ -42,10 +44,12 @@ internal sealed class UpdateCategoryCommandHandler(IProductCategoryRepository ca
                         "A category with children cannot become a child category."));
         }
 
-        category.Rename(request.Name);
+        category.Rename(name);
         if (category.ParentId != request.ParentId)
             category.ChangeParent(request.ParentId);
-        await categories.SaveChangesAsync(ct);
+        if (!await categories.SaveChangesAsync(ct))
+            return Result<CategoryDto>.Failure(
+                Error.Conflict("CATEGORY_NAME_CONFLICT", $"A category named '{name}' already exists."));
 
         return Result<CategoryDto>.Success(category.ToDto());
     }

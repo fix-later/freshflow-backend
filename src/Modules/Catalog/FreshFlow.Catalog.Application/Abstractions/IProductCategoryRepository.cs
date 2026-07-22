@@ -9,5 +9,5 @@ public interface IProductCategoryRepository
     public Task<bool> HasChildrenAsync(Guid parentId, bool activeOnly, CancellationToken ct);
     public Task<IReadOnlyList<ProductCategory>> GetAllAsync(bool activeOnly, CancellationToken ct);
     public Task AddAsync(ProductCategory category, CancellationToken ct);
-    public Task SaveChangesAsync(CancellationToken ct);
+    public Task<bool> SaveChangesAsync(CancellationToken ct);
 }

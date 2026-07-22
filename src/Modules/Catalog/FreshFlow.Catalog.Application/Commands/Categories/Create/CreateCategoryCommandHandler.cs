@@ -12,9 +12,10 @@ internal sealed class CreateCategoryCommandHandler(IProductCategoryRepository ca
 {
     public async Task<Result<CategoryDto>> Handle(CreateCategoryCommand request, CancellationToken ct)
     {
-        if (await categories.ExistsByNameAsync(request.Name, ct))
+        var name = request.Name.Trim();
+        if (await categories.ExistsByNameAsync(name, ct))
             return Result<CategoryDto>.Failure(
-                Error.Conflict("CATEGORY_NAME_CONFLICT", $"An active category named '{request.Name}' already exists."));
+                Error.Conflict("CATEGORY_NAME_CONFLICT", $"A category named '{name}' already exists."));
 
         if (request.ParentId is Guid parentId)
         {
@@ -28,9 +29,11 @@ internal sealed class CreateCategoryCommandHandler(IProductCategoryRepository ca
                     Error.Validation("INVALID_CATEGORY_PARENT", "Category parent must be an active root category."));
         }
 
-        var category = new ProductCategory(request.Name, request.ParentId);
+        var category = new ProductCategory(name, request.ParentId);
         await categories.AddAsync(category, ct);
-        await categories.SaveChangesAsync(ct);
+        if (!await categories.SaveChangesAsync(ct))
+            return Result<CategoryDto>.Failure(
+                Error.Conflict("CATEGORY_NAME_CONFLICT", $"A category named '{name}' already exists."));
 
         return Result<CategoryDto>.Success(category.ToDto());
     }

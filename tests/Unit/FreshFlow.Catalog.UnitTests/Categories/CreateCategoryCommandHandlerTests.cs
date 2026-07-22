@@ -14,6 +14,7 @@ public sealed class CreateCategoryCommandHandlerTests
 
     public CreateCategoryCommandHandlerTests()
     {
+        _categories.SaveChangesAsync(default).Returns(true);
         _sut = new CreateCategoryCommandHandler(_categories);
     }
 

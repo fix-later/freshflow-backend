@@ -112,6 +112,28 @@ public sealed class CategoryHierarchyEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
+    public async Task UpdateCategory_DuplicateInactiveName_ReturnsConflict()
+    {
+        await AuthorizeAsAdminAsync();
+        var tag = Guid.NewGuid().ToString("N")[..8];
+        var existing = await CreateCategoryAsync($"Duplicate-{tag}");
+        var category = await CreateCategoryAsync($"Rename-{tag}");
+        var deactivate = await _client.PatchAsync(
+            $"/api/v1/categories/{existing.Id}/deactivate", content: null);
+        deactivate.EnsureSuccessStatusCode();
+
+        var response = await _client.PutAsJsonAsync($"/api/v1/categories/{category.Id}", new
+        {
+            name = $"  {existing.Name}  ",
+            parentId = (Guid?)null
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var envelope = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
+        envelope!.Error!.Code.Should().Be("CATEGORY_NAME_CONFLICT");
+    }
+
+    [Fact]
     public async Task ProductCategoryFilter_ExpandsParentAndKeepsChildExact()
     {
         await AuthorizeAsAdminAsync();
