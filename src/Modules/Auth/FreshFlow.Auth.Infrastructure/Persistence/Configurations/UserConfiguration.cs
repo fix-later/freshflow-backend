@@ -17,7 +17,8 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.FullName).HasMaxLength(255);
         builder.Property(u => u.AvatarUrl).HasMaxLength(512);
         builder.Property(u => u.Phone).HasMaxLength(20);
-        builder.HasIndex(u => u.Phone).IsUnique().HasFilter("\"Phone\" IS NOT NULL");
+        builder.HasIndex(u => u.Phone).IsUnique()
+            .HasFilter("\"Phone\" IS NOT NULL AND \"DeletedAt\" IS NULL");
         builder.Property(u => u.PasswordHash).IsRequired();
 
         // FK to roles table — replaces the old string-stored UserRole enum

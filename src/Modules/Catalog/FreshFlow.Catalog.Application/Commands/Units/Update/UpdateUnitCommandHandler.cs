@@ -19,7 +19,7 @@ internal sealed class UpdateUnitCommandHandler(IUnitOfMeasurementRepository unit
         if (!string.Equals(unit.Name, request.Name, StringComparison.OrdinalIgnoreCase)
             && await units.ExistsByNameAsync(request.Name, ct))
             return Result<UnitDto>.Failure(
-                Error.Conflict("UNIT_NAME_CONFLICT", $"An active unit named '{request.Name}' already exists."));
+                Error.Conflict("UNIT_NAME_CONFLICT", $"A unit named '{request.Name}' already exists."));
 
         unit.Update(request.Name, request.Abbreviation);
         await units.SaveChangesAsync(ct);

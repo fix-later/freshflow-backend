@@ -14,7 +14,7 @@ internal sealed class CreateUnitCommandHandler(IUnitOfMeasurementRepository unit
     {
         if (await units.ExistsByNameAsync(request.Name, ct))
             return Result<UnitDto>.Failure(
-                Error.Conflict("UNIT_NAME_CONFLICT", $"An active unit named '{request.Name}' already exists."));
+                Error.Conflict("UNIT_NAME_CONFLICT", $"A unit named '{request.Name}' already exists."));
 
         var unit = new UnitOfMeasurement(request.Name, request.Abbreviation);
         await units.AddAsync(unit, ct);
