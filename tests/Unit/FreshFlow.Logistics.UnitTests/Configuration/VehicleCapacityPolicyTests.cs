@@ -28,4 +28,27 @@ public sealed class VehicleCapacityPolicyTests
 
         sut.MaxStopsPerVehicle.Should().Be(expected);
     }
+
+    [Theory]
+    [InlineData("2.5", 2.5)]
+    [InlineData("not-a-number", 2)]
+    [InlineData("0", 2)]
+    [InlineData("-1", 2)]
+    [InlineData(null, 2)]
+    public void Constructor_ReadsBoxTareKgWithInvariantFallback(
+        string? configuredValue, decimal expected)
+    {
+        var config = configuredValue is null
+            ? new ConfigurationBuilder().Build()
+            : new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Logistics:Box:TareKg"] = configuredValue
+                })
+                .Build();
+
+        var sut = new VehicleCapacityPolicy(config);
+
+        sut.BoxTareKg.Should().Be(expected);
+    }
 }

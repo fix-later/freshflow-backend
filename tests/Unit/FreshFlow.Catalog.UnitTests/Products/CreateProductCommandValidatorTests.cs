@@ -1,12 +1,20 @@
 using FluentAssertions;
+using FreshFlow.Catalog.Application.Abstractions;
 using FreshFlow.Catalog.Application.Commands.Products.Create;
+using NSubstitute;
 
 namespace FreshFlow.Catalog.UnitTests.Products;
 
 [Trait("Category", "Unit")]
 public sealed class CreateProductCommandValidatorTests
 {
-    private readonly CreateProductCommandValidator _sut = new();
+    private readonly IPackingCodeRepository _packingCodes = Substitute.For<IPackingCodeRepository>();
+    private readonly CreateProductCommandValidator _sut;
+
+    public CreateProductCommandValidatorTests()
+    {
+        _sut = new CreateProductCommandValidator(_packingCodes);
+    }
 
     [Fact]
     public async Task Validate_ValidCommand_Passes()

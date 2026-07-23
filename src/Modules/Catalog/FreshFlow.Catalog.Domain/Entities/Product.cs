@@ -13,7 +13,8 @@ public sealed class Product : AggregateRoot
         string? description,
         Guid? createdBy,
         string? legacyCategory = null,
-        string? legacyUnit = null)
+        string? legacyUnit = null,
+        Guid? packingCodeId = null)
     {
         Name = name;
         UnitId = unitId;
@@ -22,6 +23,7 @@ public sealed class Product : AggregateRoot
         CreatedBy = createdBy;
         LegacyCategory = legacyCategory;
         LegacyUnit = legacyUnit;
+        PackingCodeId = packingCodeId;
     }
 
     public string Name { get; private set; } = string.Empty;
@@ -31,6 +33,9 @@ public sealed class Product : AggregateRoot
 
     /// <summary>FK → units_of_measurement.</summary>
     public Guid UnitId { get; private set; }
+
+    /// <summary>FK → packing_codes (nullable; null = no packing code assigned).</summary>
+    public Guid? PackingCodeId { get; private set; }
 
     public string? Description { get; private set; }
 
@@ -52,7 +57,8 @@ public sealed class Product : AggregateRoot
         string? description,
         string? legacyCategory = null,
         string? legacyUnit = null,
-        string? imageUrl = null)
+        string? imageUrl = null,
+        Guid? packingCodeId = null)
     {
         Name = name;
         CategoryId = categoryId;
@@ -60,6 +66,7 @@ public sealed class Product : AggregateRoot
         Description = description;
         LegacyCategory = legacyCategory;
         LegacyUnit = legacyUnit;
+        PackingCodeId = packingCodeId;
         if (imageUrl is not null)
             ImageUrl = imageUrl;
         UpdatedAt = DateTime.UtcNow;
