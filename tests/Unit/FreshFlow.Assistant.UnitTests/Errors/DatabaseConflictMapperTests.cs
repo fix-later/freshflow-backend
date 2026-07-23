@@ -11,6 +11,7 @@ public sealed class DatabaseConflictMapperTests
     [Theory]
     [InlineData("IX_product_categories_Name", "CATEGORY_NAME_CONFLICT")]
     [InlineData("IX_units_of_measurement_Name", "UNIT_NAME_CONFLICT")]
+    [InlineData("IX_packing_codes_Code", "PACKING_CODE_CONFLICT")]
     [InlineData("IX_users_Email", "EMAIL_ALREADY_EXISTS")]
     [InlineData("IX_users_Phone", "PHONE_ALREADY_EXISTS")]
     [InlineData("ux_vehicles_plate_number_active", "PLATE_NUMBER_DUPLICATE")]
