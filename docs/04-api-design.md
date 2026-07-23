@@ -722,8 +722,8 @@ Allows a restaurant owner to self-register an account (UC-AUTH-11). The system c
 |-------|------|----------|------------|
 | `email` | string | Yes | Valid email format; must not already exist |
 | `password` | string | Yes | Must satisfy the password strength policy (min 8 chars, uppercase, digit, special char) |
-| `restaurantName` | string | Yes | Non-empty, max 255 characters |
-| `phone` | string | No | Valid phone format if provided |
+| `restaurantName` | string | Yes | Non-empty, max 200 characters |
+| `phone` | string | No | Optional; `^\+?[0-9]{7,15}$` (7–15 digits, optional leading `+`), max 20 chars |
 
 **Success response — 201 Created**
 
@@ -3186,16 +3186,38 @@ Broadcast to the `admin:delivery` group when a new route is calculated and persi
 
 ## 6. Validation Rules
 
-The following table defines all validation rules enforced by the API. Validation errors return HTTP 400 or HTTP 422 with the specified error code and field-level details.
+The following table defines validation rules enforced by the API. Validation errors return HTTP 400 (or 422 for business-rule violations) with the specified error code and field-level details. **All rules are enforced server-side (FluentValidation); mirror them client-side so the front end can block invalid input before submitting.**
+
+#### Password strength policy
+
+Applies to **every** password field: `POST /auth/register`, admin `POST /admin/users`, `POST /auth/reset-password` (`newPassword`), and `POST /auth/change-password` (`newPassword`).
+
+- Minimum **8** characters — **no maximum length**.
+- At least **1 uppercase** letter (`A–Z`).
+- At least **1 digit** (`0–9`).
+- At least **1 special character** — any character that is not a letter or a digit (`[^A-Za-z0-9]`; e.g. `@ # ! $ %`).
+- Lowercase letters are **not** required.
+- `change-password` only: `newPassword` must **differ** from `currentPassword`.
+
+Ready-to-use client-side regex (all four character rules + minimum length):
+
+```regex
+^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$
+```
 
 | Field | Rule | HTTP Status | Error Code | Error Message |
 |-------|------|-------------|-----------|---------------|
 | `email` | Must be a valid email format | 400 | `VALIDATION_ERROR` | "Must be a valid email address" |
 | `email` | Maximum 255 characters | 400 | `VALIDATION_ERROR` | "Must not exceed 255 characters" |
-| `password` (registration) | Minimum 8 characters | 400 | `VALIDATION_ERROR` | "Must be at least 8 characters" |
-| `password` (registration) | At least 1 uppercase letter | 400 | `VALIDATION_ERROR` | "Must contain at least one uppercase letter" |
-| `password` (registration) | At least 1 digit | 400 | `VALIDATION_ERROR` | "Must contain at least one number" |
-| `password` (registration) | At least 1 special character | 400 | `VALIDATION_ERROR` | "Must contain at least one special character" |
+| `password` | Minimum 8 characters | 400 | `VALIDATION_ERROR` | "Must be at least 8 characters" |
+| `password` | At least 1 uppercase letter | 400 | `VALIDATION_ERROR` | "Must contain at least one uppercase letter" |
+| `password` | At least 1 digit | 400 | `VALIDATION_ERROR` | "Must contain at least one number" |
+| `password` | At least 1 special character | 400 | `VALIDATION_ERROR` | "Must contain at least one special character" |
+| `newPassword` (change-password) | Must differ from `currentPassword` | 400 | `VALIDATION_ERROR` | "New password must be different from current password" |
+| `identifier` (login) | Non-empty; a valid email **or** phone; max 255 characters | 400 | `VALIDATION_ERROR` | "Identifier must be a valid email address or phone number" |
+| `phone` | Optional; if present must match `^\+?[0-9]{7,15}$` (7–15 digits, optional leading `+`), max 20 characters | 400 | `VALIDATION_ERROR` | "Must be a valid phone number (7–15 digits, optional leading +)" |
+| `restaurantName` | Non-empty; max 200 characters | 400 | `VALIDATION_ERROR` | "Must not exceed 200 characters" |
+| `role` (admin create user) | One of `market_agent`, `hub_staff`, `driver`, `restaurant` (`kiosk_staff` accepted as an alias of `market_agent`) | 400 | `VALIDATION_ERROR` | "Role must be one of the accepted values" |
 | `price` | Must be a numeric value greater than 0 | 422 | `VALIDATION_ERROR` | "Price must be greater than 0" |
 | `price` | Maximum 2 decimal places | 422 | `VALIDATION_ERROR` | "Price must have at most 2 decimal places" |
 | `quantity` (kiosk update) | Must be an integer | 422 | `VALIDATION_ERROR` | "Quantity must be a whole number" |
