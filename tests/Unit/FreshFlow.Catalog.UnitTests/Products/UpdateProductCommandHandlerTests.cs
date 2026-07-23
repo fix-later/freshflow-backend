@@ -12,11 +12,12 @@ public sealed class UpdateProductCommandHandlerTests
     private readonly IProductRepository _products = Substitute.For<IProductRepository>();
     private readonly IProductCategoryRepository _categories = Substitute.For<IProductCategoryRepository>();
     private readonly IUnitOfMeasurementRepository _units = Substitute.For<IUnitOfMeasurementRepository>();
+    private readonly IPackingCodeRepository _packingCodes = Substitute.For<IPackingCodeRepository>();
     private readonly UpdateProductCommandHandler _sut;
 
     public UpdateProductCommandHandlerTests()
     {
-        _sut = new UpdateProductCommandHandler(_products, _categories, _units);
+        _sut = new UpdateProductCommandHandler(_products, _categories, _units, _packingCodes);
     }
 
     [Fact]

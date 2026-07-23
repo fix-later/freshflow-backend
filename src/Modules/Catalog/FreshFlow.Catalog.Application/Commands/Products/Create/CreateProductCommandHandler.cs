@@ -10,7 +10,8 @@ namespace FreshFlow.Catalog.Application.Commands.Products.Create;
 internal sealed class CreateProductCommandHandler(
     IProductRepository products,
     IProductCategoryRepository categories,
-    IUnitOfMeasurementRepository units)
+    IUnitOfMeasurementRepository units,
+    IPackingCodeRepository packingCodes)
     : IRequestHandler<CreateProductCommand, Result<ProductDto>>
 {
     public async Task<Result<ProductDto>> Handle(CreateProductCommand request, CancellationToken ct)
@@ -35,6 +36,15 @@ internal sealed class CreateProductCommandHandler(
             legacyCategory = category.Name;
         }
 
+        if (request.PackingCodeId is Guid packingCodeId)
+        {
+            var packingCode = await packingCodes.FindByIdAsync(packingCodeId, ct);
+            if (packingCode is null || !packingCode.IsActive)
+                return Result<ProductDto>.Failure(
+                    Error.Validation("INVALID_PACKING_CODE",
+                        $"Packing code '{packingCodeId}' does not exist or is inactive."));
+        }
+
         var product = new Product(
             request.Name,
             request.UnitId,
@@ -42,7 +52,8 @@ internal sealed class CreateProductCommandHandler(
             request.Description,
             request.CreatedBy,
             legacyCategory: legacyCategory,
-            legacyUnit: unit.Name);
+            legacyUnit: unit.Name,
+            packingCodeId: request.PackingCodeId);
 
         await products.AddAsync(product, ct);
         await products.SaveChangesAsync(ct);

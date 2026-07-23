@@ -9,5 +9,6 @@ public record CreateProductCommand(
     Guid UnitId,
     Guid? CategoryId,
     string? Description,
-    Guid? CreatedBy)
+    Guid? CreatedBy,
+    Guid? PackingCodeId = null)
     : IRequest<Result<ProductDto>>;

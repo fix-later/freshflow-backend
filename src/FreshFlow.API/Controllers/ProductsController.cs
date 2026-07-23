@@ -28,7 +28,8 @@ public sealed class ProductsController(ISender sender) : ControllerBase
             : (Guid?)null;
 
         var result = await sender.Send(
-            new CreateProductCommand(body.Name, body.UnitId, body.CategoryId, body.Description, createdBy), ct);
+            new CreateProductCommand(
+                body.Name, body.UnitId, body.CategoryId, body.Description, createdBy, body.PackingCodeId), ct);
 
         return result.IsSuccess
             ? CreatedAtAction(nameof(GetProductAsync), new { id = result.Value.Id }, ApiResponse.Ok(result.Value))
@@ -75,7 +76,8 @@ public sealed class ProductsController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(
             new UpdateProductCommand(
-                id, body.Name, body.UnitId, body.CategoryId, body.Description, body.ImageUrl),
+                id, body.Name, body.UnitId, body.CategoryId, body.Description,
+                body.ImageUrl, body.PackingCodeId),
             ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
@@ -97,11 +99,13 @@ public sealed record CreateProductRequest(
     string Name,
     Guid UnitId,
     Guid? CategoryId,
-    string? Description);
+    string? Description,
+    Guid? PackingCodeId = null);
 
 public sealed record UpdateProductRequest(
     string Name,
     Guid UnitId,
     Guid? CategoryId,
     string? Description,
-    string? ImageUrl = null);
+    string? ImageUrl = null,
+    Guid? PackingCodeId = null);

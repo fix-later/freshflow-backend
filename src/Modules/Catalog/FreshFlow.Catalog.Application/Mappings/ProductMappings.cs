@@ -14,6 +14,7 @@ internal static class ProductMappings
             p.UnitId,
             // snapshot value captured at write time; may diverge from current category/unit name
             p.LegacyUnit,
+            p.PackingCodeId,
             p.Description,
             p.CreatedBy,
             p.CreatedAt,

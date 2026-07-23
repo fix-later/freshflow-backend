@@ -35,6 +35,8 @@ internal static class DatabaseConflictMapper
                 "CATEGORY_NAME_CONFLICT", "A category with this name already exists."),
             "IX_units_of_measurement_Name" => new(
                 "UNIT_NAME_CONFLICT", "A unit with this name already exists."),
+            "IX_packing_codes_Code" => new(
+                "PACKING_CODE_CONFLICT", "A packing code with this code already exists."),
             "IX_users_Email" => new(
                 "EMAIL_ALREADY_EXISTS", "A user with this email already exists."),
             "IX_users_Phone" => new(

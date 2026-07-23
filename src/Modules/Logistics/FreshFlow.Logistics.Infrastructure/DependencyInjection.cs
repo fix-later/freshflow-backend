@@ -44,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<IDeliveryBroadcastService, DeliveryBroadcastService>();
         services.AddScoped<IDriverReader, DriverReader>();
         services.AddScoped<IHubDiscrepancyStatusReader, HubDiscrepancyStatusReader>();
+        services.AddScoped<IOrderPackingReader, OrderPackingReader>();
         services.AddScoped<IOrderStatusReader, OrderStatusReader>();
         services.AddScoped<IRestaurantOwnerReader, RestaurantOwnerReader>();
         services.AddScoped<IMarketCoordinateReader, MarketCoordinateReader>();

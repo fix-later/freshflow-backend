@@ -67,7 +67,7 @@ public sealed class GetProductByIdControllerTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var dto = new ProductDto(id, "Cá lóc", null, null, Guid.NewGuid(), null, null, null,
+        var dto = new ProductDto(id, "Cá lóc", null, null, Guid.NewGuid(), null, null, null, null,
             DateTime.UtcNow, DateTime.UtcNow, false);
         _sender.Send(Arg.Any<GetProductByIdQuery>(), Arg.Any<CancellationToken>())
             .Returns(Result<ProductDto>.Success(dto));

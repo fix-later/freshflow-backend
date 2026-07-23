@@ -7,6 +7,7 @@ public record ProductDto(
     string? CategoryName,
     Guid UnitId,
     string? UnitName,
+    Guid? PackingCodeId,
     string? Description,
     Guid? CreatedBy,
     DateTime CreatedAt,

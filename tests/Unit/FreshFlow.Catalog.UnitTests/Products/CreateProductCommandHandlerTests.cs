@@ -12,6 +12,7 @@ public sealed class CreateProductCommandHandlerTests
     private readonly IProductRepository _products = Substitute.For<IProductRepository>();
     private readonly IProductCategoryRepository _categories = Substitute.For<IProductCategoryRepository>();
     private readonly IUnitOfMeasurementRepository _units = Substitute.For<IUnitOfMeasurementRepository>();
+    private readonly IPackingCodeRepository _packingCodes = Substitute.For<IPackingCodeRepository>();
     private readonly CreateProductCommandHandler _sut;
 
     private static UnitOfMeasurement ActiveUnit(string name = "kg") =>
@@ -22,7 +23,7 @@ public sealed class CreateProductCommandHandlerTests
 
     public CreateProductCommandHandlerTests()
     {
-        _sut = new CreateProductCommandHandler(_products, _categories, _units);
+        _sut = new CreateProductCommandHandler(_products, _categories, _units, _packingCodes);
     }
 
     [Fact]

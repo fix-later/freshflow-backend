@@ -1,10 +1,11 @@
 using FluentValidation;
+using FreshFlow.Catalog.Application.Abstractions;
 
 namespace FreshFlow.Catalog.Application.Commands.Products.Update;
 
 internal sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProductCommand>
 {
-    public UpdateProductCommandValidator()
+    public UpdateProductCommandValidator(IPackingCodeRepository packingCodes)
     {
         RuleFor(x => x.Id).NotEmpty();
 
@@ -22,6 +23,17 @@ internal sealed class UpdateProductCommandValidator : AbstractValidator<UpdatePr
             .NotEqual(Guid.Empty)
             .WithMessage("CategoryId must not be an empty GUID.")
             .When(x => x.CategoryId.HasValue);
+
+        RuleFor(x => x.PackingCodeId)
+            .Cascade(CascadeMode.Stop)
+            .NotEqual(Guid.Empty)
+            .MustAsync(async (id, ct) =>
+            {
+                var packingCode = await packingCodes.FindByIdAsync(id!.Value, ct);
+                return packingCode is { IsActive: true };
+            })
+            .WithMessage("PackingCodeId must reference an active packing code.")
+            .When(x => x.PackingCodeId.HasValue);
 
         RuleFor(x => x.ImageUrl)
             .MaximumLength(512)
