@@ -21,12 +21,25 @@ namespace FreshFlow.Logistics.UnitTests.Controllers;
 public sealed class VehiclesControllerTests
 {
     [Fact]
-    public void VehiclesController_RequiresAdminOrOperationsManagerAuthorization()
+    public void VehiclesController_AllowsHubStaffReadOnly_WritesNarrowedToAdminAndOps()
     {
-        var attr = typeof(VehiclesController).GetCustomAttribute<AuthorizeAttribute>();
+        var classAttr = typeof(VehiclesController).GetCustomAttribute<AuthorizeAttribute>();
+        classAttr.Should().NotBeNull();
+        classAttr!.Roles.Should().Be("admin,operations_manager,hub_staff");
 
-        attr.Should().NotBeNull();
-        attr!.Roles.Should().Be("admin,operations_manager");
+        var writes = new[]
+        {
+            nameof(VehiclesController.RegisterVehicleAsync),
+            nameof(VehiclesController.UpdateVehicleAsync),
+            nameof(VehiclesController.DeactivateVehicleAsync),
+        };
+
+        foreach (var write in writes)
+        {
+            var methodAttr = typeof(VehiclesController).GetMethod(write)!.GetCustomAttribute<AuthorizeAttribute>();
+            methodAttr.Should().NotBeNull($"{write} must exclude hub_staff");
+            methodAttr!.Roles.Should().Be("admin,operations_manager");
+        }
     }
 
     [Fact]

@@ -15,10 +15,12 @@ namespace FreshFlow.API.Controllers;
 
 [ApiController]
 [Route("api/v1/logistics/routes")]
-[Authorize(Roles = "admin,operations_manager")]
+// hub_staff has read-only access (list/detail/eligibility); every write below is narrowed back to admin,operations_manager.
+[Authorize(Roles = "admin,operations_manager,hub_staff")]
 public sealed class RoutesController(ISender sender) : ControllerBase
 {
     [HttpPost("calculate")]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> CalculateRouteAsync(
         [FromBody] CalculateRouteRequest body,
         CancellationToken ct)
@@ -39,6 +41,7 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/select")]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> SelectRouteAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new SelectRouteCommand(id), ct);
@@ -46,6 +49,7 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/optimize")]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> OptimizeRouteAsync(
         Guid id,
         [FromBody] OptimizeRouteRequest body,
@@ -56,6 +60,7 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/review")]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> ReviewRouteAsync(
         Guid id,
         [FromBody] ReviewRouteRequest? body,
@@ -66,6 +71,7 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/assign-vehicle")]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> AssignVehicleAsync(
         Guid id,
         [FromBody] AssignVehicleRequest body,
