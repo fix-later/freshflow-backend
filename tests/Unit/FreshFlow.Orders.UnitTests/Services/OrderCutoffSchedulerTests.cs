@@ -126,7 +126,7 @@ public sealed class OrderCutoffSchedulerTests
     [Fact]
     public void IsWithinDeliveryWindow_ConfiguredThreeDayWindow_BeyondDPlus3_ReturnsFalse()
     {
-        var dPlus4Utc = new DateTime(2026, 6, 22, 17, 0, 0, DateTimeKind.Utc);
+        var dPlus4Utc = new DateTime(2026, 6, 21, 17, 0, 0, DateTimeKind.Utc);
 
         var result = OrderCutoffScheduler.IsWithinDeliveryWindow(BeforeCutoffUtc, dPlus4Utc, windowDays: 3);
 

@@ -29,9 +29,9 @@ internal sealed class FavoriteListItemRowConfiguration : IEntityTypeConfiguratio
             INNER JOIN market_products mp ON rf.market_product_id = mp."Id"
             INNER JOIN products p         ON mp."ProductId" = p."Id"
             INNER JOIN markets m          ON mp."MarketId" = m."Id"
-            LEFT JOIN units_of_measurement u ON p."UnitId" = u."Id"
-            LEFT JOIN product_categories  c  ON p."CategoryId" = c."Id"
-            WHERE mp."deleted_at" IS NULL AND p."DeletedAt" IS NULL
+            LEFT JOIN units_of_measurement u ON p."UnitId" = u."Id" AND u."DeletedAt" IS NULL
+            LEFT JOIN product_categories  c  ON p."CategoryId" = c."Id" AND c."DeletedAt" IS NULL
+            WHERE mp."deleted_at" IS NULL AND p."DeletedAt" IS NULL AND m."DeletedAt" IS NULL
             """);
 
         builder.Property(r => r.RestaurantId);

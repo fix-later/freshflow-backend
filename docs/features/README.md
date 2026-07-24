@@ -22,7 +22,7 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 | [AUDIT-2026-06-17 orders module research](./orders/AUDIT-2026-06-17-orders-module-research.md) | Audit | — |
 | [order-flow-analysis](./orders/order-flow-analysis.md) | Analysis | — |
 | [order-flow-diagrams.drawio](./orders/diagrams/order-flow-diagrams.drawio) | Diagram | — |
-| [AUDIT-2026-07-23 favorites backend plan](./orders/AUDIT-2026-07-23-favorites-backend-plan.md) | Audit / Plan | ✅ SCRUM-368 implemented, reviewer passed |
+| [AUDIT-2026-07-23 favorites backend plan](./orders/AUDIT-2026-07-23-favorites-backend-plan.md) | Audit / Plan | 🛠️ SCRUM-368 implemented, review pending (PR #41) |
 
 ## credit — B2B Credit, Debt & Statement (epic SCRUM-254, trong module Orders)
 

@@ -124,7 +124,7 @@ WHERE mp."deleted_at" IS NULL AND p."DeletedAt" IS NULL
 
 **Infrastructure** (`Orders.Infrastructure`)
 - `Persistence/Configurations/RestaurantFavoriteConfiguration.cs` (ToTable + unique index + FK restaurant_id)
-- `Persistence/FavoriteRepository.cs`
+- `Repositories/FavoriteRepository.cs`
 - `CrossModule/FavoriteListItemRow.cs` + `FavoriteListItemRowConfiguration.cs` + `FavoriteReader.cs`
 - Wire vào `DependencyInjection.cs`
 

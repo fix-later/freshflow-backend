@@ -34,7 +34,16 @@ internal sealed class FavoriteRepository(AppDbContext db) : IFavoriteRepository
             return false;
 
         db.Set<RestaurantFavorite>().Remove(favorite);
-        await db.SaveChangesAsync(ct);
-        return true;
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Lost the idempotency race — another request already removed this favorite.
+            db.Entry(favorite).State = EntityState.Detached;
+            return false;
+        }
     }
 }

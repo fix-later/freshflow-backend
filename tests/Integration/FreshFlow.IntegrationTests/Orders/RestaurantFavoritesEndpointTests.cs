@@ -25,7 +25,7 @@ public sealed class RestaurantFavoritesEndpointTests(AuthWebAppFactory factory)
     [Fact]
     public async Task Favorite_ThenGet_ReturnsEnrichedItemAsync()
     {
-        var restaurantToken = await CreateAndLoginRestaurantAsync();
+        await CreateAndLoginRestaurantAsync();
         var product = await SeedMarketProductAsync();
 
         var add = await _client.PostAsJsonAsync(
@@ -51,7 +51,7 @@ public sealed class RestaurantFavoritesEndpointTests(AuthWebAppFactory factory)
     [Fact]
     public async Task Unfavorite_RemovesFromGetAsync()
     {
-        var restaurantToken = await CreateAndLoginRestaurantAsync();
+        await CreateAndLoginRestaurantAsync();
         var product = await SeedMarketProductAsync();
         await _client.PostAsJsonAsync(
             "/api/v1/restaurants/me/favorites",
