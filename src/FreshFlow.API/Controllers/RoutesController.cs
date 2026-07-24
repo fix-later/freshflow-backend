@@ -15,7 +15,8 @@ namespace FreshFlow.API.Controllers;
 
 [ApiController]
 [Route("api/v1/logistics/routes")]
-// hub_staff has read-only access (list/detail/eligibility); every write below is narrowed back to admin,operations_manager.
+// hub_staff can read (list/detail/eligibility) and dispatch (assign-vehicle) in the hub-dispatch model;
+// all other writes (calculate/select/optimize/review) are narrowed back to admin,operations_manager.
 [Authorize(Roles = "admin,operations_manager,hub_staff")]
 public sealed class RoutesController(ISender sender) : ControllerBase
 {
@@ -71,7 +72,8 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/assign-vehicle")]
-    [Authorize(Roles = "admin,operations_manager")]
+    // Intentionally NOT narrowed: hub_staff dispatch their own last-mile (hub-dispatch model). The
+    // handler still enforces eligibility, capacity, double-booking, and route-state transition guards.
     public async Task<IActionResult> AssignVehicleAsync(
         Guid id,
         [FromBody] AssignVehicleRequest body,

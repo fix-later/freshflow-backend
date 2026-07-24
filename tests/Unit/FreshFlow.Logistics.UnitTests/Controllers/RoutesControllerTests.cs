@@ -22,22 +22,27 @@ namespace FreshFlow.Logistics.UnitTests.Controllers;
 public sealed class RoutesControllerTests
 {
     [Fact]
-    public void RoutesController_AllowsHubStaffReadOnly_WritesNarrowedToAdminAndOps()
+    public void RoutesController_HubStaffCanReadAndDispatch_OtherWritesAdminOnly()
     {
         var classAttr = typeof(RoutesController).GetCustomAttribute<AuthorizeAttribute>();
         classAttr.Should().NotBeNull();
         classAttr!.Roles.Should().Be("admin,operations_manager,hub_staff");
 
-        var writes = new[]
+        // assign-vehicle is a write but intentionally open to hub_staff (hub-dispatch): no method-level override,
+        // so it inherits the class gate that includes hub_staff.
+        var assign = typeof(RoutesController).GetMethod(nameof(RoutesController.AssignVehicleAsync))!
+            .GetCustomAttribute<AuthorizeAttribute>();
+        assign.Should().BeNull("hub_staff must be able to dispatch vehicles to routes");
+
+        var adminOnlyWrites = new[]
         {
             nameof(RoutesController.CalculateRouteAsync),
             nameof(RoutesController.SelectRouteAsync),
             nameof(RoutesController.OptimizeRouteAsync),
             nameof(RoutesController.ReviewRouteAsync),
-            nameof(RoutesController.AssignVehicleAsync),
         };
 
-        foreach (var write in writes)
+        foreach (var write in adminOnlyWrites)
         {
             var methodAttr = typeof(RoutesController).GetMethod(write)!.GetCustomAttribute<AuthorizeAttribute>();
             methodAttr.Should().NotBeNull($"{write} must exclude hub_staff");
