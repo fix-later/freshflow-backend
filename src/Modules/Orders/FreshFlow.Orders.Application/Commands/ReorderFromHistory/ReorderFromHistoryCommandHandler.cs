@@ -10,7 +10,8 @@ namespace FreshFlow.Orders.Application.Commands.ReorderFromHistory;
 internal sealed class ReorderFromHistoryCommandHandler(
     IOrderRepository orderRepository,
     IRestaurantReader restaurantReader,
-    IMarketProductReader marketProductReader)
+    IMarketProductReader marketProductReader,
+    IOperationalSettingsRepository operationalSettings)
     : IRequestHandler<ReorderFromHistoryCommand, Result<OrderDto>>
 {
     public async Task<Result<OrderDto>> Handle(
@@ -29,12 +30,13 @@ internal sealed class ReorderFromHistoryCommandHandler(
             return Result<OrderDto>.Failure(Error.Validation(
                 "ORDER_EMPTY", "Cannot reorder from an order with no items."));
 
+        var settings = await operationalSettings.GetAsync(cancellationToken);
         if (request.ScheduledFor is not null
-            && !OrderCutoffScheduler.IsWithinDeliveryWindow(DateTime.UtcNow, request.ScheduledFor.Value))
+            && !OrderCutoffScheduler.IsWithinDeliveryWindow(DateTime.UtcNow, request.ScheduledFor.Value, settings.DeliveryWindowDays))
         {
             return Result<OrderDto>.Failure(Error.Validation(
                 "DELIVERY_DATE_OUT_OF_WINDOW",
-                "Delivery date must be within the next 7 days and not in the past."));
+                $"Delivery date must be within the next {settings.DeliveryWindowDays} days and not in the past."));
         }
 
         var snapshots = new Dictionary<Guid, MarketProductSnapshotDto>();

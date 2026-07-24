@@ -223,7 +223,7 @@ public sealed class ConfirmOrderCommandHandlerTests
         // hardcoded default.
         var confirmedAtUtc = new DateTime(2026, 6, 18, 14, 59, 0, DateTimeKind.Utc);
         _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
-            .Returns(new OperationalSettings(new TimeOnly(21, 0), true, "hub_relay"));
+            .Returns(new OperationalSettings(new TimeOnly(21, 0), true, "hub_relay", 7));
         var order = NewDraftOrderWithItem(scheduledFor: null);
         _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 

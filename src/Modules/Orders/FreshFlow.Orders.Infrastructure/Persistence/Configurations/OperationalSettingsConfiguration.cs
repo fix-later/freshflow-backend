@@ -16,6 +16,7 @@ internal sealed class OperationalSettingsConfiguration : IEntityTypeConfiguratio
         builder.Property(s => s.BatchingEnabled).HasColumnName("batching_enabled").IsRequired();
         builder.Property(s => s.DefaultRouteType).HasColumnName("default_route_type")
             .IsRequired().HasMaxLength(20);
+        builder.Property(s => s.DeliveryWindowDays).HasColumnName("delivery_window_days").IsRequired();
         builder.Property(s => s.CreatedAt).HasColumnName("created_at").IsRequired();
         // UpdatedAt is a concurrency token: Touch() bumps it on every Update(), so a concurrent
         // admin edit is detected as a lost update instead of silently overwriting.

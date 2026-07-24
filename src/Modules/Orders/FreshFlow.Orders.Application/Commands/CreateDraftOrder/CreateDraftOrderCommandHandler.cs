@@ -21,7 +21,8 @@ namespace FreshFlow.Orders.Application.Commands.CreateDraftOrder;
 internal sealed class CreateDraftOrderCommandHandler(
     IOrderRepository orderRepository,
     IRestaurantReader restaurantReader,
-    IMarketProductReader marketProductReader)
+    IMarketProductReader marketProductReader,
+    IOperationalSettingsRepository operationalSettings)
     : IRequestHandler<CreateDraftOrderCommand, Result<OrderDto>>
 {
     public async Task<Result<OrderDto>> Handle(
@@ -39,12 +40,13 @@ internal sealed class CreateDraftOrderCommandHandler(
                 "RESTAURANT_NOT_APPROVED", "This restaurant has not been approved to place orders."));
 
         // ── 2b. Delivery date window check (422, SCRUM-196) ────────────────────
+        var settings = await operationalSettings.GetAsync(cancellationToken);
         if (request.ScheduledFor is not null
-            && !OrderCutoffScheduler.IsWithinDeliveryWindow(DateTime.UtcNow, request.ScheduledFor.Value))
+            && !OrderCutoffScheduler.IsWithinDeliveryWindow(DateTime.UtcNow, request.ScheduledFor.Value, settings.DeliveryWindowDays))
         {
             return Result<OrderDto>.Failure(Error.Validation(
                 "DELIVERY_DATE_OUT_OF_WINDOW",
-                "Delivery date must be within the next 7 days and not in the past."));
+                $"Delivery date must be within the next {settings.DeliveryWindowDays} days and not in the past."));
         }
 
         // ── 3. Validate items against live market product data (422) ─────────

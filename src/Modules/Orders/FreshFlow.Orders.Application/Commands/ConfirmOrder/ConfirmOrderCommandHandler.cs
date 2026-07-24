@@ -45,7 +45,7 @@ internal sealed class ConfirmOrderCommandHandler(
 
         var settings = await operationalSettings.GetAsync(cancellationToken);
         var evaluation = OrderConfirmationEvaluator.Evaluate(
-            order, canChargeResult.Value, confirmedAtUtc, settings.DailyCutoffTime.ToTimeSpan());
+            order, canChargeResult.Value, confirmedAtUtc, settings.DeliveryWindowDays, settings.DailyCutoffTime.ToTimeSpan());
         if (evaluation.Issues.Count > 0)
             return Result<OrderDto>.Failure(evaluation.Issues[0]);
 

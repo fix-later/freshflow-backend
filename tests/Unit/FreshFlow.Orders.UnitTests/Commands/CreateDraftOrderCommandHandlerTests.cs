@@ -14,6 +14,7 @@ public sealed class CreateDraftOrderCommandHandlerTests
     private readonly IOrderRepository _orderRepository = Substitute.For<IOrderRepository>();
     private readonly IRestaurantReader _restaurantReader = Substitute.For<IRestaurantReader>();
     private readonly IMarketProductReader _marketProductReader = Substitute.For<IMarketProductReader>();
+    private readonly IOperationalSettingsRepository _operationalSettings = Substitute.For<IOperationalSettingsRepository>();
 
     private readonly CreateDraftOrderCommandHandler _sut;
 
@@ -23,13 +24,17 @@ public sealed class CreateDraftOrderCommandHandlerTests
 
     public CreateDraftOrderCommandHandlerTests()
     {
-        _sut = new CreateDraftOrderCommandHandler(_orderRepository, _restaurantReader, _marketProductReader);
+        _sut = new CreateDraftOrderCommandHandler(
+            _orderRepository, _restaurantReader, _marketProductReader, _operationalSettings);
 
         _restaurantReader.FindByUserIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
 
         _marketProductReader.FindAsync(MarketProductId, Arg.Any<CancellationToken>())
             .Returns(new MarketProductSnapshotDto(MarketProductId, "Cà chua", 20_000m, AvailableQuantity: 50));
+
+        _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
+            .Returns(OperationalSettings.CreateDefault());
     }
 
     private static CreateDraftOrderCommand Cmd(
@@ -159,6 +164,26 @@ public sealed class CreateDraftOrderCommandHandlerTests
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("DELIVERY_DATE_OUT_OF_WINDOW");
+    }
+
+    [Fact]
+    public async Task Handle_ScheduledForBeyondDefaultWindow_ConfiguredFourteenDayWindow_SucceedsAsync()
+    {
+        // Arrange — the same D+8 date that Handle_ScheduledForBeyondDPlus7... rejects under the
+        // default 7-day window is admitted once the admin has configured a 14-day window.
+        _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
+            .Returns(new OperationalSettings(new TimeOnly(22, 0), true, "hub_relay", 14));
+        var command = new CreateDraftOrderCommand(
+            UserId,
+            [new DraftOrderItemRequest(MarketProductId, 5)],
+            ScheduledFor: DateTime.UtcNow.AddDays(8),
+            Notes: null);
+
+        // Act
+        var result = await _sut.Handle(command, default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
     }
 
     [Fact]

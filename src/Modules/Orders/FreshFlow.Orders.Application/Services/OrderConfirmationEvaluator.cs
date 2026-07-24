@@ -20,7 +20,7 @@ namespace FreshFlow.Orders.Application.Services;
 internal static class OrderConfirmationEvaluator
 {
     public static OrderConfirmationEvaluation Evaluate(
-        Order order, CreditCheckDto creditCheck, DateTime nowUtc, TimeSpan? cutoffLocalTime = null)
+        Order order, CreditCheckDto creditCheck, DateTime nowUtc, int windowDays, TimeSpan? cutoffLocalTime = null)
     {
         var issues = new List<Error>();
 
@@ -34,11 +34,11 @@ internal static class OrderConfirmationEvaluator
 
         var resolvedScheduledFor = OrderCutoffScheduler.ResolveScheduledFor(nowUtc, order.ScheduledFor, cutoffLocalTime);
         if (resolvedScheduledFor is not null
-            && !OrderCutoffScheduler.IsWithinDeliveryWindow(nowUtc, resolvedScheduledFor.Value))
+            && !OrderCutoffScheduler.IsWithinDeliveryWindow(nowUtc, resolvedScheduledFor.Value, windowDays))
         {
             issues.Add(Error.Validation(
                 "DELIVERY_DATE_OUT_OF_WINDOW",
-                "Delivery date must be within the next 7 days and not in the past."));
+                $"Delivery date must be within the next {windowDays} days and not in the past."));
         }
 
         return new OrderConfirmationEvaluation(issues, resolvedScheduledFor, order.TotalAmount, creditCheck);

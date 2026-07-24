@@ -47,7 +47,7 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
 
         var settings = await operationalSettings.GetAsync(cancellationToken);
         var evaluation = OrderConfirmationEvaluator.Evaluate(
-            order, canChargeResult.Value, nowUtc, settings.DailyCutoffTime.ToTimeSpan());
+            order, canChargeResult.Value, nowUtc, settings.DeliveryWindowDays, settings.DailyCutoffTime.ToTimeSpan());
         var issues = evaluation.Issues
             .Select(error => new PreviewIssueDto(error.Code, error.Message))
             .ToList();

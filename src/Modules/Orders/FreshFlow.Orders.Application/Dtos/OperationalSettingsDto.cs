@@ -4,4 +4,5 @@ public sealed record OperationalSettingsDto(
     TimeOnly DailyCutoffTime,
     bool BatchingEnabled,
     string DefaultRouteType,
+    int DeliveryWindowDays,
     DateTime UpdatedAt);

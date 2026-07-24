@@ -6,4 +6,5 @@ namespace FreshFlow.Orders.Application.Commands.UpdateOperationalSettings;
 public sealed record UpdateOperationalSettingsCommand(
     TimeOnly DailyCutoffTime,
     bool BatchingEnabled,
-    string DefaultRouteType) : ICommand<OperationalSettingsDto>;
+    string DefaultRouteType,
+    int DeliveryWindowDays) : ICommand<OperationalSettingsDto>;
