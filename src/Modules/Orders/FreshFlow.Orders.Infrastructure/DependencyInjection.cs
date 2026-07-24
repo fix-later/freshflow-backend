@@ -48,6 +48,7 @@ public static class DependencyInjection
         services.AddScoped<ICreditRepository, CreditRepository>();
         services.AddScoped<ICreditStatementRepository, CreditStatementRepository>();
         services.AddScoped<IOperationalSettingsRepository, OperationalSettingsRepository>();
+        services.AddScoped<IFavoriteRepository, FavoriteRepository>();
 
         // Application services
         services.AddScoped<ICreditService, CreditService>();
@@ -61,6 +62,7 @@ public static class DependencyInjection
         // Cross-module read projections used by Orders without project references to Auth/Catalog/Pricing.
         services.AddScoped<IMarketProductReader, MarketProductReader>();
         services.AddScoped<IRestaurantReader, RestaurantReader>();
+        services.AddScoped<IFavoriteReader, FavoriteReader>();
 
         return services;
     }

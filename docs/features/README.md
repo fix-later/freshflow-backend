@@ -17,11 +17,12 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 
 ## orders — Order module
 
-| Doc | Loại |
-|---|---|
-| [AUDIT-2026-06-17 orders module research](./orders/AUDIT-2026-06-17-orders-module-research.md) | Audit |
-| [order-flow-analysis](./orders/order-flow-analysis.md) | Analysis |
-| [order-flow-diagrams.drawio](./orders/diagrams/order-flow-diagrams.drawio) | Diagram |
+| Doc | Loại | Trạng thái |
+|---|---|---|
+| [AUDIT-2026-06-17 orders module research](./orders/AUDIT-2026-06-17-orders-module-research.md) | Audit | — |
+| [order-flow-analysis](./orders/order-flow-analysis.md) | Analysis | — |
+| [order-flow-diagrams.drawio](./orders/diagrams/order-flow-diagrams.drawio) | Diagram | — |
+| [AUDIT-2026-07-23 favorites backend plan](./orders/AUDIT-2026-07-23-favorites-backend-plan.md) | Audit / Plan | ✅ SCRUM-368 implemented, reviewer passed |
 
 ## credit — B2B Credit, Debt & Statement (epic SCRUM-254, trong module Orders)
 
