@@ -5,6 +5,7 @@ using FreshFlow.Logistics.Application.Commands.OptimizeRoute;
 using FreshFlow.Logistics.Application.Commands.ReviewRoute;
 using FreshFlow.Logistics.Application.Commands.SelectRoute;
 using FreshFlow.Logistics.Application.Queries.CheckEligibility;
+using FreshFlow.Logistics.Application.Queries.GetLoadingManifest;
 using FreshFlow.Logistics.Application.Queries.GetRoute;
 using FreshFlow.Logistics.Application.Queries.ListRoutes;
 using MediatR;
@@ -112,6 +113,15 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetRouteAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetRouteQuery(id), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    // Read-only (inherits class gate): what to load onto the truck per restaurant stop, in loading
+    // order (furthest/last-delivered first). Goods only -- no prices or credit.
+    [HttpGet("{id:guid}/loading-manifest")]
+    public async Task<IActionResult> GetLoadingManifestAsync(Guid id, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetLoadingManifestQuery(id), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 }
