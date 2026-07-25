@@ -26,5 +26,6 @@ public sealed class GetOperationalSettingsQueryHandlerTests
         result.Value.DailyCutoffTime.Should().Be(new TimeOnly(22, 0));
         result.Value.BatchingEnabled.Should().BeTrue();
         result.Value.DefaultRouteType.Should().Be("hub_relay");
+        result.Value.DeliveryWindowDays.Should().Be(7);
     }
 }

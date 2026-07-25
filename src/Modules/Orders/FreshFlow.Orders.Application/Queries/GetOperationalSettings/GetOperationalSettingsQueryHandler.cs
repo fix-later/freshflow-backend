@@ -13,6 +13,10 @@ internal sealed class GetOperationalSettingsQueryHandler(IOperationalSettingsRep
     {
         var current = await settings.GetAsync(ct);
         return Result<OperationalSettingsDto>.Success(new OperationalSettingsDto(
-            current.DailyCutoffTime, current.BatchingEnabled, current.DefaultRouteType, current.UpdatedAt));
+            current.DailyCutoffTime,
+            current.BatchingEnabled,
+            current.DefaultRouteType,
+            current.DeliveryWindowDays,
+            current.UpdatedAt));
     }
 }

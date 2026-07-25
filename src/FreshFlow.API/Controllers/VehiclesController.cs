@@ -13,10 +13,12 @@ namespace FreshFlow.API.Controllers;
 
 [ApiController]
 [Route("api/v1/logistics/vehicles")]
-[Authorize(Roles = "admin,operations_manager")]
+// hub_staff has read-only access (list/detail); every write below is narrowed back to admin,operations_manager.
+[Authorize(Roles = "admin,operations_manager,hub_staff")]
 public sealed class VehiclesController(ISender sender) : ControllerBase
 {
     [HttpPost]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> RegisterVehicleAsync(
         [FromBody] RegisterVehicleRequest body,
         CancellationToken ct)
@@ -57,6 +59,7 @@ public sealed class VehiclesController(ISender sender) : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> UpdateVehicleAsync(
         Guid id,
         [FromBody] UpdateVehicleRequest body,
@@ -70,6 +73,7 @@ public sealed class VehiclesController(ISender sender) : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> DeactivateVehicleAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new DeactivateVehicleCommand(id), ct);

@@ -14,6 +14,7 @@ public sealed class ReorderFromHistoryCommandHandlerTests
     private readonly IOrderRepository _orderRepository = Substitute.For<IOrderRepository>();
     private readonly IRestaurantReader _restaurantReader = Substitute.For<IRestaurantReader>();
     private readonly IMarketProductReader _marketProductReader = Substitute.For<IMarketProductReader>();
+    private readonly IOperationalSettingsRepository _operationalSettings = Substitute.For<IOperationalSettingsRepository>();
     private readonly ReorderFromHistoryCommandHandler _sut;
 
     private static readonly Guid UserId = Guid.NewGuid();
@@ -27,7 +28,10 @@ public sealed class ReorderFromHistoryCommandHandlerTests
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
         _marketProductReader.FindAsync(MarketProductId, Arg.Any<CancellationToken>())
             .Returns(new MarketProductSnapshotDto(MarketProductId, "Fresh tomato", 22_000m, 20));
-        _sut = new ReorderFromHistoryCommandHandler(_orderRepository, _restaurantReader, _marketProductReader);
+        _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
+            .Returns(OperationalSettings.CreateDefault());
+        _sut = new ReorderFromHistoryCommandHandler(
+            _orderRepository, _restaurantReader, _marketProductReader, _operationalSettings);
     }
 
     [Fact]
@@ -76,6 +80,22 @@ public sealed class ReorderFromHistoryCommandHandlerTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("DELIVERY_DATE_OUT_OF_WINDOW");
+    }
+
+    [Fact]
+    public async Task Handle_ScheduledForBeyondDefaultWindow_ConfiguredFourteenDayWindow_SucceedsAsync()
+    {
+        // The same D+8 date that Handle_ScheduledForOutOfWindow rejects under the default 7-day
+        // window is admitted once the admin has configured a 14-day window.
+        _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
+            .Returns(new OperationalSettings(new TimeOnly(22, 0), true, "hub_relay", 14));
+        var source = NewSourceOrder(RestaurantId);
+        _orderRepository.FindByIdAsync(source.Id, Arg.Any<CancellationToken>()).Returns(source);
+
+        var result = await _sut.Handle(
+            Cmd(source.Id, scheduledFor: DateTime.UtcNow.AddDays(8)), default);
+
+        result.IsSuccess.Should().BeTrue();
     }
 
     [Fact]

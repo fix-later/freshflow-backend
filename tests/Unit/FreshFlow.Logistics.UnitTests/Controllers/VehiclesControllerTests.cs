@@ -13,6 +13,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using NSubstitute;
 
 namespace FreshFlow.Logistics.UnitTests.Controllers;
@@ -21,13 +22,27 @@ namespace FreshFlow.Logistics.UnitTests.Controllers;
 public sealed class VehiclesControllerTests
 {
     [Fact]
-    public void VehiclesController_RequiresAdminOrOperationsManagerAuthorization()
+    public void VehiclesController_EveryWriteExcludesHubStaff()
     {
-        var attr = typeof(VehiclesController).GetCustomAttribute<AuthorizeAttribute>();
+        var classAttr = typeof(VehiclesController).GetCustomAttribute<AuthorizeAttribute>();
+        classAttr.Should().NotBeNull();
+        classAttr!.Roles.Should().Be("admin,operations_manager,hub_staff");
 
-        attr.Should().NotBeNull();
-        attr!.Roles.Should().Be("admin,operations_manager");
+        foreach (var write in WriteActions(typeof(VehiclesController)))
+        {
+            var methodAttr = write.GetCustomAttribute<AuthorizeAttribute>();
+            methodAttr.Should().NotBeNull($"{write.Name} is a write action and must exclude hub_staff");
+            methodAttr!.Roles.Should().Be("admin,operations_manager", $"{write.Name} must exclude hub_staff");
+        }
     }
+
+    // Reflects over every public action mapped to a mutating HTTP verb, so a future write endpoint added
+    // without a narrowing [Authorize] fails this test instead of silently inheriting the hub_staff class gate.
+    private static IEnumerable<MethodInfo> WriteActions(Type controller) =>
+        controller.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Where(m => m.GetCustomAttributes<HttpMethodAttribute>()
+                .SelectMany(a => a.HttpMethods)
+                .Any(verb => verb is "POST" or "PUT" or "PATCH" or "DELETE"));
 
     [Fact]
     public async Task RegisterVehicleAsync_Success_UsesRegisteredByClaimAndReturnsCreatedAsync()

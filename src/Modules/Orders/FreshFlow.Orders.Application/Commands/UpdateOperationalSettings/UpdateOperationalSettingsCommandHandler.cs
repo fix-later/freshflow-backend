@@ -12,9 +12,17 @@ internal sealed class UpdateOperationalSettingsCommandHandler(IOperationalSettin
         UpdateOperationalSettingsCommand request, CancellationToken ct)
     {
         var updated = await settings.UpsertAsync(
-            request.DailyCutoffTime, request.BatchingEnabled, request.DefaultRouteType, ct);
+            request.DailyCutoffTime,
+            request.BatchingEnabled,
+            request.DefaultRouteType,
+            request.DeliveryWindowDays,
+            ct);
 
         return Result<OperationalSettingsDto>.Success(new OperationalSettingsDto(
-            updated.DailyCutoffTime, updated.BatchingEnabled, updated.DefaultRouteType, updated.UpdatedAt));
+            updated.DailyCutoffTime,
+            updated.BatchingEnabled,
+            updated.DefaultRouteType,
+            updated.DeliveryWindowDays,
+            updated.UpdatedAt));
     }
 }

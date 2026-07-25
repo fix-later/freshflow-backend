@@ -38,7 +38,7 @@ public sealed class OrderConfirmationEvaluatorTests
         var order = NewDraftOrderWithItem(scheduledFor: confirmedAtUtc.AddDays(2));
         var creditCheck = SuccessfulCreditCheck(order.TotalAmount);
 
-        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc);
+        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc, windowDays: 7);
 
         evaluation.Issues.Should().BeEmpty();
         evaluation.TotalAmount.Should().Be(order.TotalAmount);
@@ -53,7 +53,7 @@ public sealed class OrderConfirmationEvaluatorTests
         var confirmedAtUtc = new DateTime(2026, 6, 18, 10, 0, 0, DateTimeKind.Utc);
         var creditCheck = SuccessfulCreditCheck(order.TotalAmount);
 
-        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc);
+        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc, windowDays: 7);
 
         evaluation.Issues.Should().NotBeEmpty();
         evaluation.Issues[0].Code.Should().Be("ORDER_NOT_DRAFT");
@@ -66,7 +66,7 @@ public sealed class OrderConfirmationEvaluatorTests
         var confirmedAtUtc = new DateTime(2026, 6, 18, 10, 0, 0, DateTimeKind.Utc);
         var creditCheck = SuccessfulCreditCheck(order.TotalAmount);
 
-        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc);
+        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc, windowDays: 7);
 
         evaluation.Issues.Should().NotBeEmpty();
         evaluation.Issues[0].Code.Should().Be("ORDER_EMPTY");
@@ -79,10 +79,24 @@ public sealed class OrderConfirmationEvaluatorTests
         var order = NewDraftOrderWithItem(scheduledFor: confirmedAtUtc.AddDays(8));
         var creditCheck = SuccessfulCreditCheck(order.TotalAmount);
 
-        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc);
+        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc, windowDays: 7);
 
         evaluation.Issues.Should().NotBeEmpty();
         evaluation.Issues[0].Code.Should().Be("DELIVERY_DATE_OUT_OF_WINDOW");
+    }
+
+    [Fact]
+    public void Evaluate_ScheduledForBeyondDPlus7WithConfiguredFourteenDayWindow_ReturnsNoIssues()
+    {
+        // Same date that Evaluate_ScheduledForBeyondDPlus7 rejects under the default 7-day
+        // window is admitted once the admin-configured window (SCRUM-179) is 14 days.
+        var confirmedAtUtc = new DateTime(2026, 6, 18, 10, 0, 0, DateTimeKind.Utc);
+        var order = NewDraftOrderWithItem(scheduledFor: confirmedAtUtc.AddDays(8));
+        var creditCheck = SuccessfulCreditCheck(order.TotalAmount);
+
+        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc, windowDays: 14);
+
+        evaluation.Issues.Should().BeEmpty();
     }
 
     [Fact]
@@ -93,7 +107,7 @@ public sealed class OrderConfirmationEvaluatorTests
         var order = NewDraftOrderWithItem(scheduledFor: null);
         var creditCheck = SuccessfulCreditCheck(order.TotalAmount);
 
-        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc);
+        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc, windowDays: 7);
 
         evaluation.Issues.Should().BeEmpty();
         evaluation.ResolvedScheduledFor.Should().NotBeNull();
@@ -110,7 +124,7 @@ public sealed class OrderConfirmationEvaluatorTests
         order.Confirm();
         var creditCheck = SuccessfulCreditCheck(order.TotalAmount);
 
-        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc);
+        var evaluation = OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc, windowDays: 7);
 
         evaluation.Issues[0].Code.Should().Be("ORDER_NOT_DRAFT");
     }
@@ -122,7 +136,7 @@ public sealed class OrderConfirmationEvaluatorTests
         var order = NewDraftOrderWithItem(scheduledFor: null);
         var creditCheck = SuccessfulCreditCheck(order.TotalAmount);
 
-        OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc);
+        OrderConfirmationEvaluator.Evaluate(order, creditCheck, confirmedAtUtc, windowDays: 7);
 
         order.Status.Should().Be(OrderStatus.Draft);
         order.ScheduledFor.Should().BeNull();

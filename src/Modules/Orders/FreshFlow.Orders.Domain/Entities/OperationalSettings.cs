@@ -13,25 +13,30 @@ public sealed class OperationalSettings : BaseEntity
 {
     private OperationalSettings() { } // EF Core
 
-    public OperationalSettings(TimeOnly dailyCutoffTime, bool batchingEnabled, string defaultRouteType)
+    public OperationalSettings(
+        TimeOnly dailyCutoffTime, bool batchingEnabled, string defaultRouteType, int deliveryWindowDays)
     {
         DailyCutoffTime = dailyCutoffTime;
         BatchingEnabled = batchingEnabled;
         DefaultRouteType = defaultRouteType;
+        DeliveryWindowDays = deliveryWindowDays;
     }
 
     public static OperationalSettings CreateDefault() =>
-        new(new TimeOnly(22, 0), batchingEnabled: true, defaultRouteType: "hub_relay");
+        new(new TimeOnly(22, 0), batchingEnabled: true, defaultRouteType: "hub_relay", deliveryWindowDays: 7);
 
     public TimeOnly DailyCutoffTime { get; private set; }
     public bool BatchingEnabled { get; private set; }
     public string DefaultRouteType { get; private set; } = "hub_relay";
+    public int DeliveryWindowDays { get; private set; }
 
-    public void Update(TimeOnly dailyCutoffTime, bool batchingEnabled, string defaultRouteType)
+    public void Update(
+        TimeOnly dailyCutoffTime, bool batchingEnabled, string defaultRouteType, int deliveryWindowDays)
     {
         DailyCutoffTime = dailyCutoffTime;
         BatchingEnabled = batchingEnabled;
         DefaultRouteType = defaultRouteType;
+        DeliveryWindowDays = deliveryWindowDays;
         Touch();
     }
 

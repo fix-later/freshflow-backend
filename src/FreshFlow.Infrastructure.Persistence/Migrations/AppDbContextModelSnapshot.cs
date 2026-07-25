@@ -2480,6 +2480,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("default_route_type");
 
+                    b.Property<int>("DeliveryWindowDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("delivery_window_days");
+
                     b.Property<DateTime>("UpdatedAt")
                         .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone")
@@ -2721,6 +2725,37 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("restaurant_credit", (string)null);
                 });
 
+            modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.RestaurantFavorite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("MarketProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("market_product_id");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("restaurant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId")
+                        .HasDatabaseName("idx_restaurant_favorites_restaurant_id");
+
+                    b.HasIndex("RestaurantId", "MarketProductId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_restaurant_favorites_restaurant_id_market_product_id");
+
+                    b.ToTable("restaurant_favorites", (string)null);
+                });
+
             modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.ScheduledOrder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2766,6 +2801,51 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("idx_scheduled_orders_restaurant_id");
 
                     b.ToTable("scheduled_orders", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.FavoriteListItemRow", b =>
+                {
+                    b.Property<int>("AvailableQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Category")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("CurrentPrice")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("MarketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("MarketName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("MarketProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Unit")
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    rf.restaurant_id     AS \"RestaurantId\",\n    rf.market_product_id AS \"MarketProductId\",\n    rf.created_at        AS \"CreatedAt\",\n    mp.\"ProductId\"       AS \"ProductId\",\n    p.\"Name\"             AS \"ProductName\",\n    p.\"ImageUrl\"         AS \"ImageUrl\",\n    mp.\"MarketId\"        AS \"MarketId\",\n    m.\"Name\"             AS \"MarketName\",\n    c.\"Name\"             AS \"Category\",\n    u.\"Name\"             AS \"Unit\",\n    mp.\"CurrentPrice\"    AS \"CurrentPrice\",\n    (mp.\"CurrentQuantity\" - mp.\"ReservedQuantity\") AS \"AvailableQuantity\"\nFROM restaurant_favorites rf\nINNER JOIN market_products mp ON rf.market_product_id = mp.\"Id\"\nINNER JOIN products p         ON mp.\"ProductId\" = p.\"Id\"\nINNER JOIN markets m          ON mp.\"MarketId\" = m.\"Id\"\nLEFT JOIN units_of_measurement u ON p.\"UnitId\" = u.\"Id\" AND u.\"DeletedAt\" IS NULL\nLEFT JOIN product_categories  c  ON p.\"CategoryId\" = c.\"Id\" AND c.\"DeletedAt\" IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL AND m.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.MarketProductRow", b =>

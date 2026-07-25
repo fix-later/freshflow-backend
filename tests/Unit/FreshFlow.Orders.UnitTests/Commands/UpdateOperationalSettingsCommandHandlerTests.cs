@@ -19,15 +19,16 @@ public sealed class UpdateOperationalSettingsCommandHandlerTests
     public async Task Handle_ValidCommand_UpsertsAndReturnsDto()
     {
         var cutoff = new TimeOnly(21, 30);
-        _settings.UpsertAsync(cutoff, false, "direct", Arg.Any<CancellationToken>())
-            .Returns(new OperationalSettings(cutoff, false, "direct"));
+        _settings.UpsertAsync(cutoff, false, "direct", 14, Arg.Any<CancellationToken>())
+            .Returns(new OperationalSettings(cutoff, false, "direct", 14));
 
-        var result = await _sut.Handle(new UpdateOperationalSettingsCommand(cutoff, false, "direct"), default);
+        var result = await _sut.Handle(new UpdateOperationalSettingsCommand(cutoff, false, "direct", 14), default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.DailyCutoffTime.Should().Be(cutoff);
         result.Value.BatchingEnabled.Should().BeFalse();
         result.Value.DefaultRouteType.Should().Be("direct");
-        await _settings.Received(1).UpsertAsync(cutoff, false, "direct", Arg.Any<CancellationToken>());
+        result.Value.DeliveryWindowDays.Should().Be(14);
+        await _settings.Received(1).UpsertAsync(cutoff, false, "direct", 14, Arg.Any<CancellationToken>());
     }
 }

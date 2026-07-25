@@ -9,5 +9,9 @@ public interface IOperationalSettingsRepository
 
     /// <summary>Inserts the singleton row if none exists yet, otherwise updates it in place.</summary>
     public Task<OperationalSettings> UpsertAsync(
-        TimeOnly dailyCutoffTime, bool batchingEnabled, string defaultRouteType, CancellationToken ct);
+        TimeOnly dailyCutoffTime,
+        bool batchingEnabled,
+        string defaultRouteType,
+        int deliveryWindowDays,
+        CancellationToken ct);
 }

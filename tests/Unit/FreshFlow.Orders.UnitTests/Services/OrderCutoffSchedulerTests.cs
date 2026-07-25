@@ -80,7 +80,7 @@ public sealed class OrderCutoffSchedulerTests
     [Fact]
     public void IsWithinDeliveryWindow_AtUpperBoundDPlus7_ReturnsTrue()
     {
-        var result = OrderCutoffScheduler.IsWithinDeliveryWindow(BeforeCutoffUtc, DPlus7Utc);
+        var result = OrderCutoffScheduler.IsWithinDeliveryWindow(BeforeCutoffUtc, DPlus7Utc, windowDays: 7);
 
         result.Should().BeTrue();
     }
@@ -90,7 +90,7 @@ public sealed class OrderCutoffSchedulerTests
     {
         var beyondWindow = DPlus7Utc.AddSeconds(1);
 
-        var result = OrderCutoffScheduler.IsWithinDeliveryWindow(BeforeCutoffUtc, beyondWindow);
+        var result = OrderCutoffScheduler.IsWithinDeliveryWindow(BeforeCutoffUtc, beyondWindow, windowDays: 7);
 
         result.Should().BeFalse();
     }
@@ -100,7 +100,7 @@ public sealed class OrderCutoffSchedulerTests
     {
         var pastDate = BeforeCutoffUtc.AddHours(-1);
 
-        var result = OrderCutoffScheduler.IsWithinDeliveryWindow(BeforeCutoffUtc, pastDate);
+        var result = OrderCutoffScheduler.IsWithinDeliveryWindow(BeforeCutoffUtc, pastDate, windowDays: 7);
 
         result.Should().BeFalse();
     }
@@ -108,7 +108,37 @@ public sealed class OrderCutoffSchedulerTests
     [Fact]
     public void IsWithinDeliveryWindow_EqualToNow_ReturnsTrue()
     {
-        var result = OrderCutoffScheduler.IsWithinDeliveryWindow(BeforeCutoffUtc, BeforeCutoffUtc);
+        var result = OrderCutoffScheduler.IsWithinDeliveryWindow(BeforeCutoffUtc, BeforeCutoffUtc, windowDays: 7);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsWithinDeliveryWindow_ConfiguredThreeDayWindow_AtUpperBoundDPlus3_ReturnsTrue()
+    {
+        var dPlus3Utc = new DateTime(2026, 6, 20, 17, 0, 0, DateTimeKind.Utc);
+
+        var result = OrderCutoffScheduler.IsWithinDeliveryWindow(BeforeCutoffUtc, dPlus3Utc, windowDays: 3);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsWithinDeliveryWindow_ConfiguredThreeDayWindow_BeyondDPlus3_ReturnsFalse()
+    {
+        var dPlus4Utc = new DateTime(2026, 6, 21, 17, 0, 0, DateTimeKind.Utc);
+
+        var result = OrderCutoffScheduler.IsWithinDeliveryWindow(BeforeCutoffUtc, dPlus4Utc, windowDays: 3);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsWithinDeliveryWindow_ConfiguredFourteenDayWindow_AtDPlus10_ReturnsTrue()
+    {
+        var dPlus10Utc = new DateTime(2026, 6, 28, 17, 0, 0, DateTimeKind.Utc);
+
+        var result = OrderCutoffScheduler.IsWithinDeliveryWindow(BeforeCutoffUtc, dPlus10Utc, windowDays: 14);
 
         result.Should().BeTrue();
     }

@@ -14,6 +14,7 @@ using FreshFlow.SharedKernel.Application;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using NSubstitute;
 
 namespace FreshFlow.Logistics.UnitTests.Controllers;
@@ -22,13 +23,39 @@ namespace FreshFlow.Logistics.UnitTests.Controllers;
 public sealed class RoutesControllerTests
 {
     [Fact]
-    public void RoutesController_RequiresAdminOrOperationsManagerAuthorization()
+    public void RoutesController_EveryWriteExcludesHubStaff_ExceptDispatch()
     {
-        var attr = typeof(RoutesController).GetCustomAttribute<AuthorizeAttribute>();
+        var classAttr = typeof(RoutesController).GetCustomAttribute<AuthorizeAttribute>();
+        classAttr.Should().NotBeNull();
+        classAttr!.Roles.Should().Be("admin,operations_manager,hub_staff");
 
-        attr.Should().NotBeNull();
-        attr!.Roles.Should().Be("admin,operations_manager");
+        // assign-vehicle is the only write intentionally left open to hub_staff (hub-dispatch model);
+        // every other write must be narrowed back to admin,operations_manager.
+        var dispatchAllowList = new[] { nameof(RoutesController.AssignVehicleAsync) };
+
+        foreach (var write in WriteActions(typeof(RoutesController)))
+        {
+            var methodAttr = write.GetCustomAttribute<AuthorizeAttribute>();
+
+            if (dispatchAllowList.Contains(write.Name))
+            {
+                methodAttr.Should().BeNull(
+                    $"{write.Name} is the hub-dispatch write and must inherit the hub_staff class gate");
+                continue;
+            }
+
+            methodAttr.Should().NotBeNull($"{write.Name} is a write action and must exclude hub_staff");
+            methodAttr!.Roles.Should().Be("admin,operations_manager", $"{write.Name} must exclude hub_staff");
+        }
     }
+
+    // Reflects over every public action mapped to a mutating HTTP verb, so a future write endpoint added
+    // without a narrowing [Authorize] fails this test instead of silently inheriting the hub_staff class gate.
+    private static IEnumerable<MethodInfo> WriteActions(Type controller) =>
+        controller.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Where(m => m.GetCustomAttributes<HttpMethodAttribute>()
+                .SelectMany(a => a.HttpMethods)
+                .Any(verb => verb is "POST" or "PUT" or "PATCH" or "DELETE"));
 
     [Fact]
     public async Task CalculateRouteAsync_Success_SendsCommandAndReturnsCreatedAsync()

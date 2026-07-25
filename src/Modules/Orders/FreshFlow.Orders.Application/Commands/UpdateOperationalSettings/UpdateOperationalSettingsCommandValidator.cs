@@ -11,5 +11,8 @@ internal sealed class UpdateOperationalSettingsCommandValidator : AbstractValida
         RuleFor(c => c.DefaultRouteType)
             .Must(v => AllowedRouteTypes.Contains(v))
             .WithMessage("DefaultRouteType must be one of: hub_relay, direct.");
+        RuleFor(c => c.DeliveryWindowDays)
+            .InclusiveBetween(1, 30)
+            .WithMessage("DeliveryWindowDays must be between 1 and 30.");
     }
 }

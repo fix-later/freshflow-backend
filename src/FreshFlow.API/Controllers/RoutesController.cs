@@ -5,6 +5,7 @@ using FreshFlow.Logistics.Application.Commands.OptimizeRoute;
 using FreshFlow.Logistics.Application.Commands.ReviewRoute;
 using FreshFlow.Logistics.Application.Commands.SelectRoute;
 using FreshFlow.Logistics.Application.Queries.CheckEligibility;
+using FreshFlow.Logistics.Application.Queries.GetLoadingManifest;
 using FreshFlow.Logistics.Application.Queries.GetRoute;
 using FreshFlow.Logistics.Application.Queries.ListRoutes;
 using MediatR;
@@ -15,10 +16,13 @@ namespace FreshFlow.API.Controllers;
 
 [ApiController]
 [Route("api/v1/logistics/routes")]
-[Authorize(Roles = "admin,operations_manager")]
+// hub_staff can read (list/detail/eligibility) and dispatch (assign-vehicle) in the hub-dispatch model;
+// all other writes (calculate/select/optimize/review) are narrowed back to admin,operations_manager.
+[Authorize(Roles = "admin,operations_manager,hub_staff")]
 public sealed class RoutesController(ISender sender) : ControllerBase
 {
     [HttpPost("calculate")]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> CalculateRouteAsync(
         [FromBody] CalculateRouteRequest body,
         CancellationToken ct)
@@ -39,6 +43,7 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/select")]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> SelectRouteAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new SelectRouteCommand(id), ct);
@@ -46,6 +51,7 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/optimize")]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> OptimizeRouteAsync(
         Guid id,
         [FromBody] OptimizeRouteRequest body,
@@ -56,6 +62,7 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/review")]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> ReviewRouteAsync(
         Guid id,
         [FromBody] ReviewRouteRequest? body,
@@ -66,6 +73,8 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/assign-vehicle")]
+    // Intentionally NOT narrowed: hub_staff dispatch their own last-mile (hub-dispatch model). The
+    // handler still enforces eligibility, capacity, double-booking, and route-state transition guards.
     public async Task<IActionResult> AssignVehicleAsync(
         Guid id,
         [FromBody] AssignVehicleRequest body,
@@ -104,6 +113,15 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetRouteAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetRouteQuery(id), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    // Read-only (inherits class gate): what to load onto the truck per restaurant stop, in loading
+    // order (furthest/last-delivered first). Goods only -- no prices or credit.
+    [HttpGet("{id:guid}/loading-manifest")]
+    public async Task<IActionResult> GetLoadingManifestAsync(Guid id, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetLoadingManifestQuery(id), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 }

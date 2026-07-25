@@ -11,4 +11,11 @@ internal sealed class InMemoryOrderStatusReader : IOrderStatusReader
 
     public Task<OrderStatusLookupDto?> FindByIdAsync(Guid orderId, CancellationToken ct) =>
         Task.FromResult(_orders.GetValueOrDefault(orderId));
+
+    public Task<IReadOnlyList<OrderStatusLookupDto>> ListByRestaurantsAndStatusAsync(
+        IReadOnlyCollection<Guid> restaurantIds, string status, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<OrderStatusLookupDto>>(
+            _orders.Values
+                .Where(o => o.Status == status && restaurantIds.Contains(o.RestaurantId))
+                .ToList());
 }

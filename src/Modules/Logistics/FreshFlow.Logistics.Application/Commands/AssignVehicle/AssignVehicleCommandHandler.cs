@@ -14,6 +14,10 @@ internal sealed class AssignVehicleCommandHandler(
 {
     public async Task<Result<RouteDto>> Handle(AssignVehicleCommand request, CancellationToken ct)
     {
+        // ponytail: dispatch is intentionally fleet-wide — any hub_staff may assign any vehicle to any
+        // route. Topology today is one hub per market with a shared fleet, so per-hub scoping is a no-op.
+        // If fleet segregation across hubs is ever needed, add Vehicle.HubId + a hub-assignment guard here
+        // (see HubAccessChecker in the Hub module for the pattern) and scope by the vehicle's home hub.
         var route = await routes.FindByIdAsync(request.RouteId, ct);
         if (route is null)
             return Result<RouteDto>.Failure(Error.NotFound("DELIVERY_ROUTE", request.RouteId));
