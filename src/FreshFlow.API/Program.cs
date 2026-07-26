@@ -9,6 +9,7 @@ using FreshFlow.Catalog.Infrastructure;
 using FreshFlow.Hub.Infrastructure;
 using FreshFlow.Infrastructure.Media;
 using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Invoicing.Infrastructure;
 using FreshFlow.Logistics.Infrastructure;
 using FreshFlow.Logistics.Infrastructure.Realtime;
 using FreshFlow.Notifications.Infrastructure;
@@ -204,6 +205,7 @@ builder.Services.AddLogisticsModule(builder.Configuration);
 builder.Services.AddNotificationsModule(builder.Configuration);
 builder.Services.AddHubModule(builder.Configuration);
 builder.Services.AddAnalyticsModule(builder.Configuration);
+builder.Services.AddInvoicingModule(builder.Configuration);
 builder.Services.AddMediaModule(builder.Configuration);
 
 // ── AI Shopping Assistant (Tầng 2 — host-layer orchestration) ──

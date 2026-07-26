@@ -35,6 +35,11 @@
     <Project Path="src/Modules/Notifications/FreshFlow.Notifications.Domain/FreshFlow.Notifications.Domain.csproj" />
     <Project Path="src/Modules/Notifications/FreshFlow.Notifications.Infrastructure/FreshFlow.Notifications.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Invoicing/">
+    <Project Path="src/Modules/Invoicing/FreshFlow.Invoicing.Application/FreshFlow.Invoicing.Application.csproj" />
+    <Project Path="src/Modules/Invoicing/FreshFlow.Invoicing.Domain/FreshFlow.Invoicing.Domain.csproj" />
+    <Project Path="src/Modules/Invoicing/FreshFlow.Invoicing.Infrastructure/FreshFlow.Invoicing.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/Orders/">
     <Project Path="src/Modules/Orders/FreshFlow.Orders.Application/FreshFlow.Orders.Application.csproj" />
     <Project Path="src/Modules/Orders/FreshFlow.Orders.Domain/FreshFlow.Orders.Domain.csproj" />
@@ -66,6 +71,7 @@
     <Project Path="tests/Unit/FreshFlow.Hub.UnitTests/FreshFlow.Hub.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Infrastructure.Media.UnitTests/FreshFlow.Infrastructure.Media.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Infrastructure.Persistence.UnitTests/FreshFlow.Infrastructure.Persistence.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Invoicing.UnitTests/FreshFlow.Invoicing.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Logistics.UnitTests/FreshFlow.Logistics.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Notifications.UnitTests/FreshFlow.Notifications.UnitTests.csproj" />
     <Project Path="tests/Unit/FreshFlow.Orders.UnitTests/FreshFlow.Orders.UnitTests.csproj" />

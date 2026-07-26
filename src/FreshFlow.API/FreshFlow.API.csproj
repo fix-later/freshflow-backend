@@ -34,6 +34,7 @@
     <ProjectReference Include="..\Modules\Hub\FreshFlow.Hub.Infrastructure\FreshFlow.Hub.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Analytics\FreshFlow.Analytics.Infrastructure\FreshFlow.Analytics.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Notifications\FreshFlow.Notifications.Infrastructure\FreshFlow.Notifications.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Invoicing\FreshFlow.Invoicing.Infrastructure\FreshFlow.Invoicing.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

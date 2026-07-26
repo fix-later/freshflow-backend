@@ -16,6 +16,10 @@ internal sealed class RestaurantRowConfiguration : IEntityTypeConfiguration<Rest
         builder.Property(r => r.PickupStart);
         builder.Property(r => r.PickupEnd);
         builder.Property(r => r.BusinessLicenseUrl).HasMaxLength(512);
+        builder.Property(r => r.TaxCode).HasMaxLength(20);
+        builder.Property(r => r.InvoiceLegalName).HasMaxLength(300);
+        builder.Property(r => r.InvoiceAddress).HasMaxLength(256);
+        builder.Property(r => r.InvoiceEmail).HasMaxLength(256);
         builder.Property(r => r.UserId).IsRequired();
         builder.Property(r => r.Status)
             .IsRequired()
