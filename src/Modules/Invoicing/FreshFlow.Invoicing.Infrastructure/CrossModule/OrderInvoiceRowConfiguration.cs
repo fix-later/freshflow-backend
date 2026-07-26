@@ -13,6 +13,11 @@ internal sealed class OrderInvoiceRowConfiguration : IEntityTypeConfiguration<Or
         // Unit price is the price locked at confirm. VAT rate is read live from the product (null → KCT).
         // Column casing is mixed by table and verified against each *Configuration.cs — do not guess.
         builder.HasNoKey();
+        // LEFT JOIN on purpose: a delivered line must stay on the invoice even if its product /
+        // market_product was soft-deleted after delivery. Name/qty/price come from order_items;
+        // VatRateCode is null when the catalog row is gone → resolver defaults it to KCT (0%).
+        // ponytail: correct VAT for a later-deleted product needs VatRate snapshotted onto
+        // order_items at LockPrice (deferred to go-live), not this live read.
         builder.ToSqlQuery(
             """
             SELECT

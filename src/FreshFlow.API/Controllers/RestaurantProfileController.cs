@@ -4,6 +4,7 @@ using FreshFlow.Auth.Application.Commands.CreateLicenseUploadSignature;
 using FreshFlow.Auth.Application.Commands.DeliveryAddress.Add;
 using FreshFlow.Auth.Application.Commands.DeliveryAddress.Delete;
 using FreshFlow.Auth.Application.Commands.DeliveryAddress.Update;
+using FreshFlow.Auth.Application.Commands.UpdateMyTaxProfile;
 using FreshFlow.Auth.Application.Commands.UpdateRestaurantProfile;
 using FreshFlow.Auth.Application.Queries.GetDeliveryAddresses;
 using FreshFlow.Auth.Application.Queries.GetRestaurantApprovalStatus;
@@ -27,6 +28,23 @@ public sealed class RestaurantProfileController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(
             new GetRestaurantApprovalStatusQuery(ResolveUserId()), ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>PUT /api/v1/restaurants/me/tax-profile — updates the authenticated restaurant's invoice tax profile.</summary>
+    [HttpPut("me/tax-profile")]
+    public async Task<IActionResult> UpdateTaxProfileAsync(
+        [FromBody] UpdateTaxProfileRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new UpdateMyTaxProfileCommand(
+                ResolveUserId(),
+                body.TaxCode,
+                body.LegalName,
+                body.Address,
+                body.Email),
+            ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -158,6 +176,12 @@ public sealed record UpdateRestaurantProfileRequest(
     TimeOnly? PickupStart,
     TimeOnly? PickupEnd,
     string? BusinessLicenseUrl = null);
+
+public sealed record UpdateTaxProfileRequest(
+    string TaxCode,
+    string LegalName,
+    string? Address,
+    string? Email);
 
 public sealed record DeliveryAddressRequest(
     string AddressLine,

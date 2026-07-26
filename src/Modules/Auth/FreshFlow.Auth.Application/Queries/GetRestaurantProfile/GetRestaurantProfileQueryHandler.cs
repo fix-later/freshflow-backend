@@ -26,6 +26,10 @@ internal sealed class GetRestaurantProfileQueryHandler(IRestaurantRepository res
                 restaurant.PickupStart,
                 restaurant.PickupEnd,
                 restaurant.UpdatedAt,
-                restaurant.BusinessLicenseUrl));
+                restaurant.BusinessLicenseUrl,
+                restaurant.TaxCode,
+                restaurant.InvoiceLegalName,
+                restaurant.InvoiceAddress,
+                restaurant.InvoiceEmail));
     }
 }

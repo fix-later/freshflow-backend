@@ -1,0 +1,305 @@
+using FluentAssertions;
+using FreshFlow.Auth.Application.Abstractions;
+using FreshFlow.Auth.Domain.Aggregates;
+using FreshFlow.Auth.Domain.Entities;
+using FreshFlow.Catalog.Domain.Entities;
+using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.IntegrationTests.Infrastructure;
+using FreshFlow.Invoicing.Application.Abstractions;
+using FreshFlow.Invoicing.Domain.Entities;
+using FreshFlow.Invoicing.Domain.Enums;
+using FreshFlow.Orders.Domain.Entities;
+using FreshFlow.Orders.Domain.Enums;
+using FreshFlow.Pricing.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace FreshFlow.IntegrationTests.Invoicing;
+
+[Trait("Category", "Integration")]
+public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
+    : IClassFixture<AuthWebAppFactory>
+{
+    private const string FivePercentProduct = "Five-percent greens";
+    private const string KctProduct = "KCT fish";
+    private const string UnknownVatProduct = "Unknown-VAT herbs";
+    private const string DeletedProduct = "Deleted product";
+    private const string DeletedMarketProduct = "Deleted market product";
+
+    [Fact]
+    public async Task OrderInvoiceReader_ExecutesPostgresProjectionAsync()
+    {
+        var seed = await SeedAsync();
+        using var scope = factory.Services.CreateScope();
+        var reader = scope.ServiceProvider.GetRequiredService<IOrderInvoiceReader>();
+
+        var snapshot = await reader.GetByOrderIdAsync(seed.OrderId, default);
+
+        snapshot.Should().NotBeNull();
+        snapshot!.RestaurantId.Should().Be(seed.RestaurantId);
+        snapshot.Lines.Should().HaveCount(5);
+
+        var fivePercent = snapshot.Lines.Should().ContainSingle(line =>
+            line.ProductName == FivePercentProduct).Which;
+        fivePercent.Quantity.Should().Be(2.5m);
+        fivePercent.UnitPrice.Should().Be(12_000m);
+        fivePercent.VatRateCode.Should().Be("5");
+
+        var kct = snapshot.Lines.Should().ContainSingle(line => line.ProductName == KctProduct).Which;
+        kct.Quantity.Should().Be(2m);
+        kct.UnitPrice.Should().Be(20_000m);
+        kct.VatRateCode.Should().Be("KCT");
+
+        snapshot.Lines.Should().ContainSingle(line => line.ProductName == UnknownVatProduct)
+            .Which.VatRateCode.Should().BeNull();
+
+        var deletedProduct = snapshot.Lines.Should().ContainSingle(line =>
+            line.ProductName == DeletedProduct).Which;
+        deletedProduct.Quantity.Should().Be(1);
+        deletedProduct.UnitPrice.Should().Be(1_000m);
+        deletedProduct.VatRateCode.Should().BeNull();
+
+        var deletedMarketProduct = snapshot.Lines.Should().ContainSingle(line =>
+            line.ProductName == DeletedMarketProduct).Which;
+        deletedMarketProduct.Quantity.Should().Be(1);
+        deletedMarketProduct.UnitPrice.Should().Be(1_000m);
+        deletedMarketProduct.VatRateCode.Should().BeNull();
+
+        (await reader.GetByOrderIdAsync(seed.SoftDeletedOrderId, default)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RestaurantReader_ExecutesPostgresProjectionAsync()
+    {
+        var seed = await SeedAsync();
+        using var scope = factory.Services.CreateScope();
+        var reader = scope.ServiceProvider.GetRequiredService<IRestaurantReader>();
+
+        var profile = await reader.GetTaxProfileAsync(seed.RestaurantId, default);
+
+        profile.Should().NotBeNull();
+        profile!.TaxCode.Should().Be("0312345678");
+        profile.LegalName.Should().Be("FreshFlow Integration Co.");
+        profile.Address.Should().Be("123 Nguyễn Huệ, Quận 1, TP.HCM");
+        profile.Email.Should().Be("invoice@integration.freshflow");
+        (await reader.FindRestaurantIdByUserIdAsync(seed.UserId, default))
+            .Should().Be(seed.RestaurantId);
+        (await reader.FindRestaurantIdByUserIdAsync(seed.MissingProfileUserId, default))
+            .Should().Be(seed.MissingProfileRestaurantId);
+    }
+
+    [Fact]
+    public async Task IssueForDeliveredOrderAsync_PersistsOneIssuedInvoiceAsync()
+    {
+        var seed = await SeedAsync();
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IInvoiceIssuanceService>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        await service.IssueForDeliveredOrderAsync(seed.OrderId, default);
+        await service.IssueForDeliveredOrderAsync(seed.OrderId, default);
+
+        (await db.Set<Invoice>().CountAsync(invoice => invoice.OrderId == seed.OrderId))
+            .Should().Be(1);
+        var invoice = await db.Set<Invoice>()
+            .AsNoTracking()
+            .Include(value => value.Lines)
+            .SingleAsync(value => value.OrderId == seed.OrderId);
+        invoice.Status.Should().Be(InvoiceStatus.Issued);
+        invoice.TaxAuthorityCode.Should().NotBeNullOrWhiteSpace();
+        invoice.SubTotal.Should().Be(87_000m);
+        invoice.VatAmount.Should().Be(1_500m);
+        invoice.Total.Should().Be(88_500m);
+        invoice.Lines.Should().HaveCount(5);
+
+        var fivePercent = invoice.Lines.Should().ContainSingle(line =>
+            line.ProductName == FivePercentProduct).Which;
+        fivePercent.Quantity.Should().Be(2.5m);
+        fivePercent.UnitPrice.Should().Be(12_000m);
+        fivePercent.VatRateCode.Should().Be("5");
+        fivePercent.LineSubtotal.Should().Be(30_000m);
+        fivePercent.LineVatAmount.Should().Be(1_500m);
+        fivePercent.LineTotal.Should().Be(31_500m);
+        invoice.Lines.Should().ContainSingle(line =>
+            line.ProductName == KctProduct && line.VatRateCode == "KCT");
+        invoice.Lines.Should().ContainSingle(line =>
+            line.ProductName == UnknownVatProduct && line.VatRateCode == "KCT");
+        invoice.Lines.Should().ContainSingle(line =>
+            line.ProductName == DeletedProduct &&
+            line.VatRateCode == "KCT" &&
+            line.LineSubtotal == 1_000m &&
+            line.LineVatAmount == 0 &&
+            line.LineTotal == 1_000m);
+        invoice.Lines.Should().ContainSingle(line =>
+            line.ProductName == DeletedMarketProduct &&
+            line.VatRateCode == "KCT" &&
+            line.LineSubtotal == 1_000m &&
+            line.LineVatAmount == 0 &&
+            line.LineTotal == 1_000m);
+    }
+
+    [Fact]
+    public async Task IssueForDeliveredOrderAsync_MissingBuyerPersistsPendingInvoiceAsync()
+    {
+        var seed = await SeedAsync();
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IInvoiceIssuanceService>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        await service.IssueForDeliveredOrderAsync(seed.MissingProfileOrderId, default);
+
+        var invoice = await db.Set<Invoice>()
+            .AsNoTracking()
+            .SingleAsync(value => value.OrderId == seed.MissingProfileOrderId);
+        invoice.Status.Should().Be(InvoiceStatus.PendingIssuance);
+        invoice.RetryCount.Should().Be(0);
+        invoice.TaxAuthorityCode.Should().BeNull();
+    }
+
+    private async Task<SeedData> SeedAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var restaurants = scope.ServiceProvider.GetRequiredService<IRestaurantRepository>();
+        var role = await db.Set<Role>().SingleAsync(value => value.Name == "restaurant");
+        var suffix = Guid.NewGuid().ToString("N");
+        var user = User.Create($"invoice-{suffix}@test.freshflow", "test-hash", role);
+        var missingProfileUser = User.Create($"invoice-missing-{suffix}@test.freshflow", "test-hash", role);
+        user.ClearDomainEvents();
+        missingProfileUser.ClearDomainEvents();
+        db.Set<User>().AddRange(user, missingProfileUser);
+        await db.SaveChangesAsync();
+
+        var restaurantId = await restaurants.CreateAsync(user.Id, "Invoice Restaurant", default);
+        var missingProfileRestaurantId = await restaurants.CreateAsync(
+            missingProfileUser.Id, "Missing Profile Restaurant", default);
+        await restaurants.UpdateTaxProfileAsync(
+            restaurantId,
+            "0312345678",
+            "FreshFlow Integration Co.",
+            "123 Nguyễn Huệ, Quận 1, TP.HCM",
+            "invoice@integration.freshflow",
+            default);
+
+        var unit = new UnitOfMeasurement($"kg-{suffix}", "kg");
+        var market = new Market($"Invoice Market {suffix}", "HCMC", "1 Test Street", null, null);
+        db.Set<UnitOfMeasurement>().Add(unit);
+        db.Set<Market>().Add(market);
+        await db.SaveChangesAsync();
+
+        var fivePercentProduct = new Product(
+            FivePercentProduct, unit.Id, null, null, null, vatRate: "5");
+        var kctProduct = new Product(KctProduct, unit.Id, null, null, null, vatRate: "KCT");
+        var unknownVatProduct = new Product(UnknownVatProduct, unit.Id, null, null, null);
+        var deletedProduct = new Product(DeletedProduct, unit.Id, null, null, null, vatRate: "8");
+        var deletedMarketProductSource = new Product(
+            DeletedMarketProduct, unit.Id, null, null, null, vatRate: "10");
+        deletedProduct.Delete();
+        db.Set<Product>().AddRange(
+            fivePercentProduct,
+            kctProduct,
+            unknownVatProduct,
+            deletedProduct,
+            deletedMarketProductSource);
+        await db.SaveChangesAsync();
+
+        var fivePercentMarketProduct = new MarketProduct(
+            market.Id, fivePercentProduct.Id, 10_000m, 100, null);
+        var kctMarketProduct = new MarketProduct(market.Id, kctProduct.Id, 20_000m, 100, null);
+        var unknownVatMarketProduct = new MarketProduct(
+            market.Id, unknownVatProduct.Id, 15_000m, 100, null);
+        var deletedProductMarketProduct = new MarketProduct(
+            market.Id, deletedProduct.Id, 1_000m, 100, null);
+        var deletedMarketProduct = new MarketProduct(
+            market.Id, deletedMarketProductSource.Id, 1_000m, 100, null);
+        db.Set<MarketProduct>().AddRange(
+            fivePercentMarketProduct,
+            kctMarketProduct,
+            unknownVatMarketProduct,
+            deletedProductMarketProduct,
+            deletedMarketProduct);
+        db.Entry(deletedMarketProduct).Property(nameof(MarketProduct.DeletedAt)).CurrentValue = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        var order = CreateDeliveredOrder(
+            restaurantId,
+            fivePercentMarketProduct.Id,
+            kctMarketProduct.Id,
+            unknownVatMarketProduct.Id,
+            deletedProductMarketProduct.Id,
+            deletedMarketProduct.Id);
+        var missingProfileOrder = CreateDeliveredOrder(
+            missingProfileRestaurantId,
+            fivePercentMarketProduct.Id,
+            kctMarketProduct.Id,
+            unknownVatMarketProduct.Id,
+            deletedProductMarketProduct.Id,
+            deletedMarketProduct.Id);
+        var softDeletedOrder = CreateDeliveredOrder(
+            restaurantId,
+            fivePercentMarketProduct.Id,
+            kctMarketProduct.Id,
+            unknownVatMarketProduct.Id,
+            deletedProductMarketProduct.Id,
+            deletedMarketProduct.Id);
+        db.Set<Order>().AddRange(order, missingProfileOrder, softDeletedOrder);
+        db.Entry(softDeletedOrder).Property(nameof(Order.DeletedAt)).CurrentValue = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return new SeedData(
+            user.Id,
+            restaurantId,
+            missingProfileUser.Id,
+            missingProfileRestaurantId,
+            order.Id,
+            missingProfileOrder.Id,
+            softDeletedOrder.Id);
+    }
+
+    private static Order CreateDeliveredOrder(
+        Guid restaurantId,
+        Guid fivePercentMarketProductId,
+        Guid kctMarketProductId,
+        Guid unknownVatMarketProductId,
+        Guid deletedProductMarketProductId,
+        Guid deletedMarketProductId)
+    {
+        var order = new Order(restaurantId, null, null);
+        order.AddItem(fivePercentMarketProductId, FivePercentProduct, 3, 10_000m)
+            .IsSuccess.Should().BeTrue();
+        order.AddItem(kctMarketProductId, KctProduct, 2, 20_000m)
+            .IsSuccess.Should().BeTrue();
+        order.AddItem(unknownVatMarketProductId, UnknownVatProduct, 1, 15_000m)
+            .IsSuccess.Should().BeTrue();
+        order.AddItem(deletedProductMarketProductId, DeletedProduct, 1, 1_000m)
+            .IsSuccess.Should().BeTrue();
+        order.AddItem(deletedMarketProductId, DeletedMarketProduct, 1, 1_000m)
+            .IsSuccess.Should().BeTrue();
+        order.Confirm().IsSuccess.Should().BeTrue();
+
+        var fivePercentLine = order.Items.Single(item => item.ProductNameSnapshot == FivePercentProduct);
+        fivePercentLine.LockPrice(12_000m);
+        order.RecordActualQuantity(fivePercentLine.Id, 2.5m).IsSuccess.Should().BeTrue();
+        foreach (var status in new[]
+                 {
+                     OrderStatus.Batched,
+                     OrderStatus.PickedUp,
+                     OrderStatus.AtHub,
+                     OrderStatus.Delivering,
+                     OrderStatus.Delivered
+                 })
+            order.AdvanceStatus(status).IsSuccess.Should().BeTrue();
+
+        order.ClearDomainEvents();
+        return order;
+    }
+
+    private sealed record SeedData(
+        Guid UserId,
+        Guid RestaurantId,
+        Guid MissingProfileUserId,
+        Guid MissingProfileRestaurantId,
+        Guid OrderId,
+        Guid MissingProfileOrderId,
+        Guid SoftDeletedOrderId);
+}

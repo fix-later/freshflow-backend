@@ -18,6 +18,13 @@ public interface IRestaurantRepository
         TimeOnly? pickupEnd,
         string? businessLicenseUrl,
         CancellationToken ct);
+    public Task<RestaurantDto?> UpdateTaxProfileAsync(
+        Guid restaurantId,
+        string taxCode,
+        string legalName,
+        string? address,
+        string? email,
+        CancellationToken ct);
 }
 
 public sealed record RestaurantDto(
@@ -30,7 +37,11 @@ public sealed record RestaurantDto(
     string? ContactPerson = null,
     TimeOnly? PickupStart = null,
     TimeOnly? PickupEnd = null,
-    string? BusinessLicenseUrl = null)
+    string? BusinessLicenseUrl = null,
+    string? TaxCode = null,
+    string? InvoiceLegalName = null,
+    string? InvoiceAddress = null,
+    string? InvoiceEmail = null)
 {
     /// <summary>
     /// Backward-compatible convenience property.

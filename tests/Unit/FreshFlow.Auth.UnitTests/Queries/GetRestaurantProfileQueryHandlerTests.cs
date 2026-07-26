@@ -26,7 +26,11 @@ public sealed class GetRestaurantProfileQueryHandlerTests
             ContactPerson: "Jane Doe",
             PickupStart: new TimeOnly(8, 0),
             PickupEnd: new TimeOnly(20, 0),
-            BusinessLicenseUrl: "https://res.cloudinary.com/demo/image/upload/v1/freshflow/licenses/abc.jpg");
+            BusinessLicenseUrl: "https://res.cloudinary.com/demo/image/upload/v1/freshflow/licenses/abc.jpg",
+            TaxCode: "0312345678",
+            InvoiceLegalName: "Test Restaurant Co.",
+            InvoiceAddress: "456 Invoice Street",
+            InvoiceEmail: "invoice@test.freshflow");
 
     // ── NotFound ──────────────────────────────────────────────────────────────
 
@@ -83,6 +87,10 @@ public sealed class GetRestaurantProfileQueryHandlerTests
         response.PickupEnd.Should().Be(dto.PickupEnd);
         response.UpdatedAt.Should().Be(dto.UpdatedAt);
         response.BusinessLicenseUrl.Should().Be(dto.BusinessLicenseUrl);
+        response.TaxCode.Should().Be(dto.TaxCode);
+        response.InvoiceLegalName.Should().Be(dto.InvoiceLegalName);
+        response.InvoiceAddress.Should().Be(dto.InvoiceAddress);
+        response.InvoiceEmail.Should().Be(dto.InvoiceEmail);
     }
 
     [Fact]
@@ -107,5 +115,9 @@ public sealed class GetRestaurantProfileQueryHandlerTests
         response.PickupStart.Should().BeNull();
         response.PickupEnd.Should().BeNull();
         response.BusinessLicenseUrl.Should().BeNull();
+        response.TaxCode.Should().BeNull();
+        response.InvoiceLegalName.Should().BeNull();
+        response.InvoiceAddress.Should().BeNull();
+        response.InvoiceEmail.Should().BeNull();
     }
 }
