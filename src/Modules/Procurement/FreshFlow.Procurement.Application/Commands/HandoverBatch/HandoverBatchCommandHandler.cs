@@ -8,6 +8,7 @@ namespace FreshFlow.Procurement.Application.Commands.HandoverBatch;
 internal sealed class HandoverBatchCommandHandler(
     IProcurementBatchRepository batches,
     IConfirmedOrderReader orders,
+    IHubByMarketReader hubs,
     TimeProvider timeProvider)
     : IRequestHandler<HandoverBatchCommand, Result<ProcurementBatchDto>>
 {
@@ -22,9 +23,21 @@ internal sealed class HandoverBatchCommandHandler(
                 Error.NotFound("PROCUREMENT_BATCH", request.BatchId));
         }
 
-        var handover = batch.HandoverToHub(
-            request.HubId,
-            timeProvider.GetUtcNow().UtcDateTime);
+        if (batch.HubId is null)
+        {
+            return Result<ProcurementBatchDto>.Failure(Error.Validation(
+                "HUB_NOT_CONFIGURED_FOR_MARKET",
+                $"Procurement batch '{batch.Id}' has no resolved hub."));
+        }
+
+        if (!await hubs.IsActiveAsync(batch.HubId.Value, cancellationToken))
+        {
+            return Result<ProcurementBatchDto>.Failure(Error.Validation(
+                "HUB_INACTIVE",
+                $"Hub '{batch.HubId}' is inactive."));
+        }
+
+        var handover = batch.HandoverToHub(timeProvider.GetUtcNow().UtcDateTime);
         if (handover.IsFailure)
             return Result<ProcurementBatchDto>.Failure(handover.Error);
 

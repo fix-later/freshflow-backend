@@ -30,6 +30,12 @@ internal sealed class InMemoryHubRepository : IHubRepository
     public Task<HubEntity?> FindByIdAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_hubs.FirstOrDefault(h => h.Id == id));
 
+    public Task<bool> HasActiveForMarketAsync(Guid marketId, CancellationToken ct) =>
+        Task.FromResult(_hubs.Any(h =>
+            h.MarketId == marketId &&
+            h.IsActive &&
+            h.DeletedAt == null));
+
     public Task<bool> HasPendingInboundAsync(Guid hubId, CancellationToken ct) =>
         Task.FromResult(HasPendingInboundResult);
 

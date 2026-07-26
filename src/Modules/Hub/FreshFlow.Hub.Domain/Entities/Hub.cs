@@ -5,6 +5,8 @@ public sealed class Hub
     private Hub() { } // EF Core
 
     public Guid Id { get; private set; }
+    // ponytail: nullable only while existing hubs are backfilled; make required in the follow-up migration.
+    public Guid? MarketId { get; private set; }
     public string Name { get; private set; } = string.Empty;
     public string? Address { get; private set; }
     public decimal? Latitude { get; private set; }
@@ -25,14 +27,18 @@ public sealed class Hub
         decimal? latitude,
         decimal? longitude,
         decimal capacityKg,
-        Guid? managedBy)
+        Guid? managedBy,
+        Guid marketId)
     {
         Validate(name, latitude, longitude, capacityKg);
+        if (marketId == Guid.Empty)
+            throw new ArgumentException("Market ID cannot be empty.", nameof(marketId));
 
         var now = DateTime.UtcNow;
         return new Hub
         {
             Id = Guid.NewGuid(),
+            MarketId = marketId,
             Name = name.Trim(),
             Address = NormalizeOptional(address),
             Latitude = latitude,
@@ -44,6 +50,21 @@ public sealed class Hub
             CreatedAt = now,
             UpdatedAt = now
         };
+    }
+
+    // ponytail: internal overload is only for legacy test fixtures during the nullable-column rollout.
+    internal static Hub Create(
+        string name,
+        string? address,
+        decimal? latitude,
+        decimal? longitude,
+        decimal capacityKg,
+        Guid? managedBy)
+    {
+        var hub = Create(
+            name, address, latitude, longitude, capacityKg, managedBy, Guid.NewGuid());
+        hub.MarketId = null;
+        return hub;
     }
 
     public void Update(

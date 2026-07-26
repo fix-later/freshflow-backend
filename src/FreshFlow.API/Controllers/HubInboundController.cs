@@ -6,6 +6,7 @@ using FreshFlow.Hub.Application.Commands.RecordDiscrepancy;
 using FreshFlow.Hub.Application.Commands.RecordInbound;
 using FreshFlow.Hub.Application.Commands.RecordOutbound;
 using FreshFlow.Hub.Application.Commands.ScanInbound;
+using FreshFlow.Hub.Application.Queries.GetHubProcurementPlan;
 using FreshFlow.Hub.Application.Queries.GetPendingInbound;
 using FreshFlow.Hub.Application.Queries.ListCrossDock;
 using FreshFlow.Hub.Application.Queries.ListDiscrepancies;
@@ -76,6 +77,22 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         return result.IsSuccess
             ? Ok(ApiResponse.OkPaged(result.Value.Items, result.Value.PageSize, result.Value.NextCursor))
             : result.Error.ToActionResult();
+    }
+
+    [HttpGet("{hubId:guid}/procurement-plan")]
+    public async Task<IActionResult> GetProcurementPlanAsync(
+        Guid hubId,
+        [FromQuery] DateOnly date,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new GetHubProcurementPlanQuery(
+                hubId,
+                date,
+                ResolveUserId(),
+                BypassHubAssignment()),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     [HttpGet("{hubId:guid}/inbound")]

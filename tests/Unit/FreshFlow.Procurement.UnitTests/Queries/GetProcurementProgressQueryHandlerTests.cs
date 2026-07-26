@@ -206,7 +206,7 @@ public sealed class GetProcurementProgressQueryHandlerTests
                 (secondProductId, "Potato", 3, Guid.NewGuid())
             }
             : [(firstProductId, "Tomato", 2, Guid.NewGuid())];
-        var batch = ProcurementBatch.Build(CycleDate, Guid.NewGuid(), lines).Value;
+        var batch = ProcurementBatch.Build(CycleDate, Guid.NewGuid(), lines, Guid.NewGuid()).Value;
 
         if (targetStatus == ProcurementBatchStatus.Built)
             return batch;
@@ -238,7 +238,7 @@ public sealed class GetProcurementProgressQueryHandlerTests
         if (targetStatus == ProcurementBatchStatus.Purchasing)
             return batch;
 
-        batch.HandoverToHub(Guid.NewGuid(), CapturedAt.AddMinutes(3));
+        batch.HandoverToHub(CapturedAt.AddMinutes(3));
         return batch;
     }
 }

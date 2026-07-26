@@ -139,8 +139,10 @@ public sealed class HubStaffAssignmentEndpointTests(AuthWebAppFactory factory)
 
     private async Task<Guid> CreateHubAsync(string suffix)
     {
+        var marketId = await CreateMarketAsync(suffix);
         var response = await _client.PostAsJsonAsync("/api/v1/hubs", new
         {
+            marketId,
             name = $"Integration Hub {suffix} {Guid.NewGuid():N}",
             address = $"Zone {suffix}",
             latitude = (decimal?)null,
@@ -151,6 +153,21 @@ public sealed class HubStaffAssignmentEndpointTests(AuthWebAppFactory factory)
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<Envelope<HubBody>>();
         return body!.Data!.HubId;
+    }
+
+    private async Task<Guid> CreateMarketAsync(string suffix)
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/markets", new
+        {
+            name = $"Integration Market {suffix} {Guid.NewGuid():N}",
+            location = $"Zone {suffix}",
+            address = $"Market {suffix}",
+            latitude = (decimal?)null,
+            longitude = (decimal?)null
+        });
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<Envelope<IdBody>>();
+        return body!.Data!.Id;
     }
 
     private async Task ReplaceAsync(Guid hubId, IReadOnlyList<Guid> userIds)
@@ -202,6 +219,7 @@ public sealed class HubStaffAssignmentEndpointTests(AuthWebAppFactory factory)
 
     private sealed record TestStaff(Guid Id, string Email, string Password);
     private sealed record CreateUserBody(Guid Id);
+    private sealed record IdBody(Guid Id);
     private sealed record AssignmentsBody(Guid HubId, IReadOnlyList<Guid> StaffUserIds);
     private sealed record HubBody(Guid HubId, string Name, bool IsActive);
 }

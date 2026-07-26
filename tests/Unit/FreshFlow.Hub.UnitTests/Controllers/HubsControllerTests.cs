@@ -31,19 +31,21 @@ public sealed class HubsControllerTests
     public async Task CreateHubAsync_Success_SendsCommandAndReturnsCreatedAsync()
     {
         var sender = Substitute.For<ISender>();
+        var marketId = Guid.NewGuid();
         var managedBy = Guid.NewGuid();
-        var dto = CreateDto(managedBy: managedBy);
+        var dto = CreateDto(marketId: marketId, managedBy: managedBy);
         sender.Send(Arg.Any<CreateHubCommand>(), Arg.Any<CancellationToken>())
             .Returns(Result<HubDto>.Success(dto));
         var controller = new HubsController(sender);
 
         var result = await controller.CreateHubAsync(
-            new CreateHubRequest("Main Hub", "123 Road", 10m, 106m, 1000, managedBy),
+            new CreateHubRequest(marketId, "Main Hub", "123 Road", 10m, 106m, 1000, managedBy),
             default);
 
         result.Should().BeOfType<CreatedAtActionResult>();
         await sender.Received(1).Send(
             Arg.Is<CreateHubCommand>(command =>
+                command.MarketId == marketId &&
                 command.Name == "Main Hub" &&
                 command.Address == "123 Road" &&
                 command.Latitude == 10m &&
@@ -133,9 +135,13 @@ public sealed class HubsControllerTests
             Arg.Any<CancellationToken>());
     }
 
-    private static HubDto CreateDto(Guid? id = null, Guid? managedBy = null) =>
+    private static HubDto CreateDto(
+        Guid? id = null,
+        Guid? marketId = null,
+        Guid? managedBy = null) =>
         new(
             id ?? Guid.NewGuid(),
+            marketId ?? Guid.NewGuid(),
             "Main Hub",
             "123 Road",
             10m,

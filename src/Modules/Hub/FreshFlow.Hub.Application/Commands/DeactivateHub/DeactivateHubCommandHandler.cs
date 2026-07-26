@@ -6,7 +6,9 @@ using MediatR;
 
 namespace FreshFlow.Hub.Application.Commands.DeactivateHub;
 
-internal sealed class DeactivateHubCommandHandler(IHubRepository hubs)
+internal sealed class DeactivateHubCommandHandler(
+    IHubRepository hubs,
+    IHubProcurementPlanReader procurement)
     : IRequestHandler<DeactivateHubCommand, Result<HubDto>>
 {
     public async Task<Result<HubDto>> Handle(DeactivateHubCommand request, CancellationToken ct)
@@ -21,6 +23,16 @@ internal sealed class DeactivateHubCommandHandler(IHubRepository hubs)
                 Error.Validation(
                     "HUB_HAS_PENDING_DELIVERIES",
                     "Hub cannot be deactivated while it has pending inbound deliveries."));
+        }
+
+        if (await procurement.HasOpenBatchesAsync(request.HubId, ct))
+        {
+            return Result<HubDto>.Failure(
+                Error.Conflict(
+                    "HUB_HAS_ACTIVE_PROCUREMENT",
+                    // ponytail: pause batching for Hub routing changes; add a shared DB row lock
+                    // if admin deactivation and batching must run concurrently.
+                    "Hub cannot be deactivated while it has active procurement batches."));
         }
 
         hub.Deactivate();

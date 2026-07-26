@@ -430,12 +430,12 @@ public sealed class ProcurementBatchTests
     public void HandoverToHub_PurchasingBatch_SetsTraceabilityAndRaisesEvent()
     {
         var batch = BuildPurchasingBatch(Guid.NewGuid(), Guid.NewGuid());
-        var hubId = Guid.NewGuid();
+        var hubId = batch.HubId;
         var handedOffAt = new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc);
         var coveredOrderIds = batch.Orders.Select(order => order.OrderId).ToArray();
         batch.ClearDomainEvents();
 
-        var result = batch.HandoverToHub(hubId, handedOffAt);
+        var result = batch.HandoverToHub(handedOffAt);
 
         result.IsSuccess.Should().BeTrue();
         batch.Status.Should().Be(ProcurementBatchStatus.HandedOff);
@@ -462,13 +462,13 @@ public sealed class ProcurementBatchTests
             : BuildManifestedBatch(productId);
         batch.ClearDomainEvents();
 
-        var result = batch.HandoverToHub(Guid.NewGuid(), DateTime.UtcNow);
+        var result = batch.HandoverToHub(DateTime.UtcNow);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("BATCH_NOT_PURCHASED");
         batch.Status.Should().Be(status);
         batch.HandedOffAt.Should().BeNull();
-        batch.HubId.Should().BeNull();
+        batch.HubId.Should().NotBeNull();
         batch.DomainEvents.Should().BeEmpty();
     }
 
@@ -476,12 +476,12 @@ public sealed class ProcurementBatchTests
     public void HandoverToHub_HandedOffBatch_ReturnsConflict()
     {
         var batch = BuildPurchasingBatch(Guid.NewGuid());
-        var firstHubId = Guid.NewGuid();
+        var firstHubId = batch.HubId;
         var firstHandover = new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc);
-        batch.HandoverToHub(firstHubId, firstHandover);
+        batch.HandoverToHub(firstHandover);
         batch.ClearDomainEvents();
 
-        var result = batch.HandoverToHub(Guid.NewGuid(), firstHandover.AddMinutes(5));
+        var result = batch.HandoverToHub(firstHandover.AddMinutes(5));
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("BATCH_ALREADY_HANDED_OFF");
@@ -540,7 +540,7 @@ public sealed class ProcurementBatchTests
     public void Cancel_HandedOffBatch_ReturnsConflict()
     {
         var batch = BuildPurchasingBatch(Guid.NewGuid());
-        batch.HandoverToHub(Guid.NewGuid(), new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc));
+        batch.HandoverToHub(new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc));
         batch.ClearDomainEvents();
 
         var result = batch.Cancel("Too late", DateTime.UtcNow);
@@ -618,6 +618,7 @@ public sealed class ProcurementBatchTests
             new DateOnly(2026, 7, 15),
             Guid.NewGuid(),
             marketProductIds.Select(id =>
-                (id, $"Product {id}", 2, Guid.NewGuid())))
+                (id, $"Product {id}", 2, Guid.NewGuid())),
+            Guid.NewGuid())
         .Value;
 }

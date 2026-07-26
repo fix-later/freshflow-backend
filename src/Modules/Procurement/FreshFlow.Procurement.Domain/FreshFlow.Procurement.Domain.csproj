@@ -10,5 +10,10 @@
     <ProjectReference Include="..\..\..\Shared\FreshFlow.SharedKernel\FreshFlow.SharedKernel.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="FreshFlow.Procurement.UnitTests" />
+    <InternalsVisibleTo Include="FreshFlow.IntegrationTests" />
+  </ItemGroup>
+
 </Project>
 

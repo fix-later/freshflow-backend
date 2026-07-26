@@ -85,5 +85,9 @@ internal sealed class ProcurementBatchConfiguration : IEntityTypeConfiguration<P
 
         builder.HasIndex(batch => new { batch.BatchDate, batch.MarketId })
             .HasDatabaseName("idx_procurement_batches_batch_date_market_id");
+
+        builder.HasIndex(batch => new { batch.HubId, batch.BatchDate })
+            .HasFilter("\"deleted_at\" IS NULL")
+            .HasDatabaseName("idx_procurement_batches_hub_date");
     }
 }

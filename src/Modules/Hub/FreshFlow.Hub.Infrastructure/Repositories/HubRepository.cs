@@ -20,6 +20,15 @@ internal sealed class HubRepository(AppDbContext db) : IHubRepository
     public Task<HubEntity?> FindByIdAsync(Guid id, CancellationToken ct) =>
         db.Set<HubEntity>().FirstOrDefaultAsync(h => h.Id == id, ct);
 
+    public Task<bool> HasActiveForMarketAsync(Guid marketId, CancellationToken ct) =>
+        db.Set<HubEntity>()
+            .AsNoTracking()
+            .AnyAsync(h =>
+                h.MarketId == marketId &&
+                h.IsActive &&
+                h.DeletedAt == null,
+                ct);
+
     public Task<bool> HasPendingInboundAsync(Guid hubId, CancellationToken ct) =>
         db.Set<HubInboundEvent>()
             .AsNoTracking()

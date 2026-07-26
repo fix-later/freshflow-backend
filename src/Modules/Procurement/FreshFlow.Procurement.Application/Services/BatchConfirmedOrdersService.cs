@@ -8,6 +8,7 @@ namespace FreshFlow.Procurement.Application.Services;
 public sealed class BatchConfirmedOrdersService(
     IConfirmedOrderReader orders,
     IMarketProductMarketReader marketProducts,
+    IHubByMarketReader hubsByMarket,
     IOperationalSettingsReader settings,
     IProcurementBatchRepository batches) : IProcurementBatchingService
 {
@@ -57,6 +58,16 @@ public sealed class BatchConfirmedOrdersService(
                 "Eligible orders must contain at least one item."));
         }
 
+        var marketIds = lines.Select(line => line.MarketId).Distinct().ToArray();
+        var hubs = await hubsByMarket.ReadActiveHubsAsync(marketIds, ct);
+        var marketWithoutHub = marketIds.FirstOrDefault(marketId => !hubs.ContainsKey(marketId));
+        if (marketWithoutHub != Guid.Empty)
+        {
+            return Result<BatchingResult>.Failure(Error.Validation(
+                "HUB_NOT_CONFIGURED_FOR_MARKET",
+                $"Market '{marketWithoutHub}' has no active hub."));
+        }
+
         var builtBatches = new List<ProcurementBatch>();
         foreach (var marketGroup in lines.GroupBy(line => line.MarketId))
         {
@@ -67,7 +78,8 @@ public sealed class BatchConfirmedOrdersService(
                     line.MarketProductId,
                     line.ProductNameSnapshot,
                     line.Quantity,
-                    line.OrderId)));
+                    line.OrderId)),
+                hubs[marketGroup.Key]);
 
             if (build.IsFailure)
                 return Result<BatchingResult>.Failure(build.Error);

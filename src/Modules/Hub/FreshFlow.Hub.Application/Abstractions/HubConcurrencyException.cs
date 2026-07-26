@@ -7,3 +7,11 @@ public sealed class HubConcurrencyException : Exception
     {
     }
 }
+
+public sealed class HubMarketConflictException : Exception
+{
+    public HubMarketConflictException(Exception inner)
+        : base("The market already has an active hub.", inner)
+    {
+    }
+}
