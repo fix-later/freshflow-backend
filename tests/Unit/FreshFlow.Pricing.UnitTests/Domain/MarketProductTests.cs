@@ -423,6 +423,17 @@ public sealed class MarketProductTests
         mp.DomainEvents.Should().BeEmpty();
     }
 
+    [Fact]
+    public void Delete_SoftDeletesListing()
+    {
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 50, ActorId);
+
+        mp.Delete();
+
+        mp.IsDeleted.Should().BeTrue();
+        mp.DeletedAt.Should().NotBeNull();
+    }
+
     // ── DomainEvents ─────────────────────────────────────────────────────────
 
     [Fact]
