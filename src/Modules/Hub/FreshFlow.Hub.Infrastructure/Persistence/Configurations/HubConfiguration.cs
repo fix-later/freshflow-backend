@@ -19,6 +19,9 @@ internal sealed class HubConfiguration : IEntityTypeConfiguration<HubEntity>
             .HasColumnName("id")
             .IsRequired();
 
+        builder.Property(h => h.MarketId)
+            .HasColumnName("market_id");
+
         builder.Property(h => h.Name)
             .HasColumnName("name")
             .HasMaxLength(200)
@@ -71,6 +74,11 @@ internal sealed class HubConfiguration : IEntityTypeConfiguration<HubEntity>
 
         builder.HasIndex(h => h.IsActive)
             .HasDatabaseName("idx_hubs_is_active");
+
+        builder.HasIndex(h => h.MarketId)
+            .IsUnique()
+            .HasFilter("\"deleted_at\" IS NULL AND \"is_active\" = TRUE AND \"market_id\" IS NOT NULL")
+            .HasDatabaseName("ux_hubs_active_market");
 
         builder.HasIndex(h => h.ManagedBy)
             .HasDatabaseName("idx_hubs_managed_by");

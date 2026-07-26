@@ -14,7 +14,8 @@ public sealed class Product : AggregateRoot
         Guid? createdBy,
         string? legacyCategory = null,
         string? legacyUnit = null,
-        Guid? packingCodeId = null)
+        Guid? packingCodeId = null,
+        string? vatRate = null)
     {
         Name = name;
         UnitId = unitId;
@@ -24,6 +25,7 @@ public sealed class Product : AggregateRoot
         LegacyCategory = legacyCategory;
         LegacyUnit = legacyUnit;
         PackingCodeId = packingCodeId;
+        VatRate = vatRate;
     }
 
     public string Name { get; private set; } = string.Empty;
@@ -50,6 +52,12 @@ public sealed class Product : AggregateRoot
 
     public string? ImageUrl { get; private set; }
 
+    /// <summary>
+    /// VAT rate code for invoicing: "KCT" (không chịu thuế), "0", "5", "8" or "10". Null = not
+    /// configured (Invoicing treats null as KCT for v1). Fresh food is not uniformly 10%.
+    /// </summary>
+    public string? VatRate { get; private set; }
+
     public void Update(
         string name,
         Guid? categoryId,
@@ -58,7 +66,8 @@ public sealed class Product : AggregateRoot
         string? legacyCategory = null,
         string? legacyUnit = null,
         string? imageUrl = null,
-        Guid? packingCodeId = null)
+        Guid? packingCodeId = null,
+        string? vatRate = null)
     {
         Name = name;
         CategoryId = categoryId;
@@ -69,6 +78,8 @@ public sealed class Product : AggregateRoot
         PackingCodeId = packingCodeId;
         if (imageUrl is not null)
             ImageUrl = imageUrl;
+        if (vatRate is not null)
+            VatRate = vatRate;
         UpdatedAt = DateTime.UtcNow;
     }
 

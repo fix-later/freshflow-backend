@@ -62,14 +62,13 @@ public sealed class ProcurementController(ISender sender) : ControllerBase
     [HttpPatch("tasks/{batchId:guid}/handover")]
     public async Task<IActionResult> HandoverAsync(
         Guid batchId,
-        [FromBody] HandoverRequest body,
         CancellationToken ct)
     {
         if (!TryResolveUserId(out var agentUserId))
             return Unauthorized();
 
         var result = await sender.Send(
-            new HandoverBatchCommand(batchId, agentUserId, body.HubId),
+            new HandoverBatchCommand(batchId, agentUserId),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -128,5 +127,3 @@ public sealed record ReportProcurementExceptionRequest(
     int ReportedQuantity,
     string? Note,
     string? ProofImageUrl);
-
-public sealed record HandoverRequest(Guid? HubId);

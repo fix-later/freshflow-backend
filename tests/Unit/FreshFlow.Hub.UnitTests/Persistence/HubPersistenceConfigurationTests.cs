@@ -41,6 +41,9 @@ public sealed class HubPersistenceConfigurationTests
         entity.FindProperty(nameof(HubEntity.Id))!
             .GetColumnName(table)
             .Should().Be("id");
+        entity.FindProperty(nameof(HubEntity.MarketId))!
+            .GetColumnName(table)
+            .Should().Be("market_id");
         entity.FindProperty(nameof(HubEntity.Name))!
             .GetColumnName(table)
             .Should().Be("name");
@@ -82,6 +85,8 @@ public sealed class HubPersistenceConfigurationTests
 
         entity.GetIndexes().Should().Contain(i =>
             i.GetDatabaseName() == "idx_hubs_is_active");
+        entity.GetIndexes().Should().Contain(i =>
+            i.GetDatabaseName() == "ux_hubs_active_market" && i.IsUnique);
         entity.GetIndexes().Should().Contain(i =>
             i.GetDatabaseName() == "idx_hubs_managed_by");
         entity.GetIndexes().Should().Contain(i =>

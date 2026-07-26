@@ -22,6 +22,7 @@ public sealed class HubsController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(
             new CreateHubCommand(
+                body.MarketId,
                 body.Name,
                 body.Address,
                 body.Latitude,
@@ -84,6 +85,7 @@ public sealed class HubsController(ISender sender) : ControllerBase
 }
 
 public sealed record CreateHubRequest(
+    Guid MarketId,
     string Name,
     string? Address,
     decimal? Latitude,

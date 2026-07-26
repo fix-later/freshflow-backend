@@ -18,7 +18,8 @@ public sealed class HubCommandValidatorTests
     {
         var sut = new CreateHubCommandValidator();
 
-        var result = sut.Validate(new CreateHubCommand("Main Hub", null, 10m, 106m, 1000, null));
+        var result = sut.Validate(new CreateHubCommand(
+            Guid.NewGuid(), "Main Hub", null, 10m, 106m, 1000, null));
 
         result.IsValid.Should().BeTrue();
     }
@@ -30,7 +31,8 @@ public sealed class HubCommandValidatorTests
     {
         var sut = new CreateHubCommandValidator();
 
-        var result = sut.Validate(new CreateHubCommand(name, null, null, null, 1000, null));
+        var result = sut.Validate(new CreateHubCommand(
+            Guid.NewGuid(), name, null, null, null, 1000, null));
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateHubCommand.Name));
@@ -43,7 +45,8 @@ public sealed class HubCommandValidatorTests
     {
         var sut = new CreateHubCommandValidator();
 
-        var result = sut.Validate(new CreateHubCommand("Main Hub", null, null, null, capacityKg, null));
+        var result = sut.Validate(new CreateHubCommand(
+            Guid.NewGuid(), "Main Hub", null, null, null, capacityKg, null));
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateHubCommand.CapacityKg));
@@ -56,7 +59,8 @@ public sealed class HubCommandValidatorTests
     {
         var sut = new CreateHubCommandValidator();
 
-        var result = sut.Validate(new CreateHubCommand("Main Hub", null, latitude, null, 1000, null));
+        var result = sut.Validate(new CreateHubCommand(
+            Guid.NewGuid(), "Main Hub", null, latitude, null, 1000, null));
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateHubCommand.Latitude));

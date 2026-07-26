@@ -6,6 +6,8 @@ internal sealed class CreateHubCommandValidator : AbstractValidator<CreateHubCom
 {
     public CreateHubCommandValidator()
     {
+        RuleFor(x => x.MarketId).NotEmpty();
+
         RuleFor(x => x.Name)
             .NotEmpty()
             .MaximumLength(200);

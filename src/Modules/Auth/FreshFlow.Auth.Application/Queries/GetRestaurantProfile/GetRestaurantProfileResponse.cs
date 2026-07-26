@@ -9,4 +9,8 @@ public sealed record GetRestaurantProfileResponse(
     TimeOnly? PickupStart,
     TimeOnly? PickupEnd,
     DateTime UpdatedAt,
-    string? BusinessLicenseUrl = null);
+    string? BusinessLicenseUrl = null,
+    string? TaxCode = null,
+    string? InvoiceLegalName = null,
+    string? InvoiceAddress = null,
+    string? InvoiceEmail = null);

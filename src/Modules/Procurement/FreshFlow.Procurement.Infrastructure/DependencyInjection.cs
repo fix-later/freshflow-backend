@@ -34,6 +34,7 @@ public static class DependencyInjection
 
         services.AddScoped<IConfirmedOrderReader, ConfirmedOrderReader>();
         services.AddScoped<IMarketProductMarketReader, MarketProductMarketReader>();
+        services.AddScoped<IHubByMarketReader, HubByMarketReader>();
         services.AddScoped<IMarketAgentReader, MarketAgentReader>();
         services.AddScoped<IOperationalSettingsReader, OperationalSettingsReader>();
         services.AddScoped<IProcurementBatchRepository, ProcurementBatchRepository>();

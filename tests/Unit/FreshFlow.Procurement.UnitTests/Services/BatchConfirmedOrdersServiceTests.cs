@@ -11,8 +11,16 @@ public sealed class BatchConfirmedOrdersServiceTests
 {
     private readonly IConfirmedOrderReader _orders = Substitute.For<IConfirmedOrderReader>();
     private readonly IMarketProductMarketReader _markets = Substitute.For<IMarketProductMarketReader>();
+    private readonly IHubByMarketReader _hubs = Substitute.For<IHubByMarketReader>();
     private readonly IOperationalSettingsReader _settings = Substitute.For<IOperationalSettingsReader>();
     private readonly IProcurementBatchRepository _batches = Substitute.For<IProcurementBatchRepository>();
+
+    public BatchConfirmedOrdersServiceTests()
+    {
+        _hubs.ReadActiveHubsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
+            .Returns(call => ((IReadOnlyCollection<Guid>)call[0])
+                .ToDictionary(marketId => marketId, _ => Guid.NewGuid()));
+    }
 
     [Fact]
     public async Task BuildBatches_OneOrderAcrossMarkets_FansOutAsync()
@@ -132,10 +140,27 @@ public sealed class BatchConfirmedOrdersServiceTests
         result.Error.Code.Should().Be("MARKET_PRODUCT_NOT_FOUND");
     }
 
+    [Fact]
+    public async Task BuildBatches_MissingHub_RejectsBeforeWritingAsync()
+    {
+        var productId = Guid.NewGuid();
+        ArrangeSingleOrder(productId);
+        _markets.ReadMarketsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
+            .Returns(new Dictionary<Guid, Guid> { [productId] = Guid.NewGuid() });
+        _hubs.ReadActiveHubsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
+            .Returns(new Dictionary<Guid, Guid>());
+
+        var result = await CreateSut().BuildBatchesAsync(Date, false, false, default);
+
+        result.Error.Code.Should().Be("HUB_NOT_CONFIGURED_FOR_MARKET");
+        await _batches.DidNotReceiveWithAnyArgs()
+            .AddRangeAsync(default!, default);
+    }
+
     private static readonly DateOnly Date = new(2026, 7, 15);
 
     private BatchConfirmedOrdersService CreateSut() =>
-        new(_orders, _markets, _settings, _batches);
+        new(_orders, _markets, _hubs, _settings, _batches);
 
     private void ArrangeEnabled() =>
         _settings.ReadAsync(default)

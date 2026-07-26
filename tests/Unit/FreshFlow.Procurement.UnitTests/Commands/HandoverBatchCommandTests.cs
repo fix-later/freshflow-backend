@@ -17,20 +17,12 @@ public sealed class HandoverBatchCommandTests
     public void Validator_EmptyIds_IsInvalid()
     {
         var result = new HandoverBatchCommandValidator().Validate(
-            new HandoverBatchCommand(Guid.Empty, Guid.Empty, null));
+            new HandoverBatchCommand(Guid.Empty, Guid.Empty));
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().HaveCount(2);
     }
 
-    [Fact]
-    public void Validator_EmptyHubId_IsInvalid()
-    {
-        var result = new HandoverBatchCommandValidator().Validate(
-            new HandoverBatchCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.Empty));
-
-        result.IsValid.Should().BeFalse();
-    }
 
     [Fact]
     public async Task Handler_OwnerHandsOver_SavesAndReturnsBatchAsync()
@@ -38,7 +30,7 @@ public sealed class HandoverBatchCommandTests
         var agentUserId = Guid.NewGuid();
         var hubId = Guid.NewGuid();
         var orderId = Guid.NewGuid();
-        var batch = BuildAssignedBatch(agentUserId, orderId, purchased: true);
+        var batch = BuildAssignedBatch(agentUserId, orderId, purchased: true, hubId);
         var repository = Substitute.For<IProcurementBatchRepository>();
         repository.FindByIdAsync(batch.Id, default).Returns(batch);
         repository.SaveChangesAsync(default).Returns(true);
@@ -51,10 +43,11 @@ public sealed class HandoverBatchCommandTests
         var handler = new HandoverBatchCommandHandler(
             repository,
             orders,
+            ActiveHubReader(),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
-            new HandoverBatchCommand(batch.Id, agentUserId, hubId),
+            new HandoverBatchCommand(batch.Id, agentUserId),
             default);
 
         result.IsSuccess.Should().BeTrue();
@@ -76,10 +69,11 @@ public sealed class HandoverBatchCommandTests
         var handler = new HandoverBatchCommandHandler(
             repository,
             Substitute.For<IConfirmedOrderReader>(),
+            ActiveHubReader(),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
-            new HandoverBatchCommand(batchId, Guid.NewGuid(), null),
+            new HandoverBatchCommand(batchId, Guid.NewGuid()),
             default);
 
         result.IsFailure.Should().BeTrue();
@@ -96,14 +90,60 @@ public sealed class HandoverBatchCommandTests
         var handler = new HandoverBatchCommandHandler(
             repository,
             Substitute.For<IConfirmedOrderReader>(),
+            ActiveHubReader(),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
-            new HandoverBatchCommand(batch.Id, Guid.NewGuid(), null),
+            new HandoverBatchCommand(batch.Id, Guid.NewGuid()),
             default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("PROCUREMENT_BATCH_NOT_FOUND");
+        batch.Status.Should().Be(ProcurementBatchStatus.Purchasing);
+        await repository.DidNotReceive().SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Handler_InactiveHub_RejectsHandoverAsync()
+    {
+        var agentUserId = Guid.NewGuid();
+        var batch = BuildAssignedBatch(agentUserId, Guid.NewGuid(), purchased: true);
+        var repository = Substitute.For<IProcurementBatchRepository>();
+        repository.FindByIdAsync(batch.Id, default).Returns(batch);
+        var handler = new HandoverBatchCommandHandler(
+            repository,
+            Substitute.For<IConfirmedOrderReader>(),
+            ActiveHubReader(isActive: false),
+            new FixedTimeProvider(Now));
+
+        var result = await handler.Handle(
+            new HandoverBatchCommand(batch.Id, agentUserId),
+            default);
+
+        result.Error.Code.Should().Be("HUB_INACTIVE");
+        batch.Status.Should().Be(ProcurementBatchStatus.Purchasing);
+        await repository.DidNotReceive().SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Handler_LegacyBatchWithoutHub_RejectsHandoverAsync()
+    {
+        var agentUserId = Guid.NewGuid();
+        var batch = BuildAssignedBatch(
+            agentUserId, Guid.NewGuid(), purchased: true, hasHub: false);
+        var repository = Substitute.For<IProcurementBatchRepository>();
+        repository.FindByIdAsync(batch.Id, default).Returns(batch);
+        var handler = new HandoverBatchCommandHandler(
+            repository,
+            Substitute.For<IConfirmedOrderReader>(),
+            ActiveHubReader(),
+            new FixedTimeProvider(Now));
+
+        var result = await handler.Handle(
+            new HandoverBatchCommand(batch.Id, agentUserId),
+            default);
+
+        result.Error.Code.Should().Be("HUB_NOT_CONFIGURED_FOR_MARKET");
         batch.Status.Should().Be(ProcurementBatchStatus.Purchasing);
         await repository.DidNotReceive().SaveChangesAsync(default);
     }
@@ -118,10 +158,11 @@ public sealed class HandoverBatchCommandTests
         var handler = new HandoverBatchCommandHandler(
             repository,
             Substitute.For<IConfirmedOrderReader>(),
+            ActiveHubReader(),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
-            new HandoverBatchCommand(batch.Id, agentUserId, null),
+            new HandoverBatchCommand(batch.Id, agentUserId),
             default);
 
         result.IsFailure.Should().BeTrue();
@@ -132,14 +173,17 @@ public sealed class HandoverBatchCommandTests
     private static ProcurementBatch BuildAssignedBatch(
         Guid agentUserId,
         Guid orderId,
-        bool purchased)
+        bool purchased,
+        Guid? hubId = null,
+        bool hasHub = true)
     {
         var productId = Guid.NewGuid();
-        var batch = ProcurementBatch.Build(
-            new DateOnly(2026, 7, 16),
-            Guid.NewGuid(),
-            [(productId, "Tomato", 5, orderId)])
-            .Value;
+        var date = new DateOnly(2026, 7, 16);
+        var marketId = Guid.NewGuid();
+        var lines = new[] { (productId, "Tomato", 5, orderId) };
+        var batch = hasHub
+            ? ProcurementBatch.Build(date, marketId, lines, hubId ?? Guid.NewGuid()).Value
+            : ProcurementBatch.Build(date, marketId, lines).Value;
         batch.Manifest(
             new Dictionary<Guid, decimal> { [productId] = 10_000m },
             Now.UtcDateTime.AddHours(-3));
@@ -153,6 +197,14 @@ public sealed class HandoverBatchCommandTests
 
         batch.ClearDomainEvents();
         return batch;
+    }
+
+    private static IHubByMarketReader ActiveHubReader(bool isActive = true)
+    {
+        var reader = Substitute.For<IHubByMarketReader>();
+        reader.IsActiveAsync(Arg.Any<Guid>(), default)
+            .Returns(isActive);
+        return reader;
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

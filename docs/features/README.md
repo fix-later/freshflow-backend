@@ -70,6 +70,12 @@ Tài liệu **theo từng feature** (survey, audit, context, design, tasks, back
 | [AUDIT-2026-06-10 auth-profile-catalog](./auth-catalog/AUDIT-2026-06-10-auth-profile-catalog.md) | Audit | ✅ |
 | [AUDIT-2026-07-21 category hierarchy plan](./auth-catalog/AUDIT-2026-07-21-category-hierarchy-plan.md) | Audit / Plan | ⏳ Chờ Jira key |
 
+## invoicing — Hóa đơn điện tử VAT (epic SCRUM-370, module Invoicing mới)
+
+| Doc | Loại | Trạng thái |
+|---|---|---|
+| [PLAN-2026-07-25 invoicing VAT](./invoicing/PLAN-2026-07-25-invoicing-vat.md) | Plan | 📐 Blueprint chờ duyệt — tasks SCRUM-371…378 (#1…#8) |
+
 ---
 
 **Quy ước đặt tên:** `<TYPE>-<YYYY-MM-DD>-<slug>.md` — TYPE ∈ {SURVEY, AUDIT, CONTEXT, DESIGN, TASKS, BACKLOG}. Doc mới của một feature đặt vào đúng thư mục con của nó.

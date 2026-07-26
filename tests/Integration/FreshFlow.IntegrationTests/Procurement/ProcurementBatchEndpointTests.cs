@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using FluentAssertions;
 using FreshFlow.Catalog.Domain.Entities;
+using FreshFlow.Hub.Application.Dtos;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.IntegrationTests.Infrastructure;
 using FreshFlow.Logistics.Domain.Entities;
@@ -16,6 +17,7 @@ using FreshFlow.Procurement.Domain.Entities;
 using FreshFlow.Procurement.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using HubEntity = FreshFlow.Hub.Domain.Entities.Hub;
 
 namespace FreshFlow.IntegrationTests.Procurement;
 
@@ -70,6 +72,21 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             item.TotalQuantity == 5 &&
             item.ReferenceUnitPrice == null);
         var batchId = listBody.Data.Batches[0].Id;
+        var hubPlan = await _client.GetFromJsonAsync<Envelope<HubProcurementPlanDto>>(
+            $"/api/v1/hubs/{seed.HubId}/procurement-plan?date={targetDate:yyyy-MM-dd}");
+        hubPlan!.Data!.Batches.Should().ContainSingle(batch =>
+            batch.BatchId == batchId &&
+            batch.OrderIds.Contains(seed.OrderId) &&
+            batch.Items.Any(item =>
+                item.MarketProductId == seed.MarketProductId &&
+                item.TargetQuantity == 5));
+
+        var deactivateHub = await _client.DeleteAsync($"/api/v1/hubs/{seed.HubId}");
+        deactivateHub.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var deactivateError = await deactivateHub.Content
+            .ReadFromJsonAsync<ErrorEnvelope>();
+        deactivateError!.Error!.Code.Should().Be("HUB_HAS_ACTIVE_PROCUREMENT");
+
         var agentA = await CreateUserAccountAsync("market_agent", seed.MarketId);
         var agentUserId = agentA.Id;
         var purchaseRequest = new
@@ -93,9 +110,9 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             $"/api/v1/procurement/tasks/{batchId}/purchase",
             purchaseRequest);
         builtPurchase.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        var builtHandover = await _client.PatchAsJsonAsync(
+        var builtHandover = await _client.PatchAsync(
             $"/api/v1/procurement/tasks/{batchId}/handover",
-            new { hubId = (Guid?)null });
+            null);
         builtHandover.StatusCode.Should().Be(HttpStatusCode.Conflict);
         var builtHandoverError = await builtHandover.Content
             .ReadFromJsonAsync<ErrorEnvelope>();
@@ -170,9 +187,9 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             $"/api/v1/procurement/tasks/{batchId}/purchase",
             purchaseRequest);
         missingJwtPurchase.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        var missingJwtHandover = await _client.PatchAsJsonAsync(
+        var missingJwtHandover = await _client.PatchAsync(
             $"/api/v1/procurement/tasks/{batchId}/handover",
-            new { hubId = (Guid?)null });
+            null);
         missingJwtHandover.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
         var wrongRoleToken = await LoginAsync(
@@ -186,9 +203,9 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             $"/api/v1/procurement/tasks/{batchId}/purchase",
             purchaseRequest);
         forbiddenPurchase.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        var forbiddenHandover = await _client.PatchAsJsonAsync(
+        var forbiddenHandover = await _client.PatchAsync(
             $"/api/v1/procurement/tasks/{batchId}/handover",
-            new { hubId = (Guid?)null });
+            null);
         forbiddenHandover.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
         var agentBToken = await LoginAsync(agentB.Email, agentB.Password);
@@ -274,26 +291,25 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
 
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", agentBToken);
-        var crossAgentHandover = await _client.PatchAsJsonAsync(
+        var crossAgentHandover = await _client.PatchAsync(
             $"/api/v1/procurement/tasks/{batchId}/handover",
-            new { hubId = (Guid?)null });
+            null);
         crossAgentHandover.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
-        var hubId = Guid.NewGuid();
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", agentAToken);
-        var handover = await _client.PatchAsJsonAsync(
+        var handover = await _client.PatchAsync(
             $"/api/v1/procurement/tasks/{batchId}/handover",
-            new { hubId = (Guid?)hubId });
+            null);
         handover.StatusCode.Should().Be(HttpStatusCode.OK);
         var handoverBody = await handover.Content
             .ReadFromJsonAsync<Envelope<ProcurementBatchDto>>();
         handoverBody!.Data!.Status.Should().Be("HandedOff");
         handoverBody.Data.HandedOffAt.Should().NotBeNull();
-        handoverBody.Data.HubId.Should().Be(hubId);
+        handoverBody.Data.HubId.Should().Be(seed.HubId);
         handoverBody.Data.Members.Should().ContainSingle(member =>
             member.OrderId == seed.OrderId && member.Status == "AtHub");
-        await AssertHandoverStateAsync(batchId, seed.OrderId, hubId);
+        await AssertHandoverStateAsync(batchId, seed.OrderId, seed.HubId);
 
         var routeId = await SeedAssignedDeliveryRouteAsync(
             targetDate,
@@ -414,11 +430,16 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Guid marketId;
+        Guid hubId;
         Guid marketProductId;
 
         if (existingMarketId.HasValue && existingMarketProductId.HasValue)
         {
             marketId = existingMarketId.Value;
+            hubId = await db.Set<HubEntity>()
+                .Where(hub => hub.MarketId == marketId && hub.IsActive)
+                .Select(hub => hub.Id)
+                .SingleAsync();
             marketProductId = existingMarketProductId.Value;
         }
         else
@@ -450,10 +471,20 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
                 100,
                 null);
             db.Set<MarketProduct>().Add(marketProduct);
+            var hub = HubEntity.Create(
+                $"Procurement Hub {Guid.NewGuid():N}",
+                null,
+                null,
+                null,
+                1_000m,
+                null,
+                market.Id);
+            db.Set<HubEntity>().Add(hub);
             await db.SaveChangesAsync();
 
             marketId = market.Id;
             marketProductId = marketProduct.Id;
+            hubId = hub.Id;
         }
 
         var scheduledForUtc = new DateTimeOffset(
@@ -471,6 +502,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         return new SeededOrder(
             order.Id,
             marketId,
+            hubId,
             marketProductId,
             productName);
     }
@@ -868,6 +900,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
     private sealed record SeededOrder(
         Guid OrderId,
         Guid MarketId,
+        Guid HubId,
         Guid MarketProductId,
         string ProductName);
 

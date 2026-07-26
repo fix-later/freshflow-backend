@@ -84,7 +84,8 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<App
             "FreshFlow.Logistics.Infrastructure",
             "FreshFlow.Hub.Infrastructure",
             "FreshFlow.Analytics.Infrastructure",
-            "FreshFlow.Notifications.Infrastructure"
+            "FreshFlow.Notifications.Infrastructure",
+            "FreshFlow.Invoicing.Infrastructure"
         };
 
         foreach (var name in moduleAssemblies)

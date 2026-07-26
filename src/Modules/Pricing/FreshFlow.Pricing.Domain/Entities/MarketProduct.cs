@@ -30,6 +30,12 @@ public sealed class MarketProduct : AggregateRoot
     public int AvailableQuantity => CurrentQuantity - ReservedQuantity;
     public bool IsOutOfStock => CurrentQuantity == 0;
 
+    public void Delete()
+    {
+        SoftDelete();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     /// <summary>
     /// Applies a price-only update. Raises <see cref="PriceUpdatedDomainEvent"/>.
     /// Caller must ensure <paramref name="newPrice"/> is positive (domain defends in depth).

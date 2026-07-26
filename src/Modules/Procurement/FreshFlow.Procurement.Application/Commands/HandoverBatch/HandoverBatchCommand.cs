@@ -5,5 +5,4 @@ namespace FreshFlow.Procurement.Application.Commands.HandoverBatch;
 
 public sealed record HandoverBatchCommand(
     Guid BatchId,
-    Guid AgentUserId,
-    Guid? HubId) : ICommand<ProcurementBatchDto>;
+    Guid AgentUserId) : ICommand<ProcurementBatchDto>;

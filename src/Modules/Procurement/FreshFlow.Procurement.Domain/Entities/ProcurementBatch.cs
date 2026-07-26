@@ -32,11 +32,12 @@ public sealed class ProcurementBatch : AggregateRoot
     public static Result<ProcurementBatch> Build(
         DateOnly batchDate,
         Guid marketId,
-        IEnumerable<(Guid MarketProductId, string ProductName, int Quantity, Guid OrderId)> lines)
+        IEnumerable<(Guid MarketProductId, string ProductName, int Quantity, Guid OrderId)> lines,
+        Guid hubId)
     {
         var input = lines?.ToList() ?? [];
 
-        if (batchDate == default || marketId == Guid.Empty || input.Count == 0 ||
+        if (batchDate == default || marketId == Guid.Empty || hubId == Guid.Empty || input.Count == 0 ||
             input.Any(line =>
                 line.MarketProductId == Guid.Empty ||
                 line.OrderId == Guid.Empty ||
@@ -71,6 +72,7 @@ public sealed class ProcurementBatch : AggregateRoot
         {
             BatchDate = batchDate,
             MarketId = marketId,
+            HubId = hubId,
             Status = ProcurementBatchStatus.Built
         };
 
@@ -96,6 +98,18 @@ public sealed class ProcurementBatch : AggregateRoot
             coveredOrderIds));
 
         return Result<ProcurementBatch>.Success(batch);
+    }
+
+    // ponytail: internal overload is only for legacy test fixtures during the nullable-column rollout.
+    internal static Result<ProcurementBatch> Build(
+        DateOnly batchDate,
+        Guid marketId,
+        IEnumerable<(Guid MarketProductId, string ProductName, int Quantity, Guid OrderId)> lines)
+    {
+        var result = Build(batchDate, marketId, lines, Guid.NewGuid());
+        if (result.IsSuccess)
+            result.Value.HubId = null;
+        return result;
     }
 
     public Result Manifest(
@@ -331,7 +345,7 @@ public sealed class ProcurementBatch : AggregateRoot
         return Result.Success();
     }
 
-    public Result HandoverToHub(Guid? hubId, DateTime capturedAtUtc)
+    public Result HandoverToHub(DateTime capturedAtUtc)
     {
         if (Status == ProcurementBatchStatus.HandedOff)
         {
@@ -347,9 +361,15 @@ public sealed class ProcurementBatch : AggregateRoot
                 $"Procurement batch '{Id}' must be purchased before handover."));
         }
 
+        if (HubId is null)
+        {
+            return Result.Failure(Error.Validation(
+                "HUB_NOT_CONFIGURED_FOR_MARKET",
+                $"Procurement batch '{Id}' has no resolved hub."));
+        }
+
         Status = ProcurementBatchStatus.HandedOff;
         HandedOffAt = capturedAtUtc;
-        HubId = hubId;
         UpdatedAt = capturedAtUtc;
         var coveredOrderIds = _orders
             .Select(order => order.OrderId)
@@ -359,7 +379,7 @@ public sealed class ProcurementBatch : AggregateRoot
         RaiseDomainEvent(new ProcurementBatchHandedOffDomainEvent(
             Id,
             MarketId,
-            hubId,
+            HubId,
             capturedAtUtc,
             coveredOrderIds));
 

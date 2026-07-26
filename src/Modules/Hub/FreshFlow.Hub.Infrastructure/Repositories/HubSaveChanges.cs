@@ -18,6 +18,15 @@ internal static class HubSaveChanges
             throw new HubConcurrencyException(
                 "Hub data was updated by another request. Please refresh and retry.", ex);
         }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "ux_hubs_active_market"
+            })
+        {
+            throw new HubMarketConflictException(ex);
+        }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg &&
                                           pg.SqlState == PostgresErrorCodes.UniqueViolation)
         {

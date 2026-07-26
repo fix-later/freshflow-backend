@@ -8,6 +8,7 @@ using FreshFlow.Catalog.Application.Commands.Markets.Update;
 using FreshFlow.Catalog.Application.Queries.Markets.GetMarketById;
 using FreshFlow.Catalog.Application.Queries.Markets.GetMarkets;
 using FreshFlow.Pricing.Application.Commands.CreateMarketProduct;
+using FreshFlow.Pricing.Application.Commands.DeleteMarketProduct;
 using FreshFlow.Pricing.Application.Commands.UpdateAvailableQuantity;
 using FreshFlow.Pricing.Application.Commands.UpdateProductPrice;
 using FreshFlow.Pricing.Application.Queries.GetMarketProducts;
@@ -141,6 +142,25 @@ public sealed class MarketsController(ISender sender) : ControllerBase
             ? Created(
                 $"/api/v1/markets/{marketId}/products/{body.ProductId}", ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
+    }
+
+    /// <summary>
+    /// DELETE /api/v1/markets/{marketId}/products/{productId}
+    /// Removes a product listing from a market. Admin only (soft-delete).
+    /// </summary>
+    [HttpDelete("{marketId:guid}/products/{productId:guid}")]
+    [Authorize(Roles = "admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteMarketProductAsync(
+        Guid marketId,
+        Guid productId,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new DeleteMarketProductCommand(marketId, productId), ct);
+        return result.IsSuccess ? NoContent() : result.Error.ToActionResult();
     }
 
     /// <summary>

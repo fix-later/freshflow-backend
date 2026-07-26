@@ -25,6 +25,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\FreshFlow.API\FreshFlow.API.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Invoicing\FreshFlow.Invoicing.Application\FreshFlow.Invoicing.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Invoicing\FreshFlow.Invoicing.Infrastructure\FreshFlow.Invoicing.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

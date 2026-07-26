@@ -35,7 +35,8 @@ public static class ErrorExtensions
                         or "BATCH_NOT_PURCHASED"
                         or "BATCH_ALREADY_IN_PROGRESS"
                         or "BATCH_NOT_CANCELLABLE"
-                        or "BATCH_CANCELLED")
+                        or "BATCH_CANCELLED"
+                        or "HUB_ALREADY_CONFIGURED_FOR_MARKET")
             return new ConflictObjectResult(body);
 
         if (error.Code is "UNAUTHORIZED" or "INVALID_CREDENTIALS" or "INVALID_CURRENT_PASSWORD"
@@ -83,6 +84,9 @@ public static class ErrorExtensions
                         or "AGENT_NOT_ELIGIBLE"
                         or "PURCHASE_LINES_MISMATCH"
                         or "INVALID_PURCHASE_LINE"
+                        or "MARKET_INACTIVE"
+                        or "HUB_INACTIVE"
+                        or "HUB_NOT_CONFIGURED_FOR_MARKET"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 
@@ -92,6 +96,7 @@ public static class ErrorExtensions
                         or "ORDER_ISSUE_NOT_ALLOWED" or "ORDER_ISSUE_ALREADY_RESOLVED"
                         or "SCHEDULED_ORDER_NOT_ACTIVE" or "SCHEDULED_ORDER_ALREADY_CANCELLED"
                         or "ROUTE_INVALID_TRANSITION" or "HUB_HAS_PENDING_DELIVERIES"
+                        or "HUB_HAS_ACTIVE_PROCUREMENT"
                         or "DISCREPANCY_ALREADY_ACKNOWLEDGED"
                         or "HUB_HANDOVER_ALREADY_CHECKED_OUT")
             return new ConflictObjectResult(body);

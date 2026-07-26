@@ -8,6 +8,7 @@ internal static class HubMappings
     public static HubDto ToDto(this HubEntity hub) =>
         new(
             hub.Id,
+            hub.MarketId,
             hub.Name,
             hub.Address,
             hub.Latitude,

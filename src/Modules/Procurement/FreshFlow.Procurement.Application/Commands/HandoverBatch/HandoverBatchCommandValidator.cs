@@ -8,8 +8,5 @@ internal sealed class HandoverBatchCommandValidator : AbstractValidator<Handover
     {
         RuleFor(command => command.BatchId).NotEmpty();
         RuleFor(command => command.AgentUserId).NotEmpty();
-        RuleFor(command => command.HubId)
-            .NotEqual(Guid.Empty)
-            .When(command => command.HubId.HasValue);
     }
 }

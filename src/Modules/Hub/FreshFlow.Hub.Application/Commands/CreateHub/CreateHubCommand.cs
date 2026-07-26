@@ -4,6 +4,7 @@ using FreshFlow.SharedKernel.Application;
 namespace FreshFlow.Hub.Application.Commands.CreateHub;
 
 public sealed record CreateHubCommand(
+    Guid MarketId,
     string Name,
     string? Address,
     decimal? Latitude,

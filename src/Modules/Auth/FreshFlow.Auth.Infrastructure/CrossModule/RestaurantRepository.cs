@@ -94,7 +94,31 @@ internal sealed class RestaurantRepository(AppDbContext db) : IRestaurantReposit
         return ToDto(row);
     }
 
+    public async Task<RestaurantDto?> UpdateTaxProfileAsync(
+        Guid restaurantId,
+        string taxCode,
+        string legalName,
+        string? address,
+        string? email,
+        CancellationToken ct)
+    {
+        var row = await db.Set<RestaurantRow>()
+            .FirstOrDefaultAsync(r => r.Id == restaurantId, ct);
+
+        if (row is null)
+            return null;
+
+        row.TaxCode = taxCode;
+        row.InvoiceLegalName = legalName;
+        row.InvoiceAddress = address;
+        row.InvoiceEmail = email;
+        row.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return ToDto(row);
+    }
+
     private static RestaurantDto ToDto(RestaurantRow row) =>
         new(row.Id, row.Name, row.Status, row.UpdatedAt, row.UserId,
-            row.Address, row.ContactPerson, row.PickupStart, row.PickupEnd, row.BusinessLicenseUrl);
+            row.Address, row.ContactPerson, row.PickupStart, row.PickupEnd, row.BusinessLicenseUrl,
+            row.TaxCode, row.InvoiceLegalName, row.InvoiceAddress, row.InvoiceEmail);
 }

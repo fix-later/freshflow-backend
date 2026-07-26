@@ -2,6 +2,7 @@ namespace FreshFlow.Hub.Application.Dtos;
 
 public sealed record HubDto(
     Guid HubId,
+    Guid? MarketId,
     string Name,
     string? Address,
     decimal? Latitude,
