@@ -2,12 +2,14 @@ using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Hub.Application.Commands.AcknowledgeDiscrepancy;
 using FreshFlow.Hub.Application.Commands.CreateCrossDock;
+using FreshFlow.Hub.Application.Commands.MarkLineSorted;
 using FreshFlow.Hub.Application.Commands.RecordDiscrepancy;
 using FreshFlow.Hub.Application.Commands.RecordInbound;
 using FreshFlow.Hub.Application.Commands.RecordOutbound;
 using FreshFlow.Hub.Application.Commands.ScanInbound;
 using FreshFlow.Hub.Application.Queries.GetHubProcurementPlan;
 using FreshFlow.Hub.Application.Queries.GetPendingInbound;
+using FreshFlow.Hub.Application.Queries.GetSortingProgress;
 using FreshFlow.Hub.Application.Queries.ListCrossDock;
 using FreshFlow.Hub.Application.Queries.ListDiscrepancies;
 using FreshFlow.Hub.Application.Queries.ListInbound;
@@ -264,6 +266,38 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    [HttpPost("{hubId:guid}/routes/{routeId:guid}/sorting")]
+    public async Task<IActionResult> MarkLineSortedAsync(
+        Guid hubId,
+        Guid routeId,
+        [FromBody] MarkLineSortedRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new MarkLineSortedCommand(
+                hubId,
+                routeId,
+                body.OrderItemId,
+                body.SortedQuantityKg,
+                ResolveUserId(),
+                BypassHubAssignment()),
+            ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("{hubId:guid}/routes/{routeId:guid}/sorting-progress")]
+    public async Task<IActionResult> GetSortingProgressAsync(
+        Guid hubId,
+        Guid routeId,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new GetSortingProgressQuery(hubId, routeId, ResolveUserId(), BypassHubAssignment()),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     private Guid ResolveUserId()
     {
         var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -308,3 +342,5 @@ public sealed record RecordOutboundItemRequest(
     Guid MarketProductId,
     Guid? ProductId,
     decimal QuantityKg);
+
+public sealed record MarkLineSortedRequest(Guid OrderItemId, decimal SortedQuantityKg);
