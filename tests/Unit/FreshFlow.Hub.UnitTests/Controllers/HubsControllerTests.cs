@@ -99,9 +99,10 @@ public sealed class HubsControllerTests
             .Returns(Result<HubDto>.Success(CreateDto(hubId)));
         var controller = new HubsController(sender);
 
+        var marketId = Guid.NewGuid();
         var result = await controller.UpdateHubAsync(
             hubId,
-            new UpdateHubRequest("Updated Hub", "456 Road", 11m, 107m, 1500, managedBy),
+            new UpdateHubRequest("Updated Hub", "456 Road", 11m, 107m, 1500, managedBy, marketId),
             default);
 
         result.Should().BeOfType<OkObjectResult>();
@@ -113,7 +114,8 @@ public sealed class HubsControllerTests
                 command.Latitude == 11m &&
                 command.Longitude == 107m &&
                 command.CapacityKg == 1500 &&
-                command.ManagedBy == managedBy),
+                command.ManagedBy == managedBy &&
+                command.MarketId == marketId),
             Arg.Any<CancellationToken>());
     }
 
