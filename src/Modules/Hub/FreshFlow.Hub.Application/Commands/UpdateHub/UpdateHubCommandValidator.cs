@@ -22,6 +22,10 @@ internal sealed class UpdateHubCommandValidator : AbstractValidator<UpdateHubCom
             .NotEqual(Guid.Empty)
             .When(x => x.ManagedBy.HasValue);
 
+        RuleFor(x => x.MarketId)
+            .NotEqual(Guid.Empty)
+            .When(x => x.MarketId.HasValue);
+
         RuleFor(x => x.Latitude)
             .InclusiveBetween(-90, 90)
             .When(x => x.Latitude.HasValue);

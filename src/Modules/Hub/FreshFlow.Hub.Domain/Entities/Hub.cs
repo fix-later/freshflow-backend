@@ -89,6 +89,15 @@ public sealed class Hub
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void AssignMarket(Guid marketId)
+    {
+        if (marketId == Guid.Empty)
+            throw new ArgumentException("Market ID cannot be empty.", nameof(marketId));
+
+        MarketId = marketId;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void ApplyInbound(decimal totalKg)
     {
         OccupiedCapacityKg += totalKg;

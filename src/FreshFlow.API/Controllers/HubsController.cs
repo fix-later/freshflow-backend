@@ -70,7 +70,8 @@ public sealed class HubsController(ISender sender) : ControllerBase
                 body.Latitude,
                 body.Longitude,
                 body.CapacityKg,
-                body.ManagedBy),
+                body.ManagedBy,
+                body.MarketId),
             ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
@@ -99,4 +100,5 @@ public sealed record UpdateHubRequest(
     decimal? Latitude,
     decimal? Longitude,
     decimal CapacityKg,
-    Guid? ManagedBy);
+    Guid? ManagedBy,
+    Guid? MarketId);

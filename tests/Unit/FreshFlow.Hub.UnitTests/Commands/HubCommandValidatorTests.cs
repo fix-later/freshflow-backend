@@ -73,7 +73,7 @@ public sealed class HubCommandValidatorTests
     {
         var sut = new UpdateHubCommandValidator();
 
-        var result = sut.Validate(new UpdateHubCommand(Guid.NewGuid(), "Main Hub", null, null, longitude, 1000, null));
+        var result = sut.Validate(new UpdateHubCommand(Guid.NewGuid(), "Main Hub", null, null, longitude, 1000, null, null));
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateHubCommand.Longitude));
@@ -84,7 +84,7 @@ public sealed class HubCommandValidatorTests
     {
         var sut = new UpdateHubCommandValidator();
 
-        var result = sut.Validate(new UpdateHubCommand(Guid.Empty, "Main Hub", null, null, null, 1000, null));
+        var result = sut.Validate(new UpdateHubCommand(Guid.Empty, "Main Hub", null, null, null, 1000, null, null));
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateHubCommand.HubId));
@@ -95,10 +95,21 @@ public sealed class HubCommandValidatorTests
     {
         var sut = new UpdateHubCommandValidator();
 
-        var result = sut.Validate(new UpdateHubCommand(Guid.NewGuid(), "Main Hub", null, null, null, 1000, Guid.Empty));
+        var result = sut.Validate(new UpdateHubCommand(Guid.NewGuid(), "Main Hub", null, null, null, 1000, Guid.Empty, null));
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateHubCommand.ManagedBy));
+    }
+
+    [Fact]
+    public void UpdateHubCommandValidator_EmptyMarketId_Fails()
+    {
+        var sut = new UpdateHubCommandValidator();
+
+        var result = sut.Validate(new UpdateHubCommand(Guid.NewGuid(), "Main Hub", null, null, null, 1000, null, Guid.Empty));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateHubCommand.MarketId));
     }
 
     [Fact]

@@ -10,4 +10,5 @@ public sealed record UpdateHubCommand(
     decimal? Latitude,
     decimal? Longitude,
     decimal CapacityKg,
-    Guid? ManagedBy) : ICommand<HubDto>;
+    Guid? ManagedBy,
+    Guid? MarketId) : ICommand<HubDto>;
