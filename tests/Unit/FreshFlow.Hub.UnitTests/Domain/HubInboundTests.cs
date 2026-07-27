@@ -82,7 +82,7 @@ public sealed class HubInboundTests
         var inbound = CreateInbound();
         inbound.ConfirmArrival();
 
-        var act = inbound.ConfirmArrival;
+        Action act = () => inbound.ConfirmArrival();
 
         act.Should().Throw<InvalidOperationException>();
     }

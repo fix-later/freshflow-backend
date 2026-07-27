@@ -46,7 +46,7 @@ internal sealed class ScanInboundCommandHandler(
                     "Hub capacity is not sufficient for this inbound delivery."));
         }
 
-        inbound.ConfirmArrival();
+        inbound.ConfirmArrival(request.ActorUserId);
 
         foreach (var item in inbound.Items)
         {

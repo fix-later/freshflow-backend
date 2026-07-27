@@ -64,4 +64,43 @@ internal sealed class HubProcurementPlanReader(AppDbContext db) : IHubProcuremen
 
         return new HubProcurementPlanDto(hubId, date, result);
     }
+
+    public async Task<IReadOnlyList<HubProcurementItemDto>> ReadBatchItemsAsync(
+        Guid batchId,
+        CancellationToken ct)
+    {
+        var items = await db.Set<HubProcurementItemRow>()
+            .AsNoTracking()
+            .Where(item => item.ProcurementBatchId == batchId)
+            .OrderBy(item => item.MarketProductId)
+            .ToListAsync(ct);
+
+        return items
+            .Select(item => new HubProcurementItemDto(
+                item.MarketProductId,
+                item.ProductName,
+                item.TargetQuantity,
+                item.ActualQuantity,
+                item.ActualUnitPrice,
+                item.PurchasedAt))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<HubHandedOffBatchDto>> ReadHandedOffBatchesAsync(CancellationToken ct)
+    {
+        var batches = await db.Set<HubProcurementBatchRow>()
+            .AsNoTracking()
+            .Where(batch => batch.Status == "HandedOff" && batch.HubId != null)
+            .OrderBy(batch => batch.BatchId)
+            .ToListAsync(ct);
+
+        return batches
+            .Select(batch => new HubHandedOffBatchDto(
+                batch.BatchId,
+                batch.HubId!.Value,
+                batch.MarketId,
+                batch.HandedOffAt ?? DateTime.UtcNow,
+                batch.AssignedAgentUserId))
+            .ToList();
+    }
 }

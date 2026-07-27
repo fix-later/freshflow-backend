@@ -20,3 +20,10 @@ public sealed record HubProcurementItemDto(
     int? ActualQuantity,
     decimal? ActualUnitPrice,
     DateTime? PurchasedAt);
+
+public sealed record HubHandedOffBatchDto(
+    Guid BatchId,
+    Guid HubId,
+    Guid MarketId,
+    DateTime HandedOffAt,
+    Guid? AssignedAgentUserId);

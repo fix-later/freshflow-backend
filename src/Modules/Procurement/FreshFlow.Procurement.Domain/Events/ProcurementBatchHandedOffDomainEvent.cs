@@ -7,4 +7,5 @@ public sealed record ProcurementBatchHandedOffDomainEvent(
     Guid MarketId,
     Guid? HubId,
     DateTime HandedOffAt,
-    IReadOnlyList<Guid> CoveredOrderIds) : IDomainEvent;
+    IReadOnlyList<Guid> CoveredOrderIds,
+    Guid? HandedOffByUserId = null) : IDomainEvent;

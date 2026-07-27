@@ -381,7 +381,8 @@ public sealed class ProcurementBatch : AggregateRoot
             MarketId,
             HubId,
             capturedAtUtc,
-            coveredOrderIds));
+            coveredOrderIds,
+            AssignedAgentUserId));
 
         return Result.Success();
     }

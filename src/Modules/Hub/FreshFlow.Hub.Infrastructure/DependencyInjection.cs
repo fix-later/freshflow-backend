@@ -4,12 +4,14 @@ using FreshFlow.Hub.Application.Abstractions;
 using FreshFlow.Hub.Application.Behaviors;
 using FreshFlow.Hub.Application.Services;
 using FreshFlow.Hub.Infrastructure.CrossModule;
+using FreshFlow.Hub.Infrastructure.Jobs;
 using FreshFlow.Hub.Infrastructure.Repositories;
 using FreshFlow.Infrastructure.Persistence;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace FreshFlow.Hub.Infrastructure;
 
@@ -55,6 +57,8 @@ public static class DependencyInjection
         services.AddScoped<IMarketReader, MarketReader>();
         services.AddScoped<IHubProcurementPlanReader, HubProcurementPlanReader>();
         services.AddScoped<HubAccessChecker>();
+
+        services.AddHostedService<HubInboundBackfillHostedService>();
 
         return services;
     }

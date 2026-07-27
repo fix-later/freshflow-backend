@@ -7,4 +7,5 @@ public sealed record ProcurementBatchHandedOffIntegrationEvent(
     Guid MarketId,
     Guid? HubId,
     DateTime HandedOffAt,
-    IReadOnlyList<Guid> CoveredOrderIds) : INotification;
+    IReadOnlyList<Guid> CoveredOrderIds,
+    Guid? HandedOffByUserId = null) : INotification;
