@@ -13,7 +13,7 @@ internal sealed class OrderPackingReader(AppDbContext db) : IOrderPackingReader
             .AsNoTracking()
             .Where(row => row.OrderId == orderId)
             .Select(row => new OrderPackingLine(
-                row.ProductName, row.Quantity, row.CapacityKg))
+                row.OrderId, row.OrderItemId, row.ProductName, row.Quantity, row.CapacityKg))
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<OrderPackingLines>> GetLinesByOrdersAsync(
@@ -31,7 +31,8 @@ internal sealed class OrderPackingReader(AppDbContext db) : IOrderPackingReader
             .GroupBy(row => row.OrderId)
             .Select(group => new OrderPackingLines(
                 group.Key,
-                group.Select(row => new OrderPackingLine(row.ProductName, row.Quantity, row.CapacityKg)).ToList()))
+                group.Select(row => new OrderPackingLine(
+                    row.OrderId, row.OrderItemId, row.ProductName, row.Quantity, row.CapacityKg)).ToList()))
             .ToList();
     }
 }

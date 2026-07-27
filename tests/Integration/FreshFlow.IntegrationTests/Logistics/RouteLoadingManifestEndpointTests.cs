@@ -47,8 +47,13 @@ public sealed class RouteLoadingManifestEndpointTests(AuthWebAppFactory factory)
         stop.RestaurantId.Should().Be(restaurantId);
         stop.RestaurantName.Should().Be("Manifest Restaurant");
         // AtHub order shows up with its packing line (proves GetLinesByOrdersAsync on Postgres).
-        stop.Lines.Should().ContainSingle(line =>
-            line.ProductName == "Packed fish" && line.Quantity == 8 && line.CapacityKg == 15m);
+        var line = stop.Lines.Should().ContainSingle(line =>
+            line.ProductName == "Packed fish" && line.Quantity == 8 && line.CapacityKg == 15m)
+            .Which;
+        // orderId/orderItemId sourced from order_items."Id" via the seam (proves the extended
+        // ToSqlQuery projection on Postgres).
+        line.OrderId.Should().Be(seed.AtHubOrderId);
+        line.OrderItemId.Should().NotBeEmpty();
         // The Draft order at the SAME restaurant must be filtered out
         // (proves ListByRestaurantsAndStatusAsync's status filter on Postgres).
         stop.Lines.Should().NotContain(line => line.ProductName == "Draft-only greens");
@@ -94,7 +99,7 @@ public sealed class RouteLoadingManifestEndpointTests(AuthWebAppFactory factory)
         db.Set<Order>().Add(draftOrder); // stays Draft -> excluded from the manifest
         await db.SaveChangesAsync();
 
-        return new SeededGoods(market.Id);
+        return new SeededGoods(market.Id, atHubOrder.Id);
     }
 
     private async Task<Guid> SeedRouteAsync(Guid marketId, Guid restaurantId)
@@ -148,7 +153,7 @@ public sealed class RouteLoadingManifestEndpointTests(AuthWebAppFactory factory)
             .Which.RestaurantId.Should().NotBeNull().And.Subject!.Value;
     }
 
-    private sealed record SeededGoods(Guid MarketId);
+    private sealed record SeededGoods(Guid MarketId, Guid AtHubOrderId);
 
     private sealed record UserListBody(IReadOnlyList<UserSummaryBody> Data);
 

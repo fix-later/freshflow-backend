@@ -3,6 +3,7 @@ using FreshFlow.API.Extensions;
 using FreshFlow.Hub.Application.Commands.CreateHandover;
 using FreshFlow.Hub.Application.Commands.DriverCheckout;
 using FreshFlow.Hub.Application.Queries.ListHandovers;
+using FreshFlow.Logistics.Application.Queries.ListEligibleDrivers;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -69,6 +70,16 @@ public sealed class HubHandoverController(ISender sender) : ControllerBase
         return result.IsSuccess
             ? Ok(ApiResponse.OkPaged(result.Value.Items, result.Value.PageSize, result.Value.NextCursor))
             : result.Error.ToActionResult();
+    }
+
+    // hubId is RBAC scoping only -- the driver fleet is shared across hubs (no Vehicle.HubId), so
+    // eligible drivers are NOT filtered by hub.
+    [HttpGet("{hubId:guid}/drivers/eligible")]
+    [Authorize(Roles = "hub_staff,admin,operations_manager")]
+    public async Task<IActionResult> ListEligibleDriversAsync(Guid hubId, CancellationToken ct)
+    {
+        var result = await sender.Send(new ListEligibleDriversQuery(), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     private Guid ResolveUserId()
