@@ -18,7 +18,8 @@ public sealed class ReorderDriverRouteCommandHandlerTests
         var routes = new InMemoryDeliveryRouteRepository();
         var route = CreateAssignedRoute(Guid.NewGuid());
         await routes.AddAsync(route, default);
-        var sut = new ReorderDriverRouteCommandHandler(routes, Substitute.For<IRouteOptimizer>());
+        var sut = new ReorderDriverRouteCommandHandler(
+            routes, Substitute.For<IRouteOptimizer>(), Substitute.For<IHubSortingStateReader>());
 
         var result = await sut.Handle(
             new ReorderDriverRouteCommand(
@@ -40,7 +41,8 @@ public sealed class ReorderDriverRouteCommandHandlerTests
         var route = CreateAssignedRoute(driverId);
         route.Start();
         await routes.AddAsync(route, default);
-        var sut = new ReorderDriverRouteCommandHandler(routes, Substitute.For<IRouteOptimizer>());
+        var sut = new ReorderDriverRouteCommandHandler(
+            routes, Substitute.For<IRouteOptimizer>(), Substitute.For<IHubSortingStateReader>());
 
         var result = await sut.Handle(
             new ReorderDriverRouteCommand(
@@ -54,6 +56,36 @@ public sealed class ReorderDriverRouteCommandHandlerTests
         routes.SaveChangesCount.Should().Be(0);
     }
 
+
+    [Fact]
+    public async Task Handle_SortedRoute_ReturnsLockedConflictAsync()
+    {
+        var driverId = Guid.NewGuid();
+        var routes = new InMemoryDeliveryRouteRepository();
+        var route = CreateAssignedRoute(driverId);
+        await routes.AddAsync(route, default);
+        var sorting = Substitute.For<IHubSortingStateReader>();
+        sorting.HasSortedLinesAsync(
+                route.Id,
+                route.Stops[0].EntityId,
+                route.ServiceDate,
+                Arg.Any<CancellationToken>())
+            .Returns(true);
+        var optimizer = Substitute.For<IRouteOptimizer>();
+        var sut = new ReorderDriverRouteCommandHandler(routes, optimizer, sorting);
+
+        var result = await sut.Handle(
+            new ReorderDriverRouteCommand(
+                route.Id,
+                driverId,
+                route.Stops.Select(stop => stop.EntityId).ToList()),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ROUTE_LOCKED_FOR_SORTING");
+        routes.SaveChangesCount.Should().Be(0);
+        _ = optimizer.DidNotReceiveWithAnyArgs().Recalculate(default!, default);
+    }
     [Fact]
     public async Task Handle_AssignedRoute_ReordersAndRecalculatesAsync()
     {
@@ -76,7 +108,8 @@ public sealed class ReorderDriverRouteCommandHandlerTests
                     stops.Select(stop => stop.EntityId).SequenceEqual(orderedIds)),
                 route.ServiceDate)
             .Returns(new RouteOptimizationResult(recalculatedStops, 8.9m, 18, 44500m));
-        var sut = new ReorderDriverRouteCommandHandler(routes, optimizer);
+        var sorting = Substitute.For<IHubSortingStateReader>();
+        var sut = new ReorderDriverRouteCommandHandler(routes, optimizer, sorting);
 
         var result = await sut.Handle(
             new ReorderDriverRouteCommand(route.Id, driverId, orderedIds),
@@ -93,6 +126,11 @@ public sealed class ReorderDriverRouteCommandHandlerTests
             Arg.Is<IReadOnlyList<RouteStop>>(stops =>
                 stops.Select(stop => stop.EntityId).SequenceEqual(orderedIds)),
             route.ServiceDate);
+        await sorting.Received(1).HasSortedLinesAsync(
+            route.Id,
+            route.Stops[0].EntityId,
+            route.ServiceDate,
+            Arg.Any<CancellationToken>());
         routes.SaveChangesCount.Should().Be(1);
     }
 

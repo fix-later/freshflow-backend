@@ -9,7 +9,8 @@ namespace FreshFlow.Logistics.Application.Commands.ReorderDriverRoute;
 
 internal sealed class ReorderDriverRouteCommandHandler(
     IDeliveryRouteRepository routes,
-    IRouteOptimizer optimizer)
+    IRouteOptimizer optimizer,
+    IHubSortingStateReader sorting)
     : IRequestHandler<ReorderDriverRouteCommand, Result<RouteDto>>
 {
     public async Task<Result<RouteDto>> Handle(
@@ -31,6 +32,16 @@ internal sealed class ReorderDriverRouteCommandHandler(
             return Result<RouteDto>.Failure(Error.Conflict(
                 "ROUTE_NOT_REORDERABLE",
                 "Route can only be reordered while assigned, before departure."));
+        }
+
+        var marketId = route.Stops
+            .First(stop => stop.EntityType == StopEntityType.market)
+            .EntityId;
+        if (await sorting.HasSortedLinesAsync(route.Id, marketId, route.ServiceDate, ct))
+        {
+            return Result<RouteDto>.Failure(Error.Conflict(
+                "ROUTE_LOCKED_FOR_SORTING",
+                "Route stop order is locked because hub sorting has started."));
         }
 
         try

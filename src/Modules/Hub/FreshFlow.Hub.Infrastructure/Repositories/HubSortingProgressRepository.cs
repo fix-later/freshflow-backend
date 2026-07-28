@@ -7,16 +7,20 @@ namespace FreshFlow.Hub.Infrastructure.Repositories;
 
 internal sealed class HubSortingProgressRepository(AppDbContext db) : IHubSortingProgressRepository
 {
-    public Task<HubSortingProgress?> FindByRouteAndOrderItemAsync(
-        Guid routeId, Guid orderItemId, CancellationToken ct) =>
+    public Task<HubSortingProgress?> FindByHubDateAndOrderItemAsync(
+        Guid hubId, DateOnly serviceDate, Guid orderItemId, CancellationToken ct) =>
         db.Set<HubSortingProgress>()
             .FirstOrDefaultAsync(p =>
-                p.RouteId == routeId && p.OrderItemId == orderItemId && p.DeletedAt == null, ct);
+                p.HubId == hubId &&
+                p.ServiceDate == serviceDate &&
+                p.OrderItemId == orderItemId &&
+                p.DeletedAt == null, ct);
 
-    public async Task<IReadOnlyList<HubSortingProgress>> ListByRouteAsync(Guid routeId, CancellationToken ct) =>
+    public async Task<IReadOnlyList<HubSortingProgress>> ListByHubAndDateAsync(
+        Guid hubId, DateOnly serviceDate, CancellationToken ct) =>
         await db.Set<HubSortingProgress>()
             .AsNoTracking()
-            .Where(p => p.RouteId == routeId && p.DeletedAt == null)
+            .Where(p => p.HubId == hubId && p.ServiceDate == serviceDate && p.DeletedAt == null)
             .ToListAsync(ct);
 
     public async Task AddAsync(HubSortingProgress progress, CancellationToken ct) =>

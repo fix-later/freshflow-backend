@@ -106,7 +106,12 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         CancellationToken ct = default)
     {
         var result = await sender.Send(
-            new GetHubOrdersByRestaurantQuery(hubId, serviceDate, includeBatched),
+            new GetHubOrdersByRestaurantQuery(
+                hubId,
+                serviceDate,
+                includeBatched,
+                ResolveUserId(),
+                BypassHubAssignment()),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -280,17 +285,16 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
-    [HttpPost("{hubId:guid}/routes/{routeId:guid}/sorting")]
+    [HttpPost("{hubId:guid}/sorting")]
     public async Task<IActionResult> MarkLineSortedAsync(
         Guid hubId,
-        Guid routeId,
         [FromBody] MarkLineSortedRequest body,
         CancellationToken ct)
     {
         var result = await sender.Send(
             new MarkLineSortedCommand(
                 hubId,
-                routeId,
+                body.ServiceDate,
                 body.OrderItemId,
                 body.SortedQuantityKg,
                 ResolveUserId(),
@@ -300,14 +304,15 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
-    [HttpGet("{hubId:guid}/routes/{routeId:guid}/sorting-progress")]
+    [HttpGet("{hubId:guid}/sorting-progress")]
     public async Task<IActionResult> GetSortingProgressAsync(
         Guid hubId,
-        Guid routeId,
+        [FromQuery] DateOnly serviceDate,
         CancellationToken ct)
     {
         var result = await sender.Send(
-            new GetSortingProgressQuery(hubId, routeId, ResolveUserId(), BypassHubAssignment()),
+            new GetSortingProgressQuery(
+                hubId, serviceDate, ResolveUserId(), BypassHubAssignment()),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -357,4 +362,4 @@ public sealed record RecordOutboundItemRequest(
     Guid? ProductId,
     decimal QuantityKg);
 
-public sealed record MarkLineSortedRequest(Guid OrderItemId, decimal SortedQuantityKg);
+public sealed record MarkLineSortedRequest(DateOnly ServiceDate, Guid OrderItemId, decimal SortedQuantityKg);

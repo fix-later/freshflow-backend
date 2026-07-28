@@ -6,7 +6,7 @@ namespace FreshFlow.Hub.Application.Commands.MarkLineSorted;
 
 public sealed record MarkLineSortedCommand(
     Guid HubId,
-    Guid RouteId,
+    DateOnly ServiceDate,
     Guid OrderItemId,
     decimal SortedQuantityKg,
     Guid ActorUserId = default,

@@ -45,7 +45,10 @@ public sealed class HubOrdersByRestaurantEndpointTests(AuthWebAppFactory factory
         first.Lines.Should().ContainSingle(line =>
             line.OrderId == seed.FirstAtHubOrderId &&
             line.ProductName == "Hub fish" &&
-            line.Quantity == 2 &&
+            line.OrderedQuantity == 2 &&
+            line.MarketProductId == seed.MarketProductId &&
+            line.ProductId == seed.ProductId &&
+            line.Unit == seed.Unit &&
             line.CapacityKg == 12m);
 
         var second = body.Data.Restaurants.Single(group => group.RestaurantId == secondRestaurantId);
@@ -53,7 +56,7 @@ public sealed class HubOrdersByRestaurantEndpointTests(AuthWebAppFactory factory
         second.OrderCount.Should().Be(1);
         second.Lines.Should().ContainSingle(line =>
             line.OrderId == seed.SecondAtHubOrderId &&
-            line.Quantity == 3);
+            line.OrderedQuantity == 3);
 
         body.Data.Restaurants.SelectMany(group => group.Lines).Select(line => line.OrderId)
             .Should().NotContain([
@@ -145,6 +148,9 @@ public sealed class HubOrdersByRestaurantEndpointTests(AuthWebAppFactory factory
 
         return new SeededOrders(
             hub.Id,
+            marketProduct.Id,
+            product.Id,
+            unit.Name,
             firstAtHub.Entity.Id,
             secondAtHub.Entity.Id,
             batched.Entity.Id,
@@ -204,6 +210,9 @@ public sealed class HubOrdersByRestaurantEndpointTests(AuthWebAppFactory factory
 
     private sealed record SeededOrders(
         Guid HubId,
+        Guid MarketProductId,
+        Guid ProductId,
+        string Unit,
         Guid FirstAtHubOrderId,
         Guid SecondAtHubOrderId,
         Guid BatchedOrderId,

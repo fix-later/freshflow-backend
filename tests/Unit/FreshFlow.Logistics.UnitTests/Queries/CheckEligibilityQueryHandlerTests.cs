@@ -1,6 +1,7 @@
 using System.Reflection;
 using FluentAssertions;
 using FreshFlow.Logistics.Application.Abstractions;
+using FreshFlow.Logistics.Application.Dtos;
 using FreshFlow.Logistics.Application.Queries.CheckEligibility;
 using FreshFlow.Logistics.Domain.Entities;
 using FreshFlow.Logistics.Domain.Enums;
@@ -95,6 +96,37 @@ public sealed class CheckEligibilityQueryHandlerTests
         var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, null), default);
 
         result.Value.Reasons.Contains("VEHICLE_CAPACITY_EXCEEDED").Should().Be(expectCapacityExceeded);
+    }
+
+    [Fact]
+    public async Task Handle_RouteLoadExceedsVehicleCapacity_ReturnsWeightReasonAsync()
+    {
+        var route = CreateRoute();
+        var vehicle = new Vehicle("51A-12345", 100m, VehicleType.truck, null);
+        var orders = new InMemoryOrderStatusReader();
+        var orderId = Guid.NewGuid();
+        orders.Add(orderId, "AtHub", route.Stops[1].EntityId);
+        var packing = Substitute.For<IOrderPackingReader>();
+        packing.GetLinesByOrdersAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns([
+                new OrderPackingLines(
+                    orderId,
+                    [new OrderPackingLine(orderId, Guid.NewGuid(), "Fish", 11, 10m)])
+            ]);
+        var routes = new InMemoryDeliveryRouteRepository();
+        await routes.AddAsync(route, default);
+        var vehicles = new InMemoryVehicleRepository();
+        await vehicles.AddAsync(vehicle, default);
+        var sut = CreateSut(
+            routes, vehicles, Substitute.For<IDriverReader>(), orders: orders, packing: packing);
+
+        var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, null), default);
+
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.Reasons.Should().Contain("VEHICLE_WEIGHT_CAPACITY_EXCEEDED");
+        result.Value.RouteLoadKg.Should().Be(110m);
+        result.Value.VehicleCapacityKg.Should().Be(100m);
+        result.Value.IsWeightComplete.Should().BeTrue();
     }
 
     [Theory]
@@ -215,12 +247,20 @@ public sealed class CheckEligibilityQueryHandlerTests
         InMemoryDeliveryRouteRepository routes,
         InMemoryVehicleRepository vehicles,
         IDriverReader drivers,
-        int maxStopsPerVehicle = 20)
+        int maxStopsPerVehicle = 20,
+        IOrderStatusReader? orders = null,
+        IOrderPackingReader? packing = null)
     {
         var capacityPolicy = Substitute.For<IVehicleCapacityPolicy>();
         capacityPolicy.MaxStopsPerVehicle.Returns(maxStopsPerVehicle);
 
-        return new CheckEligibilityQueryHandler(routes, vehicles, drivers, capacityPolicy);
+        return new CheckEligibilityQueryHandler(
+            routes,
+            vehicles,
+            drivers,
+            capacityPolicy,
+            orders ?? new InMemoryOrderStatusReader(),
+            packing ?? Substitute.For<IOrderPackingReader>());
     }
 
     private static async Task<(CheckEligibilityQueryHandler Handler, IDriverReader Drivers)> CreateHandlerWithRouteAndVehicleAsync(

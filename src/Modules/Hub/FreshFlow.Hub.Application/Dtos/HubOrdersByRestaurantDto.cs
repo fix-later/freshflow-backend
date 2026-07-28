@@ -15,5 +15,8 @@ public sealed record HubOrderLineDto(
     Guid OrderId,
     Guid OrderItemId,
     string ProductName,
-    int Quantity,
+    Guid MarketProductId,
+    Guid ProductId,
+    string? Unit,
+    int OrderedQuantity,
     decimal? CapacityKg);

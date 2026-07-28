@@ -7,6 +7,7 @@ internal sealed class GetHubOrdersByRestaurantQueryValidator
 {
     public GetHubOrdersByRestaurantQueryValidator()
     {
+        RuleFor(query => query.HubId).NotEmpty();
         RuleFor(query => query.ServiceDate)
             .NotEmpty()
             .LessThan(DateOnly.MaxValue)

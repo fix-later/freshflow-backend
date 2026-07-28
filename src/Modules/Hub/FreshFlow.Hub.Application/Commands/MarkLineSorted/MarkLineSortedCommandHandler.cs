@@ -18,12 +18,13 @@ internal sealed class MarkLineSortedCommandHandler(
         if (hub is null)
             return Result<HubSortingProgressDto>.Failure(Error.NotFound("HUB", request.HubId));
 
-        // Upsert on (RouteId, OrderItemId): a second POST for the same line just overwrites the
+        // Upsert on (HubId, ServiceDate, OrderItemId): a second POST for the same line overwrites the
         // sorted quantity/who/when instead of creating a second row.
-        var line = await progress.FindByRouteAndOrderItemAsync(request.RouteId, request.OrderItemId, ct);
+        var line = await progress.FindByHubDateAndOrderItemAsync(
+            request.HubId, request.ServiceDate, request.OrderItemId, ct);
         if (line is null)
         {
-            line = HubSortingProgress.Create(request.RouteId, request.OrderItemId);
+            line = HubSortingProgress.Create(request.HubId, request.ServiceDate, request.OrderItemId);
             await progress.AddAsync(line, ct);
         }
 
