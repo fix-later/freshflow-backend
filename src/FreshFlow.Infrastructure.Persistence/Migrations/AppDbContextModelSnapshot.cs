@@ -3897,6 +3897,19 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToSqlQuery("SELECT u.\"Id\", u.\"RoleId\", r.\"Name\" AS \"RoleName\", u.\"IsActive\", u.\"DeletedAt\"\nFROM users AS u\nINNER JOIN roles AS r ON u.\"RoleId\" = r.\"Id\"");
                 });
 
+            modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.MarketProductImageRow", b =>
+                {
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("MarketProductId")
+                        .HasColumnType("uuid");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT mp.\"Id\"       AS \"MarketProductId\",\n       p.\"ImageUrl\"  AS \"ImageUrl\"\nFROM market_products mp\nJOIN products p ON p.\"Id\" = mp.\"ProductId\"\nWHERE mp.\"deleted_at\" IS NULL\n  AND p.\"DeletedAt\" IS NULL");
+                });
+
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.MarketProductMarketRow", b =>
                 {
                     b.Property<decimal>("CurrentPrice")

@@ -34,7 +34,12 @@ public sealed class GetAssignedProcurementTaskQueryHandlerTests
                     ids.SequenceEqual(new[] { orderId })),
                 default)
             .Returns(new Dictionary<Guid, string> { [orderId] = "Batched" });
-        var handler = new GetAssignedProcurementTaskQueryHandler(repository, orders);
+        var images = Substitute.For<IMarketProductImageReader>();
+        images.ReadImagesAsync(
+                Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { productId })),
+                default)
+            .Returns(new Dictionary<Guid, string> { [productId] = "https://img/tomato.jpg" });
+        var handler = new GetAssignedProcurementTaskQueryHandler(repository, orders, images);
 
         var result = await handler.Handle(
             new GetAssignedProcurementTaskQuery(agentUserId, batch.Id),
@@ -51,6 +56,8 @@ public sealed class GetAssignedProcurementTaskQueryHandlerTests
         result.Value.Members.Should().ContainSingle(member =>
             member.OrderId == orderId &&
             member.Status == "Batched");
+        result.Value.Items.Should().ContainSingle(item =>
+            item.ProductImageUrl == "https://img/tomato.jpg");
     }
 
     [Fact]
@@ -64,7 +71,8 @@ public sealed class GetAssignedProcurementTaskQueryHandlerTests
         var repository = Substitute.For<IProcurementBatchRepository>();
         repository.FindByIdAsync(batch.Id, default).Returns(batch);
         var orders = Substitute.For<IConfirmedOrderReader>();
-        var handler = new GetAssignedProcurementTaskQueryHandler(repository, orders);
+        var images = Substitute.For<IMarketProductImageReader>();
+        var handler = new GetAssignedProcurementTaskQueryHandler(repository, orders, images);
 
         var result = await handler.Handle(
             new GetAssignedProcurementTaskQuery(Guid.NewGuid(), batch.Id),
@@ -84,7 +92,8 @@ public sealed class GetAssignedProcurementTaskQueryHandlerTests
         repository.FindByIdAsync(batchId, default)
             .Returns((ProcurementBatch?)null);
         var orders = Substitute.For<IConfirmedOrderReader>();
-        var handler = new GetAssignedProcurementTaskQueryHandler(repository, orders);
+        var images = Substitute.For<IMarketProductImageReader>();
+        var handler = new GetAssignedProcurementTaskQueryHandler(repository, orders, images);
 
         var result = await handler.Handle(
             new GetAssignedProcurementTaskQuery(Guid.NewGuid(), batchId),

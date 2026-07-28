@@ -37,7 +37,12 @@ public sealed class GetAssignedProcurementTasksQueryHandlerTests
                     ids.SequenceEqual(new[] { orderId })),
                 default)
             .Returns(new Dictionary<Guid, string> { [orderId] = "Batched" });
-        var handler = new GetAssignedProcurementTasksQueryHandler(repository, orders);
+        var images = Substitute.For<IMarketProductImageReader>();
+        images.ReadImagesAsync(
+                Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { productId })),
+                default)
+            .Returns(new Dictionary<Guid, string> { [productId] = "https://img/tomato.jpg" });
+        var handler = new GetAssignedProcurementTasksQueryHandler(repository, orders, images);
 
         var result = await handler.Handle(
             new GetAssignedProcurementTasksQuery(agentUserId, 2, 10),
@@ -48,6 +53,7 @@ public sealed class GetAssignedProcurementTasksQueryHandlerTests
         result.Value.Batches[0].AssignedAgentUserId.Should().Be(agentUserId);
         result.Value.Batches[0].Items.Should().ContainSingle()
             .Which.ReferenceUnitPrice.Should().Be(10_000m);
+        result.Value.Batches[0].Items[0].ProductImageUrl.Should().Be("https://img/tomato.jpg");
         result.Value.Batches[0].Members.Should().ContainSingle()
             .Which.Status.Should().Be("Batched");
         result.Value.Pagination.Should().BeEquivalentTo(new
@@ -79,7 +85,8 @@ public sealed class GetAssignedProcurementTasksQueryHandlerTests
                 Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 0),
                 default)
             .Returns(new Dictionary<Guid, string>());
-        var handler = new GetAssignedProcurementTasksQueryHandler(repository, orders);
+        var images = Substitute.For<IMarketProductImageReader>();
+        var handler = new GetAssignedProcurementTasksQueryHandler(repository, orders, images);
 
         var result = await handler.Handle(
             new GetAssignedProcurementTasksQuery(agentUserId),
