@@ -7,7 +7,8 @@ namespace FreshFlow.Procurement.Application.Queries.GetAssignedProcurementTasks;
 
 internal sealed class GetAssignedProcurementTasksQueryHandler(
     IProcurementBatchRepository batches,
-    IConfirmedOrderReader orders)
+    IConfirmedOrderReader orders,
+    IMarketProductImageReader images)
     : IRequestHandler<GetAssignedProcurementTasksQuery, Result<ProcurementBatchListDto>>
 {
     public async Task<Result<ProcurementBatchListDto>> Handle(
@@ -25,10 +26,16 @@ internal sealed class GetAssignedProcurementTasksQueryHandler(
             .Distinct()
             .ToArray();
         var statuses = await orders.ReadStatusesAsync(orderIds, cancellationToken);
+        var marketProductIds = page
+            .SelectMany(batch => batch.Items)
+            .Select(item => item.MarketProductId)
+            .Distinct()
+            .ToArray();
+        var imageUrls = await images.ReadImagesAsync(marketProductIds, cancellationToken);
 
         return Result<ProcurementBatchListDto>.Success(
             new ProcurementBatchListDto(
-                page.Select(batch => ProcurementBatchDtoMapper.Map(batch, statuses))
+                page.Select(batch => ProcurementBatchDtoMapper.Map(batch, statuses, imageUrls))
                     .ToList()
                     .AsReadOnly(),
                 new ProcurementBatchPaginationDto(
