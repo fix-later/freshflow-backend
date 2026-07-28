@@ -16,4 +16,11 @@ internal sealed class DriverReader(AppDbContext db) : IDriverReader
             ? null
             : new DriverDto(row.UserId, row.RoleName, row.IsActive);
     }
+
+    public async Task<IReadOnlyList<DriverDto>> ListEligibleAsync(CancellationToken ct) =>
+        await db.Set<DriverRow>()
+            .AsNoTracking()
+            .Where(d => d.RoleName == "driver" && d.IsActive)
+            .Select(d => new DriverDto(d.UserId, d.RoleName, d.IsActive))
+            .ToListAsync(ct);
 }

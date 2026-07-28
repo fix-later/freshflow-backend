@@ -12,7 +12,7 @@ public sealed class ShipmentEstimatorTests
     [Fact]
     public void Estimate_ExactThreeBoxes_IncludesTareInLoad()
     {
-        var result = Estimate([new OrderPackingLine("Cá", 45, 15m)]);
+        var result = Estimate([new OrderPackingLine(Guid.NewGuid(), Guid.NewGuid(), "Cá", 45, 15m)]);
 
         result.TotalBoxes.Should().Be(3);
         result.TotalLoadKg.Should().Be(51m);
@@ -23,7 +23,7 @@ public sealed class ShipmentEstimatorTests
     [Fact]
     public void Estimate_PartialBox_RoundsUp()
     {
-        var result = Estimate([new OrderPackingLine("Rau", 25, 15m)]);
+        var result = Estimate([new OrderPackingLine(Guid.NewGuid(), Guid.NewGuid(), "Rau", 25, 15m)]);
 
         result.TotalBoxes.Should().Be(2);
         result.TotalLoadKg.Should().Be(34m);
@@ -41,7 +41,7 @@ public sealed class ShipmentEstimatorTests
     [Fact]
     public void Estimate_MissingPackingCode_ListsProductAndExcludesTotals()
     {
-        var result = Estimate([new OrderPackingLine("Muối", 10, null)]);
+        var result = Estimate([new OrderPackingLine(Guid.NewGuid(), Guid.NewGuid(), "Muối", 10, null)]);
 
         result.TotalBoxes.Should().Be(0);
         result.TotalLoadKg.Should().Be(0m);
@@ -77,7 +77,7 @@ public sealed class ShipmentEstimatorTests
     }
 
     private static IReadOnlyList<OrderPackingLine> TwoPackedLines() =>
-        [new("Cá", 45, 15m), new("Rau", 25, 15m)];
+        [new(Guid.NewGuid(), Guid.NewGuid(), "Cá", 45, 15m), new(Guid.NewGuid(), Guid.NewGuid(), "Rau", 25, 15m)];
 
     private static ShipmentEstimateDto Estimate(
         IReadOnlyList<OrderPackingLine> lines,

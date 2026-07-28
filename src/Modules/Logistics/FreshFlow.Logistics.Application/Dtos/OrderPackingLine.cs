@@ -1,6 +1,8 @@
 namespace FreshFlow.Logistics.Application.Dtos;
 
 public sealed record OrderPackingLine(
+    Guid OrderId,
+    Guid OrderItemId,
     string ProductName,
     int Quantity,
     decimal? CapacityKg);

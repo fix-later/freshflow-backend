@@ -17,4 +17,5 @@ public sealed record RecordInboundCommand(
 public sealed record HubInboundItemCommand(
     Guid MarketProductId,
     Guid? ProductId,
-    decimal QuantityKg);
+    decimal QuantityKg,
+    string? ProductName = null);

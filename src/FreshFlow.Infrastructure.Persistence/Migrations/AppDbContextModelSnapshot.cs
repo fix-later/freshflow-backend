@@ -1518,6 +1518,70 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("FreshFlow.Hub.Domain.Entities.HubSortingProgress", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid>("OrderItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_item_id");
+
+                    b.Property<Guid>("RouteId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("route_id");
+
+                    b.Property<DateTime?>("SortedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sorted_at");
+
+                    b.Property<Guid?>("SortedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sorted_by_user_id");
+
+                    b.Property<decimal>("SortedQuantityKg")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("sorted_quantity_kg");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("PENDING")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RouteId", "OrderItemId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_hub_sorting_progress_route_item_active")
+                        .HasFilter("deleted_at IS NULL");
+
+                    b.ToTable("hub_sorting_progress", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_hub_sorting_progress_qty_nonnegative", "sorted_quantity_kg >= 0");
+
+                            t.HasCheckConstraint("ck_hub_sorting_progress_status", "status IN ('PENDING', 'SORTED')");
+                        });
+                });
+
             modelBuilder.Entity("FreshFlow.Hub.Domain.Entities.HubStaffAssignment", b =>
                 {
                     b.Property<Guid>("HubId")
@@ -1555,6 +1619,9 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubProcurementBatchRow", b =>
                 {
+                    b.Property<Guid?>("AssignedAgentUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateOnly>("BatchDate")
                         .HasColumnType("date");
 
@@ -1576,7 +1643,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT id AS \"BatchId\",\n       batch_date AS \"BatchDate\",\n       market_id AS \"MarketId\",\n       hub_id AS \"HubId\",\n       status AS \"Status\",\n       handed_off_at AS \"HandedOffAt\"\nFROM procurement_batches\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT id AS \"BatchId\",\n       batch_date AS \"BatchDate\",\n       market_id AS \"MarketId\",\n       hub_id AS \"HubId\",\n       status AS \"Status\",\n       handed_off_at AS \"HandedOffAt\",\n       assigned_agent_user_id AS \"AssignedAgentUserId\"\nFROM procurement_batches\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubProcurementItemRow", b =>
@@ -2408,6 +2475,9 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("OrderItemId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ProductName")
                         .IsRequired()
                         .HasColumnType("text");
@@ -2417,7 +2487,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    oi.\"OrderId\"             AS \"OrderId\",\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\n    oi.\"Quantity\"            AS \"Quantity\",\n    pc.\"CapacityKg\"          AS \"CapacityKg\"\nFROM order_items oi\nINNER JOIN orders o          ON o.\"Id\" = oi.\"OrderId\" AND o.\"deleted_at\" IS NULL\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\nINNER JOIN products p        ON p.\"Id\" = mp.\"ProductId\"\nLEFT JOIN packing_codes pc   ON pc.\"Id\" = p.\"PackingCodeId\" AND pc.\"DeletedAt\" IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT\n    oi.\"OrderId\"             AS \"OrderId\",\n    oi.\"Id\"                  AS \"OrderItemId\",\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\n    oi.\"Quantity\"            AS \"Quantity\",\n    pc.\"CapacityKg\"          AS \"CapacityKg\"\nFROM order_items oi\nINNER JOIN orders o          ON o.\"Id\" = oi.\"OrderId\" AND o.\"deleted_at\" IS NULL\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\nINNER JOIN products p        ON p.\"Id\" = mp.\"ProductId\"\nLEFT JOIN packing_codes pc   ON pc.\"Id\" = p.\"PackingCodeId\" AND pc.\"DeletedAt\" IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.OrderStatusRow", b =>

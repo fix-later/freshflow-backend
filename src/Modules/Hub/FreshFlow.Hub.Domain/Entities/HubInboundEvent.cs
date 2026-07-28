@@ -63,12 +63,14 @@ public sealed class HubInboundEvent
         };
     }
 
-    public void ConfirmArrival()
+    public void ConfirmArrival(Guid? hubStaffUserId = null)
     {
         if (Status != StatusPending)
             throw new InvalidOperationException("Only pending inbound events can be confirmed.");
 
         Status = StatusArrivedAtHub;
+        if (hubStaffUserId.HasValue)
+            HubStaffUserId = hubStaffUserId;
         UpdatedAt = DateTime.UtcNow;
     }
 

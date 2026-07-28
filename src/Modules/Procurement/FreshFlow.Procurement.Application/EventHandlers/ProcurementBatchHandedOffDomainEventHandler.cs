@@ -16,6 +16,7 @@ internal sealed class ProcurementBatchHandedOffDomainEventHandler(IPublisher pub
                 notification.MarketId,
                 notification.HubId,
                 notification.HandedOffAt,
-                notification.CoveredOrderIds),
+                notification.CoveredOrderIds,
+                notification.HandedOffByUserId),
             cancellationToken);
 }

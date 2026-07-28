@@ -25,8 +25,8 @@ internal static class HubInboundMappings
             inbound.UpdatedAt);
 
     public static HubInboundItemDto ToDto(this HubInboundItem item) =>
-        new(item.MarketProductId, item.ProductId, item.QuantityKg);
+        new(item.MarketProductId, item.ProductId, item.QuantityKg, item.ProductName);
 
     public static HubInboundItem ToDomain(this HubInboundItemCommand item) =>
-        new(item.MarketProductId, item.ProductId, item.QuantityKg);
+        new(item.MarketProductId, item.ProductId, item.QuantityKg, item.ProductName);
 }

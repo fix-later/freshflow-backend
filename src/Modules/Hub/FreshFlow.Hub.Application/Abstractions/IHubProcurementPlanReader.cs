@@ -10,4 +10,10 @@ public interface IHubProcurementPlanReader
         Guid hubId,
         DateOnly date,
         CancellationToken ct);
+
+    public Task<IReadOnlyList<HubProcurementItemDto>> ReadBatchItemsAsync(
+        Guid batchId,
+        CancellationToken ct);
+
+    public Task<IReadOnlyList<HubHandedOffBatchDto>> ReadHandedOffBatchesAsync(CancellationToken ct);
 }

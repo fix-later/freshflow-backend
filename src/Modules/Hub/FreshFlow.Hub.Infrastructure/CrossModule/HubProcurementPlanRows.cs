@@ -11,6 +11,7 @@ internal sealed class HubProcurementBatchRow
     public Guid? HubId { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime? HandedOffAt { get; set; }
+    public Guid? AssignedAgentUserId { get; set; }
 }
 
 internal sealed class HubProcurementItemRow
@@ -43,7 +44,8 @@ internal sealed class HubProcurementBatchRowConfiguration
                    market_id AS "MarketId",
                    hub_id AS "HubId",
                    status AS "Status",
-                   handed_off_at AS "HandedOffAt"
+                   handed_off_at AS "HandedOffAt",
+                   assigned_agent_user_id AS "AssignedAgentUserId"
             FROM procurement_batches
             WHERE deleted_at IS NULL
             """);
