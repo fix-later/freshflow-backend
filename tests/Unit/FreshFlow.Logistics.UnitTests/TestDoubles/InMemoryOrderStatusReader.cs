@@ -18,4 +18,10 @@ internal sealed class InMemoryOrderStatusReader : IOrderStatusReader
             _orders.Values
                 .Where(o => o.Status == status && restaurantIds.Contains(o.RestaurantId))
                 .ToList());
+
+    public Task<IReadOnlyList<(Guid RestaurantId, int OrderCount)>> ListRoutableRestaurantsAsync(
+        DateOnly serviceDate,
+        IReadOnlyCollection<string> statuses,
+        CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<(Guid RestaurantId, int OrderCount)>>([]);
 }

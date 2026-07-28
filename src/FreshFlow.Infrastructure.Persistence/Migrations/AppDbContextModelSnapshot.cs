@@ -2467,6 +2467,30 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToSqlQuery("SELECT \"Id\", \"Name\", \"Latitude\", \"Longitude\" FROM markets WHERE \"DeletedAt\" IS NULL AND \"IsActive\" = true");
                 });
 
+            modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.OrderMarketRow", b =>
+                {
+                    b.Property<Guid>("MarketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("MarketName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ScheduledFor")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT o.\"Id\" AS \"OrderId\", o.\"Status\" AS \"Status\",\n       o.\"ScheduledFor\" AS \"ScheduledFor\",\n       mp.\"MarketId\" AS \"MarketId\", m.\"Name\" AS \"MarketName\"\nFROM order_items oi\nJOIN orders o ON o.\"Id\" = oi.\"OrderId\" AND o.\"deleted_at\" IS NULL\nJOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\" AND mp.\"deleted_at\" IS NULL\nJOIN markets m ON m.\"Id\" = mp.\"MarketId\" AND m.\"DeletedAt\" IS NULL");
+                });
+
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.OrderPackingLineRow", b =>
                 {
                     b.Property<decimal?>("CapacityKg")
@@ -2498,13 +2522,16 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("RestaurantId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("ScheduledFor")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT \"Id\" AS \"OrderId\", \"Status\" AS \"Status\", \"RestaurantId\" AS \"RestaurantId\"\nFROM orders\nWHERE \"deleted_at\" IS NULL");
+                    b.ToSqlQuery("SELECT \"Id\" AS \"OrderId\", \"Status\" AS \"Status\", \"RestaurantId\" AS \"RestaurantId\",\n       \"ScheduledFor\" AS \"ScheduledFor\"\nFROM orders\nWHERE \"deleted_at\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.RestaurantCoordinateRow", b =>
