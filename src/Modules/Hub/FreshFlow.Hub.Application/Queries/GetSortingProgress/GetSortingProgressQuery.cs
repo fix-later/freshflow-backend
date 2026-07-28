@@ -6,7 +6,7 @@ namespace FreshFlow.Hub.Application.Queries.GetSortingProgress;
 
 public sealed record GetSortingProgressQuery(
     Guid HubId,
-    Guid RouteId,
+    DateOnly ServiceDate,
     Guid ActorUserId = default,
     bool BypassHubAssignment = false)
     : IQuery<IReadOnlyList<HubSortingProgressDto>>, IHubAccessRequest;

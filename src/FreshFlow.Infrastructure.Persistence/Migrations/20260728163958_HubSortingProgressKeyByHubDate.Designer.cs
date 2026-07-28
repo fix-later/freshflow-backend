@@ -3,6 +3,7 @@ using System;
 using FreshFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FreshFlow.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260728163958_HubSortingProgressKeyByHubDate")]
+    partial class HubSortingProgressKeyByHubDate
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3383,19 +3386,6 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable((string)null);
 
                     b.ToSqlQuery("SELECT\n    rf.restaurant_id     AS \"RestaurantId\",\n    rf.market_product_id AS \"MarketProductId\",\n    rf.created_at        AS \"CreatedAt\",\n    mp.\"ProductId\"       AS \"ProductId\",\n    p.\"Name\"             AS \"ProductName\",\n    p.\"ImageUrl\"         AS \"ImageUrl\",\n    mp.\"MarketId\"        AS \"MarketId\",\n    m.\"Name\"             AS \"MarketName\",\n    c.\"Name\"             AS \"Category\",\n    u.\"Name\"             AS \"Unit\",\n    mp.\"CurrentPrice\"    AS \"CurrentPrice\",\n    (mp.\"CurrentQuantity\" - mp.\"ReservedQuantity\") AS \"AvailableQuantity\"\nFROM restaurant_favorites rf\nINNER JOIN market_products mp ON rf.market_product_id = mp.\"Id\"\nINNER JOIN products p         ON mp.\"ProductId\" = p.\"Id\"\nINNER JOIN markets m          ON mp.\"MarketId\" = m.\"Id\"\nLEFT JOIN units_of_measurement u ON p.\"UnitId\" = u.\"Id\" AND u.\"DeletedAt\" IS NULL\nLEFT JOIN product_categories  c  ON p.\"CategoryId\" = c.\"Id\" AND c.\"DeletedAt\" IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL AND m.\"DeletedAt\" IS NULL");
-                });
-
-            modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.MarketProductImageRow", b =>
-                {
-                    b.Property<string>("ImageUrl")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("MarketProductId")
-                        .HasColumnType("uuid");
-
-                    b.ToTable((string)null);
-
-                    b.ToSqlQuery("SELECT mp.\"Id\"       AS \"MarketProductId\",\n       p.\"ImageUrl\"  AS \"ImageUrl\"\nFROM market_products mp\nJOIN products p ON p.\"Id\" = mp.\"ProductId\"\nWHERE mp.\"deleted_at\" IS NULL\n  AND p.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.MarketProductRow", b =>

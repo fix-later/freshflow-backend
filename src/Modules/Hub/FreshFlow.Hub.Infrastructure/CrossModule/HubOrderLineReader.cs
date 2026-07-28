@@ -21,6 +21,9 @@ internal sealed class HubOrderLineReader(AppDbContext db) : IHubOrderLineReader
                 row.OrderId,
                 row.OrderItemId,
                 row.ProductName,
+                row.MarketProductId,
+                row.ProductId,
+                row.Unit,
                 row.Quantity,
                 row.CapacityKg))
             .ToListAsync(ct);

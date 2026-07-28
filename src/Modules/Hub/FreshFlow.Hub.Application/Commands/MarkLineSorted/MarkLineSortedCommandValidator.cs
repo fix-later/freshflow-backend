@@ -7,7 +7,7 @@ internal sealed class MarkLineSortedCommandValidator : AbstractValidator<MarkLin
     public MarkLineSortedCommandValidator()
     {
         RuleFor(x => x.HubId).NotEmpty();
-        RuleFor(x => x.RouteId).NotEmpty();
+        RuleFor(x => x.ServiceDate).NotEmpty();
         RuleFor(x => x.OrderItemId).NotEmpty();
         RuleFor(x => x.SortedQuantityKg).GreaterThan(0);
     }

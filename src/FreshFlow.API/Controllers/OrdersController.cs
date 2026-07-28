@@ -15,6 +15,7 @@ using FreshFlow.Orders.Application.Commands.ReportOrderIssue;
 using FreshFlow.Orders.Application.Commands.UpdateOrderItem;
 using FreshFlow.Orders.Application.Commands.UpdateScheduledOrder;
 using FreshFlow.Orders.Application.Dtos;
+using FreshFlow.Orders.Application.Queries.GetOperationalSettings;
 using FreshFlow.Orders.Application.Queries.GetOrder;
 using FreshFlow.Orders.Application.Queries.GetScheduledOrder;
 using FreshFlow.Orders.Application.Queries.ListOrders;
@@ -65,6 +66,17 @@ public sealed class OrdersController(ISender sender) : ControllerBase
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default) =>
         ListOrdersInternalAsync(restaurantId, status, from, to, sort, page, pageSize, ct);
+
+    [HttpGet("ordering-window")]
+    [Authorize(Roles = "admin,operations_manager,restaurant")]
+    public async Task<IActionResult> GetOrderingWindowAsync(CancellationToken ct)
+    {
+        var result = await sender.Send(new GetOperationalSettingsQuery(), ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse.Ok(new OrderingWindowResponse(
+                result.Value.DailyCutoffTime, result.Value.DeliveryWindowDays)))
+            : result.Error.ToActionResult();
+    }
 
     /// <summary>GET /api/v1/orders/scheduled — UC-ORD-10: lists recurring scheduled orders.</summary>
     [HttpGet("scheduled")]
@@ -469,6 +481,8 @@ public sealed class OrdersController(ISender sender) : ControllerBase
 }
 
 // ── Request DTOs ──────────────────────────────────────────────────────────────
+
+public sealed record OrderingWindowResponse(TimeOnly DailyCutoffTime, int DeliveryWindowDays);
 
 public sealed record CreateDraftOrderRequest(
     IReadOnlyList<DraftOrderItemRequest> Items,

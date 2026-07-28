@@ -7,6 +7,6 @@ internal sealed class GetSortingProgressQueryValidator : AbstractValidator<GetSo
     public GetSortingProgressQueryValidator()
     {
         RuleFor(x => x.HubId).NotEmpty();
-        RuleFor(x => x.RouteId).NotEmpty();
+        RuleFor(x => x.ServiceDate).NotEmpty();
     }
 }

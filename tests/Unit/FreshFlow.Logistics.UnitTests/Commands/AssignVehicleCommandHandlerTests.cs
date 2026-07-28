@@ -95,6 +95,24 @@ public sealed class AssignVehicleCommandHandlerTests
         repository.SaveAssignmentCount.Should().Be(0);
     }
 
+    [Fact]
+    public async Task Handle_WeightCapacityExceeded_ReturnsValidationErrorAsync()
+    {
+        var repository = new InMemoryDeliveryRouteRepository();
+        var route = ReviewedRoute();
+        await repository.AddAsync(route, default);
+        var sender = EligibilitySender(false, ["VEHICLE_WEIGHT_CAPACITY_EXCEEDED"]);
+        var sut = new AssignVehicleCommandHandler(repository, sender);
+
+        var result = await sut.Handle(
+            new AssignVehicleCommand(route.Id, Guid.NewGuid(), null), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("VALIDATION_ERROR");
+        result.Error.Message.Should().Contain("VEHICLE_WEIGHT_CAPACITY_EXCEEDED");
+        repository.SaveAssignmentCount.Should().Be(0);
+    }
+
     [Theory]
     [InlineData("VEHICLE_DOUBLE_BOOKED")]
     [InlineData("VEHICLE_UNAVAILABLE")]

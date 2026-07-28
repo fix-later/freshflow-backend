@@ -7,8 +7,8 @@ using FreshFlow.IntegrationTests.Infrastructure;
 namespace FreshFlow.IntegrationTests.Hub;
 
 /// <summary>
-/// POST/GET .../routes/{routeId}/sorting(-progress). Proves persistence + read-back on real
-/// Postgres, and that the partial unique index on (route_id, order_item_id) makes the POST
+/// POST/GET route-free sorting endpoints. Proves persistence + read-back on real Postgres,
+/// and that the partial unique index on (hub_id, service_date, order_item_id) makes the POST
 /// idempotent (two calls for the same line -> one row).
 /// </summary>
 [Trait("Category", "Integration")]
@@ -16,29 +16,32 @@ public sealed class HubSortingProgressEndpointTests(AuthWebAppFactory factory)
     : IClassFixture<AuthWebAppFactory>
 {
     private readonly HttpClient _client = factory.CreateClient();
+    private static readonly DateOnly ServiceDate = new(2026, 7, 29);
 
     [Fact]
     public async Task MarkSorted_CalledTwiceForSameLine_UpsertsOneRowAsync()
     {
         await AuthenticateAsAdminAsync();
         var hubId = await CreateHubAsync();
-        var routeId = Guid.NewGuid();
         var orderItemId = Guid.NewGuid();
 
         var first = await _client.PostAsJsonAsync(
-            $"/api/v1/hubs/{hubId}/routes/{routeId}/sorting",
-            new { orderItemId, sortedQuantityKg = 4m });
+            $"/api/v1/hubs/{hubId}/sorting",
+            new { serviceDate = ServiceDate, orderItemId, sortedQuantityKg = 4m });
         first.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var second = await _client.PostAsJsonAsync(
-            $"/api/v1/hubs/{hubId}/routes/{routeId}/sorting",
-            new { orderItemId, sortedQuantityKg = 9m });
+            $"/api/v1/hubs/{hubId}/sorting",
+            new { serviceDate = ServiceDate, orderItemId, sortedQuantityKg = 9m });
         second.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var progress = await _client.GetFromJsonAsync<Envelope<List<SortingLineBody>>>(
-            $"/api/v1/hubs/{hubId}/routes/{routeId}/sorting-progress");
+            $"/api/v1/hubs/{hubId}/sorting-progress?serviceDate={ServiceDate:yyyy-MM-dd}");
 
         var line = progress!.Data!.Should().ContainSingle().Which;
+        line.HubId.Should().Be(hubId);
+        line.ServiceDate.Should().Be(ServiceDate);
+        line.RouteId.Should().BeNull();
         line.OrderItemId.Should().Be(orderItemId);
         line.SortedQuantityKg.Should().Be(9m);
         line.Status.Should().Be("SORTED");
@@ -85,5 +88,11 @@ public sealed class HubSortingProgressEndpointTests(AuthWebAppFactory factory)
 
     private sealed record IdBody(Guid Id);
     private sealed record HubBody(Guid HubId);
-    private sealed record SortingLineBody(Guid OrderItemId, decimal SortedQuantityKg, string Status);
+    private sealed record SortingLineBody(
+        Guid HubId,
+        DateOnly ServiceDate,
+        Guid? RouteId,
+        Guid OrderItemId,
+        decimal SortedQuantityKg,
+        string Status);
 }

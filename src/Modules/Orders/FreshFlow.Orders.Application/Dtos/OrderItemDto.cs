@@ -7,4 +7,5 @@ public sealed record OrderItemDto(
     int Quantity,
     decimal UnitPrice,
     decimal Subtotal,
-    decimal? ActualQuantity);
+    decimal? ActualQuantity,
+    string? ImageUrl);

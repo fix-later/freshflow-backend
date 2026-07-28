@@ -7,7 +7,8 @@ namespace FreshFlow.Orders.Application.Queries.GetOrder;
 
 internal sealed class GetOrderQueryHandler(
     IOrderRepository orderRepository,
-    IRestaurantReader restaurantReader) : IRequestHandler<GetOrderQuery, Result<OrderDto>>
+    IRestaurantReader restaurantReader,
+    IMarketProductImageReader marketProductImageReader) : IRequestHandler<GetOrderQuery, Result<OrderDto>>
 {
     public async Task<Result<OrderDto>> Handle(GetOrderQuery request, CancellationToken cancellationToken)
     {
@@ -23,6 +24,10 @@ internal sealed class GetOrderQueryHandler(
                     Error.Unauthorized("FORBIDDEN", "This order is not accessible."));
         }
 
-        return Result<OrderDto>.Success(OrderDtoMapper.ToDto(order));
+        var images = await marketProductImageReader.ReadImagesAsync(
+            order.Items.Select(item => item.MarketProductId).ToArray(),
+            cancellationToken);
+
+        return Result<OrderDto>.Success(OrderDtoMapper.ToDto(order, images));
     }
 }

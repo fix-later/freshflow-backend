@@ -10,6 +10,8 @@ namespace FreshFlow.Hub.UnitTests.Commands;
 [Trait("Category", "Unit")]
 public sealed class MarkLineSortedCommandHandlerTests
 {
+    private static readonly DateOnly ServiceDate = new(2026, 7, 29);
+
     [Fact]
     public async Task Handle_NoExistingLine_InsertsSortedRowAsync()
     {
@@ -17,13 +19,12 @@ public sealed class MarkLineSortedCommandHandlerTests
         var progress = new InMemoryHubSortingProgressRepository();
         var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
         await hubs.AddAsync(hub, default);
-        var routeId = Guid.NewGuid();
         var orderItemId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var sut = new MarkLineSortedCommandHandler(hubs, progress);
 
         var result = await sut.Handle(
-            new MarkLineSortedCommand(hub.Id, routeId, orderItemId, 4m, userId),
+            new MarkLineSortedCommand(hub.Id, ServiceDate, orderItemId, 4m, userId),
             default);
 
         result.IsSuccess.Should().BeTrue();
@@ -33,19 +34,18 @@ public sealed class MarkLineSortedCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ExistingLineForSameRouteAndItem_UpdatesInPlaceInsteadOfInsertingAsync()
+    public async Task Handle_ExistingLineForSameHubDateAndItem_UpdatesInPlaceInsteadOfInsertingAsync()
     {
         var hubs = new InMemoryHubRepository();
         var progress = new InMemoryHubSortingProgressRepository();
         var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
         await hubs.AddAsync(hub, default);
-        var routeId = Guid.NewGuid();
         var orderItemId = Guid.NewGuid();
         var sut = new MarkLineSortedCommandHandler(hubs, progress);
-        await sut.Handle(new MarkLineSortedCommand(hub.Id, routeId, orderItemId, 4m, Guid.NewGuid()), default);
+        await sut.Handle(new MarkLineSortedCommand(hub.Id, ServiceDate, orderItemId, 4m, Guid.NewGuid()), default);
 
         var result = await sut.Handle(
-            new MarkLineSortedCommand(hub.Id, routeId, orderItemId, 9m, Guid.NewGuid()),
+            new MarkLineSortedCommand(hub.Id, ServiceDate, orderItemId, 9m, Guid.NewGuid()),
             default);
 
         result.IsSuccess.Should().BeTrue();
@@ -59,7 +59,7 @@ public sealed class MarkLineSortedCommandHandlerTests
         var sut = new MarkLineSortedCommandHandler(new InMemoryHubRepository(), new InMemoryHubSortingProgressRepository());
 
         var result = await sut.Handle(
-            new MarkLineSortedCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1m, Guid.NewGuid()),
+            new MarkLineSortedCommand(Guid.NewGuid(), ServiceDate, Guid.NewGuid(), 1m, Guid.NewGuid()),
             default);
 
         result.IsFailure.Should().BeTrue();
@@ -67,20 +67,20 @@ public sealed class MarkLineSortedCommandHandlerTests
     }
 
     [Fact]
-    public async Task GetSortingProgress_ReturnsOnlyLinesForRequestedRouteAsync()
+    public async Task GetSortingProgress_ReturnsOnlyLinesForRequestedHubAndDateAsync()
     {
         var hubs = new InMemoryHubRepository();
         var progress = new InMemoryHubSortingProgressRepository();
         var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
         await hubs.AddAsync(hub, default);
-        var routeId = Guid.NewGuid();
-        var line = HubSortingProgress.Create(routeId, Guid.NewGuid());
+        var line = HubSortingProgress.Create(hub.Id, ServiceDate, Guid.NewGuid());
         line.MarkSorted(2m, Guid.NewGuid(), DateTime.UtcNow);
         await progress.AddAsync(line, default);
-        await progress.AddAsync(HubSortingProgress.Create(Guid.NewGuid(), Guid.NewGuid()), default);
+        await progress.AddAsync(
+            HubSortingProgress.Create(hub.Id, ServiceDate.AddDays(1), Guid.NewGuid()), default);
         var sut = new GetSortingProgressQueryHandler(hubs, progress);
 
-        var result = await sut.Handle(new GetSortingProgressQuery(hub.Id, routeId), default);
+        var result = await sut.Handle(new GetSortingProgressQuery(hub.Id, ServiceDate), default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().ContainSingle().Which.OrderItemId.Should().Be(line.OrderItemId);

@@ -7,6 +7,8 @@ internal static class HubSortingProgressMappings
 {
     public static HubSortingProgressDto ToDto(this HubSortingProgress progress) =>
         new(
+            progress.HubId,
+            progress.ServiceDate,
             progress.RouteId,
             progress.OrderItemId,
             progress.SortedQuantityKg,

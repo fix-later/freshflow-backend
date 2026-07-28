@@ -24,11 +24,18 @@ internal sealed class HubSortingProgressConfiguration : IEntityTypeConfiguration
             .HasColumnName("id")
             .IsRequired();
 
-        // RouteId/OrderItemId are cross-module ids (Logistics/Orders) -- no DB FK, same as
-        // HubDiscrepancy.OrderId/OrderItemId.
-        builder.Property(p => p.RouteId)
-            .HasColumnName("route_id")
+        builder.Property(p => p.HubId)
+            .HasColumnName("hub_id")
             .IsRequired();
+
+        builder.Property(p => p.ServiceDate)
+            .HasColumnName("service_date")
+            .HasColumnType("date")
+            .IsRequired();
+
+        // RouteId/OrderItemId are cross-module ids (Logistics/Orders) -- no DB FK.
+        builder.Property(p => p.RouteId)
+            .HasColumnName("route_id");
 
         builder.Property(p => p.OrderItemId)
             .HasColumnName("order_item_id")
@@ -63,10 +70,9 @@ internal sealed class HubSortingProgressConfiguration : IEntityTypeConfiguration
         builder.Property(p => p.DeletedAt)
             .HasColumnName("deleted_at");
 
-        // Idempotency key: one active row per (route, order item). Callers upsert through this.
-        builder.HasIndex(p => new { p.RouteId, p.OrderItemId })
+        builder.HasIndex(p => new { p.HubId, p.ServiceDate, p.OrderItemId })
             .IsUnique()
             .HasFilter("deleted_at IS NULL")
-            .HasDatabaseName("ux_hub_sorting_progress_route_item_active");
+            .HasDatabaseName("ux_hub_sorting_progress_hub_date_item_active");
     }
 }

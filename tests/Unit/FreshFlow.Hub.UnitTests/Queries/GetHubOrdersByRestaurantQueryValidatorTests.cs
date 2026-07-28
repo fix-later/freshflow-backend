@@ -6,6 +6,15 @@ namespace FreshFlow.Hub.UnitTests.Queries;
 [Trait("Category", "Unit")]
 public sealed class GetHubOrdersByRestaurantQueryValidatorTests
 {
+    [Fact]
+    public void Validate_EmptyHubId_Fails()
+    {
+        var result = new GetHubOrdersByRestaurantQueryValidator()
+            .Validate(new GetHubOrdersByRestaurantQuery(Guid.Empty, new DateOnly(2026, 7, 29)));
+
+        result.IsValid.Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

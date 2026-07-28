@@ -18,7 +18,7 @@ internal sealed class GetSortingProgressQueryHandler(
         if (hub is null)
             return Result<IReadOnlyList<HubSortingProgressDto>>.Failure(Error.NotFound("HUB", request.HubId));
 
-        var lines = await progress.ListByRouteAsync(request.RouteId, ct);
+        var lines = await progress.ListByHubAndDateAsync(request.HubId, request.ServiceDate, ct);
 
         return Result<IReadOnlyList<HubSortingProgressDto>>.Success(
             lines.Select(line => line.ToDto()).ToList().AsReadOnly());

@@ -76,6 +76,15 @@ public sealed class HubStaffAssignmentEndpointTests(AuthWebAppFactory factory)
             .StatusCode.Should().Be(HttpStatusCode.OK);
         (await _client.GetAsync($"/api/v1/hubs/{hubB}/pending-inbound"))
             .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await _client.GetAsync(
+            $"/api/v1/hubs/{hubA}/orders-by-restaurant?service_date=2026-07-29"))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        (await _client.GetAsync(
+            $"/api/v1/hubs/{hubB}/orders-by-restaurant?service_date=2026-07-29"))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await _client.GetAsync(
+            $"/api/v1/hubs/{Guid.NewGuid()}/orders-by-restaurant?service_date=2026-07-29"))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
 
         Authenticate(adminToken);
         await SetActiveAsync(staffA.Id, false);

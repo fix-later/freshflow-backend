@@ -13,6 +13,7 @@ using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Pricing.Domain.Entities;
 using Microsoft.Extensions.DependencyInjection;
+using HubEntity = FreshFlow.Hub.Domain.Entities.Hub;
 
 namespace FreshFlow.IntegrationTests.Logistics;
 
@@ -21,6 +22,7 @@ public sealed class DriverRouteReorderEndpointTests(AuthWebAppFactory factory)
     : IClassFixture<AuthWebAppFactory>
 {
     private const string DriverPassword = "DriverP@ss1";
+    private static readonly DateOnly ServiceDate = new(2026, 7, 30);
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
@@ -64,6 +66,41 @@ public sealed class DriverRouteReorderEndpointTests(AuthWebAppFactory factory)
         manifest.Data.Stops.Select(stop => stop.StopOrder).Should().Equal(2, 1);
     }
 
+    [Fact]
+    public async Task Reorder_RouteFreeSortedLine_ReturnsConflictAsync()
+    {
+        await AuthenticateAsAdminAsync();
+        var assignedDriver = await CreateDriverAsync();
+        var firstRestaurantId = await CreateRestaurantAsync("Locked Restaurant One");
+        var secondRestaurantId = await CreateRestaurantAsync("Locked Restaurant Two");
+        var seed = await SeedAssignedRouteAsync(
+            assignedDriver.Id, firstRestaurantId, secondRestaurantId);
+        await SeedRouteFreeSortingAsync(seed);
+
+        await AuthenticateAsync(assignedDriver.Email, DriverPassword);
+        var response = await _client.PostAsJsonAsync(
+            $"/api/v1/driver/routes/{seed.RouteId}/reorder",
+            new { stopOrder = new[] { seed.MarketId, secondRestaurantId, firstRestaurantId } });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var error = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
+        error!.Error!.Code.Should().Be("ROUTE_LOCKED_FOR_SORTING");
+    }
+
+    private async Task SeedRouteFreeSortingAsync(SeededRoute seed)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var hub = HubEntity.Create("Sorting Lock Hub", null, null, null, 1000m, null, seed.MarketId);
+        db.Add(hub);
+        await db.SaveChangesAsync();
+        var sorting = FreshFlow.Hub.Domain.Entities.HubSortingProgress.Create(
+            hub.Id, ServiceDate, Guid.NewGuid());
+        sorting.MarkSorted(1m, Guid.NewGuid(), DateTime.UtcNow);
+        db.Add(sorting);
+        await db.SaveChangesAsync();
+    }
+
     private async Task<SeededRoute> SeedAssignedRouteAsync(
         Guid driverId,
         Guid firstRestaurantId,
@@ -101,7 +138,7 @@ public sealed class DriverRouteReorderEndpointTests(AuthWebAppFactory factory)
             new(2, StopEntityType.restaurant, secondRestaurantId, "Reorder Restaurant Two",
                 10.77m, 106.69m, null, null)
         ];
-        var route = DeliveryRoute.CreateDirect(new DateOnly(2026, 7, 30), stops, null);
+        var route = DeliveryRoute.CreateDirect(ServiceDate, stops, null);
         route.ApplyOptimization(route.Stops, 10m, 20, 50_000m, OptimizationCriteria.distance);
         route.Select();
         route.MarkReviewed();

@@ -31,6 +31,13 @@ internal sealed class AssignVehicleCommandHandler(
         if (!eligibilityResult.Value.IsEligible)
         {
             var reasons = eligibilityResult.Value.Reasons;
+            if (reasons.Contains("VEHICLE_WEIGHT_CAPACITY_EXCEEDED"))
+            {
+                return Result<RouteDto>.Failure(Error.Validation(
+                    "VALIDATION_ERROR",
+                    "VEHICLE_WEIGHT_CAPACITY_EXCEEDED: Route load exceeds vehicle capacity."));
+            }
+
             var isConflict = reasons.Contains("VEHICLE_DOUBLE_BOOKED") || reasons.Contains("VEHICLE_UNAVAILABLE");
             return isConflict
                 ? Result<RouteDto>.Failure(Error.Conflict(
