@@ -7,6 +7,7 @@ using FreshFlow.Hub.Application.Commands.RecordDiscrepancy;
 using FreshFlow.Hub.Application.Commands.RecordInbound;
 using FreshFlow.Hub.Application.Commands.RecordOutbound;
 using FreshFlow.Hub.Application.Commands.ScanInbound;
+using FreshFlow.Hub.Application.Queries.GetHubOrdersByRestaurant;
 using FreshFlow.Hub.Application.Queries.GetHubProcurementPlan;
 using FreshFlow.Hub.Application.Queries.GetPendingInbound;
 using FreshFlow.Hub.Application.Queries.GetSortingProgress;
@@ -93,6 +94,19 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
                 date,
                 ResolveUserId(),
                 BypassHubAssignment()),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("{hubId:guid}/orders-by-restaurant")]
+    public async Task<IActionResult> GetOrdersByRestaurantAsync(
+        Guid hubId,
+        [FromQuery(Name = "service_date")] DateOnly serviceDate,
+        [FromQuery(Name = "include_batched")] bool includeBatched = false,
+        CancellationToken ct = default)
+    {
+        var result = await sender.Send(
+            new GetHubOrdersByRestaurantQuery(hubId, serviceDate, includeBatched),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
