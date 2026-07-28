@@ -1617,6 +1617,29 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToSqlQuery("SELECT id AS \"RouteId\", status AS \"Status\", driver_user_id AS \"DriverUserId\"\nFROM delivery_routes\nWHERE deleted_at IS NULL");
                 });
 
+            modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubOrderLineRow", b =>
+                {
+                    b.Property<decimal?>("CapacityKg")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrderItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT\n    oi.\"OrderId\"             AS \"OrderId\",\n    oi.\"Id\"                  AS \"OrderItemId\",\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\n    oi.\"Quantity\"            AS \"Quantity\",\n    pc.\"CapacityKg\"          AS \"CapacityKg\"\nFROM order_items oi\nINNER JOIN orders o          ON o.\"Id\" = oi.\"OrderId\" AND o.\"deleted_at\" IS NULL\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\nINNER JOIN products p        ON p.\"Id\" = mp.\"ProductId\"\nLEFT JOIN packing_codes pc   ON pc.\"Id\" = p.\"PackingCodeId\" AND pc.\"DeletedAt\" IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
+                });
+
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubProcurementBatchRow", b =>
                 {
                     b.Property<Guid?>("AssignedAgentUserId")
@@ -1686,6 +1709,33 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable((string)null);
 
                     b.ToSqlQuery("SELECT procurement_batch_id AS \"ProcurementBatchId\",\n       order_id AS \"OrderId\"\nFROM procurement_batch_orders\nWHERE deleted_at IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubRestaurantOrderRow", b =>
+                {
+                    b.Property<Guid>("HubId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RestaurantName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ScheduledFor")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT pb.hub_id           AS \"HubId\",\n       pbo.order_id        AS \"OrderId\",\n       o.\"RestaurantId\"    AS \"RestaurantId\",\n       r.\"Name\"            AS \"RestaurantName\",\n       o.\"Status\"          AS \"Status\",\n       o.\"ScheduledFor\"    AS \"ScheduledFor\"\nFROM procurement_batches pb\nJOIN procurement_batch_orders pbo ON pbo.procurement_batch_id = pb.id AND pbo.deleted_at IS NULL\nJOIN orders o        ON o.\"Id\" = pbo.order_id AND o.\"deleted_at\" IS NULL\nJOIN restaurants r   ON r.\"Id\" = o.\"RestaurantId\"\nWHERE pb.deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubStaffUserRow", b =>

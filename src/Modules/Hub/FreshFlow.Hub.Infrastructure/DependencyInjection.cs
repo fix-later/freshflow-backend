@@ -57,6 +57,8 @@ public static class DependencyInjection
         services.AddScoped<IHubStaffReader, HubStaffReader>();
         services.AddScoped<IMarketReader, MarketReader>();
         services.AddScoped<IHubProcurementPlanReader, HubProcurementPlanReader>();
+        services.AddScoped<IHubRestaurantOrderReader, HubRestaurantOrderReader>();
+        services.AddScoped<IHubOrderLineReader, HubOrderLineReader>();
         services.AddScoped<HubAccessChecker>();
 
         services.AddHostedService<HubInboundBackfillHostedService>();

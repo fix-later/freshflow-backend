@@ -23,6 +23,7 @@ public static class ErrorExtensions
                         or "MARKET_PRODUCT_ALREADY_EXISTS"
                         or "ALREADY_RECEIVED"
                         or "ROUTE_NOT_ASSIGNED"
+                        or "ROUTE_NOT_REORDERABLE"
                         or "DELIVERY_ALREADY_EXISTS"
                         or "ROUTE_NOT_STARTABLE"
                         or "ROUTE_HAS_NO_DELIVERIES"

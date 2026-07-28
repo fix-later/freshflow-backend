@@ -14,4 +14,13 @@ public sealed class GetRouteSuggestionsQueryValidatorTests
 
         result.IsValid.Should().BeFalse();
     }
+
+    [Fact]
+    public void Validate_MaxServiceDate_Fails()
+    {
+        var result = new GetRouteSuggestionsQueryValidator()
+            .Validate(new GetRouteSuggestionsQuery(DateOnly.MaxValue));
+
+        result.IsValid.Should().BeFalse();
+    }
 }
