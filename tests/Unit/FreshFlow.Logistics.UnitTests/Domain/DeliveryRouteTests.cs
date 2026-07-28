@@ -274,6 +274,61 @@ public sealed class DeliveryRouteTests
     }
 
     [Fact]
+    public void ReorderStopsByDriver_AssignedRoute_ReordersAndRenumbersStops()
+    {
+        var route = AssignedRoute();
+        var orderedIds = new[]
+        {
+            route.Stops[0].EntityId,
+            route.Stops[2].EntityId,
+            route.Stops[1].EntityId
+        };
+
+        route.ReorderStopsByDriver(orderedIds);
+
+        route.Status.Should().Be(RouteStatus.assigned);
+        route.Stops.Select(stop => stop.EntityId).Should().Equal(orderedIds);
+        route.Stops.Select(stop => stop.StopOrder).Should().Equal(0, 1, 2);
+        route.OptimizationCriteria.Should().Be(OptimizationCriteria.distance);
+    }
+
+    [Theory]
+    [InlineData(RouteStatus.reviewed)]
+    [InlineData(RouteStatus.in_progress)]
+    public void ReorderStopsByDriver_NotAssigned_ThrowsInvalidOperationException(RouteStatus status)
+    {
+        var route = AssignedRoute();
+        SetStatus(route, status);
+
+        var act = () => route.ReorderStopsByDriver(
+            route.Stops.Select(stop => stop.EntityId).ToList());
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void ReorderStopsByDriver_InvalidPermutation_ThrowsArgumentException()
+    {
+        var route = AssignedRoute();
+
+        var act = () => route.ReorderStopsByDriver(
+            [route.Stops[0].EntityId, route.Stops[1].EntityId, route.Stops[1].EntityId]);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void ReorderStopsByDriver_RestaurantBeforeMarket_ThrowsArgumentException()
+    {
+        var route = AssignedRoute();
+
+        var act = () => route.ReorderStopsByDriver(
+            [route.Stops[1].EntityId, route.Stops[0].EntityId, route.Stops[2].EntityId]);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
     public void MarkReviewed_SelectedOptimizedRoute_TransitionsToReviewed()
     {
         var route = OptimizedSelectedRoute();
@@ -467,6 +522,19 @@ public sealed class DeliveryRouteTests
     {
         var route = OptimizedSelectedRoute();
         route.MarkReviewed();
+        return route;
+    }
+
+    private static DeliveryRoute AssignedRoute()
+    {
+        var route = DeliveryRoute.CreateDirect(
+            new DateOnly(2026, 7, 9),
+            [MarketStop(), RestaurantStop(1), RestaurantStop(2)],
+            null);
+        route.ApplyOptimization(route.Stops, 10m, 20, 50000m, OptimizationCriteria.distance);
+        route.Select();
+        route.MarkReviewed();
+        route.Assign(Guid.NewGuid(), Guid.NewGuid());
         return route;
     }
 

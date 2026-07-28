@@ -3,6 +3,7 @@ using FreshFlow.API.Extensions;
 using FreshFlow.Logistics.Application.Commands.AttachProofOfDelivery;
 using FreshFlow.Logistics.Application.Commands.ConfirmPickup;
 using FreshFlow.Logistics.Application.Commands.CreateProofUploadSignature;
+using FreshFlow.Logistics.Application.Commands.ReorderDriverRoute;
 using FreshFlow.Logistics.Application.Commands.ReportDeliveryIssue;
 using FreshFlow.Logistics.Application.Commands.StartRoute;
 using FreshFlow.Logistics.Application.Commands.UpdateDeliveryStatus;
@@ -29,6 +30,17 @@ public sealed class DriverController(ISender sender) : ControllerBase
     public async Task<IActionResult> StartRouteAsync(Guid routeId, CancellationToken ct)
     {
         var result = await sender.Send(new StartRouteCommand(routeId, ResolveUserId()), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPost("routes/{routeId:guid}/reorder")]
+    public async Task<IActionResult> ReorderRouteAsync(
+        Guid routeId,
+        [FromBody] ReorderRouteRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new ReorderDriverRouteCommand(routeId, ResolveUserId(), body.StopOrder), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -107,3 +119,5 @@ public sealed record ConfirmPickupRequest(IReadOnlyList<Guid> OrderIds);
 public sealed record AttachProofOfDeliveryRequest(string ProofUrl);
 
 public sealed record UpdateDeliveryStatusRequest(string Status, string? FailureReason);
+
+public sealed record ReorderRouteRequest(IReadOnlyList<Guid> StopOrder);

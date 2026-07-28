@@ -92,39 +92,34 @@ public sealed class DeliveryRoute
         if (Status != RouteStatus.selected)
             throw new InvalidOperationException("Only selected routes can have their stop order adjusted.");
 
-        ArgumentNullException.ThrowIfNull(orderedEntityIds);
+        Stops = BuildReorderedStops(orderedEntityIds);
+        UpdatedAt = DateTime.UtcNow;
+    }
 
-        var currentIds = Stops.Select(stop => stop.EntityId).ToHashSet();
-        var newIds = orderedEntityIds.ToHashSet();
+    public void ReorderStopsByDriver(IReadOnlyList<Guid> orderedEntityIds)
+    {
+        if (Status != RouteStatus.assigned)
+            throw new InvalidOperationException("Only assigned routes can be reordered by the driver.");
 
-        if (orderedEntityIds.Count != Stops.Count || !currentIds.SetEquals(newIds))
-        {
-            throw new ArgumentException(
-                "StopOrder must be a permutation of the route's existing stop entity ids.",
-                nameof(orderedEntityIds));
-        }
+        Stops = BuildReorderedStops(orderedEntityIds);
+        UpdatedAt = DateTime.UtcNow;
+    }
 
-        var byEntityId = Stops.ToDictionary(stop => stop.EntityId);
-        var reordered = orderedEntityIds
-            .Select((id, index) => byEntityId[id] with { StopOrder = index })
-            .ToList();
+    public void ApplyDriverRecalculation(
+        IReadOnlyList<RouteStop> stops,
+        decimal totalDistanceKm,
+        int estimatedDurationMinutes,
+        decimal estimatedCost)
+    {
+        if (Status != RouteStatus.assigned)
+            throw new InvalidOperationException("Only assigned routes can be recalculated by the driver.");
 
-        var seenRestaurantStop = false;
-        foreach (var stop in reordered)
-        {
-            if (stop.EntityType == StopEntityType.restaurant)
-            {
-                seenRestaurantStop = true;
-            }
-            else if (seenRestaurantStop)
-            {
-                throw new ArgumentException(
-                    "Market (pickup) stops must precede restaurant (dropoff) stops.",
-                    nameof(orderedEntityIds));
-            }
-        }
+        ArgumentNullException.ThrowIfNull(stops);
 
-        Stops = reordered.AsReadOnly();
+        Stops = stops.ToList().AsReadOnly();
+        TotalDistanceKm = totalDistanceKm;
+        EstimatedDurationMinutes = estimatedDurationMinutes;
+        EstimatedCost = estimatedCost;
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -176,5 +171,42 @@ public sealed class DeliveryRoute
 
         Status = RouteStatus.completed;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    private IReadOnlyList<RouteStop> BuildReorderedStops(IReadOnlyList<Guid> orderedEntityIds)
+    {
+        ArgumentNullException.ThrowIfNull(orderedEntityIds);
+
+        var currentIds = Stops.Select(stop => stop.EntityId).ToHashSet();
+        var newIds = orderedEntityIds.ToHashSet();
+
+        if (orderedEntityIds.Count != Stops.Count || !currentIds.SetEquals(newIds))
+        {
+            throw new ArgumentException(
+                "StopOrder must be a permutation of the route's existing stop entity ids.",
+                nameof(orderedEntityIds));
+        }
+
+        var byEntityId = Stops.ToDictionary(stop => stop.EntityId);
+        var reordered = orderedEntityIds
+            .Select((id, index) => byEntityId[id] with { StopOrder = index })
+            .ToList();
+
+        var seenRestaurantStop = false;
+        foreach (var stop in reordered)
+        {
+            if (stop.EntityType == StopEntityType.restaurant)
+            {
+                seenRestaurantStop = true;
+            }
+            else if (seenRestaurantStop)
+            {
+                throw new ArgumentException(
+                    "Market (pickup) stops must precede restaurant (dropoff) stops.",
+                    nameof(orderedEntityIds));
+            }
+        }
+
+        return reordered.AsReadOnly();
     }
 }
