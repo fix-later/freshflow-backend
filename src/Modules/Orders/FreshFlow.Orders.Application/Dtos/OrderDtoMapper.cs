@@ -5,7 +5,9 @@ namespace FreshFlow.Orders.Application.Dtos;
 
 internal static class OrderDtoMapper
 {
-    public static OrderDto ToDto(Order order) => new(
+    public static OrderDto ToDto(
+        Order order,
+        IReadOnlyDictionary<Guid, string>? images = null) => new(
         order.Id,
         order.RestaurantId,
         ToApiStatus(order.Status),
@@ -21,7 +23,8 @@ internal static class OrderDtoMapper
                 i.Quantity,
                 i.UnitPrice,
                 i.Subtotal,
-                i.ActualQuantity))
+                i.ActualQuantity,
+                images?.GetValueOrDefault(i.MarketProductId)))
             .ToList(),
         order.OrderGroupId,
         order.ScheduledOrderId,

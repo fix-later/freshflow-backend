@@ -12,6 +12,8 @@ public sealed class GetOrderQueryHandlerTests
 {
     private readonly IOrderRepository _orderRepository = Substitute.For<IOrderRepository>();
     private readonly IRestaurantReader _restaurantReader = Substitute.For<IRestaurantReader>();
+    private readonly IMarketProductImageReader _marketProductImageReader =
+        Substitute.For<IMarketProductImageReader>();
     private readonly GetOrderQueryHandler _sut;
 
     private static readonly Guid UserId = Guid.NewGuid();
@@ -23,7 +25,10 @@ public sealed class GetOrderQueryHandlerTests
     {
         _restaurantReader.FindByUserIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
-        _sut = new GetOrderQueryHandler(_orderRepository, _restaurantReader);
+        _sut = new GetOrderQueryHandler(
+            _orderRepository,
+            _restaurantReader,
+            _marketProductImageReader);
     }
 
     [Fact]
@@ -47,6 +52,8 @@ public sealed class GetOrderQueryHandlerTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("FORBIDDEN");
+        await _marketProductImageReader.DidNotReceive()
+            .ReadImagesAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -62,8 +69,30 @@ public sealed class GetOrderQueryHandlerTests
         result.Value.RestaurantId.Should().Be(RestaurantId);
         result.Value.Status.Should().Be("draft");
         result.Value.Items.Should().ContainSingle();
+        result.Value.Items[0].ImageUrl.Should().BeNull();
         result.Value.CreatedAt.Should().Be(order.CreatedAt);
         result.Value.UpdatedAt.Should().Be(order.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task Handle_MapsAvailableItemImagesAsync()
+    {
+        var order = NewOrder(RestaurantId);
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _marketProductImageReader.ReadImagesAsync(
+                Arg.Any<IReadOnlyCollection<Guid>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, string>
+            {
+                [MarketProductId] = "https://img/tomato.jpg"
+            });
+
+        var result = await _sut.Handle(
+            new GetOrderQuery(UserId, IsAdmin: false, order.Id),
+            default);
+
+        result.Value.Items.Should().ContainSingle()
+            .Which.ImageUrl.Should().Be("https://img/tomato.jpg");
     }
 
     [Fact]
