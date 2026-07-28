@@ -6,6 +6,11 @@ public interface IOrderStatusReader
 
     public Task<IReadOnlyList<OrderStatusLookupDto>> ListByRestaurantsAndStatusAsync(
         IReadOnlyCollection<Guid> restaurantIds, string status, CancellationToken ct);
+
+    public Task<IReadOnlyList<(Guid RestaurantId, int OrderCount)>> ListRoutableRestaurantsAsync(
+        DateOnly serviceDate,
+        IReadOnlyCollection<string> statuses,
+        CancellationToken ct);
 }
 
 public sealed record OrderStatusLookupDto(Guid OrderId, string Status, Guid RestaurantId);

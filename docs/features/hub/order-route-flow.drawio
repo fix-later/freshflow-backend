@@ -1,0 +1,117 @@
+<mxfile host="app.diagrams.net" version="24.0.0">
+  <diagram name="Order to Route Flow" id="flow1">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="FreshFlow — Luồng đơn hàng &amp; Route (đơn → gom đơn → hub → routes → giao)" style="text;html=1;fontSize=18;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="900" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ===== LANE LABELS ===== -->
+        <mxCell id="laneOrder" value="LUỒNG ĐƠN HÀNG (Orders)" style="text;html=1;fontSize=13;fontStyle=1;align=center;fillColor=#d5e8d4;strokeColor=#82b366;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="70" width="220" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="laneHub" value="HUB (song song)" style="text;html=1;fontSize=13;fontStyle=1;align=center;fillColor=#ffe6cc;strokeColor=#d79b00;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="500" y="70" width="220" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="laneRoute" value="LUỒNG ROUTE (admin tạo tay, độc lập)" style="text;html=1;fontSize=13;fontStyle=1;align=center;fillColor=#dae8fc;strokeColor=#6c8ebf;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="940" y="70" width="280" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ===== ORDER LIFECYCLE (left, green) ===== -->
+        <mxCell id="draft" value="Order: Draft" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="90" y="120" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="confirmed" value="Order: Confirmed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="90" y="230" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="batched" value="Order: Batched&#10;⬅ GOM ĐƠN (bạn ở đây)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b9e0a5;strokeColor=#2d6a1e;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="90" y="360" width="160" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="athub" value="Order: AtHub&#10;(đủ điều kiện lên manifest)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="90" y="540" width="160" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="delivering" value="Order: Delivering" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="90" y="880" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="delivered" value="Order: Delivered" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="90" y="990" width="160" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Order edges -->
+        <mxCell id="e1" value="nhà hàng confirm (trước cutoff)" style="endArrow=block;html=1;fontSize=11;" edge="1" parent="1" source="draft" target="confirmed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="ProcurementBatchingHostedService&#10;(job nền gom đơn Confirmed)" style="endArrow=block;html=1;fontSize=11;" edge="1" parent="1" source="confirmed" target="batched">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="PATCH /procurement/tasks/{batchId}/handover&#10;→ HandOff() → HandedOff IntegrationEvent" style="endArrow=block;html=1;fontSize=11;strokeWidth=2;strokeColor=#d79b00;" edge="1" parent="1" source="batched" target="athub">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="driver ConfirmPickup&#10;(yêu cầu order.Status == AtHub)" style="endArrow=block;html=1;fontSize=11;" edge="1" parent="1" source="athub" target="delivering">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="driver hoàn tất giao" style="endArrow=block;html=1;fontSize=11;" edge="1" parent="1" source="delivering" target="delivered">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===== HUB branch (orange) ===== -->
+        <mxCell id="hubinbound" value="Hub: tạo hub inbound task&#10;(HandedOff IntegrationEventHandler)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="500" y="440" width="220" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="hubsort" value="Hub: nhận hàng + phân loại (sorting)&#10;POST /hubs/{id}/handover → checkout" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="500" y="540" width="220" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="cùng 1 IntegrationEvent" style="endArrow=block;html=1;dashed=1;fontSize=11;strokeColor=#d79b00;" edge="1" parent="1" source="e3" target="hubinbound">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" style="endArrow=block;html=1;fontSize=11;strokeColor=#d79b00;" edge="1" parent="1" source="hubinbound" target="hubsort">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===== ROUTE branch (blue) ===== -->
+        <mxCell id="calc" value="admin: POST /logistics/routes/calculate&#10;(chọn market + restaurant + service_date)&#10;DeliveryRoute.CreateDirect — KHÔNG gắn order" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="960" y="120" width="260" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="select" value="POST /routes/{id}/select" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="990" y="220" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="optimize" value="POST /routes/{id}/optimize" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="990" y="290" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="review" value="POST /routes/{id}/review" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="990" y="360" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="assign" value="POST /routes/{id}/assign-vehicle&#10;(hub_staff được phép)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="990" y="430" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="re1" style="endArrow=block;html=1;" edge="1" parent="1" source="calc" target="select"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="re2" style="endArrow=block;html=1;" edge="1" parent="1" source="select" target="optimize"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="re3" style="endArrow=block;html=1;" edge="1" parent="1" source="optimize" target="review"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="re4" style="endArrow=block;html=1;" edge="1" parent="1" source="review" target="assign"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ===== JUNCTION: loading-manifest ===== -->
+        <mxCell id="manifest" value="GET /logistics/routes/{id}/loading-manifest&#10;&#10;GHÉP: order AtHub  ∩  restaurant ∈ stop của route&#10;→ trả Lines[OrderId, OrderItemId, ProductName, Qty]&#10;theo thứ tự xếp xe (giao cuối = xếp trong)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="660" width="320" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="me1" value="input: đơn AtHub" style="endArrow=block;html=1;fontSize=11;strokeWidth=2;" edge="1" parent="1" source="athub" target="manifest">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="me2" value="input: route stops (sau assign)" style="endArrow=block;html=1;fontSize=11;strokeWidth=2;strokeColor=#6c8ebf;" edge="1" parent="1" source="assign" target="manifest">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="me3" value="tài xế xem &amp; xếp hàng lên xe → ConfirmPickup" style="endArrow=block;html=1;fontSize=11;strokeWidth=2;" edge="1" parent="1" source="manifest" target="delivering">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===== WARNING note ===== -->
+        <mxCell id="warn" value="⚠ Route KHÔNG sinh từ gom đơn/handover. Admin tự chọn restaurant.&#10;Nếu bỏ sót restaurant có đơn AtHub → đơn không lên manifest, KHÔNG cảnh báo.&#10;HUB_RELAY (HubIds/CompareWithHub) bị chặn cứng: HUB_RELAY_NOT_SUPPORTED." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;align=left;" vertex="1" parent="1">
+          <mxGeometry x="470" y="880" width="480" height="80" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

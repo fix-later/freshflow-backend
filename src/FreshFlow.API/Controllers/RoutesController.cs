@@ -7,6 +7,7 @@ using FreshFlow.Logistics.Application.Commands.SelectRoute;
 using FreshFlow.Logistics.Application.Queries.CheckEligibility;
 using FreshFlow.Logistics.Application.Queries.GetLoadingManifest;
 using FreshFlow.Logistics.Application.Queries.GetRoute;
+using FreshFlow.Logistics.Application.Queries.GetRouteSuggestions;
 using FreshFlow.Logistics.Application.Queries.ListRoutes;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -96,6 +97,18 @@ public sealed class RoutesController(ISender sender) : ControllerBase
         return result.IsSuccess
             ? Ok(ApiResponse.OkPaged(result.Value.Items, result.Value.PageSize, result.Value.NextCursor))
             : result.Error.ToActionResult();
+    }
+
+    [HttpGet("suggestions")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetSuggestionsAsync(
+        [FromQuery(Name = "service_date")] DateOnly serviceDate,
+        [FromQuery(Name = "include_batched")] bool includeBatched = false,
+        CancellationToken ct = default)
+    {
+        var result = await sender.Send(
+            new GetRouteSuggestionsQuery(serviceDate, includeBatched), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     [HttpGet("{routeId:guid}/eligibility")]

@@ -27,4 +27,26 @@ internal sealed class OrderStatusReader(AppDbContext db) : IOrderStatusReader
             .Select(o => new OrderStatusLookupDto(o.OrderId, o.Status, o.RestaurantId))
             .ToListAsync(ct);
     }
+
+    public async Task<IReadOnlyList<(Guid RestaurantId, int OrderCount)>> ListRoutableRestaurantsAsync(
+        DateOnly serviceDate,
+        IReadOnlyCollection<string> statuses,
+        CancellationToken ct)
+    {
+        // ScheduledFor is a UTC timestamptz; serviceDate is an Asia/Ho_Chi_Minh business date.
+        // Filter by the VN-day's UTC [start, end) window so early-morning VN orders aren't misbucketed.
+        var (startUtc, endUtc) = VietnamTime.GetUtcDayBounds(serviceDate);
+
+        var rows = await db.Set<OrderStatusRow>()
+            .AsNoTracking()
+            .Where(o => statuses.Contains(o.Status)
+                        && o.ScheduledFor != null
+                        && o.ScheduledFor >= startUtc
+                        && o.ScheduledFor < endUtc)
+            .GroupBy(o => o.RestaurantId)
+            .Select(group => new { RestaurantId = group.Key, OrderCount = group.Count() })
+            .ToListAsync(ct);
+
+        return rows.Select(row => (row.RestaurantId, row.OrderCount)).ToList();
+    }
 }
