@@ -30,7 +30,7 @@ public sealed class CheckEligibilityQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_VehicleMissing_ReturnsVehicleNotFoundOnlyAsync()
+    public async Task Handle_VehicleMissing_ReturnsVehicleNotFoundAsync()
     {
         var routes = new InMemoryDeliveryRouteRepository();
         var route = CreateRoute(stopCount: 3);
@@ -47,7 +47,7 @@ public sealed class CheckEligibilityQueryHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.IsEligible.Should().BeFalse();
-        result.Value.Reasons.Should().Equal("VEHICLE_NOT_FOUND");
+        result.Value.Reasons.Should().Contain("VEHICLE_NOT_FOUND");
     }
 
     [Fact]
@@ -129,6 +129,31 @@ public sealed class CheckEligibilityQueryHandlerTests
         result.Value.IsWeightComplete.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task Handle_AtHubOrderWithoutPackingWeight_ReturnsWeightIncompleteAsync()
+    {
+        var route = CreateRoute();
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
+        var orders = new InMemoryOrderStatusReader();
+        orders.Add(Guid.NewGuid(), "AtHub", route.Stops[1].EntityId);
+        var routes = new InMemoryDeliveryRouteRepository();
+        await routes.AddAsync(route, default);
+        var vehicles = new InMemoryVehicleRepository();
+        await vehicles.AddAsync(vehicle, default);
+        var driverUserId = Guid.NewGuid();
+        var drivers = Substitute.For<IDriverReader>();
+        drivers.FindByUserIdAsync(driverUserId, Arg.Any<CancellationToken>())
+            .Returns(new DriverDto(driverUserId, "driver", true));
+        var sut = CreateSut(routes, vehicles, drivers, orders: orders);
+
+        var result = await sut.Handle(
+            new CheckEligibilityQuery(route.Id, vehicle.Id, driverUserId), default);
+
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.IsWeightComplete.Should().BeFalse();
+        result.Value.Reasons.Should().Contain("ROUTE_WEIGHT_INCOMPLETE");
+    }
+
     [Theory]
     [InlineData(RouteStatus.assigned, 0, true)]
     [InlineData(RouteStatus.cancelled, 0, false)]
@@ -157,7 +182,7 @@ public sealed class CheckEligibilityQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_NullDriverUserId_SkipsDriverRulesAsync()
+    public async Task Handle_NullDriverUserId_ReturnsDriverRequiredAsync()
     {
         var route = CreateRoute();
         var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
@@ -166,7 +191,7 @@ public sealed class CheckEligibilityQueryHandlerTests
 
         var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, null), default);
 
-        result.Value.Reasons.Should().NotContain(reason => reason.StartsWith("DRIVER_"));
+        result.Value.Reasons.Should().Contain("DRIVER_REQUIRED");
         _ = drivers.DidNotReceiveWithAnyArgs().FindByUserIdAsync(default, default);
     }
 
@@ -219,20 +244,15 @@ public sealed class CheckEligibilityQueryHandlerTests
         result.Value.Reasons.Should().Contain("DRIVER_INACTIVE");
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Handle_HappyPath_ReturnsEligibleAsync(bool includeDriver)
+    [Fact]
+    public async Task Handle_HappyPath_ReturnsEligibleAsync()
     {
         var route = CreateRoute();
         var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
-        var driverUserId = includeDriver ? Guid.NewGuid() : (Guid?)null;
+        var driverUserId = Guid.NewGuid();
         var drivers = Substitute.For<IDriverReader>();
-        if (driverUserId.HasValue)
-        {
-            drivers.FindByUserIdAsync(driverUserId.Value, Arg.Any<CancellationToken>())
-                .Returns(new DriverDto(driverUserId.Value, "driver", true));
-        }
+        drivers.FindByUserIdAsync(driverUserId, Arg.Any<CancellationToken>())
+            .Returns(new DriverDto(driverUserId, "driver", true));
 
         var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle, drivers: drivers);
 

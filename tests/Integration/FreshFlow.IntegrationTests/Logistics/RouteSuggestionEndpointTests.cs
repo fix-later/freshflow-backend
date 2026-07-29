@@ -11,6 +11,7 @@ using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Pricing.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using HubEntity = FreshFlow.Hub.Domain.Entities.Hub;
 
 namespace FreshFlow.IntegrationTests.Logistics;
 
@@ -27,7 +28,7 @@ public sealed class RouteSuggestionEndpointTests(AuthWebAppFactory factory)
         await AuthenticateAsAdminAsync();
         var firstRestaurantId = await CreateRestaurantAsync("Suggestion Restaurant One");
         var secondRestaurantId = await CreateRestaurantAsync("Suggestion Restaurant Two");
-        var marketId = await SeedAsync(firstRestaurantId, secondRestaurantId);
+        var hubId = await SeedAsync(firstRestaurantId, secondRestaurantId);
 
         var defaultResponse = await _client.GetAsync(
             $"/api/v1/logistics/routes/suggestions?service_date={ServiceDate:yyyy-MM-dd}");
@@ -36,8 +37,8 @@ public sealed class RouteSuggestionEndpointTests(AuthWebAppFactory factory)
         var defaultBody = await defaultResponse.Content
             .ReadFromJsonAsync<Envelope<RouteSuggestionsDto>>();
         defaultBody!.Data!.ServiceDate.Should().Be(ServiceDate);
-        defaultBody.Data.Markets.Should().ContainSingle()
-            .Which.Should().Be(new SuggestionItemDto(marketId, "Suggestion Market", 2));
+        defaultBody.Data.Hubs.Should().ContainSingle()
+            .Which.Should().Be(new SuggestionItemDto(hubId, "Suggestion Hub", 2));
         defaultBody.Data.Restaurants.Should().BeEquivalentTo(
         [
             new SuggestionItemDto(firstRestaurantId, "Suggestion Restaurant One", 1),
@@ -50,8 +51,8 @@ public sealed class RouteSuggestionEndpointTests(AuthWebAppFactory factory)
         batchedResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var batchedBody = await batchedResponse.Content
             .ReadFromJsonAsync<Envelope<RouteSuggestionsDto>>();
-        batchedBody!.Data!.Markets.Should().ContainSingle()
-            .Which.Should().Be(new SuggestionItemDto(marketId, "Suggestion Market", 3));
+        batchedBody!.Data!.Hubs.Should().ContainSingle()
+            .Which.Should().Be(new SuggestionItemDto(hubId, "Suggestion Hub", 3));
         batchedBody.Data.Restaurants.Should().BeEquivalentTo(
         [
             new SuggestionItemDto(firstRestaurantId, "Suggestion Restaurant One", 1),
@@ -71,6 +72,11 @@ public sealed class RouteSuggestionEndpointTests(AuthWebAppFactory factory)
         var market = new Market("Suggestion Market", "HCMC", "3 Suggestion St", null, null);
         db.Set<UnitOfMeasurement>().Add(unit);
         db.Set<Market>().Add(market);
+        await db.SaveChangesAsync();
+
+        var hub = HubEntity.Create(
+            "Suggestion Hub", "3 Suggestion St", 10.75m, 106.67m, 1000m, null, market.Id);
+        db.Set<HubEntity>().Add(hub);
         await db.SaveChangesAsync();
 
         var product = new Product("Suggestion Product", unit.Id, null, null, null);
@@ -102,7 +108,7 @@ public sealed class RouteSuggestionEndpointTests(AuthWebAppFactory factory)
         db.Entry(orders[4]).Property(nameof(Order.Status)).CurrentValue = OrderStatus.AtHub;
         await db.SaveChangesAsync();
 
-        return market.Id;
+        return hub.Id;
     }
 
     private static Order NewOrder(Guid restaurantId, DateTime scheduledFor, Guid marketProductId)

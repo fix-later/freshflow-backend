@@ -30,6 +30,7 @@ services:
       Cloudinary__CloudName: ${CLOUDINARY_CLOUD_NAME}
       Cloudinary__ApiKey: ${CLOUDINARY_API_KEY}
       Cloudinary__ApiSecret: ${CLOUDINARY_API_SECRET}
+      Assistant__ZenMux__ApiKey: ${ZENMUX_API_KEY}
       AdminSeed__Email: ${ADMIN_SEED_EMAIL}
       AdminSeed__Password: ${ADMIN_SEED_PASSWORD}
       ADMIN_SEED_EMAIL: ${ADMIN_SEED_EMAIL}

@@ -10,10 +10,16 @@ public sealed class DeliveryRoute
         Stops = [];
     }
 
-    private DeliveryRoute(DateOnly serviceDate, IReadOnlyList<RouteStop> stops, Guid? createdBy)
+    private DeliveryRoute(
+        DateOnly serviceDate,
+        IReadOnlyList<RouteStop> stops,
+        Guid? createdBy,
+        Guid? hubId = null,
+        RouteType routeType = RouteType.direct)
     {
         Id = Guid.NewGuid();
-        RouteType = RouteType.direct;
+        HubId = hubId;
+        RouteType = routeType;
         Status = RouteStatus.planned;
         ServiceDate = serviceDate;
         Stops = stops.ToList().AsReadOnly();
@@ -23,6 +29,7 @@ public sealed class DeliveryRoute
     }
 
     public Guid Id { get; private set; }
+    public Guid? HubId { get; private set; }
     public RouteType RouteType { get; private set; }
     public RouteStatus Status { get; private set; }
     public DateOnly ServiceDate { get; private set; }
@@ -56,6 +63,29 @@ public sealed class DeliveryRoute
             throw new ArgumentException("A direct delivery route requires at least one restaurant stop.", nameof(stops));
 
         return new DeliveryRoute(serviceDate, stops, createdBy);
+    }
+
+    public static DeliveryRoute CreateHubRoute(
+        Guid hubId,
+        DateOnly serviceDate,
+        IReadOnlyList<RouteStop> stops,
+        Guid? createdBy)
+    {
+        ArgumentNullException.ThrowIfNull(stops);
+
+        if (hubId == Guid.Empty)
+            throw new ArgumentException("HubId is required.", nameof(hubId));
+
+        if (stops.Count > 20)
+            throw new ArgumentException("A delivery route cannot contain more than 20 stops.", nameof(stops));
+
+        if (stops.Count(stop => stop.EntityType == StopEntityType.hub && stop.EntityId == hubId) != 1)
+            throw new ArgumentException("A hub route requires exactly one matching hub stop.", nameof(stops));
+
+        if (!stops.Any(stop => stop.EntityType == StopEntityType.restaurant))
+            throw new ArgumentException("A hub route requires at least one restaurant stop.", nameof(stops));
+
+        return new DeliveryRoute(serviceDate, stops, createdBy, hubId, RouteType.hub_relay);
     }
 
     public void Select()
@@ -135,8 +165,11 @@ public sealed class DeliveryRoute
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void Assign(Guid vehicleId, Guid? driverUserId)
+    public void Assign(Guid vehicleId, Guid driverUserId)
     {
+        if (driverUserId == Guid.Empty)
+            throw new ArgumentException("DriverUserId is required.", nameof(driverUserId));
+
         if (Status == RouteStatus.assigned)
         {
             if (VehicleId == vehicleId && DriverUserId == driverUserId)
@@ -202,7 +235,7 @@ public sealed class DeliveryRoute
             else if (seenRestaurantStop)
             {
                 throw new ArgumentException(
-                    "Market (pickup) stops must precede restaurant (dropoff) stops.",
+                    "Pickup stops must precede restaurant (dropoff) stops.",
                     nameof(orderedEntityIds));
             }
         }

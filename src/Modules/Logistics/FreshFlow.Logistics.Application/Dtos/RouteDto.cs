@@ -2,6 +2,7 @@ namespace FreshFlow.Logistics.Application.Dtos;
 
 public sealed record RouteDto(
     Guid Id,
+    Guid? HubId,
     string RouteType,
     string Status,
     DateOnly ServiceDate,

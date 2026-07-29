@@ -30,7 +30,8 @@ internal sealed class ListRoutesQueryHandler(IDeliveryRouteRepository routes)
             request.PageSize,
             request.ServiceDate,
             status,
-            ct);
+            ct,
+            request.HubId);
 
         var dtos = items.Select(route => route.ToDto()).ToList().AsReadOnly();
         return Result<RoutePageDto>.Success(new RoutePageDto(dtos, request.PageSize, nextCursor));

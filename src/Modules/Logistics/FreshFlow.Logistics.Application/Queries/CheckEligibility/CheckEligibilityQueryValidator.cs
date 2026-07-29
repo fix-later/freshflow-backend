@@ -8,5 +8,6 @@ internal sealed class CheckEligibilityQueryValidator : AbstractValidator<CheckEl
     {
         RuleFor(x => x.RouteId).NotEmpty();
         RuleFor(x => x.VehicleId).NotEmpty();
+        RuleFor(x => x.DriverUserId).NotEmpty();
     }
 }

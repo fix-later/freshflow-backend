@@ -9,7 +9,7 @@ internal sealed class CalculateRouteCommandValidator : AbstractValidator<Calcula
 
     public CalculateRouteCommandValidator()
     {
-        RuleFor(x => x.SourceMarketIds).NotEmpty();
+        RuleFor(x => x.HubId).NotEmpty();
         RuleFor(x => x.DestinationRestaurantIds).NotEmpty();
 
         RuleFor(x => x.OptimizationCriteria)

@@ -17,7 +17,8 @@ public interface IDeliveryRouteRepository
         int pageSize,
         DateOnly? serviceDate,
         RouteStatus? status,
-        CancellationToken ct);
+        CancellationToken ct,
+        Guid? hubId = null);
 
     public Task AddAsync(DeliveryRoute route, CancellationToken ct);
 

@@ -70,7 +70,8 @@ public sealed class AssignVehicleCommandHandlerTests
             .Returns(Result<EligibilityResultDto>.Failure(Error.NotFound("DELIVERY_ROUTE", route.Id)));
         var sut = new AssignVehicleCommandHandler(repository, sender);
 
-        var result = await sut.Handle(new AssignVehicleCommand(route.Id, Guid.NewGuid(), null), default);
+        var result = await sut.Handle(
+            new AssignVehicleCommand(route.Id, Guid.NewGuid(), Guid.NewGuid()), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("DELIVERY_ROUTE_NOT_FOUND");
@@ -88,7 +89,8 @@ public sealed class AssignVehicleCommandHandlerTests
         var sender = EligibilitySender(false, [reason]);
         var sut = new AssignVehicleCommandHandler(repository, sender);
 
-        var result = await sut.Handle(new AssignVehicleCommand(route.Id, Guid.NewGuid(), null), default);
+        var result = await sut.Handle(
+            new AssignVehicleCommand(route.Id, Guid.NewGuid(), Guid.NewGuid()), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("VEHICLE_NOT_ELIGIBLE");
@@ -140,7 +142,8 @@ public sealed class AssignVehicleCommandHandlerTests
         var sender = EligibleSender();
         var sut = new AssignVehicleCommandHandler(repository, sender);
 
-        var result = await sut.Handle(new AssignVehicleCommand(route.Id, Guid.NewGuid(), null), default);
+        var result = await sut.Handle(
+            new AssignVehicleCommand(route.Id, Guid.NewGuid(), Guid.NewGuid()), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("ROUTE_INVALID_TRANSITION");
@@ -196,7 +199,8 @@ public sealed class AssignVehicleCommandHandlerTests
         var sender = EligibleSender();
         var sut = new AssignVehicleCommandHandler(repository, sender);
 
-        var result = await sut.Handle(new AssignVehicleCommand(route.Id, Guid.NewGuid(), null), default);
+        var result = await sut.Handle(
+            new AssignVehicleCommand(route.Id, Guid.NewGuid(), Guid.NewGuid()), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("VEHICLE_NOT_AVAILABLE");

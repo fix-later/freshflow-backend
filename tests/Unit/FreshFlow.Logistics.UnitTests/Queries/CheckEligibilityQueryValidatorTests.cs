@@ -11,7 +11,8 @@ public sealed class CheckEligibilityQueryValidatorTests
     [Fact]
     public void Validate_ValidQuery_Passes()
     {
-        var result = _sut.Validate(new CheckEligibilityQuery(Guid.NewGuid(), Guid.NewGuid(), null));
+        var result = _sut.Validate(
+            new CheckEligibilityQuery(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
 
         result.IsValid.Should().BeTrue();
     }
@@ -19,7 +20,8 @@ public sealed class CheckEligibilityQueryValidatorTests
     [Fact]
     public void Validate_EmptyRouteId_Fails()
     {
-        var result = _sut.Validate(new CheckEligibilityQuery(Guid.Empty, Guid.NewGuid(), null));
+        var result = _sut.Validate(
+            new CheckEligibilityQuery(Guid.Empty, Guid.NewGuid(), Guid.NewGuid()));
 
         result.IsValid.Should().BeFalse();
     }
@@ -27,7 +29,16 @@ public sealed class CheckEligibilityQueryValidatorTests
     [Fact]
     public void Validate_EmptyVehicleId_Fails()
     {
-        var result = _sut.Validate(new CheckEligibilityQuery(Guid.NewGuid(), Guid.Empty, null));
+        var result = _sut.Validate(
+            new CheckEligibilityQuery(Guid.NewGuid(), Guid.Empty, Guid.NewGuid()));
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_MissingDriver_Fails()
+    {
+        var result = _sut.Validate(new CheckEligibilityQuery(Guid.NewGuid(), Guid.NewGuid(), null));
 
         result.IsValid.Should().BeFalse();
     }

@@ -24,14 +24,17 @@ internal sealed class CheckEligibilityQueryHandler(
             .Where(stop => stop.EntityType == StopEntityType.restaurant)
             .Select(stop => stop.EntityId)
             .ToList();
-        var atHubOrders = await orders.ListByRestaurantsAndStatusAsync(restaurantIds, "AtHub", ct);
+        var atHubOrders = await orders.ListByRestaurantsAndStatusAsync(
+            restaurantIds, "AtHub", ct, route.HubId, route.ServiceDate);
         var packingByOrder = atHubOrders.Count == 0
             ? []
             : await packing.GetLinesByOrdersAsync(
                 atHubOrders.Select(order => order.OrderId).ToList(), ct);
         var lines = packingByOrder.SelectMany(entry => entry.Lines).ToList();
-        var isWeightComplete = packingByOrder.Count == atHubOrders.Count
-            && lines.All(line => line.CapacityKg is > 0m);
+        var isWeightComplete = atHubOrders.Count == 0
+            || (packingByOrder.Count == atHubOrders.Count
+                && lines.Count > 0
+                && lines.All(line => line.CapacityKg is > 0m));
         var routeLoadKg = lines.Sum(line =>
             line.CapacityKg is { } capacityKg && capacityKg > 0m
                 ? line.Quantity * capacityKg
@@ -39,6 +42,9 @@ internal sealed class CheckEligibilityQueryHandler(
 
 
         var reasons = new List<string>();
+
+        if (!isWeightComplete)
+            reasons.Add("ROUTE_WEIGHT_INCOMPLETE");
 
         var vehicle = await vehicles.FindByIdAsync(request.VehicleId, ct);
         if (vehicle is null)
@@ -69,21 +75,24 @@ internal sealed class CheckEligibilityQueryHandler(
             }
         }
 
-        if (request.DriverUserId is { } driverUserId)
+        var driver = request.DriverUserId is { } driverUserId
+            ? await drivers.FindByUserIdAsync(driverUserId, ct)
+            : null;
+        if (request.DriverUserId is null)
         {
-            var driver = await drivers.FindByUserIdAsync(driverUserId, ct);
-            if (driver is null)
-            {
-                reasons.Add("DRIVER_NOT_FOUND");
-            }
-            else
-            {
-                if (!string.Equals(driver.RoleName, "driver", StringComparison.OrdinalIgnoreCase))
-                    reasons.Add("DRIVER_NOT_DRIVER_ROLE");
+            reasons.Add("DRIVER_REQUIRED");
+        }
+        else if (driver is null)
+        {
+            reasons.Add("DRIVER_NOT_FOUND");
+        }
+        else
+        {
+            if (!string.Equals(driver.RoleName, "driver", StringComparison.OrdinalIgnoreCase))
+                reasons.Add("DRIVER_NOT_DRIVER_ROLE");
 
-                if (!driver.IsActive)
-                    reasons.Add("DRIVER_INACTIVE");
-            }
+            if (!driver.IsActive)
+                reasons.Add("DRIVER_INACTIVE");
         }
 
         return Result<EligibilityResultDto>.Success(new EligibilityResultDto(

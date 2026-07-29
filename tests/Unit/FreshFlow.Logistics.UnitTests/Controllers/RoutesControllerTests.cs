@@ -65,45 +65,40 @@ public sealed class RoutesControllerTests
         sender.Send(Arg.Any<CalculateRouteCommand>(), Arg.Any<CancellationToken>())
             .Returns(Result<RouteDto>.Success(dto));
         var controller = new RoutesController(sender);
-        var marketId = Guid.NewGuid();
         var hubId = Guid.NewGuid();
         var restaurantId = Guid.NewGuid();
 
         var result = await controller.CalculateRouteAsync(
             new CalculateRouteRequest(
-                [marketId],
-                [hubId],
+                hubId,
                 [restaurantId],
                 "COST",
-                new DateOnly(2026, 7, 9),
-                true),
+                new DateOnly(2026, 7, 9)),
             default);
 
         result.Should().BeOfType<CreatedAtActionResult>();
         await sender.Received(1).Send(
             Arg.Is<CalculateRouteCommand>(command =>
-                command.SourceMarketIds.SequenceEqual(new[] { marketId }) &&
-                command.HubIds.SequenceEqual(new[] { hubId }) &&
+                command.HubId == hubId &&
                 command.DestinationRestaurantIds.SequenceEqual(new[] { restaurantId }) &&
                 command.OptimizationCriteria == "COST" &&
-                command.ServiceDate == new DateOnly(2026, 7, 9) &&
-                command.CompareWithHub),
+                command.ServiceDate == new DateOnly(2026, 7, 9)),
             Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task CalculateRouteAsync_HubRelayNotSupported_Returns422Async()
+    public async Task CalculateRouteAsync_ValidationFailure_Returns422Async()
     {
         var sender = Substitute.For<ISender>();
         sender.Send(Arg.Any<CalculateRouteCommand>(), Arg.Any<CancellationToken>())
-            .Returns(Result<RouteDto>.Failure(Error.Validation("HUB_RELAY_NOT_SUPPORTED", "hub")));
+            .Returns(Result<RouteDto>.Failure(Error.Validation("VALIDATION_ERROR", "invalid")));
         var controller = new RoutesController(sender);
 
         var result = await controller.CalculateRouteAsync(
-            new CalculateRouteRequest([Guid.NewGuid()], [Guid.NewGuid()], [Guid.NewGuid()], null, new DateOnly(2026, 7, 9), null),
+            new CalculateRouteRequest(Guid.NewGuid(), [Guid.NewGuid()], null, new DateOnly(2026, 7, 9)),
             default);
 
-        result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        result.Should().BeOfType<BadRequestObjectResult>();
     }
 
     [Fact]
@@ -244,7 +239,8 @@ public sealed class RoutesControllerTests
             .Returns(Result<EligibilityResultDto>.Failure(Error.NotFound("DELIVERY_ROUTE", routeId)));
         var controller = new RoutesController(sender);
 
-        var result = await controller.CheckEligibilityAsync(routeId, Guid.NewGuid(), null, default);
+        var result = await controller.CheckEligibilityAsync(
+            routeId, Guid.NewGuid(), Guid.NewGuid(), default);
 
         result.Should().BeOfType<NotFoundObjectResult>();
     }
@@ -284,7 +280,7 @@ public sealed class RoutesControllerTests
 
         var result = await controller.AssignVehicleAsync(
             Guid.NewGuid(),
-            new AssignVehicleRequest(Guid.NewGuid(), null),
+            new AssignVehicleRequest(Guid.NewGuid(), Guid.NewGuid()),
             default);
 
         result.Should().BeOfType<UnprocessableEntityObjectResult>();
@@ -300,7 +296,7 @@ public sealed class RoutesControllerTests
 
         var result = await controller.AssignVehicleAsync(
             Guid.NewGuid(),
-            new AssignVehicleRequest(Guid.NewGuid(), null),
+            new AssignVehicleRequest(Guid.NewGuid(), Guid.NewGuid()),
             default);
 
         result.Should().BeOfType<ConflictObjectResult>();
@@ -323,11 +319,12 @@ public sealed class RoutesControllerTests
     private static RouteDto CreateDto(Guid? id = null) =>
         new(
             id ?? Guid.NewGuid(),
-            "direct",
+            Guid.NewGuid(),
+            "hub_relay",
             "planned",
             new DateOnly(2026, 7, 9),
             [
-                new RouteStopDto(0, "market", Guid.NewGuid(), "Market", 10.1m, 106.1m, null, null),
+                new RouteStopDto(0, "hub", Guid.NewGuid(), "Hub", 10.1m, 106.1m, null, null),
                 new RouteStopDto(1, "restaurant", Guid.NewGuid(), "Restaurant", 10.2m, 106.2m, null, null)
             ],
             null,

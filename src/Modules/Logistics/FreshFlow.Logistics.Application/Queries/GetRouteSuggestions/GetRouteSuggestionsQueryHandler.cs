@@ -8,6 +8,7 @@ namespace FreshFlow.Logistics.Application.Queries.GetRouteSuggestions;
 internal sealed class GetRouteSuggestionsQueryHandler(
     IOrderStatusReader orders,
     IOrderMarketReader orderMarkets,
+    IHubCoordinateReader hubs,
     IRestaurantCoordinateReader restaurants)
     : IRequestHandler<GetRouteSuggestionsQuery, Result<RouteSuggestionsDto>>
 {
@@ -24,6 +25,14 @@ internal sealed class GetRouteSuggestionsQueryHandler(
         var restaurantCounts = await orders.ListRoutableRestaurantsAsync(
             request.ServiceDate, statuses, ct);
 
+        var hubSuggestions = new List<SuggestionItemDto>(marketCounts.Count);
+        foreach (var market in marketCounts)
+        {
+            var hub = await hubs.FindByMarketIdAsync(market.MarketId, ct);
+            if (hub is not null)
+                hubSuggestions.Add(new SuggestionItemDto(hub.Id, hub.Name, market.OrderCount));
+        }
+
         var restaurantSuggestions = new List<SuggestionItemDto>(restaurantCounts.Count);
         foreach (var (restaurantId, orderCount) in restaurantCounts)
         {
@@ -34,10 +43,7 @@ internal sealed class GetRouteSuggestionsQueryHandler(
 
         return Result<RouteSuggestionsDto>.Success(new RouteSuggestionsDto(
             request.ServiceDate,
-            marketCounts
-                .Select(market => new SuggestionItemDto(
-                    market.MarketId, market.MarketName, market.OrderCount))
-                .ToList(),
+            hubSuggestions,
             restaurantSuggestions));
     }
 }

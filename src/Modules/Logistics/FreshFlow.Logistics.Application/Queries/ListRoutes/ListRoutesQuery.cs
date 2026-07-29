@@ -7,4 +7,5 @@ public sealed record ListRoutesQuery(
     string? Cursor,
     int PageSize = 50,
     DateOnly? ServiceDate = null,
-    string? Status = null) : IQuery<RoutePageDto>;
+    string? Status = null,
+    Guid? HubId = null) : IQuery<RoutePageDto>;

@@ -12,6 +12,8 @@ internal sealed class DeliveryRouteReader(AppDbContext db) : IDeliveryRouteReade
             .AsNoTracking()
             .FirstOrDefaultAsync(r => r.RouteId == routeId, ct);
 
-        return row is null ? null : new DeliveryRouteLookupDto(row.RouteId, row.Status, row.DriverUserId);
+        return row is null
+            ? null
+            : new DeliveryRouteLookupDto(row.RouteId, row.HubId, row.Status, row.DriverUserId);
     }
 }

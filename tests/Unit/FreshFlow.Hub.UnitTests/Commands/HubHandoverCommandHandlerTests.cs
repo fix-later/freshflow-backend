@@ -22,7 +22,7 @@ public sealed class HubHandoverCommandHandlerTests
         var routeId = Guid.NewGuid();
         var driverUserId = Guid.NewGuid();
         await hubs.AddAsync(hub, default);
-        routes.Add(routeId, driverUserId);
+        routes.Add(routeId, driverUserId, "assigned", hub.Id);
         var sut = new CreateHandoverCommandHandler(hubs, routes, outbounds, handovers);
 
         var result = await sut.Handle(
@@ -63,7 +63,7 @@ public sealed class HubHandoverCommandHandlerTests
         var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
         var routeId = Guid.NewGuid();
         await hubs.AddAsync(hub, default);
-        routes.Add(routeId);
+        routes.Add(routeId, status: "assigned", hubId: hub.Id);
         var sut = new CreateHandoverCommandHandler(
             hubs,
             routes,
@@ -86,7 +86,7 @@ public sealed class HubHandoverCommandHandlerTests
         var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
         var routeId = Guid.NewGuid();
         await hubs.AddAsync(hub, default);
-        routes.Add(routeId, Guid.NewGuid());
+        routes.Add(routeId, Guid.NewGuid(), "assigned", hub.Id);
         var sut = new CreateHandoverCommandHandler(
             hubs,
             routes,
@@ -99,6 +99,30 @@ public sealed class HubHandoverCommandHandlerTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("DRIVER_ROUTE_MISMATCH");
+    }
+
+    [Fact]
+    public async Task CreateHandover_RouteFromDifferentHub_ReturnsRouteHubMismatchAsync()
+    {
+        var hubs = new InMemoryHubRepository();
+        var routes = new InMemoryDeliveryRouteReader();
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        var routeId = Guid.NewGuid();
+        var driverUserId = Guid.NewGuid();
+        await hubs.AddAsync(hub, default);
+        routes.Add(routeId, driverUserId, "assigned", Guid.NewGuid());
+        var sut = new CreateHandoverCommandHandler(
+            hubs,
+            routes,
+            new InMemoryHubOutboundRepository(),
+            new InMemoryHubHandoverRepository());
+
+        var result = await sut.Handle(
+            new CreateHandoverCommand(hub.Id, routeId, driverUserId, null, Guid.NewGuid()),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ROUTE_HUB_MISMATCH");
     }
 
     [Fact]
@@ -117,7 +141,7 @@ public sealed class HubHandoverCommandHandlerTests
             DateTime.UtcNow);
         await hubs.AddAsync(hub, default);
         await outbounds.AddAsync(outbound, default);
-        routes.Add(routeId, driverUserId);
+        routes.Add(routeId, driverUserId, "assigned", hub.Id);
         var sut = new CreateHandoverCommandHandler(
             hubs,
             routes,

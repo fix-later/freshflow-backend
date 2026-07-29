@@ -29,7 +29,8 @@ internal sealed class GetLoadingManifestQueryHandler(
         // Orders the hub must load for this truck: those AtHub whose restaurant is a stop on the
         // route (the same set ConfirmPickup validates). Deliveries don't exist until the driver
         // confirms pickup, so they are NOT the source at loading time.
-        var atHubOrders = await orders.ListByRestaurantsAndStatusAsync(restaurantIds, OrderStatusAtHub, ct);
+        var atHubOrders = await orders.ListByRestaurantsAndStatusAsync(
+            restaurantIds, OrderStatusAtHub, ct, route.HubId, route.ServiceDate);
 
         var linesByOrder = (await packing.GetLinesByOrdersAsync(
                 atHubOrders.Select(order => order.OrderId).ToList(), ct))

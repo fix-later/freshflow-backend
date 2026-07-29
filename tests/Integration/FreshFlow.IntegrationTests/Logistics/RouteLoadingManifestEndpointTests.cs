@@ -84,12 +84,12 @@ public sealed class RouteLoadingManifestEndpointTests(AuthWebAppFactory factory)
         db.Set<MarketProduct>().AddRange(packedMarketProduct, greensMarketProduct);
         await db.SaveChangesAsync();
 
-        var atHubOrder = new Order(restaurantId, null, null);
+        var atHubOrder = new Order(restaurantId, DateTime.UtcNow, null);
         atHubOrder.AddItem(packedMarketProduct.Id, packedProduct.Name, 8, 100_000m)
             .IsSuccess.Should().BeTrue();
         atHubOrder.ClearDomainEvents();
 
-        var draftOrder = new Order(restaurantId, null, null);
+        var draftOrder = new Order(restaurantId, DateTime.UtcNow, null);
         draftOrder.AddItem(greensMarketProduct.Id, greensProduct.Name, 3, 20_000m)
             .IsSuccess.Should().BeTrue();
         draftOrder.ClearDomainEvents();

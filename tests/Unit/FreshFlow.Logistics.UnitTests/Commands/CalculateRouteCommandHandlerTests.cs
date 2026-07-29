@@ -11,73 +11,72 @@ namespace FreshFlow.Logistics.UnitTests.Commands;
 public sealed class CalculateRouteCommandHandlerTests
 {
     [Fact]
-    public async Task Handle_HappyPath_PersistsDirectRouteWithInputOrderAsync()
+    public async Task Handle_HappyPath_PersistsHubRouteWithInputOrderAsync()
     {
-        var marketId = Guid.NewGuid();
+        var hubId = Guid.NewGuid();
         var restaurantId = Guid.NewGuid();
         var repository = new InMemoryDeliveryRouteRepository();
-        var markets = Substitute.For<IMarketCoordinateReader>();
+        var hubs = Substitute.For<IHubCoordinateReader>();
         var restaurants = Substitute.For<IRestaurantCoordinateReader>();
-        markets.FindByIdAsync(marketId, Arg.Any<CancellationToken>())
-            .Returns(new MarketCoordinateDto(marketId, "Market A", 10.1m, 106.1m));
+        hubs.FindByIdAsync(hubId, Arg.Any<CancellationToken>())
+            .Returns(new HubCoordinateDto(hubId, Guid.NewGuid(), "Hub A", 10.1m, 106.1m));
         restaurants.FindByRestaurantIdAsync(restaurantId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantCoordinateDto(restaurantId, "Bistro B", 10.2m, 106.2m));
-        var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
+        var sut = new CalculateRouteCommandHandler(hubs, restaurants, repository);
 
         var result = await sut.Handle(
             new CalculateRouteCommand(
-                [marketId],
-                [],
+                hubId,
                 [restaurantId],
                 null,
-                new DateOnly(2026, 7, 9),
-                false),
+                new DateOnly(2026, 7, 9)),
             default);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.RouteType.Should().Be("direct");
+        result.Value.HubId.Should().Be(hubId);
+        result.Value.RouteType.Should().Be("hub_relay");
         result.Value.Status.Should().Be("planned");
         result.Value.Stops.Should().HaveCount(2);
-        result.Value.Stops[0].EntityType.Should().Be("market");
-        result.Value.Stops[0].EntityId.Should().Be(marketId);
-        result.Value.Stops[0].EntityName.Should().Be("Market A");
+        result.Value.Stops[0].EntityType.Should().Be("hub");
+        result.Value.Stops[0].EntityId.Should().Be(hubId);
+        result.Value.Stops[0].EntityName.Should().Be("Hub A");
         result.Value.Stops[1].EntityType.Should().Be("restaurant");
         result.Value.Stops[1].EntityId.Should().Be(restaurantId);
         result.Value.Stops[1].EntityName.Should().Be("Bistro B");
         result.Value.Stops[1].EntityName.Should().NotBe(restaurantId.ToString());
-        repository.Routes.Should().ContainSingle(route => route.RouteType == RouteType.direct);
+        repository.Routes.Should().ContainSingle(route => route.RouteType == RouteType.hub_relay);
         repository.SaveChangesCount.Should().Be(1);
     }
 
     [Fact]
-    public async Task Handle_MarketMissing_ReturnsNotFoundAsync()
+    public async Task Handle_HubMissing_ReturnsNotFoundAsync()
     {
-        var marketId = Guid.NewGuid();
+        var hubId = Guid.NewGuid();
         var repository = new InMemoryDeliveryRouteRepository();
-        var markets = Substitute.For<IMarketCoordinateReader>();
+        var hubs = Substitute.For<IHubCoordinateReader>();
         var restaurants = Substitute.For<IRestaurantCoordinateReader>();
-        var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
+        var sut = new CalculateRouteCommandHandler(hubs, restaurants, repository);
 
-        var result = await sut.Handle(Command(marketId, Guid.NewGuid()), default);
+        var result = await sut.Handle(Command(hubId, Guid.NewGuid()), default);
 
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("MARKET_NOT_FOUND");
+        result.Error.Code.Should().Be("HUB_NOT_FOUND");
         repository.Routes.Should().BeEmpty();
     }
 
     [Fact]
     public async Task Handle_RestaurantMissing_ReturnsNotFoundAsync()
     {
-        var marketId = Guid.NewGuid();
+        var hubId = Guid.NewGuid();
         var restaurantId = Guid.NewGuid();
         var repository = new InMemoryDeliveryRouteRepository();
-        var markets = Substitute.For<IMarketCoordinateReader>();
+        var hubs = Substitute.For<IHubCoordinateReader>();
         var restaurants = Substitute.For<IRestaurantCoordinateReader>();
-        markets.FindByIdAsync(marketId, Arg.Any<CancellationToken>())
-            .Returns(new MarketCoordinateDto(marketId, "Market A", 10.1m, 106.1m));
-        var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
+        hubs.FindByIdAsync(hubId, Arg.Any<CancellationToken>())
+            .Returns(new HubCoordinateDto(hubId, Guid.NewGuid(), "Hub A", 10.1m, 106.1m));
+        var sut = new CalculateRouteCommandHandler(hubs, restaurants, repository);
 
-        var result = await sut.Handle(Command(marketId, restaurantId), default);
+        var result = await sut.Handle(Command(hubId, restaurantId), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("RESTAURANT_NOT_FOUND");
@@ -85,17 +84,17 @@ public sealed class CalculateRouteCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_MarketMissingCoordinates_ReturnsValidationFailureAsync()
+    public async Task Handle_HubMissingCoordinates_ReturnsValidationFailureAsync()
     {
-        var marketId = Guid.NewGuid();
+        var hubId = Guid.NewGuid();
         var repository = new InMemoryDeliveryRouteRepository();
-        var markets = Substitute.For<IMarketCoordinateReader>();
+        var hubs = Substitute.For<IHubCoordinateReader>();
         var restaurants = Substitute.For<IRestaurantCoordinateReader>();
-        markets.FindByIdAsync(marketId, Arg.Any<CancellationToken>())
-            .Returns(new MarketCoordinateDto(marketId, "Market A", null, 106.1m));
-        var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
+        hubs.FindByIdAsync(hubId, Arg.Any<CancellationToken>())
+            .Returns(new HubCoordinateDto(hubId, Guid.NewGuid(), "Hub A", null, 106.1m));
+        var sut = new CalculateRouteCommandHandler(hubs, restaurants, repository);
 
-        var result = await sut.Handle(Command(marketId, Guid.NewGuid()), default);
+        var result = await sut.Handle(Command(hubId, Guid.NewGuid()), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("MISSING_COORDINATES");
@@ -105,18 +104,18 @@ public sealed class CalculateRouteCommandHandlerTests
     [Fact]
     public async Task Handle_RestaurantMissingCoordinates_ReturnsValidationFailureAsync()
     {
-        var marketId = Guid.NewGuid();
+        var hubId = Guid.NewGuid();
         var restaurantId = Guid.NewGuid();
         var repository = new InMemoryDeliveryRouteRepository();
-        var markets = Substitute.For<IMarketCoordinateReader>();
+        var hubs = Substitute.For<IHubCoordinateReader>();
         var restaurants = Substitute.For<IRestaurantCoordinateReader>();
-        markets.FindByIdAsync(marketId, Arg.Any<CancellationToken>())
-            .Returns(new MarketCoordinateDto(marketId, "Market A", 10.1m, 106.1m));
+        hubs.FindByIdAsync(hubId, Arg.Any<CancellationToken>())
+            .Returns(new HubCoordinateDto(hubId, Guid.NewGuid(), "Hub A", 10.1m, 106.1m));
         restaurants.FindByRestaurantIdAsync(restaurantId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantCoordinateDto(restaurantId, "Bistro B", 10.2m, null));
-        var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
+        var sut = new CalculateRouteCommandHandler(hubs, restaurants, repository);
 
-        var result = await sut.Handle(Command(marketId, restaurantId), default);
+        var result = await sut.Handle(Command(hubId, restaurantId), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("MISSING_COORDINATES");
@@ -124,69 +123,20 @@ public sealed class CalculateRouteCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_HubIdsPresent_ReturnsHubRelayNotSupportedAsync()
-    {
-        var repository = new InMemoryDeliveryRouteRepository();
-        var markets = Substitute.For<IMarketCoordinateReader>();
-        var restaurants = Substitute.For<IRestaurantCoordinateReader>();
-        var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
-
-        var result = await sut.Handle(
-            new CalculateRouteCommand(
-                [Guid.NewGuid()],
-                [Guid.NewGuid()],
-                [Guid.NewGuid()],
-                "COST",
-                new DateOnly(2026, 7, 9),
-                false),
-            default);
-
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("HUB_RELAY_NOT_SUPPORTED");
-        repository.Routes.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task Handle_CompareWithHubTrue_ReturnsHubRelayNotSupportedAsync()
-    {
-        var repository = new InMemoryDeliveryRouteRepository();
-        var markets = Substitute.For<IMarketCoordinateReader>();
-        var restaurants = Substitute.For<IRestaurantCoordinateReader>();
-        var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
-
-        var result = await sut.Handle(
-            new CalculateRouteCommand(
-                [Guid.NewGuid()],
-                [],
-                [Guid.NewGuid()],
-                "COST",
-                new DateOnly(2026, 7, 9),
-                true),
-            default);
-
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("HUB_RELAY_NOT_SUPPORTED");
-        repository.Routes.Should().BeEmpty();
-    }
-
-    [Fact]
     public async Task Handle_MoreThan20Stops_ReturnsStopLimitExceededAsync()
     {
         var repository = new InMemoryDeliveryRouteRepository();
-        var markets = Substitute.For<IMarketCoordinateReader>();
+        var hubs = Substitute.For<IHubCoordinateReader>();
         var restaurants = Substitute.For<IRestaurantCoordinateReader>();
-        var sut = new CalculateRouteCommandHandler(markets, restaurants, repository);
-        var sourceMarketIds = Enumerable.Range(0, 10).Select(_ => Guid.NewGuid()).ToList();
-        var destinationRestaurantIds = Enumerable.Range(0, 11).Select(_ => Guid.NewGuid()).ToList();
+        var sut = new CalculateRouteCommandHandler(hubs, restaurants, repository);
+        var destinationRestaurantIds = Enumerable.Range(0, 20).Select(_ => Guid.NewGuid()).ToList();
 
         var result = await sut.Handle(
             new CalculateRouteCommand(
-                sourceMarketIds,
-                [],
+                Guid.NewGuid(),
                 destinationRestaurantIds,
                 "COST",
-                new DateOnly(2026, 7, 9),
-                false),
+                new DateOnly(2026, 7, 9)),
             default);
 
         result.IsFailure.Should().BeTrue();
@@ -194,6 +144,6 @@ public sealed class CalculateRouteCommandHandlerTests
         repository.Routes.Should().BeEmpty();
     }
 
-    private static CalculateRouteCommand Command(Guid marketId, Guid restaurantId) =>
-        new([marketId], [], [restaurantId], "COST", new DateOnly(2026, 7, 9), false);
+    private static CalculateRouteCommand Command(Guid hubId, Guid restaurantId) =>
+        new(hubId, [restaurantId], "COST", new DateOnly(2026, 7, 9));
 }
