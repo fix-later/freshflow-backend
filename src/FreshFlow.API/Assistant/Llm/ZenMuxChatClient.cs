@@ -7,6 +7,7 @@ using FreshFlow.API.Assistant.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using OpenAI;
+using Polly.Timeout;
 
 namespace FreshFlow.API.Assistant.Llm;
 
@@ -65,7 +66,33 @@ public sealed class ZenMuxChatClient : IAssistantChatClient
             Tools = tools.Count == 0 ? null : tools.Select(ToAiTool).Cast<AITool>().ToList()
         };
 
-        var response = await _inner.GetResponseAsync(messages, chatOptions, ct);
+        ChatResponse response;
+        try
+        {
+            response = await _inner.GetResponseAsync(messages, chatOptions, ct);
+        }
+        catch (ClientResultException ex)
+        {
+            var failure = ex.Status switch
+            {
+                401 or 403 => AssistantProviderFailure.AuthenticationFailed,
+                429 => AssistantProviderFailure.RateLimited,
+                _ => AssistantProviderFailure.Unavailable
+            };
+            throw new AssistantProviderException(failure, ex);
+        }
+        catch (TimeoutRejectedException ex)
+        {
+            throw new AssistantProviderException(AssistantProviderFailure.Timeout, ex);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new AssistantProviderException(AssistantProviderFailure.Timeout, ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new AssistantProviderException(AssistantProviderFailure.Unavailable, ex);
+        }
 
         var functionCall = response.Messages
             .SelectMany(m => m.Contents)
