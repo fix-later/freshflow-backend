@@ -34,10 +34,10 @@ internal sealed class ReorderDriverRouteCommandHandler(
                 "Route can only be reordered while assigned, before departure."));
         }
 
-        var marketId = route.Stops
+        var hubId = route.HubId ?? route.Stops
             .First(stop => stop.EntityType == StopEntityType.market)
             .EntityId;
-        if (await sorting.HasSortedLinesAsync(route.Id, marketId, route.ServiceDate, ct))
+        if (await sorting.HasSortedLinesAsync(route.Id, hubId, route.ServiceDate, ct))
         {
             return Result<RouteDto>.Failure(Error.Conflict(
                 "ROUTE_LOCKED_FOR_SORTING",

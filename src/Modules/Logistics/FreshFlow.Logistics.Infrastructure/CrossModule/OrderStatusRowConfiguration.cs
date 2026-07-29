@@ -10,14 +10,20 @@ internal sealed class OrderStatusRowConfiguration : IEntityTypeConfiguration<Ord
         builder.HasNoKey();
         builder.ToSqlQuery(
             """
-            SELECT "Id" AS "OrderId", "Status" AS "Status", "RestaurantId" AS "RestaurantId",
-                   "ScheduledFor" AS "ScheduledFor"
-            FROM orders
-            WHERE "deleted_at" IS NULL
+            SELECT o."Id" AS "OrderId", o."Status" AS "Status",
+                   o."RestaurantId" AS "RestaurantId", o."ScheduledFor" AS "ScheduledFor",
+                   pb.hub_id AS "HubId"
+            FROM orders o
+            LEFT JOIN procurement_batch_orders pbo
+              ON pbo.order_id = o."Id" AND pbo.deleted_at IS NULL
+            LEFT JOIN procurement_batches pb
+              ON pb.id = pbo.procurement_batch_id AND pb.deleted_at IS NULL
+            WHERE o."deleted_at" IS NULL
             """);
         builder.Property(o => o.OrderId);
         builder.Property(o => o.Status);
         builder.Property(o => o.RestaurantId);
+        builder.Property(o => o.HubId);
         builder.Property(o => o.ScheduledFor);
     }
 }

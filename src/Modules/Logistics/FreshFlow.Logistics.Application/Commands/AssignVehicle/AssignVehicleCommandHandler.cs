@@ -48,9 +48,15 @@ internal sealed class AssignVehicleCommandHandler(
                     $"Vehicle/driver not eligible: {string.Join(", ", reasons)}"));
         }
 
+        if (request.DriverUserId is null)
+        {
+            return Result<RouteDto>.Failure(Error.Validation(
+                "DRIVER_REQUIRED", "DriverUserId is required."));
+        }
+
         try
         {
-            route.Assign(request.VehicleId, request.DriverUserId);
+            route.Assign(request.VehicleId, request.DriverUserId.Value);
         }
         catch (InvalidOperationException ex)
         {

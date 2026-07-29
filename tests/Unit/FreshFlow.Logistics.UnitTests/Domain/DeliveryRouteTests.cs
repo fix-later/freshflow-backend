@@ -405,7 +405,7 @@ public sealed class DeliveryRouteTests
         var route = ReviewedRoute();
         route.Assign(Guid.NewGuid(), Guid.NewGuid());
 
-        var act = () => route.Assign(Guid.NewGuid(), route.DriverUserId);
+        var act = () => route.Assign(Guid.NewGuid(), route.DriverUserId!.Value);
 
         act.Should().Throw<InvalidOperationException>();
     }

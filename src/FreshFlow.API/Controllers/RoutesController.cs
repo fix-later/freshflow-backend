@@ -1,4 +1,7 @@
+using System.Security.Claims;
 using FreshFlow.API.Extensions;
+using FreshFlow.Hub.Application.Abstractions;
+using FreshFlow.Hub.Application.Services;
 using FreshFlow.Logistics.Application.Commands.AssignVehicle;
 using FreshFlow.Logistics.Application.Commands.CalculateRoute;
 using FreshFlow.Logistics.Application.Commands.OptimizeRoute;
@@ -12,6 +15,7 @@ using FreshFlow.Logistics.Application.Queries.ListRoutes;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FreshFlow.API.Controllers;
 
@@ -30,12 +34,10 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(
             new CalculateRouteCommand(
-                body.SourceMarketIds,
-                body.HubIds ?? [],
+                body.HubId,
                 body.DestinationRestaurantIds,
                 body.OptimizationCriteria,
-                body.ServiceDate,
-                body.CompareWithHub ?? false),
+                body.ServiceDate),
             ct);
 
         return result.IsSuccess
@@ -81,6 +83,10 @@ public sealed class RoutesController(ISender sender) : ControllerBase
         [FromBody] AssignVehicleRequest body,
         CancellationToken ct)
     {
+        var denied = await CheckRouteAccessAsync(id, ct);
+        if (denied is not null)
+            return denied.ToActionResult();
+
         var result = await sender.Send(new AssignVehicleCommand(id, body.VehicleId, body.DriverUserId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -91,9 +97,22 @@ public sealed class RoutesController(ISender sender) : ControllerBase
         [FromQuery(Name = "page_size")] int pageSize = 50,
         [FromQuery(Name = "service_date")] DateOnly? serviceDate = null,
         [FromQuery] string? status = null,
+        [FromQuery(Name = "hub_id")] Guid? hubId = null,
         CancellationToken ct = default)
     {
-        var result = await sender.Send(new ListRoutesQuery(cursor, pageSize, serviceDate, status), ct);
+        if (hubId is { } scopedHubId)
+        {
+            var denied = await CheckHubAccessAsync(scopedHubId, ct);
+            if (denied is not null)
+                return denied.ToActionResult();
+        }
+        else if (IsHubStaff())
+        {
+            return BadRequest(ApiResponse.Err("HUB_ID_REQUIRED", "hub_id is required for hub staff."));
+        }
+
+        var result = await sender.Send(
+            new ListRoutesQuery(cursor, pageSize, serviceDate, status, hubId), ct);
         return result.IsSuccess
             ? Ok(ApiResponse.OkPaged(result.Value.Items, result.Value.PageSize, result.Value.NextCursor))
             : result.Error.ToActionResult();
@@ -115,9 +134,13 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     public async Task<IActionResult> CheckEligibilityAsync(
         Guid routeId,
         [FromQuery] Guid vehicleId,
-        [FromQuery(Name = "driver_user_id")] Guid? driverUserId,
+        [FromQuery(Name = "driver_user_id")] Guid driverUserId,
         CancellationToken ct)
     {
+        var denied = await CheckRouteAccessAsync(routeId, ct);
+        if (denied is not null)
+            return denied.ToActionResult();
+
         var result = await sender.Send(new CheckEligibilityQuery(routeId, vehicleId, driverUserId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -126,6 +149,13 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetRouteAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetRouteQuery(id), ct);
+        if (result.IsSuccess)
+        {
+            var denied = await CheckHubAccessAsync(result.Value.HubId, ct);
+            if (denied is not null)
+                return denied.ToActionResult();
+        }
+
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -134,21 +164,65 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     [HttpGet("{id:guid}/loading-manifest")]
     public async Task<IActionResult> GetLoadingManifestAsync(Guid id, CancellationToken ct)
     {
+        var denied = await CheckRouteAccessAsync(id, ct);
+        if (denied is not null)
+            return denied.ToActionResult();
+
         var result = await sender.Send(new GetLoadingManifestQuery(id), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
+
+    private async Task<FreshFlow.SharedKernel.Application.Error?> CheckRouteAccessAsync(
+        Guid routeId,
+        CancellationToken ct)
+    {
+        if (!IsHubStaff())
+            return null;
+
+        var result = await sender.Send(new GetRouteQuery(routeId), ct);
+        return result.IsSuccess ? await CheckHubAccessAsync(result.Value.HubId, ct) : result.Error;
+    }
+
+    private async Task<FreshFlow.SharedKernel.Application.Error?> CheckHubAccessAsync(
+        Guid? hubId,
+        CancellationToken ct)
+    {
+        if (!IsHubStaff())
+            return null;
+
+        if (hubId is null)
+            return FreshFlow.SharedKernel.Application.Error.Unauthorized(
+                "HUB_ACCESS_DENIED", "Route is not assigned to a hub.");
+
+        var hubs = HttpContext.RequestServices.GetRequiredService<IHubRepository>();
+        var hubAccess = HttpContext.RequestServices.GetRequiredService<HubAccessChecker>();
+        var hub = await hubs.FindByIdAsync(hubId.Value, ct);
+        if (hub is null)
+            return FreshFlow.SharedKernel.Application.Error.NotFound("HUB", hubId.Value);
+
+        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        return Guid.TryParse(rawUserId, out var actorUserId)
+            ? await hubAccess.CheckAsync(
+                hub.Id,
+                hub.IsActive,
+                actorUserId,
+                User.IsInRole("admin") || User.IsInRole("operations_manager"),
+                ct)
+            : FreshFlow.SharedKernel.Application.Error.Unauthorized(
+                "HUB_ACCESS_DENIED", "You do not have access to this hub.");
+    }
+
+    private bool IsHubStaff() => HttpContext?.User.IsInRole("hub_staff") == true;
 }
 
 public sealed record CalculateRouteRequest(
-    IReadOnlyList<Guid> SourceMarketIds,
-    IReadOnlyList<Guid>? HubIds,
+    Guid HubId,
     IReadOnlyList<Guid> DestinationRestaurantIds,
     string? OptimizationCriteria,
-    DateOnly ServiceDate,
-    bool? CompareWithHub);
+    DateOnly ServiceDate);
 
 public sealed record OptimizeRouteRequest(string OptimizationCriteria);
 
 public sealed record ReviewRouteRequest(IReadOnlyList<Guid>? StopOrder);
 
-public sealed record AssignVehicleRequest(Guid VehicleId, Guid? DriverUserId);
+public sealed record AssignVehicleRequest(Guid VehicleId, Guid DriverUserId);

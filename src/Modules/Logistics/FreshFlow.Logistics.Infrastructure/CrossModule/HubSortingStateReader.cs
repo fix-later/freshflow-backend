@@ -8,7 +8,7 @@ internal sealed class HubSortingStateReader(AppDbContext db) : IHubSortingStateR
 {
     public Task<bool> HasSortedLinesAsync(
         Guid routeId,
-        Guid marketId,
+        Guid hubId,
         DateOnly serviceDate,
         CancellationToken ct) =>
         db.Set<HubSortingStateRow>()
@@ -18,7 +18,7 @@ internal sealed class HubSortingStateReader(AppDbContext db) : IHubSortingStateR
                     row.Status == "SORTED" &&
                     (row.RouteId == routeId ||
                      (row.RouteId == null &&
-                      row.MarketId == marketId &&
+                      row.HubId == hubId &&
                       row.ServiceDate == serviceDate)),
                 ct);
 }

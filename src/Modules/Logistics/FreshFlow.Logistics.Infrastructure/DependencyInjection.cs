@@ -45,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<IDriverReader, DriverReader>();
         services.AddScoped<IHubDiscrepancyStatusReader, HubDiscrepancyStatusReader>();
         services.AddScoped<IHubSortingStateReader, HubSortingStateReader>();
+        services.AddScoped<IHubCoordinateReader, HubCoordinateReader>();
         services.AddScoped<IOrderMarketReader, OrderMarketReader>();
         services.AddScoped<IOrderPackingReader, OrderPackingReader>();
         services.AddScoped<IOrderStatusReader, OrderStatusReader>();

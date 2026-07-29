@@ -37,32 +37,37 @@ internal sealed class ConfirmPickupCommandHandler(
             .Where(stop => stop.EntityType == StopEntityType.restaurant)
             .ToDictionary(stop => stop.EntityId, stop => stop.StopOrder);
 
-        var orderStopOrders = new List<(Guid OrderId, int StopOrder)>();
-        foreach (var orderId in request.OrderIds)
+        var expectedOrders = await orders.ListByRestaurantsAndStatusAsync(
+            restaurantStopOrders.Keys,
+            OrderStatusAtHub,
+            ct,
+            route.HubId,
+            route.ServiceDate);
+        var expectedOrderIds = expectedOrders.Select(order => order.OrderId).ToHashSet();
+        if (request.OrderIds.Count != expectedOrderIds.Count
+            || !expectedOrderIds.SetEquals(request.OrderIds))
         {
-            var order = await orders.FindByIdAsync(orderId, ct);
-            if (order is null)
-                return Result<ConfirmPickupResultDto>.Failure(Error.NotFound("ORDER", orderId));
+            return Result<ConfirmPickupResultDto>.Failure(Error.Validation(
+                "PICKUP_ORDERS_INCOMPLETE",
+                "Pickup must include every AtHub order assigned to this route and hub."));
+        }
 
-            if (order.Status != OrderStatusAtHub)
-            {
-                return Result<ConfirmPickupResultDto>.Failure(
-                    Error.Validation("ORDER_NOT_AT_HUB", "Order must be at hub before dispatch."));
-            }
-
+        var orderStopOrders = new List<(Guid OrderId, int StopOrder)>();
+        foreach (var order in expectedOrders)
+        {
             if (!restaurantStopOrders.TryGetValue(order.RestaurantId, out var stopOrder))
             {
                 return Result<ConfirmPickupResultDto>.Failure(
                     Error.Validation("ORDER_NOT_ON_ROUTE", "Order restaurant must be a stop on this route."));
             }
 
-            if (await deliveries.ExistsForOrderAsync(orderId, ct))
+            if (await deliveries.ExistsForOrderAsync(order.OrderId, ct))
             {
                 return Result<ConfirmPickupResultDto>.Failure(
                     Error.Conflict("DELIVERY_ALREADY_EXISTS", "Delivery already exists for this order."));
             }
 
-            orderStopOrders.Add((orderId, stopOrder));
+            orderStopOrders.Add((order.OrderId, stopOrder));
         }
 
         var created = orderStopOrders

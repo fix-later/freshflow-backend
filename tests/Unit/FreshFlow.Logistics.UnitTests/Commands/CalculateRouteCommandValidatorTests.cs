@@ -9,7 +9,7 @@ public sealed class CalculateRouteCommandValidatorTests
     private readonly CalculateRouteCommandValidator _sut = new();
 
     [Fact]
-    public void Validate_ValidDirectCommand_Passes()
+    public void Validate_ValidHubCommand_Passes()
     {
         var result = _sut.Validate(Command());
 
@@ -17,27 +17,18 @@ public sealed class CalculateRouteCommandValidatorTests
     }
 
     [Fact]
-    public void Validate_HubIdsPresent_Passes()
+    public void Validate_HubIdMissing_Fails()
     {
-        var result = _sut.Validate(Command(hubIds: [Guid.NewGuid()]));
+        var result = _sut.Validate(Command(hubId: Guid.Empty));
 
-        result.IsValid.Should().BeTrue();
-    }
-
-    [Fact]
-    public void Validate_CompareWithHubTrue_Passes()
-    {
-        var result = _sut.Validate(Command(compareWithHub: true));
-
-        result.IsValid.Should().BeTrue();
+        result.IsValid.Should().BeFalse();
     }
 
     [Fact]
     public void Validate_MoreThan20Stops_Passes()
     {
         var result = _sut.Validate(Command(
-            sourceMarketIds: Enumerable.Range(0, 10).Select(_ => Guid.NewGuid()).ToList(),
-            destinationRestaurantIds: Enumerable.Range(0, 11).Select(_ => Guid.NewGuid()).ToList()));
+            destinationRestaurantIds: Enumerable.Range(0, 20).Select(_ => Guid.NewGuid()).ToList()));
 
         result.IsValid.Should().BeTrue();
     }
@@ -64,16 +55,12 @@ public sealed class CalculateRouteCommandValidatorTests
     }
 
     private static CalculateRouteCommand Command(
-        IReadOnlyList<Guid>? sourceMarketIds = null,
-        IReadOnlyList<Guid>? hubIds = null,
+        Guid? hubId = null,
         IReadOnlyList<Guid>? destinationRestaurantIds = null,
-        string? optimizationCriteria = "COST",
-        bool compareWithHub = false) =>
+        string? optimizationCriteria = "COST") =>
         new(
-            sourceMarketIds ?? [Guid.NewGuid()],
-            hubIds ?? [],
+            hubId ?? Guid.NewGuid(),
             destinationRestaurantIds ?? [Guid.NewGuid()],
             optimizationCriteria,
-            new DateOnly(2026, 7, 9),
-            compareWithHub);
+            new DateOnly(2026, 7, 9));
 }

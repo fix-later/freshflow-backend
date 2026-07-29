@@ -38,6 +38,29 @@ public sealed class ConfirmPickupCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_MissingOneAtHubOrder_ReturnsPickupOrdersIncompleteAsync()
+    {
+        var routes = new InMemoryDeliveryRouteRepository();
+        var deliveries = new InMemoryDeliveryRepository();
+        var orders = new InMemoryOrderStatusReader();
+        var driverId = Guid.NewGuid();
+        var restaurantId = Guid.NewGuid();
+        var route = AssignedRoute(driverId, restaurantId);
+        var firstOrderId = Guid.NewGuid();
+        await routes.AddAsync(route, default);
+        orders.Add(firstOrderId, "AtHub", restaurantId);
+        orders.Add(Guid.NewGuid(), "AtHub", restaurantId);
+        var sut = new ConfirmPickupCommandHandler(routes, deliveries, orders);
+
+        var result = await sut.Handle(
+            new ConfirmPickupCommand(route.Id, driverId, [firstOrderId]), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("PICKUP_ORDERS_INCOMPLETE");
+        deliveries.Deliveries.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Handle_OrdersRequestedOutOfStopOrder_AssignsSequenceByRouteStopOrderAsync()
     {
         var routes = new InMemoryDeliveryRouteRepository();
@@ -152,7 +175,7 @@ public sealed class ConfirmPickupCommandHandlerTests
         var result = await sut.Handle(new ConfirmPickupCommand(route.Id, driverId, [orderId]), default);
 
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("ORDER_NOT_FOUND");
+        result.Error.Code.Should().Be("PICKUP_ORDERS_INCOMPLETE");
     }
 
     [Fact]
@@ -171,7 +194,7 @@ public sealed class ConfirmPickupCommandHandlerTests
         var result = await sut.Handle(new ConfirmPickupCommand(route.Id, driverId, [orderId]), default);
 
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("ORDER_NOT_AT_HUB");
+        result.Error.Code.Should().Be("PICKUP_ORDERS_INCOMPLETE");
     }
 
     [Fact]
@@ -190,7 +213,7 @@ public sealed class ConfirmPickupCommandHandlerTests
         var result = await sut.Handle(new ConfirmPickupCommand(route.Id, driverId, [orderId]), default);
 
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("ORDER_NOT_ON_ROUTE");
+        result.Error.Code.Should().Be("PICKUP_ORDERS_INCOMPLETE");
         deliveries.SaveChangesCount.Should().Be(0);
         deliveries.Deliveries.Should().BeEmpty();
     }

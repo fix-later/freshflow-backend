@@ -51,7 +51,8 @@ internal sealed class InMemoryDeliveryRouteRepository : IDeliveryRouteRepository
         int pageSize,
         DateOnly? serviceDate,
         RouteStatus? status,
-        CancellationToken ct)
+        CancellationToken ct,
+        Guid? hubId = null)
     {
         var query = _routes.AsEnumerable();
 
@@ -60,6 +61,9 @@ internal sealed class InMemoryDeliveryRouteRepository : IDeliveryRouteRepository
 
         if (status.HasValue)
             query = query.Where(route => route.Status == status.Value);
+
+        if (hubId.HasValue)
+            query = query.Where(route => route.HubId == hubId.Value);
 
         return Task.FromResult<(IReadOnlyList<DeliveryRoute>, string?)>(
             (query.OrderByDescending(route => route.CreatedAt).ToList().AsReadOnly(), null));

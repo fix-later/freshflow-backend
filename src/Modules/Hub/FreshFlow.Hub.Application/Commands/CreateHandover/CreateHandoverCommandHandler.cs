@@ -24,6 +24,18 @@ internal sealed class CreateHandoverCommandHandler(
         if (route is null)
             return Result<HubHandoverDto>.Failure(Error.NotFound("DELIVERY_ROUTE", request.DeliveryRouteId));
 
+        if (route.HubId != request.HubId)
+        {
+            return Result<HubHandoverDto>.Failure(
+                Error.Validation("ROUTE_HUB_MISMATCH", "Delivery route belongs to a different hub."));
+        }
+
+        if (!string.Equals(route.Status, "assigned", StringComparison.OrdinalIgnoreCase))
+        {
+            return Result<HubHandoverDto>.Failure(
+                Error.Validation("ROUTE_NOT_ASSIGNED", "Delivery route must be assigned before handover."));
+        }
+
         if (route.DriverUserId is null)
         {
             return Result<HubHandoverDto>.Failure(

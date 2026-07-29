@@ -4,7 +4,7 @@ public interface IHubSortingStateReader
 {
     public Task<bool> HasSortedLinesAsync(
         Guid routeId,
-        Guid marketId,
+        Guid hubId,
         DateOnly serviceDate,
         CancellationToken ct);
 }

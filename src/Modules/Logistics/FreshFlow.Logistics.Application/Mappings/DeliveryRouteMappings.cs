@@ -8,6 +8,7 @@ public static class DeliveryRouteMappings
     public static RouteDto ToDto(this DeliveryRoute route) =>
         new(
             route.Id,
+            route.HubId,
             route.RouteType.ToString(),
             route.Status.ToString(),
             route.ServiceDate,

@@ -69,7 +69,8 @@ internal sealed class DeliveryRouteRepository(AppDbContext db) : IDeliveryRouteR
         int pageSize,
         DateOnly? serviceDate,
         RouteStatus? status,
-        CancellationToken ct)
+        CancellationToken ct,
+        Guid? hubId = null)
     {
         if (pageSize <= 0)
             throw new ArgumentException("pageSize must be greater than zero.", nameof(pageSize));
@@ -83,6 +84,9 @@ internal sealed class DeliveryRouteRepository(AppDbContext db) : IDeliveryRouteR
 
         if (status.HasValue)
             query = query.Where(r => r.Status == status.Value);
+
+        if (hubId.HasValue)
+            query = query.Where(r => r.HubId == hubId.Value);
 
         var decoded = RouteCursor.TryDecode(cursor);
         if (decoded is not null)

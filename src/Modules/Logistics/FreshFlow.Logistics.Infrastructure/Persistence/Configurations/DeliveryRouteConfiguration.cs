@@ -19,6 +19,9 @@ internal sealed class DeliveryRouteConfiguration : IEntityTypeConfiguration<Deli
             .HasColumnName("id")
             .IsRequired();
 
+        builder.Property(r => r.HubId)
+            .HasColumnName("hub_id");
+
         builder.Property(r => r.RouteType)
             .HasColumnName("route_type")
             .HasMaxLength(20)
@@ -101,6 +104,9 @@ internal sealed class DeliveryRouteConfiguration : IEntityTypeConfiguration<Deli
 
         builder.HasIndex(r => r.Status)
             .HasDatabaseName("idx_delivery_routes_status");
+
+        builder.HasIndex(r => r.HubId)
+            .HasDatabaseName("idx_delivery_routes_hub_id");
 
         builder.HasIndex(r => r.ServiceDate)
             .HasDatabaseName("idx_delivery_routes_service_date");

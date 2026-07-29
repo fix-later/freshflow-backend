@@ -20,8 +20,8 @@ internal sealed class NearestNeighborTwoOptOptimizer(IConfiguration config) : IR
         ArgumentNullException.ThrowIfNull(stops);
 
         var orderedStops = stops.OrderBy(stop => stop.StopOrder).ToList();
-        var marketStops = orderedStops
-            .Where(stop => stop.EntityType == StopEntityType.market)
+        var pickupStops = orderedStops
+            .Where(stop => stop.EntityType is StopEntityType.hub or StopEntityType.market)
             .ToList();
         var restaurantStops = orderedStops
             .Where(stop => stop.EntityType == StopEntityType.restaurant)
@@ -30,10 +30,10 @@ internal sealed class NearestNeighborTwoOptOptimizer(IConfiguration config) : IR
         var optimizedRestaurants = restaurantStops.Count <= 1
             ? restaurantStops
             : ImproveWithTwoOpt(
-                BuildNearestNeighborOrder(marketStops[^1], restaurantStops),
-                marketStops[^1]);
+                BuildNearestNeighborOrder(pickupStops[^1], restaurantStops),
+                pickupStops[^1]);
 
-        var optimizedStops = marketStops
+        var optimizedStops = pickupStops
             .Concat(optimizedRestaurants)
             .ToList();
 
