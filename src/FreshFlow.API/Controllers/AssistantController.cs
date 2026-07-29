@@ -23,7 +23,8 @@ namespace FreshFlow.API.Controllers;
 public sealed class AssistantController(
     AssistantOrchestrator orchestrator,
     IConversationStore conversationStore,
-    IValidator<AssistantChatRequest> requestValidator) : ControllerBase
+    IValidator<AssistantChatRequest> requestValidator,
+    ILogger<AssistantController> logger) : ControllerBase
 {
     /// <summary>POST /api/v1/assistant/chat — one conversational turn against the shopping assistant.</summary>
     [HttpPost("chat")]
@@ -32,6 +33,8 @@ public sealed class AssistantController(
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(StatusCodes.Status504GatewayTimeout)]
     public async Task<IActionResult> ChatAsync([FromBody] AssistantChatRequest request, CancellationToken ct)
     {
         // H1: validated explicitly — the chat endpoint calls the orchestrator directly, not via ISender,
@@ -58,7 +61,16 @@ public sealed class AssistantController(
         var state = BuildState(existing, request, userId);
         state = state with { Turns = [.. state.Turns, new ConversationTurn(ConversationRole.User, request.Message)] };
 
-        var outcome = await orchestrator.RunAsync(state, request.ConfirmOrderId, ct);
+        AssistantTurnOutcome outcome;
+        try
+        {
+            outcome = await orchestrator.RunAsync(state, request.ConfirmOrderId, ct);
+        }
+        catch (AssistantProviderException ex)
+        {
+            logger.LogWarning(ex, "Assistant provider request failed: {Failure}", ex.Failure);
+            return ProviderFailure(ex.Failure);
+        }
 
         if (!await conversationStore.SaveAsync(outcome.State, ct))
         {
@@ -101,4 +113,27 @@ public sealed class AssistantController(
             ? id
             : throw new UnauthorizedAccessException("User ID claim is missing or malformed.");
     }
+
+    internal static ObjectResult ProviderFailure(AssistantProviderFailure failure) => failure switch
+    {
+        AssistantProviderFailure.AuthenticationFailed => Error(
+            StatusCodes.Status502BadGateway,
+            "ASSISTANT_PROVIDER_AUTH_FAILED",
+            "AI provider authentication failed."),
+        AssistantProviderFailure.RateLimited => Error(
+            StatusCodes.Status429TooManyRequests,
+            "ASSISTANT_PROVIDER_RATE_LIMITED",
+            "AI provider usage limit has been reached. Please try again later."),
+        AssistantProviderFailure.Timeout => Error(
+            StatusCodes.Status504GatewayTimeout,
+            "ASSISTANT_PROVIDER_TIMEOUT",
+            "AI provider timed out. Please try again."),
+        _ => Error(
+            StatusCodes.Status502BadGateway,
+            "ASSISTANT_PROVIDER_UNAVAILABLE",
+            "AI provider is unavailable. Please try again later.")
+    };
+
+    private static ObjectResult Error(int statusCode, string code, string message) =>
+        new(ApiResponse.Err(code, message)) { StatusCode = statusCode };
 }

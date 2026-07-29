@@ -22,3 +22,19 @@ public interface IAssistantChatClient
         IReadOnlyList<AssistantTool> tools,
         CancellationToken ct = default);
 }
+
+internal enum AssistantProviderFailure
+{
+    AuthenticationFailed,
+    RateLimited,
+    Timeout,
+    Unavailable
+}
+
+internal sealed class AssistantProviderException(
+    AssistantProviderFailure failure,
+    Exception innerException)
+    : Exception($"Assistant provider failed: {failure}.", innerException)
+{
+    public AssistantProviderFailure Failure { get; } = failure;
+}
