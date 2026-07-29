@@ -5,6 +5,7 @@ using FreshFlow.Hub.Application.Services;
 using FreshFlow.Logistics.Application.Commands.AssignVehicle;
 using FreshFlow.Logistics.Application.Commands.CalculateRoute;
 using FreshFlow.Logistics.Application.Commands.OptimizeRoute;
+using FreshFlow.Logistics.Application.Commands.PlanRoutes;
 using FreshFlow.Logistics.Application.Commands.ReviewRoute;
 using FreshFlow.Logistics.Application.Commands.SelectRoute;
 using FreshFlow.Logistics.Application.Queries.CheckEligibility;
@@ -43,6 +44,18 @@ public sealed class RoutesController(ISender sender) : ControllerBase
         return result.IsSuccess
             ? CreatedAtAction(nameof(GetRouteAsync), new { id = result.Value.Id }, ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
+    }
+
+    [HttpPost("plan")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> PlanRoutesAsync(
+        [FromBody] PlanRoutesRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new PlanRoutesCommand(body.HubId, body.ServiceDate, body.OptimizationCriteria),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     [HttpPost("{id:guid}/select")]
@@ -220,6 +233,11 @@ public sealed record CalculateRouteRequest(
     IReadOnlyList<Guid> DestinationRestaurantIds,
     string? OptimizationCriteria,
     DateOnly ServiceDate);
+
+public sealed record PlanRoutesRequest(
+    Guid HubId,
+    DateOnly ServiceDate,
+    string? OptimizationCriteria);
 
 public sealed record OptimizeRouteRequest(string OptimizationCriteria);
 
