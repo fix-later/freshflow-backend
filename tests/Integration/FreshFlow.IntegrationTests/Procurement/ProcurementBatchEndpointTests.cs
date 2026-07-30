@@ -5,6 +5,7 @@ using FluentAssertions;
 using FreshFlow.Catalog.Domain.Entities;
 using FreshFlow.Hub.Application.Dtos;
 using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Infrastructure.Persistence.Entities;
 using FreshFlow.IntegrationTests.Infrastructure;
 using FreshFlow.Logistics.Domain.Entities;
 using FreshFlow.Logistics.Domain.Enums;
@@ -765,6 +766,120 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
+    public async Task ResetOrderGroups_SafeDay_SoftDeletesAndAllowsBatchingAgainAsync()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+        var restaurantId = await CreateRestaurantAsync();
+        var targetDate = new DateOnly(2042, 4, 17);
+        var seed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+        await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/auto-batch",
+            new { targetDate, dryRun = false, force = false });
+        var originalBatchId = await BatchIdCoveringAsync(seed.OrderId);
+
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/reset",
+            new { targetDate, confirmation = "RESET 2042-04-17" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<Envelope<BatchingResetResult>>();
+        body!.Data!.OperationId.Should().NotBeEmpty();
+        body.Data.TargetDate.Should().Be(targetDate);
+        body.Data.BatchesReset.Should().Be(1);
+        body.Data.OrdersReset.Should().Be(1);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var batch = await db.Set<ProcurementBatch>()
+                .AsNoTracking()
+                .SingleAsync(candidate => candidate.Id == originalBatchId);
+            batch.DeletedAt.Should().NotBeNull();
+            var link = await db.Set<ProcurementBatchOrder>()
+                .AsNoTracking()
+                .SingleAsync(candidate => candidate.ProcurementBatchId == originalBatchId);
+            link.DeletedAt.Should().NotBeNull();
+            var item = await db.Set<ProcurementBatchItem>()
+                .AsNoTracking()
+                .SingleAsync(candidate => candidate.ProcurementBatchId == originalBatchId);
+            item.DeletedAt.Should().NotBeNull();
+            var order = await db.Set<Order>()
+                .AsNoTracking()
+                .SingleAsync(candidate => candidate.Id == seed.OrderId);
+            order.Status.Should().Be(OrderStatus.Confirmed);
+            var audit = await db.Set<AuditLog>()
+                .AsNoTracking()
+                .SingleAsync(candidate =>
+                    candidate.Action == "procurement_batching_reset" &&
+                    candidate.EntityId == body.Data.OperationId);
+            audit.ActorId.Should().NotBeNull();
+            audit.Details.Should().Contain("2042-04-17");
+        }
+
+        var list = await _client.GetFromJsonAsync<Envelope<ProcurementBatchListDto>>(
+            $"/api/v1/admin/order-groups?date={targetDate:yyyy-MM-dd}");
+        list!.Data!.Batches.Should().BeEmpty();
+
+        var repeated = await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/reset",
+            new { targetDate, confirmation = "RESET 2042-04-17" });
+        repeated.StatusCode.Should().Be(HttpStatusCode.OK);
+        var repeatedBody = await repeated.Content
+            .ReadFromJsonAsync<Envelope<BatchingResetResult>>();
+        repeatedBody!.Data!.BatchesReset.Should().Be(0);
+        repeatedBody.Data.OrdersReset.Should().Be(0);
+
+        var rerun = await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/auto-batch",
+            new { targetDate, dryRun = false, force = false });
+        rerun.StatusCode.Should().Be(HttpStatusCode.OK);
+        var rerunBody = await rerun.Content.ReadFromJsonAsync<Envelope<BatchingResult>>();
+        rerunBody!.Data!.BatchesCreated.Should().Be(1);
+        rerunBody.Data.OrdersBatched.Should().Be(1);
+        await AssertOrderAndBatchStateForOrderAsync(seed.OrderId, OrderStatus.Batched, 1);
+    }
+
+    [Fact]
+    public async Task ResetOrderGroups_PurchasingBatch_ReturnsConflictWithoutPartialResetAsync()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+        var restaurantId = await CreateRestaurantAsync();
+        var targetDate = new DateOnly(2042, 4, 18);
+        var seed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+        var safeSeed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+        await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/auto-batch",
+            new { targetDate, dryRun = false, force = false });
+        var batchId = await BatchIdCoveringAsync(seed.OrderId);
+        var safeBatchId = await BatchIdCoveringAsync(safeSeed.OrderId);
+        await SetBatchStatusForTestAsync(batchId, ProcurementBatchStatus.Purchasing);
+
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/reset",
+            new { targetDate, confirmation = "RESET 2042-04-18" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var error = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
+        error!.Error!.Code.Should().Be("BATCH_RESET_NOT_ALLOWED");
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var batches = await db.Set<ProcurementBatch>()
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == batchId || candidate.Id == safeBatchId)
+            .ToListAsync();
+        batches.Should().HaveCount(2).And.OnlyContain(batch => batch.DeletedAt == null);
+        var orders = await db.Set<Order>()
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == seed.OrderId || candidate.Id == safeSeed.OrderId)
+            .ToListAsync();
+        orders.Should().HaveCount(2).And.OnlyContain(order => order.Status == OrderStatus.Batched);
+    }
+
+    [Fact]
     public async Task GetOrderGroups_FiltersByDateAndMarketAsync()
     {
         var token = await LoginAsAdminAsync();
@@ -895,6 +1010,23 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         order.Status.Should().Be(expectedStatus);
         var batchCount = await db.Set<ProcurementBatch>().CountAsync();
         batchCount.Should().Be(expectedBatchCount);
+    }
+
+    private async Task AssertOrderAndBatchStateForOrderAsync(
+        Guid orderId,
+        OrderStatus expectedStatus,
+        int expectedActiveBatchCount)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var order = await db.Set<Order>()
+            .AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == orderId);
+        order.Status.Should().Be(expectedStatus);
+        var batchCount = await db.Set<ProcurementBatchOrder>()
+            .CountAsync(link => link.OrderId == orderId && link.DeletedAt == null);
+        batchCount.Should().Be(expectedActiveBatchCount);
     }
 
     private sealed record SeededOrder(
