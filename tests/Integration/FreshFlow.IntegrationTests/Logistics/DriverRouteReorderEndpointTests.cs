@@ -151,7 +151,11 @@ public sealed class DriverRouteReorderEndpointTests(AuthWebAppFactory factory)
 
     private static Order NewAtHubOrder(Guid restaurantId, Guid marketProductId)
     {
-        var order = new Order(restaurantId, null, null);
+        // Scheduled at noon Asia/Ho_Chi_Minh on the service date (05:00 UTC) so the loading
+        // manifest's VN-day window filter keeps this order in scope.
+        var scheduledFor = new DateTime(
+            ServiceDate.Year, ServiceDate.Month, ServiceDate.Day, 5, 0, 0, DateTimeKind.Utc);
+        var order = new Order(restaurantId, scheduledFor, null);
         order.AddItem(marketProductId, "Reorder Product", 1, 10_000m)
             .IsSuccess.Should().BeTrue();
         order.ClearDomainEvents();
