@@ -1,4 +1,6 @@
+using FreshFlow.Procurement.Application.Dtos;
 using FreshFlow.Procurement.Domain.Entities;
+using FreshFlow.SharedKernel.Application;
 
 namespace FreshFlow.Procurement.Application.Abstractions;
 
@@ -31,5 +33,10 @@ public interface IProcurementBatchRepository
 
     public Task<IReadOnlyList<ProcurementBatch>> ListByDateAsync(
         DateOnly date,
+        CancellationToken ct);
+
+    public Task<Result<BatchingResetCounts>> ResetDayAsync(
+        DateOnly batchDate,
+        DateTime resetAtUtc,
         CancellationToken ct);
 }

@@ -22,6 +22,7 @@ using FreshFlow.Pricing.Application.Queries.GetPricingSettings;
 using FreshFlow.Procurement.Application.Commands.AssignAgent;
 using FreshFlow.Procurement.Application.Commands.CancelBatch;
 using FreshFlow.Procurement.Application.Commands.GenerateManifest;
+using FreshFlow.Procurement.Application.Commands.ResetBatchingDay;
 using FreshFlow.Procurement.Application.Commands.RunAutoBatch;
 using FreshFlow.Procurement.Application.Queries.GetProcurementBatches;
 using FreshFlow.Procurement.Application.Queries.GetProcurementProgress;
@@ -251,6 +252,22 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    [HttpPost("order-groups/reset")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> ResetOrderGroupsAsync(
+        [FromBody] ResetOrderGroupsRequest body,
+        CancellationToken ct)
+    {
+        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (!Guid.TryParse(raw, out var adminId))
+            return Unauthorized();
+
+        var result = await sender.Send(
+            new ResetBatchingDayCommand(body.TargetDate, body.Confirmation, adminId),
+            ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     [HttpPost("order-groups/{batchId:guid}/manifest")]
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> GenerateManifestAsync(Guid batchId, CancellationToken ct)
@@ -377,4 +394,5 @@ public sealed record UpdateOperationalSettingsRequest(
     TimeOnly DailyCutoffTime, bool BatchingEnabled, string DefaultRouteType, int DeliveryWindowDays);
 public sealed record UpdatePricingSettingsRequest(decimal PriceAlertThresholdPercent);
 public sealed record RunAutoBatchRequest(DateOnly? TargetDate, bool? DryRun, bool? Force);
+public sealed record ResetOrderGroupsRequest(DateOnly TargetDate, string Confirmation);
 public sealed record CancelOrderGroupRequest(string? Reason);

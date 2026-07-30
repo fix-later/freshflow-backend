@@ -37,6 +37,7 @@ public static class ErrorExtensions
                         or "BATCH_NOT_PURCHASED"
                         or "BATCH_ALREADY_IN_PROGRESS"
                         or "BATCH_NOT_CANCELLABLE"
+                        or "BATCH_RESET_NOT_ALLOWED"
                         or "BATCH_CANCELLED"
                         or "HUB_ALREADY_CONFIGURED_FOR_MARKET")
             return new ConflictObjectResult(body);
