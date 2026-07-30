@@ -877,6 +877,12 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             .Where(candidate => candidate.Id == seed.OrderId || candidate.Id == safeSeed.OrderId)
             .ToListAsync();
         orders.Should().HaveCount(2).And.OnlyContain(order => order.Status == OrderStatus.Batched);
+
+        // The rejected reset intentionally leaves 2 batches. AutoBatch...Async counts every row in
+        // procurement_batches across the shared test DB (no soft-delete query filter), so these
+        // must not outlive this test — hard-delete them like the filter test's RemoveBatchAsync.
+        await RemoveBatchAsync(batchId);
+        await RemoveBatchAsync(safeBatchId);
     }
 
     [Fact]
