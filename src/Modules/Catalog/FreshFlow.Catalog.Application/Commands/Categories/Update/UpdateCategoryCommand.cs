@@ -3,4 +3,8 @@ using FreshFlow.SharedKernel.Application;
 
 namespace FreshFlow.Catalog.Application.Commands.Categories.Update;
 
-public sealed record UpdateCategoryCommand(Guid Id, string Name, Guid? ParentId = null) : ICommand<CategoryDto>;
+public sealed record UpdateCategoryCommand(
+    Guid Id,
+    string Name,
+    Guid? ParentId = null,
+    string? ImageUrl = null) : ICommand<CategoryDto>;

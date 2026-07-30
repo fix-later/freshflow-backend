@@ -33,4 +33,13 @@ public sealed class CreateCategoryCommandValidatorTests
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == "Name");
     }
+    [Fact]
+    public async Task Validate_InvalidImageUrl_Fails()
+    {
+        var result = await _sut.ValidateAsync(
+            new CreateCategoryCommand("Rau củ", ImageUrl: "not-a-url"));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "ImageUrl");
+    }
 }

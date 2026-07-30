@@ -199,7 +199,7 @@ flowchart TD
     P --> P3[Assign Agent hoặc cancel batch]
 
     B --> L[Hub và Logistics]
-    L --> L1[Tạo/sửa/deactivate Hub, Zone, Vehicle]
+    L --> L1[Tạo/sửa/deactivate Hub, Vehicle]
     L --> L2[Calculate → Select → Optimize → Review route]
     L --> L3[Eligibility → assign xe + driver]
     L --> L4[Thực hiện/giám sát Hub inbound, sorting, outbound, handover]
@@ -227,7 +227,7 @@ flowchart TD
     H --> H3[Inbound / discrepancy / sorting / outbound / handover]
 
     B --> L[Logistics]
-    L --> L1[CRUD vehicle và delivery zone]
+    L --> L1[CRUD vehicle]
     L --> L2[Route suggestion / calculate]
     L --> L3[Select → optimize → review]
     L --> L4[Eligibility → assign xe + driver]

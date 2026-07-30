@@ -47,6 +47,7 @@ internal sealed class UpdateCategoryCommandHandler(IProductCategoryRepository ca
         category.Rename(name);
         if (category.ParentId != request.ParentId)
             category.ChangeParent(request.ParentId);
+        category.SetImage(request.ImageUrl);
         if (!await categories.SaveChangesAsync(ct))
             return Result<CategoryDto>.Failure(
                 Error.Conflict("CATEGORY_NAME_CONFLICT", $"A category named '{name}' already exists."));

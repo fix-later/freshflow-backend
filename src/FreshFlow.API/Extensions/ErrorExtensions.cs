@@ -17,7 +17,6 @@ public static class ErrorExtensions
                         or "CATEGORY_NAME_CONFLICT" or "UNIT_NAME_CONFLICT"
                         or "PACKING_CODE_CONFLICT"
                         or "CATEGORY_HAS_ACTIVE_CHILDREN"
-                        or "DELIVERY_ZONE_CODE_EXISTS"
                         or "PLATE_NUMBER_DUPLICATE"
                         or "VEHICLE_NOT_AVAILABLE"
                         or "MARKET_PRODUCT_ALREADY_EXISTS"
@@ -37,6 +36,7 @@ public static class ErrorExtensions
                         or "BATCH_NOT_PURCHASED"
                         or "BATCH_ALREADY_IN_PROGRESS"
                         or "BATCH_NOT_CANCELLABLE"
+                        or "BATCH_RESET_NOT_ALLOWED"
                         or "BATCH_CANCELLED"
                         or "HUB_ALREADY_CONFIGURED_FOR_MARKET")
             return new ConflictObjectResult(body);

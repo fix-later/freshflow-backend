@@ -23,14 +23,21 @@ public sealed class CreateCategoryCommandHandlerTests
     {
         _categories.ExistsByNameAsync("Rau củ", default).Returns(false);
 
-        var result = await _sut.Handle(new CreateCategoryCommand("Rau củ"), default);
+        var result = await _sut.Handle(
+            new CreateCategoryCommand("Rau củ", ImageUrl: "https://example.com/category.jpg"),
+            default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Name.Should().Be("Rau củ");
         result.Value.ParentId.Should().BeNull();
+        result.Value.ImageUrl.Should().Be("https://example.com/category.jpg");
         result.Value.IsActive.Should().BeTrue();
         await _categories.Received(1).AddAsync(
-            Arg.Is<ProductCategory>(c => c.Name == "Rau củ" && c.ParentId == null), default);
+            Arg.Is<ProductCategory>(c =>
+                c.Name == "Rau củ"
+                && c.ParentId == null
+                && c.ImageUrl == "https://example.com/category.jpg"),
+            default);
         await _categories.Received(1).SaveChangesAsync(default);
     }
 

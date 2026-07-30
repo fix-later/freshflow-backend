@@ -18,7 +18,9 @@ internal sealed class HubSortingStateReader(AppDbContext db) : IHubSortingStateR
                     row.Status == "SORTED" &&
                     (row.RouteId == routeId ||
                      (row.RouteId == null &&
-                      row.HubId == hubId &&
+                      // The caller passes route.HubId when set, else the route's market-stop id.
+                      // Match either the hub or its market so a market-level sort still locks.
+                      (row.HubId == hubId || row.MarketId == hubId) &&
                       row.ServiceDate == serviceDate)),
                 ct);
 }

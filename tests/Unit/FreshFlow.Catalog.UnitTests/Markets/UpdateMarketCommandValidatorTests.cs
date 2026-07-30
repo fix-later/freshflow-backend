@@ -46,4 +46,13 @@ public sealed class UpdateMarketCommandValidatorTests
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName.Contains("Latitude"));
     }
+    [Fact]
+    public async Task Validate_InvalidImageUrl_Fails()
+    {
+        var result = await _sut.ValidateAsync(
+            new UpdateMarketCommand(Guid.NewGuid(), "Name", null, null, null, null, "not-a-url"));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "ImageUrl");
+    }
 }

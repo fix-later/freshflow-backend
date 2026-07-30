@@ -25,7 +25,15 @@ public sealed class UpdateMarketCommandHandlerTests
         var id = market.Id;
         _markets.FindByIdAsync(id, default).Returns(market);
 
-        var cmd = new UpdateMarketCommand(id, "New Name", "New Location", "New Address", 10.5m, 106.5m);
+        var cmd = new UpdateMarketCommand(
+            id,
+            "New Name",
+            "New Location",
+            "New Address",
+            10.5m,
+            106.5m,
+            "https://example.com/market.jpg",
+            "Updated description");
 
         // Act
         var result = await _sut.Handle(cmd, default);
@@ -34,6 +42,8 @@ public sealed class UpdateMarketCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Name.Should().Be("New Name");
         result.Value.Location.Should().Be("New Location");
+        result.Value.ImageUrl.Should().Be("https://example.com/market.jpg");
+        result.Value.Description.Should().Be("Updated description");
         await _markets.Received(1).SaveChangesAsync(default);
     }
 

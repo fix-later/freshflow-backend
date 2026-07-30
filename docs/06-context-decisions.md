@@ -100,7 +100,7 @@ Merging these roles would create a bloated, confusing UX and complicate RBAC. Th
 
 **Old behavior:** Admin manually creates `order_groups` by selecting orders.
 
-**New behavior:** A system cron job at 22:00 groups all `CONFIRMED` orders by delivery zone and market source, creating `OrderGroup` entities and transitioning order status to `BATCHED` automatically.
+**New behavior:** A system cron job at 22:00 groups all `CONFIRMED` orders by source market, creating `OrderGroup` entities and transitioning order status to `BATCHED` automatically. (Grouping by delivery zone was specified in FR-ORD-005 but is not implemented — there is no restaurant-to-zone link.)
 
 **Rationale:** Manual batching doesn't scale, introduces human error, and creates an operational bottleneck at a fixed time each night. System auto-batching is deterministic and auditable.
 
@@ -113,7 +113,7 @@ Merging these roles would create a bloated, confusing UX and complicate RBAC. Th
 **Decision:** `order_items.locked_unit_price` stores the price as a snapshot at `CONFIRMED` status transition time.
 
 **Why not a FK reference to `price_snapshots`?**
-Price snapshots are a high-volume append-only table partitioned by month. FK references across the orders boundary would complicate cross-context queries and violate the bounded context principle. A scalar snapshot is simpler, faster to read, and immune to cascade effects.
+Price snapshots are a high-volume append-only table (currently a plain table with ordinary indexes; monthly range partitioning is a target design, not implemented). FK references across the orders boundary would complicate cross-context queries and violate the bounded context principle. A scalar snapshot is simpler, faster to read, and immune to cascade effects.
 
 **Price Band Rule:** Tolerate ±10% deviation between `locked_unit_price` and actual purchase price. Wider deviation requires restaurant re-confirmation (30-min window, then auto-confirm). Configurable via `system_config` key `price_band_tolerance_percent`.
 

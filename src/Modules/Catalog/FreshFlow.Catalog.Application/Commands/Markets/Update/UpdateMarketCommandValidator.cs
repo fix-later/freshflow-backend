@@ -28,5 +28,16 @@ public sealed class UpdateMarketCommandValidator : AbstractValidator<UpdateMarke
         When(x => x.Longitude.HasValue, () =>
             RuleFor(x => x.Longitude!.Value)
                 .InclusiveBetween(-180m, 180m).WithMessage("Longitude must be between -180 and 180."));
+        RuleFor(x => x.ImageUrl)
+            .MaximumLength(512)
+            .Must(url =>
+                Uri.TryCreate(url, UriKind.Absolute, out var u) &&
+                (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp))
+            .WithMessage("ImageUrl must be a valid absolute HTTPS or HTTP URL.")
+            .When(x => x.ImageUrl is not null);
+
+        RuleFor(x => x.Description)
+            .MaximumLength(2000)
+            .When(x => x.Description is not null);
     }
 }

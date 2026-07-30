@@ -29,7 +29,7 @@ internal sealed class CreateCategoryCommandHandler(IProductCategoryRepository ca
                     Error.Validation("INVALID_CATEGORY_PARENT", "Category parent must be an active root category."));
         }
 
-        var category = new ProductCategory(name, request.ParentId);
+        var category = new ProductCategory(name, request.ParentId, request.ImageUrl);
         await categories.AddAsync(category, ct);
         if (!await categories.SaveChangesAsync(ct))
             return Result<CategoryDto>.Failure(

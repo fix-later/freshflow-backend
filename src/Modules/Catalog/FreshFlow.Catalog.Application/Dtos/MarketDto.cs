@@ -7,6 +7,8 @@ public sealed record MarketDto(
     string? Address,
     decimal? Latitude,
     decimal? Longitude,
+    string? ImageUrl,
+    string? Description,
     bool IsActive,
     DateTime CreatedAt,
     DateTime UpdatedAt);

@@ -149,7 +149,7 @@ All endpoints in `04-api-design.md` are traceable to a functional requirement. N
 ### Phase 3 (Database) — PASS
 - [x] All entities from requirements are represented (24 tables)
 - [x] No N+1 query traps (indexes cover all FK traversals)
-- [x] `price_snapshots` handles high-frequency writes (partitioned, append-only, composite index on `market_product_id + recorded_at DESC`)
+- [x] `price_snapshots` handles high-frequency writes (append-only, composite index on `market_product_id + recorded_at DESC`; **not** partitioned — monthly partitioning remains a target design)
 - [x] Soft delete strategy consistent (`deleted_at TIMESTAMPTZ NULL` on all mutable tables, absent on append-only tables)
 - [x] Redis keys cover all real-time pricing scenarios
 - [x] UUID strategy consistent (all PKs are UUID)

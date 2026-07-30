@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Catalog.Application.Commands.Markets.Create;
+using FreshFlow.Catalog.Application.Commands.Markets.CreateImageUploadSignature;
 using FreshFlow.Catalog.Application.Commands.Markets.Deactivate;
 using FreshFlow.Catalog.Application.Commands.Markets.Delete;
 using FreshFlow.Catalog.Application.Commands.Markets.Update;
@@ -48,11 +49,28 @@ public sealed class MarketsController(ISender sender) : ControllerBase
         [FromBody] CreateMarketRequest body, CancellationToken ct)
     {
         var result = await sender.Send(
-            new CreateMarketCommand(body.Name, body.Location, body.Address, body.Latitude, body.Longitude), ct);
+            new CreateMarketCommand(
+                body.Name,
+                body.Location,
+                body.Address,
+                body.Latitude,
+                body.Longitude,
+                body.ImageUrl,
+                body.Description),
+            ct);
 
         return result.IsSuccess
             ? CreatedAtAction(nameof(GetMarketByIdAsync), new { id = result.Value.Id }, ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
+    }
+
+    /// <summary>POST /api/v1/markets/image/upload-signature — Admin only.</summary>
+    [HttpPost("image/upload-signature")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> CreateMarketImageUploadSignatureAsync(CancellationToken ct)
+    {
+        var result = await sender.Send(new CreateMarketImageUploadSignatureCommand(), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>PUT /api/v1/markets/{id} — Admin only.</summary>
@@ -62,7 +80,16 @@ public sealed class MarketsController(ISender sender) : ControllerBase
         Guid id, [FromBody] UpdateMarketRequest body, CancellationToken ct)
     {
         var result = await sender.Send(
-            new UpdateMarketCommand(id, body.Name, body.Location, body.Address, body.Latitude, body.Longitude), ct);
+            new UpdateMarketCommand(
+                id,
+                body.Name,
+                body.Location,
+                body.Address,
+                body.Latitude,
+                body.Longitude,
+                body.ImageUrl,
+                body.Description),
+            ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -293,14 +320,18 @@ public sealed record CreateMarketRequest(
     string? Location,
     string? Address,
     decimal? Latitude,
-    decimal? Longitude);
+    decimal? Longitude,
+    string? ImageUrl,
+    string? Description);
 
 public sealed record UpdateMarketRequest(
     string Name,
     string? Location,
     string? Address,
     decimal? Latitude,
-    decimal? Longitude);
+    decimal? Longitude,
+    string? ImageUrl,
+    string? Description);
 
 public sealed record UpdateProductPriceRequest(
     decimal? Price,

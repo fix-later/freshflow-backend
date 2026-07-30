@@ -21,7 +21,14 @@ public sealed class CreateMarketCommandHandlerTests
     public async Task Handle_ValidCommand_CreatesAndReturnsMarket()
     {
         // Arrange
-        var cmd = new CreateMarketCommand("Hóc Môn Market", "Hóc Môn", "123 Street", 10.8m, 106.6m);
+        var cmd = new CreateMarketCommand(
+            "Hóc Môn Market",
+            "Hóc Môn",
+            "123 Street",
+            10.8m,
+            106.6m,
+            "https://example.com/market.jpg",
+            "Wholesale market");
 
         // Act
         var result = await _sut.Handle(cmd, default);
@@ -30,9 +37,16 @@ public sealed class CreateMarketCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Name.Should().Be("Hóc Môn Market");
         result.Value.Location.Should().Be("Hóc Môn");
+        result.Value.ImageUrl.Should().Be("https://example.com/market.jpg");
+        result.Value.Description.Should().Be("Wholesale market");
         result.Value.IsActive.Should().BeTrue();
 
-        await _markets.Received(1).AddAsync(Arg.Is<Market>(m => m.Name == "Hóc Môn Market"), default);
+        await _markets.Received(1).AddAsync(
+            Arg.Is<Market>(m =>
+                m.Name == "Hóc Môn Market"
+                && m.ImageUrl == "https://example.com/market.jpg"
+                && m.Description == "Wholesale market"),
+            default);
         await _markets.Received(1).SaveChangesAsync(default);
     }
 

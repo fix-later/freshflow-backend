@@ -6,7 +6,14 @@ public sealed class Market : AggregateRoot
 {
     private Market() { } // EF Core
 
-    public Market(string name, string? location, string? address, decimal? latitude, decimal? longitude)
+    public Market(
+        string name,
+        string? location,
+        string? address,
+        decimal? latitude,
+        decimal? longitude,
+        string? imageUrl = null,
+        string? description = null)
     {
         ValidateName(name);
         ValidateCoordinates(latitude, longitude);
@@ -16,6 +23,8 @@ public sealed class Market : AggregateRoot
         Address = address;
         Latitude = latitude;
         Longitude = longitude;
+        ImageUrl = imageUrl;
+        Description = description;
         IsActive = true;
     }
 
@@ -24,9 +33,18 @@ public sealed class Market : AggregateRoot
     public string? Address { get; private set; }
     public decimal? Latitude { get; private set; }
     public decimal? Longitude { get; private set; }
+    public string? ImageUrl { get; private set; }
+    public string? Description { get; private set; }
     public bool IsActive { get; private set; } = true;
 
-    public void Update(string name, string? location, string? address, decimal? latitude, decimal? longitude)
+    public void Update(
+        string name,
+        string? location,
+        string? address,
+        decimal? latitude,
+        decimal? longitude,
+        string? imageUrl = null,
+        string? description = null)
     {
         ValidateName(name);
         ValidateCoordinates(latitude, longitude);
@@ -36,6 +54,8 @@ public sealed class Market : AggregateRoot
         Address = address;
         Latitude = latitude;
         Longitude = longitude;
+        ImageUrl = imageUrl;
+        Description = description;
         UpdatedAt = DateTime.UtcNow;
     }
 
