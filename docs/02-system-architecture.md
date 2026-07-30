@@ -286,7 +286,7 @@ The ASP.NET Core application host wires all seven modules together. Each module'
 - `OrderStatusService` — transitions order status through the state machine (`PENDING → CONFIRMED → IN_TRANSIT → DELIVERED`, and `→ CANCELLED` from PENDING/CONFIRMED); triggers `OrderStatusChanged` domain event on each transition
 - `ScheduledOrderService` — manages `scheduled_orders` definitions; generates order instances on the correct cron tick; implements missed-execution recovery; enforces idempotency via a `last_executed_at` timestamp
 - `SoftReservationService` — Redis-backed: decrements available quantity key on order creation; rolls back on order failure; releases expired reservations (called by background job)
-- `OrderBatchingService` — shared by the 22:00 scheduled job and Admin manual trigger; groups eligible `CONFIRMED` orders by delivery zone and source market; supports `dryRun`, `targetDate`, and idempotent skip behavior
+- `OrderBatchingService` — shared by the 22:00 scheduled job and Admin manual trigger; groups eligible `CONFIRMED` orders by source market (delivery-zone grouping from FR-ORD-005 is not implemented — no restaurant-to-zone link); supports `dryRun`, `targetDate`, and idempotent skip behavior
 - `OrderGroupService` — validates manually adjusted `order_groups`; enforces single-group constraint per order
 - `OrderRepository` — full CRUD for `orders` and `order_line_items`
 - `ScheduledOrderRepository` — CRUD for `scheduled_orders` and `scheduled_order_instances`

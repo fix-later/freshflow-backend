@@ -37,7 +37,6 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(applicationAssembly, includeInternalTypes: true);
 
         services.AddScoped<IVehicleRepository, VehicleRepository>();
-        services.AddScoped<IDeliveryZoneRepository, DeliveryZoneRepository>();
         services.AddScoped<IDeliveryRouteRepository, DeliveryRouteRepository>();
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<IDeliveryIssueRepository, DeliveryIssueRepository>();

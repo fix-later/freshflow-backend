@@ -43,8 +43,6 @@ internal static class DatabaseConflictMapper
                 "PHONE_ALREADY_EXISTS", "A user with this phone number already exists."),
             "ux_vehicles_plate_number_active" => new(
                 "PLATE_NUMBER_DUPLICATE", "A vehicle with this plate number already exists."),
-            "ux_delivery_zones_code_active" => new(
-                "DELIVERY_ZONE_CODE_EXISTS", "A delivery zone with this code already exists."),
             "IX_user_market_assignments_UserId_MarketId" => new(
                 "MARKET_ASSIGNMENT_CONFLICT", "This market is already assigned to the user."),
             "IX_assistant_conversations_session_id" => new(

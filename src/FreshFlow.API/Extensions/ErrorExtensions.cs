@@ -17,7 +17,6 @@ public static class ErrorExtensions
                         or "CATEGORY_NAME_CONFLICT" or "UNIT_NAME_CONFLICT"
                         or "PACKING_CODE_CONFLICT"
                         or "CATEGORY_HAS_ACTIVE_CHILDREN"
-                        or "DELIVERY_ZONE_CODE_EXISTS"
                         or "PLATE_NUMBER_DUPLICATE"
                         or "VEHICLE_NOT_AVAILABLE"
                         or "MARKET_PRODUCT_ALREADY_EXISTS"

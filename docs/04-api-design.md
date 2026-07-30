@@ -1553,7 +1553,7 @@ Creates a new order group and associates the specified orders with it. All order
 
 **Role:** Admin only
 
-Triggers the same batching service that normally runs at the 22:00 cutoff. The service finds eligible `CONFIRMED` orders that are not already assigned to an active batch, groups them by delivery zone and source market, creates `OrderGroup`/Procurement Batch records, transitions included orders to `BATCHED`, and emits `OrderGrouped` events. The operation is idempotent.
+Triggers the same batching service that normally runs at the 22:00 cutoff. The service finds eligible `CONFIRMED` orders that are not already assigned to an active batch, groups them by source market (grouping by delivery zone is not implemented — no restaurant-to-zone link exists), creates `OrderGroup`/Procurement Batch records, transitions included orders to `BATCHED`, and emits `OrderGrouped` events. The operation is idempotent.
 
 **Request body:**
 
@@ -1585,7 +1585,6 @@ Triggers the same batching service that normally runs at the 22:00 cutoff. The s
     "batches": [
       {
         "orderGroupId": "l2m3n4o5-p6q7-8901-rstu-234567890123",
-        "deliveryZone": "district-1",
         "sourceMarketId": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
         "orderIds": [
           "i9j0k1l2-m3n4-5678-opqr-901234567890"

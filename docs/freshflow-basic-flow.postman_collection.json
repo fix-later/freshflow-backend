@@ -1106,7 +1106,7 @@
                 "value": "Bearer {{adminToken}}"
               }
             ],
-            "description": "Reactivate a category (admin only). Idempotent \u2014 activating an active category is a no-op 2xx.\nOpenAPI: PATCH /api/v1/categories/{id}/activate\nRequest body: none\nDocumented success status: 200",
+            "description": "Reactivate a category (admin only). Idempotent — activating an active category is a no-op 2xx.\nOpenAPI: PATCH /api/v1/categories/{id}/activate\nRequest body: none\nDocumented success status: 200",
             "url": "{{baseUrl}}/api/v1/categories/{{categoryId}}/activate"
           },
           "response": []
@@ -2654,7 +2654,7 @@
                 "value": "Bearer {{adminToken}}"
               }
             ],
-            "description": "Runnable after auto-batch; saves the newest batchId.\nOpenAPI: GET /api/v1/admin/order-groups\nRequest body: none\nAvailable query parameters: page, pageSize, date, marketId\ndate/marketId (SCRUM-366) open one day's market session (phi\u00ean ch\u1ee3) and optionally one market.\nDocumented success status: 200",
+            "description": "Runnable after auto-batch; saves the newest batchId.\nOpenAPI: GET /api/v1/admin/order-groups\nRequest body: none\nAvailable query parameters: page, pageSize, date, marketId\ndate/marketId (SCRUM-366) open one day's market session (phiên chợ) and optionally one market.\nDocumented success status: 200",
             "url": "{{baseUrl}}/api/v1/admin/order-groups?page=1&pageSize=20"
           },
           "response": []
@@ -2680,7 +2680,7 @@
                 "value": "Bearer {{adminToken}}"
               }
             ],
-            "description": "SCRUM-366 \u2014 admin opens the market session (phi\u00ean ch\u1ee3) of a specific day, optionally one market.\nOpenAPI: GET /api/v1/admin/order-groups\nRequest body: none\nQuery parameters: date (DateOnly), marketId (Guid), page, pageSize\nEmpty list is still 200 if no batch matches. Documented success status: 200",
+            "description": "SCRUM-366 — admin opens the market session (phiên chợ) of a specific day, optionally one market.\nOpenAPI: GET /api/v1/admin/order-groups\nRequest body: none\nQuery parameters: date (DateOnly), marketId (Guid), page, pageSize\nEmpty list is still 200 if no batch matches. Documented success status: 200",
             "url": "{{baseUrl}}/api/v1/admin/order-groups?date={{serviceDate}}&marketId={{marketId}}&page=1&pageSize=20"
           },
           "response": []
@@ -3005,52 +3005,8 @@
     },
     {
       "name": "06 - Logistics Planning",
-      "description": "Delivery zones, vehicles, route calculation, optimization, review, eligibility, and assignment.",
+      "description": "Vehicles, route calculation, optimization, review, eligibility, and assignment.",
       "item": [
-        {
-          "name": "06.01 POST /api/v1/logistics/delivery-zones",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('request returns 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
-                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
-                  "  const body = pm.response.json();",
-                  "  const data = body.data ?? body;",
-                  "  { const value = data.id; if (value !== undefined && value !== null && value !== '') pm.collectionVariables.set('deliveryZoneId', value); }",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "description": "Runnable in the numbered happy-path sequence.\nOpenAPI: POST /api/v1/logistics/delivery-zones\nRequest schema: CreateDeliveryZoneRequest\nDocumented success status: 200",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"ZONE_{{runTs}}\",\n  \"name\": \"Delivery Zone {{runTs}}\",\n  \"description\": \"Postman complete flow\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{baseUrl}}/api/v1/logistics/delivery-zones"
-          },
-          "response": []
-        },
         {
           "name": "06.02 POST /api/v1/logistics/vehicles",
           "event": [
@@ -3175,58 +3131,6 @@
               }
             },
             "url": "{{baseUrl}}/api/v1/logistics/routes/{{routeId}}/optimize"
-          },
-          "response": []
-        },
-        {
-          "name": "06.05 GET /api/v1/logistics/delivery-zones",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('request returns 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "description": "Runnable in the numbered happy-path sequence.\nOpenAPI: GET /api/v1/logistics/delivery-zones\nRequest body: none\nAvailable query parameters: active_only\nDocumented success status: 200",
-            "url": "{{baseUrl}}/api/v1/logistics/delivery-zones?active_only=true"
-          },
-          "response": []
-        },
-        {
-          "name": "06.06 GET /api/v1/logistics/delivery-zones/{id}",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('request returns 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "description": "Runnable in the numbered happy-path sequence.\nOpenAPI: GET /api/v1/logistics/delivery-zones/{id}\nRequest body: none\nDocumented success status: 200",
-            "url": "{{baseUrl}}/api/v1/logistics/delivery-zones/{{deliveryZoneId}}"
           },
           "response": []
         },
@@ -3396,45 +3300,6 @@
               }
             },
             "url": "{{baseUrl}}/api/v1/logistics/routes/{{routeId}}/review"
-          },
-          "response": []
-        },
-        {
-          "name": "06.13 PUT /api/v1/logistics/delivery-zones/{id}",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('request returns 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "description": "Runnable in the numbered happy-path sequence.\nOpenAPI: PUT /api/v1/logistics/delivery-zones/{id}\nRequest schema: UpdateDeliveryZoneRequest\nDocumented success status: 200",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Delivery Zone {{runTs}} Updated\",\n  \"description\": \"Updated by Postman\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{baseUrl}}/api/v1/logistics/delivery-zones/{{deliveryZoneId}}"
           },
           "response": []
         },
@@ -3617,7 +3482,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "SCRUM-365 \u2014 replace the full set of hub_staff assigned to a hub (admin/operations_manager).\nOpenAPI: PUT /api/v1/hubs/{hubId}/staff-assignments\nRequest schema: ReplaceHubStaffAssignmentsRequest\nSend [] to clear all. Documented success status: 200",
+            "description": "SCRUM-365 — replace the full set of hub_staff assigned to a hub (admin/operations_manager).\nOpenAPI: PUT /api/v1/hubs/{hubId}/staff-assignments\nRequest schema: ReplaceHubStaffAssignmentsRequest\nSend [] to clear all. Documented success status: 200",
             "url": "{{baseUrl}}/api/v1/hubs/{{hubId}}/staff-assignments",
             "body": {
               "mode": "raw",
@@ -3652,7 +3517,7 @@
                 "value": "Bearer {{adminToken}}"
               }
             ],
-            "description": "SCRUM-365 \u2014 view staff currently assigned to a hub (admin/operations_manager).\nOpenAPI: GET /api/v1/hubs/{hubId}/staff-assignments\nRequest body: none\nDocumented success status: 200",
+            "description": "SCRUM-365 — view staff currently assigned to a hub (admin/operations_manager).\nOpenAPI: GET /api/v1/hubs/{hubId}/staff-assignments\nRequest body: none\nDocumented success status: 200",
             "url": "{{baseUrl}}/api/v1/hubs/{{hubId}}/staff-assignments"
           },
           "response": []
@@ -3678,7 +3543,7 @@
                 "value": "Bearer {{hubStaffToken}}"
               }
             ],
-            "description": "SCRUM-365 \u2014 hub_staff lists the hubs they are assigned to (role hub_staff).\nOpenAPI: GET /api/v1/hubs/assigned\nRequest body: none\nDocumented success status: 200",
+            "description": "SCRUM-365 — hub_staff lists the hubs they are assigned to (role hub_staff).\nOpenAPI: GET /api/v1/hubs/assigned\nRequest body: none\nDocumented success status: 200",
             "url": "{{baseUrl}}/api/v1/hubs/assigned"
           },
           "response": []
@@ -4518,7 +4383,7 @@
                 "value": "Bearer {{restaurantToken}}"
               }
             ],
-            "description": "SCRUM-364 \u2014 download a credit statement as PDF (roles admin, restaurant).\nOpenAPI: GET /api/v1/restaurants/{restaurantId}/credit/statements/{statementId}/pdf\nRequest body: none. Response: application/pdf (binary). Documented success status: 200",
+            "description": "SCRUM-364 — download a credit statement as PDF (roles admin, restaurant).\nOpenAPI: GET /api/v1/restaurants/{restaurantId}/credit/statements/{statementId}/pdf\nRequest body: none. Response: application/pdf (binary). Documented success status: 200",
             "url": "{{baseUrl}}/api/v1/restaurants/{{restaurantId}}/credit/statements/{{statementId}}/pdf"
           },
           "response": []
@@ -5530,22 +5395,6 @@
             ],
             "description": "Runnable in the numbered happy-path sequence.\nOpenAPI: DELETE /api/v1/hubs/{id}\nRequest body: none\nDocumented success status: 200",
             "url": "{{baseUrl}}/api/v1/hubs/{{hubId}}"
-          },
-          "response": []
-        },
-        {
-          "name": "99.09 [CLEANUP] DELETE /api/v1/logistics/delivery-zones/{id}",
-          "event": [],
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "description": "Runnable in the numbered happy-path sequence.\nOpenAPI: DELETE /api/v1/logistics/delivery-zones/{id}\nRequest body: none\nDocumented success status: 200",
-            "url": "{{baseUrl}}/api/v1/logistics/delivery-zones/{{deliveryZoneId}}"
           },
           "response": []
         },

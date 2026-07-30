@@ -15,7 +15,6 @@ public sealed class DatabaseConflictMapperTests
     [InlineData("IX_users_Email", "EMAIL_ALREADY_EXISTS")]
     [InlineData("IX_users_Phone", "PHONE_ALREADY_EXISTS")]
     [InlineData("ux_vehicles_plate_number_active", "PLATE_NUMBER_DUPLICATE")]
-    [InlineData("ux_delivery_zones_code_active", "DELIVERY_ZONE_CODE_EXISTS")]
     [InlineData("IX_user_market_assignments_UserId_MarketId", "MARKET_ASSIGNMENT_CONFLICT")]
     [InlineData("IX_assistant_conversations_session_id", "SESSION_CONFLICT")]
     public void TryMap_KnownUniqueConstraint_ReturnsExpectedConflict(
