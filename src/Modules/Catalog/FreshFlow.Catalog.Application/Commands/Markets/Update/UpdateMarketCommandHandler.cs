@@ -15,7 +15,14 @@ internal sealed class UpdateMarketCommandHandler(IMarketRepository markets)
         if (market is null)
             return Result<MarketDto>.Failure(Error.NotFound("Market", request.Id));
 
-        market.Update(request.Name, request.Location, request.Address, request.Latitude, request.Longitude);
+        market.Update(
+            request.Name,
+            request.Location,
+            request.Address,
+            request.Latitude,
+            request.Longitude,
+            request.ImageUrl,
+            request.Description);
         markets.Track(market);
         await markets.SaveChangesAsync(ct);
 

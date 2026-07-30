@@ -8,4 +8,6 @@ public sealed record CreateMarketCommand(
     string? Location,
     string? Address,
     decimal? Latitude,
-    decimal? Longitude) : ICommand<MarketDto>;
+    decimal? Longitude,
+    string? ImageUrl = null,
+    string? Description = null) : ICommand<MarketDto>;

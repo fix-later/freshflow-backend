@@ -1,6 +1,7 @@
 using FreshFlow.API.Extensions;
 using FreshFlow.Catalog.Application.Commands.Categories.Activate;
 using FreshFlow.Catalog.Application.Commands.Categories.Create;
+using FreshFlow.Catalog.Application.Commands.Categories.CreateImageUploadSignature;
 using FreshFlow.Catalog.Application.Commands.Categories.Deactivate;
 using FreshFlow.Catalog.Application.Commands.Categories.Update;
 using FreshFlow.Catalog.Application.Queries.Categories.GetCategories;
@@ -39,10 +40,19 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
     public async Task<IActionResult> CreateCategoryAsync(
         [FromBody] CreateCategoryRequest body, CancellationToken ct)
     {
-        var result = await sender.Send(new CreateCategoryCommand(body.Name, body.ParentId), ct);
+        var result = await sender.Send(new CreateCategoryCommand(body.Name, body.ParentId, body.ImageUrl), ct);
         return result.IsSuccess
             ? CreatedAtAction(nameof(GetCategoryByIdAsync), new { id = result.Value.Id }, ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
+    }
+
+    /// <summary>POST /api/v1/categories/image/upload-signature — Admin only.</summary>
+    [HttpPost("image/upload-signature")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> CreateCategoryImageUploadSignatureAsync(CancellationToken ct)
+    {
+        var result = await sender.Send(new CreateCategoryImageUploadSignatureCommand(), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     /// <summary>PUT /api/v1/categories/{id} — Admin only.</summary>
@@ -51,7 +61,7 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
     public async Task<IActionResult> UpdateCategoryAsync(
         Guid id, [FromBody] UpdateCategoryRequest body, CancellationToken ct)
     {
-        var result = await sender.Send(new UpdateCategoryCommand(id, body.Name, body.ParentId), ct);
+        var result = await sender.Send(new UpdateCategoryCommand(id, body.Name, body.ParentId, body.ImageUrl), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -76,6 +86,6 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
 
 // ── Request DTOs ──────────────────────────────────────────────────────────────
 
-public sealed record CreateCategoryRequest(string Name, Guid? ParentId);
+public sealed record CreateCategoryRequest(string Name, Guid? ParentId, string? ImageUrl);
 
-public sealed record UpdateCategoryRequest(string Name, Guid? ParentId);
+public sealed record UpdateCategoryRequest(string Name, Guid? ParentId, string? ImageUrl);

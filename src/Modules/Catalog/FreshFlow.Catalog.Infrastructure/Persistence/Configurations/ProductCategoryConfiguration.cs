@@ -13,6 +13,7 @@ internal sealed class ProductCategoryConfiguration : IEntityTypeConfiguration<Pr
 
         builder.Property(c => c.Name).IsRequired().HasMaxLength(200);
         builder.Property(c => c.ParentId);
+        builder.Property(c => c.ImageUrl).HasMaxLength(512);
         builder.Property(c => c.IsActive).IsRequired().HasDefaultValue(true);
         builder.Property(c => c.CreatedAt).IsRequired();
         builder.Property(c => c.UpdatedAt).IsRequired();

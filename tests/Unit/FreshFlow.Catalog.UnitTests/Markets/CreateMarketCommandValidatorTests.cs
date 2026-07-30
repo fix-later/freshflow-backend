@@ -63,4 +63,13 @@ public sealed class CreateMarketCommandValidatorTests
         var result = await _sut.ValidateAsync(new CreateMarketCommand("Name", null, null, null, null));
         result.IsValid.Should().BeTrue();
     }
+    [Fact]
+    public async Task Validate_InvalidImageUrl_Fails()
+    {
+        var result = await _sut.ValidateAsync(
+            new CreateMarketCommand("Name", null, null, null, null, "not-a-url"));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "ImageUrl");
+    }
 }

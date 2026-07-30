@@ -16,7 +16,9 @@ internal sealed class CreateMarketCommandHandler(IMarketRepository markets)
             request.Location,
             request.Address,
             request.Latitude,
-            request.Longitude);
+            request.Longitude,
+            request.ImageUrl,
+            request.Description);
 
         await markets.AddAsync(market, ct);
         await markets.SaveChangesAsync(ct);
@@ -26,5 +28,5 @@ internal sealed class CreateMarketCommandHandler(IMarketRepository markets)
 
     internal static MarketDto ToDto(Market m) =>
         new(m.Id, m.Name, m.Location, m.Address, m.Latitude, m.Longitude,
-            m.IsActive, m.CreatedAt, m.UpdatedAt);
+            m.ImageUrl, m.Description, m.IsActive, m.CreatedAt, m.UpdatedAt);
 }

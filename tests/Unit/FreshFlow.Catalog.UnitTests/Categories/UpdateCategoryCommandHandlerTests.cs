@@ -25,10 +25,16 @@ public sealed class UpdateCategoryCommandHandlerTests
         _categories.FindByIdAsync(category.Id, default).Returns(category);
         _categories.ExistsByNameAsync("Hải sản", default).Returns(false);
 
-        var result = await _sut.Handle(new UpdateCategoryCommand(category.Id, "Hải sản"), default);
+        var result = await _sut.Handle(
+            new UpdateCategoryCommand(
+                category.Id,
+                "Hải sản",
+                ImageUrl: "https://example.com/category.jpg"),
+            default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Name.Should().Be("Hải sản");
+        result.Value.ImageUrl.Should().Be("https://example.com/category.jpg");
         await _categories.Received(1).SaveChangesAsync(default);
     }
 
