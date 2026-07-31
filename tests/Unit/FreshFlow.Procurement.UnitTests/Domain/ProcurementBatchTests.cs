@@ -79,6 +79,138 @@ public sealed class ProcurementBatchTests
     }
 
     [Fact]
+    public void MergeIn_BuiltBatch_AccumulatesItemsAndRaisesEventOnlyForNewOrders()
+    {
+        var marketId = Guid.NewGuid();
+        var existingProductId = Guid.NewGuid();
+        var newProductId = Guid.NewGuid();
+        var existingOrderId = Guid.NewGuid();
+        var newOrderId = Guid.NewGuid();
+        var batch = ProcurementBatch.Build(
+            new DateOnly(2026, 7, 15),
+            marketId,
+            [(existingProductId, "Cabbage", 4, existingOrderId)],
+            Guid.NewGuid()).Value;
+        var capturedAt = new DateTime(2026, 7, 15, 2, 0, 0, DateTimeKind.Utc);
+        batch.ClearDomainEvents();
+
+        var result = batch.MergeIn(
+            [
+                (existingProductId, "Cabbage", 3, newOrderId),
+                (newProductId, "Fish", 2, newOrderId)
+            ],
+            new Dictionary<Guid, decimal>(),
+            capturedAt);
+
+        result.IsSuccess.Should().BeTrue();
+        batch.TotalItemCount.Should().Be(2);
+        batch.UpdatedAt.Should().Be(capturedAt);
+        batch.Items.Should().Contain(item =>
+            item.MarketProductId == existingProductId && item.TotalQuantity == 7);
+        batch.Items.Should().Contain(item =>
+            item.MarketProductId == newProductId && item.TotalQuantity == 2);
+        batch.Orders.Select(order => order.OrderId)
+            .Should().BeEquivalentTo([existingOrderId, newOrderId]);
+        var domainEvent = batch.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<ProcurementBatchBuiltDomainEvent>().Subject;
+        domainEvent.CoveredOrderIds.Should().Equal(newOrderId);
+    }
+
+    [Fact]
+    public void MergeIn_ManifestedBatch_PricesOnlyNewItems()
+    {
+        var existingProductId = Guid.NewGuid();
+        var newProductId = Guid.NewGuid();
+        var batch = BuildBatch(existingProductId);
+        batch.Manifest(
+            new Dictionary<Guid, decimal> { [existingProductId] = 10_000m },
+            new DateTime(2026, 7, 15, 1, 0, 0, DateTimeKind.Utc));
+        batch.ClearDomainEvents();
+
+        var result = batch.MergeIn(
+            [
+                (existingProductId, "Existing", 3, Guid.NewGuid()),
+                (newProductId, "New", 4, Guid.NewGuid())
+            ],
+            new Dictionary<Guid, decimal> { [newProductId] = 12_000m },
+            new DateTime(2026, 7, 15, 2, 0, 0, DateTimeKind.Utc));
+
+        result.IsSuccess.Should().BeTrue();
+        batch.Items.Should().Contain(item =>
+            item.MarketProductId == existingProductId &&
+            item.TotalQuantity == 5 &&
+            item.ReferenceUnitPrice == 10_000m);
+        batch.Items.Should().Contain(item =>
+            item.MarketProductId == newProductId &&
+            item.TotalQuantity == 4 &&
+            item.ReferenceUnitPrice == 12_000m);
+    }
+
+    [Fact]
+    public void MergeIn_ManifestedBatchMissingNewItemPrice_ReturnsWithoutMutation()
+    {
+        var existingProductId = Guid.NewGuid();
+        var newProductId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(existingProductId);
+        batch.ClearDomainEvents();
+
+        var result = batch.MergeIn(
+            [(newProductId, "New", 4, Guid.NewGuid())],
+            new Dictionary<Guid, decimal>(),
+            DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("REFERENCE_PRICE_MISSING");
+        batch.Items.Should().ContainSingle();
+        batch.Orders.Should().ContainSingle();
+        batch.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MergeIn_ExistingOrder_DoesNotDuplicateLinkOrRaiseEvent()
+    {
+        var productId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var batch = ProcurementBatch.Build(
+            new DateOnly(2026, 7, 15),
+            Guid.NewGuid(),
+            [(productId, "Tomato", 2, orderId)],
+            Guid.NewGuid()).Value;
+        batch.ClearDomainEvents();
+
+        var result = batch.MergeIn(
+            [(productId, "Tomato", 1, orderId)],
+            new Dictionary<Guid, decimal>(),
+            DateTime.UtcNow);
+
+        result.IsSuccess.Should().BeTrue();
+        batch.Orders.Should().ContainSingle().Which.OrderId.Should().Be(orderId);
+        batch.Items.Should().ContainSingle().Which.TotalQuantity.Should().Be(2);
+        batch.DomainEvents.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(ProcurementBatchStatus.Purchasing)]
+    [InlineData(ProcurementBatchStatus.HandedOff)]
+    [InlineData(ProcurementBatchStatus.Cancelled)]
+    public void MergeIn_NonMergeableStatus_ReturnsConflict(ProcurementBatchStatus status)
+    {
+        var batch = BuildBatch(Guid.NewGuid());
+        typeof(ProcurementBatch).GetProperty(nameof(ProcurementBatch.Status))!
+            .SetValue(batch, status);
+        batch.ClearDomainEvents();
+
+        var result = batch.MergeIn(
+            [(Guid.NewGuid(), "Tomato", 1, Guid.NewGuid())],
+            new Dictionary<Guid, decimal>(),
+            DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("BATCH_NOT_MERGEABLE");
+        batch.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Manifest_BuiltBatch_FreezesPricesAndRaisesEvent()
     {
         var firstProductId = Guid.NewGuid();

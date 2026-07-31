@@ -35,6 +35,10 @@ public interface IProcurementBatchRepository
         DateOnly date,
         CancellationToken ct);
 
+    public Task<IReadOnlyList<ProcurementBatch>> ListMergeableByDateAsync(
+        DateOnly date,
+        CancellationToken ct);
+
     public Task<Result<BatchingResetCounts>> ResetDayAsync(
         DateOnly batchDate,
         DateTime resetAtUtc,

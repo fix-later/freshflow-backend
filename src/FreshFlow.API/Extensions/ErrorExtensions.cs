@@ -30,6 +30,7 @@ public static class ErrorExtensions
                         or "PENDING_HUB_DISCREPANCY"
                         or "DELIVERY_STATUS_INVALID"
                         or "ORDER_ALREADY_IN_ACTIVE_GROUP"
+                        or "BATCH_NOT_MERGEABLE"
                         or "BATCH_NOT_MANIFESTABLE"
                         or "BATCH_NOT_MANIFESTED"
                         or "BATCH_ALREADY_HANDED_OFF"
