@@ -22,9 +22,6 @@ namespace FreshFlow.API.Controllers;
 
 [ApiController]
 [Route("api/v1/logistics/routes")]
-// hub_staff can read (list/detail/eligibility) and dispatch (assign-vehicle) in the hub-dispatch model;
-// all other writes (calculate/select/optimize/review) are narrowed back to admin,operations_manager.
-[Authorize(Roles = "admin,operations_manager,hub_staff")]
 public sealed class RoutesController(ISender sender) : ControllerBase
 {
     [HttpPost("calculate")]
@@ -89,6 +86,7 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/assign-vehicle")]
+    [Authorize(Roles = "admin,operations_manager,hub_staff")]
     // Intentionally NOT narrowed: hub_staff dispatch their own last-mile (hub-dispatch model). The
     // handler still enforces eligibility, capacity, double-booking, and route-state transition guards.
     public async Task<IActionResult> AssignVehicleAsync(
@@ -105,6 +103,7 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "admin,operations_manager,hub_staff")]
     public async Task<IActionResult> ListRoutesAsync(
         [FromQuery] string? cursor = null,
         [FromQuery(Name = "page_size")] int pageSize = 50,
@@ -144,6 +143,7 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpGet("{routeId:guid}/eligibility")]
+    [Authorize(Roles = "admin,operations_manager,hub_staff")]
     public async Task<IActionResult> CheckEligibilityAsync(
         Guid routeId,
         [FromQuery] Guid vehicleId,
@@ -159,6 +159,7 @@ public sealed class RoutesController(ISender sender) : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = "admin,operations_manager,hub_staff")]
     public async Task<IActionResult> GetRouteAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetRouteQuery(id), ct);
@@ -172,9 +173,10 @@ public sealed class RoutesController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
-    // Read-only (inherits class gate): what to load onto the truck per restaurant stop, in loading
-    // order (furthest/last-delivered first). Goods only -- no prices or credit.
+    // What to load onto the truck per restaurant stop, in loading order
+    // (furthest/last-delivered first). Goods only -- no prices or credit.
     [HttpGet("{id:guid}/loading-manifest")]
+    [Authorize(Roles = "admin,operations_manager,hub_staff,driver")]
     public async Task<IActionResult> GetLoadingManifestAsync(Guid id, CancellationToken ct)
     {
         var denied = await CheckRouteAccessAsync(id, ct);
@@ -189,11 +191,22 @@ public sealed class RoutesController(ISender sender) : ControllerBase
         Guid routeId,
         CancellationToken ct)
     {
-        if (!IsHubStaff())
+        var isDriver = HttpContext?.User.IsInRole("driver") == true;
+        if (!IsHubStaff() && !isDriver)
             return null;
 
         var result = await sender.Send(new GetRouteQuery(routeId), ct);
-        return result.IsSuccess ? await CheckHubAccessAsync(result.Value.HubId, ct) : result.Error;
+        if (!result.IsSuccess)
+            return result.Error;
+
+        if (!isDriver)
+            return await CheckHubAccessAsync(result.Value.HubId, ct);
+
+        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        return Guid.TryParse(rawUserId, out var driverUserId) && result.Value.DriverUserId == driverUserId
+            ? null
+            : FreshFlow.SharedKernel.Application.Error.Unauthorized(
+                "FORBIDDEN", "This route is not assigned to the authenticated driver.");
     }
 
     private async Task<FreshFlow.SharedKernel.Application.Error?> CheckHubAccessAsync(
