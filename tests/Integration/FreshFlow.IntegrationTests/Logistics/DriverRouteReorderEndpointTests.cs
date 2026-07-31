@@ -54,7 +54,6 @@ public sealed class DriverRouteReorderEndpointTests(AuthWebAppFactory factory)
         body!.Data!.Stops.Select(stop => stop.EntityId).Should().Equal(stopOrder);
         body.Data.Stops.Select(stop => stop.StopOrder).Should().Equal(0, 1, 2);
 
-        await AuthenticateAsAdminAsync();
         var manifestResponse = await _client.GetAsync(
             $"/api/v1/logistics/routes/{seed.RouteId}/loading-manifest");
 
