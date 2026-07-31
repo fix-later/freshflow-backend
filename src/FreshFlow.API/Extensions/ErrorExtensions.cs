@@ -49,7 +49,8 @@ public static class ErrorExtensions
         if (error.Code is "FORBIDDEN" or "MARKET_ACCESS_DENIED" or "HUB_ACCESS_DENIED")
             return new ObjectResult(body) { StatusCode = 403 };
 
-        if (error.Code is "OPTIMISTIC_CONCURRENCY_CONFLICT")
+        if (error.Code is "OPTIMISTIC_CONCURRENCY_CONFLICT" or "SERIALIZATION_CONFLICT"
+                          or "STOCK_RESERVATION_CONFLICT")
             return new ConflictObjectResult(body);
 
         if (error.Code is "VALIDATION_ERROR" or "INVALID_ROLE" or "WEAK_PASSWORD")

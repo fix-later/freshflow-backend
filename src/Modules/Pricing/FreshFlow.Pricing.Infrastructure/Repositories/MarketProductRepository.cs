@@ -119,7 +119,11 @@ internal sealed class MarketProductRepository(AppDbContext db) : IMarketProductR
         }
     }
 
-    public void Track(MarketProduct marketProduct) => db.Update(marketProduct);
+    public void Track(MarketProduct marketProduct)
+    {
+        db.Update(marketProduct);
+        db.Entry(marketProduct).Property(product => product.ReservedQuantity).IsModified = false;
+    }
 
     public async Task SaveChangesAsync(CancellationToken ct)
     {

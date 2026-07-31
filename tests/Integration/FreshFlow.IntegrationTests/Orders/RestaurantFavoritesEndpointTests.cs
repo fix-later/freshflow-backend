@@ -7,6 +7,7 @@ using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.IntegrationTests.Infrastructure;
 using FreshFlow.Orders.Application.Dtos;
 using FreshFlow.Pricing.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FreshFlow.IntegrationTests.Orders;
@@ -162,6 +163,9 @@ public sealed class RestaurantFavoritesEndpointTests(AuthWebAppFactory factory)
         var marketProduct = new MarketProduct(market.Id, product.Id, 12_500m, 40, null);
         db.Set<MarketProduct>().Add(marketProduct);
         await db.SaveChangesAsync();
+        const int reservedQuantity = 7;
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE market_products SET \"ReservedQuantity\" = {reservedQuantity} WHERE \"Id\" = {marketProduct.Id}");
 
         return new SeededMarketProduct(
             marketProduct.Id,
@@ -170,7 +174,7 @@ public sealed class RestaurantFavoritesEndpointTests(AuthWebAppFactory factory)
             unit.Name,
             marketProduct.CurrentPrice,
             marketProduct.CurrentQuantity,
-            marketProduct.ReservedQuantity);
+            reservedQuantity);
     }
 
     private sealed record SeededMarketProduct(

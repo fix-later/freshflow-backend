@@ -21,6 +21,26 @@ internal sealed class CancelOrderCommandHandler(
 {
     public async Task<Result<OrderDto>> Handle(CancelOrderCommand request, CancellationToken cancellationToken)
     {
+        OrderDto? cancelledOrder = null;
+        var transaction = await orderRepository.ExecuteInSerializableTransactionAsync(async ct =>
+        {
+            var result = await CancelAsync(request, ct);
+            if (result.IsFailure)
+                return Result.Failure(result.Error);
+
+            cancelledOrder = result.Value;
+            return Result.Success();
+        }, cancellationToken);
+
+        return transaction.IsFailure
+            ? Result<OrderDto>.Failure(transaction.Error)
+            : Result<OrderDto>.Success(cancelledOrder!);
+    }
+
+    private async Task<Result<OrderDto>> CancelAsync(
+        CancelOrderCommand request,
+        CancellationToken cancellationToken)
+    {
         var order = await orderRepository.FindByIdAsync(request.OrderId, cancellationToken);
         if (order is null)
             return Result<OrderDto>.Failure(Error.NotFound("ORDER", request.OrderId));
@@ -42,6 +62,17 @@ internal sealed class CancelOrderCommandHandler(
 
         if (wasConfirmed)
         {
+            var reservations = order.Items
+                .GroupBy(item => item.MarketProductId)
+                .Select(group => new StockReservation(group.Key, group.Sum(item => item.Quantity)))
+                .OrderBy(reservation => reservation.MarketProductId)
+                .ToArray();
+
+            if (!await orderRepository.ReleaseStockAsync(reservations, cancellationToken))
+                return Result<OrderDto>.Failure(Error.Conflict(
+                    "STOCK_RESERVATION_CONFLICT",
+                    "The order stock reservation could not be released."));
+
             var refundResult = await creditService.RefundAsync(
                 order.RestaurantId,
                 order.Id,
@@ -51,10 +82,6 @@ internal sealed class CancelOrderCommandHandler(
 
             if (refundResult.IsFailure)
                 return Result<OrderDto>.Failure(refundResult.Error);
-        }
-        else
-        {
-            await orderRepository.SaveChangesAsync(cancellationToken);
         }
 
         return Result<OrderDto>.Success(OrderDtoMapper.ToDto(order));

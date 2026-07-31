@@ -29,6 +29,13 @@ public sealed class ConfirmOrderCommandHandlerTests
     {
         _sut = new ConfirmOrderCommandHandler(_orderRepository, _restaurantReader, _creditService, _operationalSettings);
 
+        _orderRepository.ExecuteInSerializableTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<Result>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.ArgAt<Func<CancellationToken, Task<Result>>>(0)(
+                call.ArgAt<CancellationToken>(1)));
+        _orderRepository.TryReserveStockAsync(
+                Arg.Any<IReadOnlyList<StockReservation>>(), Arg.Any<CancellationToken>())
+            .Returns(true);
         _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
             .Returns(OperationalSettings.CreateDefault());
 
@@ -160,6 +167,25 @@ public sealed class ConfirmOrderCommandHandlerTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("OPTIMISTIC_CONCURRENCY_CONFLICT");
+    }
+
+    [Fact]
+    public async Task Handle_ReservationFails_ReturnsInsufficientStockWithoutChargingAsync()
+    {
+        var order = NewDraftOrderWithItem();
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _orderRepository.TryReserveStockAsync(
+                Arg.Any<IReadOnlyList<StockReservation>>(), Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INSUFFICIENT_STOCK");
+        order.Status.Should().Be(OrderStatus.Draft);
+        await _creditService.DidNotReceive().ChargeAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<string?>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

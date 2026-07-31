@@ -15,6 +15,18 @@ public sealed class ProcurementBatchHandedOffIntegrationEventHandlerTests
 {
     private readonly IOrderRepository _orders = Substitute.For<IOrderRepository>();
 
+    public ProcurementBatchHandedOffIntegrationEventHandlerTests()
+    {
+        _orders.ExecuteInSerializableTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<FreshFlow.SharedKernel.Application.Result>>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call => call.ArgAt<Func<CancellationToken, Task<FreshFlow.SharedKernel.Application.Result>>>(0)(
+                call.ArgAt<CancellationToken>(1)));
+        _orders.ConsumeStockAsync(
+                Arg.Any<IReadOnlyList<StockReservation>>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+    }
+
     [Fact]
     public async Task Handle_BatchedOrder_AdvancesThroughBothHopsAsync()
     {
@@ -25,7 +37,25 @@ public sealed class ProcurementBatchHandedOffIntegrationEventHandlerTests
 
         order.Status.Should().Be(OrderStatus.AtHub);
         await _orders.Received(1).FindByIdAsync(order.Id, default);
-        await _orders.Received(1).SaveChangesAsync(default);
+        await _orders.Received(1).ConsumeStockAsync(
+            Arg.Is<IReadOnlyList<StockReservation>>(values => values.Count == 1 && values[0].Quantity == 1),
+            default);
+    }
+
+    [Fact]
+    public async Task Handle_RepeatedEvent_ConsumesStockOnceAsync()
+    {
+        var order = CreateOrder(OrderStatus.Batched);
+        _orders.FindByIdAsync(order.Id, default).Returns(order);
+        var notification = CreateEvent([order.Id]);
+        var sut = CreateSut();
+
+        await sut.Handle(notification, default);
+        await sut.Handle(notification, default);
+
+        order.Status.Should().Be(OrderStatus.AtHub);
+        await _orders.Received(1).ConsumeStockAsync(
+            Arg.Any<IReadOnlyList<StockReservation>>(), default);
     }
 
     [Fact]
@@ -37,7 +67,7 @@ public sealed class ProcurementBatchHandedOffIntegrationEventHandlerTests
         await CreateSut().Handle(CreateEvent([order.Id]), default);
 
         order.Status.Should().Be(OrderStatus.AtHub);
-        await _orders.Received(1).SaveChangesAsync(default);
+        await _orders.DidNotReceiveWithAnyArgs().ConsumeStockAsync(default!, default);
     }
 
     [Fact]
@@ -50,7 +80,7 @@ public sealed class ProcurementBatchHandedOffIntegrationEventHandlerTests
 
         await act.Should().NotThrowAsync();
         order.Status.Should().Be(OrderStatus.AtHub);
-        await _orders.Received(1).SaveChangesAsync(default);
+        await _orders.DidNotReceiveWithAnyArgs().ConsumeStockAsync(default!, default);
     }
 
     [Fact]
@@ -62,7 +92,7 @@ public sealed class ProcurementBatchHandedOffIntegrationEventHandlerTests
         var act = () => CreateSut().Handle(CreateEvent([orderId]), default);
 
         await act.Should().NotThrowAsync();
-        await _orders.DidNotReceiveWithAnyArgs().SaveChangesAsync(default);
+        await _orders.DidNotReceiveWithAnyArgs().ConsumeStockAsync(default!, default);
     }
 
     [Fact]
@@ -81,7 +111,7 @@ public sealed class ProcurementBatchHandedOffIntegrationEventHandlerTests
 
         await act.Should().NotThrowAsync();
         succeedingOrder.Status.Should().Be(OrderStatus.AtHub);
-        await _orders.Received(1).SaveChangesAsync(default);
+        await _orders.Received(1).ConsumeStockAsync(Arg.Any<IReadOnlyList<StockReservation>>(), default);
     }
 
     private ProcurementBatchHandedOffIntegrationEventHandler CreateSut() =>
@@ -101,6 +131,7 @@ public sealed class ProcurementBatchHandedOffIntegrationEventHandlerTests
     private static Order CreateOrder(OrderStatus status)
     {
         var order = new Order(Guid.NewGuid(), DateTime.UtcNow, null);
+        order.AddItem(Guid.NewGuid(), "Cà chua", 1, 20_000m);
         typeof(Order)
             .GetField(
                 $"<{nameof(Order.Status)}>k__BackingField",

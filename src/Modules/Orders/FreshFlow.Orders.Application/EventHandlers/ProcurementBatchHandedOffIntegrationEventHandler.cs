@@ -19,31 +19,49 @@ internal sealed class ProcurementBatchHandedOffIntegrationEventHandler(
         {
             try
             {
-                var order = await orders.FindByIdAsync(orderId, cancellationToken);
-                if (order is null)
+                var transaction = await orders.ExecuteInSerializableTransactionAsync(async ct =>
                 {
-                    logger.LogWarning(
-                        "Skipping procurement handover propagation because OrderId={OrderId} was not found for BatchId={BatchId}.",
-                        orderId,
-                        notification.BatchId);
-                    continue;
-                }
+                    var order = await orders.FindByIdAsync(orderId, ct);
+                    if (order is null)
+                    {
+                        logger.LogWarning(
+                            "Skipping procurement handover propagation because OrderId={OrderId} was not found for BatchId={BatchId}.",
+                            orderId,
+                            notification.BatchId);
+                        return FreshFlow.SharedKernel.Application.Result.Success();
+                    }
 
-                if (order.Status == OrderStatus.Batched)
-                {
-                    var pickup = order.AdvanceStatus(OrderStatus.PickedUp);
-                    if (pickup.IsFailure)
-                        LogTransitionFailure("pickup", orderId, notification.BatchId, pickup.Error.Code);
-                }
+                    if (order.Status == OrderStatus.Batched)
+                    {
+                        var reservations = order.Items
+                            .GroupBy(item => item.MarketProductId)
+                            .Select(group => new StockReservation(group.Key, group.Sum(item => item.Quantity)))
+                            .OrderBy(reservation => reservation.MarketProductId)
+                            .ToArray();
 
-                if (order.Status == OrderStatus.PickedUp)
-                {
-                    var atHub = order.AdvanceStatus(OrderStatus.AtHub);
-                    if (atHub.IsFailure)
-                        LogTransitionFailure("hub", orderId, notification.BatchId, atHub.Error.Code);
-                }
+                        if (!await orders.ConsumeStockAsync(reservations, ct))
+                            return FreshFlow.SharedKernel.Application.Result.Failure(
+                                FreshFlow.SharedKernel.Application.Error.Conflict(
+                                    "STOCK_RESERVATION_CONFLICT",
+                                    "The order stock reservation could not be consumed."));
 
-                await orders.SaveChangesAsync(cancellationToken);
+                        var pickup = order.AdvanceStatus(OrderStatus.PickedUp);
+                        if (pickup.IsFailure)
+                            return pickup;
+                    }
+
+                    if (order.Status == OrderStatus.PickedUp)
+                    {
+                        var atHub = order.AdvanceStatus(OrderStatus.AtHub);
+                        if (atHub.IsFailure)
+                            return atHub;
+                    }
+
+                    return FreshFlow.SharedKernel.Application.Result.Success();
+                }, cancellationToken);
+
+                if (transaction.IsFailure)
+                    LogTransitionFailure("stock/hub", orderId, notification.BatchId, transaction.Error.Code);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

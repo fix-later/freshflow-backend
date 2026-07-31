@@ -19,6 +19,25 @@ internal sealed class ConfirmOrderCommandHandler(
     internal async Task<Result<OrderDto>> Handle(
         ConfirmOrderCommand request, CancellationToken cancellationToken, DateTime confirmedAtUtc)
     {
+        OrderDto? confirmedOrder = null;
+        var transaction = await orderRepository.ExecuteInSerializableTransactionAsync(async ct =>
+        {
+            var result = await ConfirmAsync(request, ct, confirmedAtUtc);
+            if (result.IsFailure)
+                return Result.Failure(result.Error);
+
+            confirmedOrder = result.Value;
+            return Result.Success();
+        }, cancellationToken);
+
+        return transaction.IsFailure
+            ? Result<OrderDto>.Failure(transaction.Error)
+            : Result<OrderDto>.Success(confirmedOrder!);
+    }
+
+    private async Task<Result<OrderDto>> ConfirmAsync(
+        ConfirmOrderCommand request, CancellationToken cancellationToken, DateTime confirmedAtUtc)
+    {
         var order = await orderRepository.FindByIdAsync(request.OrderId, cancellationToken);
         if (order is null)
             return Result<OrderDto>.Failure(Error.NotFound("ORDER", request.OrderId));
@@ -48,6 +67,17 @@ internal sealed class ConfirmOrderCommandHandler(
             order, canChargeResult.Value, confirmedAtUtc, settings.DeliveryWindowDays, settings.DailyCutoffTime.ToTimeSpan());
         if (evaluation.Issues.Count > 0)
             return Result<OrderDto>.Failure(evaluation.Issues[0]);
+
+        var reservations = order.Items
+            .GroupBy(item => item.MarketProductId)
+            .Select(group => new StockReservation(group.Key, group.Sum(item => item.Quantity)))
+            .OrderBy(reservation => reservation.MarketProductId)
+            .ToArray();
+
+        if (!await orderRepository.TryReserveStockAsync(reservations, cancellationToken))
+            return Result<OrderDto>.Failure(Error.Validation(
+                "INSUFFICIENT_STOCK",
+                "One or more products no longer have enough available stock."));
 
         var rescheduledFor = evaluation.ResolvedScheduledFor;
         if (rescheduledFor != order.ScheduledFor && rescheduledFor is not null)

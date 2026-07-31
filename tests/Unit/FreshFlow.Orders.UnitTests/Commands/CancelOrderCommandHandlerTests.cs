@@ -25,6 +25,13 @@ public sealed class CancelOrderCommandHandlerTests
 
     public CancelOrderCommandHandlerTests()
     {
+        _orderRepository.ExecuteInSerializableTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<Result>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.ArgAt<Func<CancellationToken, Task<Result>>>(0)(
+                call.ArgAt<CancellationToken>(1)));
+        _orderRepository.ReleaseStockAsync(
+                Arg.Any<IReadOnlyList<StockReservation>>(), Arg.Any<CancellationToken>())
+            .Returns(true);
         _restaurantReader.FindByUserIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
         _creditService.RefundAsync(
@@ -88,7 +95,7 @@ public sealed class CancelOrderCommandHandlerTests
         result.Value.CancellationReason.Should().Be("Khách hàng đổi ý");
         order.Status.Should().Be(OrderStatus.Cancelled);
         _orderRepository.Received(1).Track(order);
-        await _orderRepository.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _orderRepository.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
         await _creditService.DidNotReceive().RefundAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
@@ -106,6 +113,9 @@ public sealed class CancelOrderCommandHandlerTests
         order.Status.Should().Be(OrderStatus.Cancelled);
         order.PaymentStatus.Should().Be(OrderPaymentStatus.Waived);
         _orderRepository.Received(1).Track(order);
+        await _orderRepository.Received(1).ReleaseStockAsync(
+            Arg.Is<IReadOnlyList<StockReservation>>(values => values.Count == 1 && values[0].Quantity == 5),
+            Arg.Any<CancellationToken>());
         await _creditService.Received(1).RefundAsync(
             RestaurantId, order.Id, 100_000m, "Order cancelled", Arg.Any<CancellationToken>());
         await _orderRepository.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
@@ -139,6 +149,25 @@ public sealed class CancelOrderCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("CREDIT_REFUND_EXCEEDS_BALANCE");
         await _orderRepository.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ConfirmedOrderCalledTwice_ReleasesAndRefundsOnceAsync()
+    {
+        var order = NewConfirmedOrder(RestaurantId);
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+
+        var first = await _sut.Handle(Cmd(order.Id), default);
+        var second = await _sut.Handle(Cmd(order.Id), default);
+
+        first.IsSuccess.Should().BeTrue();
+        second.IsFailure.Should().BeTrue();
+        second.Error.Code.Should().Be("ORDER_NOT_CANCELLABLE");
+        await _orderRepository.Received(1).ReleaseStockAsync(
+            Arg.Any<IReadOnlyList<StockReservation>>(), Arg.Any<CancellationToken>());
+        await _creditService.Received(1).RefundAsync(
+            RestaurantId, order.Id, order.TotalAmount, Arg.Any<string?>(),
+            Arg.Any<CancellationToken>());
     }
 
     private static CancelOrderCommand Cmd(Guid orderId, string? reason = null) =>

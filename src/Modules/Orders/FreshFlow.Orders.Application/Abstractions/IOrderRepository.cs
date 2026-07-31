@@ -1,10 +1,21 @@
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
+using FreshFlow.SharedKernel.Application;
 
 namespace FreshFlow.Orders.Application.Abstractions;
 
 public interface IOrderRepository
 {
+    public Task<Result> ExecuteInSerializableTransactionAsync(
+        Func<CancellationToken, Task<Result>> operation,
+        CancellationToken ct);
+
+    public Task<bool> TryReserveStockAsync(IReadOnlyList<StockReservation> reservations, CancellationToken ct);
+
+    public Task<bool> ReleaseStockAsync(IReadOnlyList<StockReservation> reservations, CancellationToken ct);
+
+    public Task<bool> ConsumeStockAsync(IReadOnlyList<StockReservation> reservations, CancellationToken ct);
+
     public Task<Order?> FindByIdAsync(Guid id, CancellationToken ct);
 
     public Task<IReadOnlyList<Order>> GetByRestaurantIdAsync(Guid restaurantId, CancellationToken ct);
@@ -23,6 +34,8 @@ public interface IOrderRepository
 
     public Task SaveChangesAsync(CancellationToken ct);
 }
+
+public sealed record StockReservation(Guid MarketProductId, int Quantity);
 
 public sealed record OrderSearchCriteria(
     Guid? RestaurantId,
