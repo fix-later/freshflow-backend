@@ -191,11 +191,22 @@ public sealed class RoutesController(ISender sender) : ControllerBase
         Guid routeId,
         CancellationToken ct)
     {
-        if (!IsHubStaff())
+        var isDriver = HttpContext?.User.IsInRole("driver") == true;
+        if (!IsHubStaff() && !isDriver)
             return null;
 
         var result = await sender.Send(new GetRouteQuery(routeId), ct);
-        return result.IsSuccess ? await CheckHubAccessAsync(result.Value.HubId, ct) : result.Error;
+        if (!result.IsSuccess)
+            return result.Error;
+
+        if (!isDriver)
+            return await CheckHubAccessAsync(result.Value.HubId, ct);
+
+        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        return Guid.TryParse(rawUserId, out var driverUserId) && result.Value.DriverUserId == driverUserId
+            ? null
+            : FreshFlow.SharedKernel.Application.Error.Unauthorized(
+                "FORBIDDEN", "This route is not assigned to the authenticated driver.");
     }
 
     private async Task<FreshFlow.SharedKernel.Application.Error?> CheckHubAccessAsync(

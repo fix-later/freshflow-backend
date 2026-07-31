@@ -44,6 +44,10 @@ public sealed class DriverRouteReorderEndpointTests(AuthWebAppFactory factory)
 
         forbidden.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
+        var forbiddenManifest = await _client.GetAsync(
+            $"/api/v1/logistics/routes/{seed.RouteId}/loading-manifest");
+        forbiddenManifest.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
         await AuthenticateAsync(assignedDriver.Email, DriverPassword);
         var response = await _client.PostAsJsonAsync(
             $"/api/v1/driver/routes/{seed.RouteId}/reorder",
