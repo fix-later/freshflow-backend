@@ -39,7 +39,8 @@ public sealed class AssistantOrchestratorTests
         var orchestrator = BuildOrchestrator(chatClient, registry);
 
         // Act
-        var outcome = await orchestrator.RunAsync(NewState(), confirmOrderIdFlag: null);
+        var outcome = await orchestrator.RunAsync(
+            NewState(), confirmOrderIdFlag: null, deliveryAddressIdFlag: null);
 
         // Assert
         outcome.Reply.Should().Be("Chào bạn, tôi giúp gì được?");
@@ -63,7 +64,8 @@ public sealed class AssistantOrchestratorTests
         var orchestrator = BuildOrchestrator(chatClient, registry);
 
         // Act
-        var outcome = await orchestrator.RunAsync(NewState(), confirmOrderIdFlag: null);
+        var outcome = await orchestrator.RunAsync(
+            NewState(), confirmOrderIdFlag: null, deliveryAddressIdFlag: null);
 
         // Assert
         outcome.Reply.Should().Be("Tôi đã tạo đơn nháp cho bạn.");
@@ -77,6 +79,7 @@ public sealed class AssistantOrchestratorTests
     {
         // Arrange — LLM asks to confirm, but no client confirmation flag is present.
         var orderId = Guid.NewGuid();
+        var deliveryAddressId = Guid.NewGuid();
         var chatClient = new ScriptedChatClient(
             AssistantTurnResult.FromToolCall("c1", "confirm_order", JsonSerializer.Serialize(new { orderId })));
         var registry = new SpyToolRegistry()
@@ -84,13 +87,15 @@ public sealed class AssistantOrchestratorTests
         var orchestrator = BuildOrchestrator(chatClient, registry);
 
         // Act
-        var outcome = await orchestrator.RunAsync(NewState(), confirmOrderIdFlag: null);
+        var outcome = await orchestrator.RunAsync(
+            NewState(), confirmOrderIdFlag: null, deliveryAddressIdFlag: deliveryAddressId);
 
         // Assert — confirm_order NEVER dispatched; preview ran; pendingConfirmation surfaced.
         registry.Invocations.Select(i => i.ToolName).Should().NotContain("confirm_order");
         registry.Invocations.Select(i => i.ToolName).Should().Contain("preview_confirmation");
         outcome.PendingConfirmation.Should().NotBeNull();
         outcome.PendingConfirmation!.OrderId.Should().Be(orderId);
+        outcome.PendingConfirmation.DeliveryAddressId.Should().Be(deliveryAddressId);
         outcome.PendingConfirmation.PreviewJson.Should().Contain("totalAmount");
     }
 
@@ -99,6 +104,7 @@ public sealed class AssistantOrchestratorTests
     {
         // Arrange — user pressed confirm for this exact order, then the LLM wraps up.
         var orderId = Guid.NewGuid();
+        var deliveryAddressId = Guid.NewGuid();
         var chatClient = new ScriptedChatClient(
             AssistantTurnResult.FromToolCall("c1", "confirm_order", JsonSerializer.Serialize(new { orderId })),
             AssistantTurnResult.FromText("Đơn của bạn đã được xác nhận."));
@@ -107,7 +113,8 @@ public sealed class AssistantOrchestratorTests
         var orchestrator = BuildOrchestrator(chatClient, registry);
 
         // Act
-        var outcome = await orchestrator.RunAsync(NewState(), confirmOrderIdFlag: orderId);
+        var outcome = await orchestrator.RunAsync(
+            NewState(), confirmOrderIdFlag: orderId, deliveryAddressIdFlag: deliveryAddressId);
 
         // Assert
         registry.Invocations.Select(i => i.ToolName).Should().Contain("confirm_order");
@@ -127,7 +134,8 @@ public sealed class AssistantOrchestratorTests
         var orchestrator = BuildOrchestrator(chatClient, registry, maxToolHops: 3);
 
         // Act
-        var outcome = await orchestrator.RunAsync(NewState(), confirmOrderIdFlag: null);
+        var outcome = await orchestrator.RunAsync(
+            NewState(), confirmOrderIdFlag: null, deliveryAddressIdFlag: null);
 
         // Assert — bailed out after exactly the budget, with a safe non-technical message.
         registry.Invocations.Should().HaveCount(3);

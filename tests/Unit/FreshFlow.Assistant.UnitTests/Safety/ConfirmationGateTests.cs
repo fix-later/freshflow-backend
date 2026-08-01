@@ -19,7 +19,8 @@ public sealed class ConfirmationGateTests
         var orderId = Guid.NewGuid();
 
         // Act — a matching flag must NOT turn a non-confirm tool into an Allow.
-        var result = Gate.Evaluate("create_draft_order", ArgsFor(orderId), confirmOrderIdFlag: orderId);
+        var result = Gate.Evaluate(
+            "create_draft_order", ArgsFor(orderId), confirmOrderIdFlag: orderId, Guid.NewGuid());
 
         // Assert
         result.Decision.Should().Be(ConfirmationDecision.NotApplicable);
@@ -33,7 +34,8 @@ public sealed class ConfirmationGateTests
         var orderId = Guid.NewGuid();
 
         // Act — the LLM asked to confirm but the client sent no confirmOrderId flag.
-        var result = Gate.Evaluate(ConfirmationGate.ConfirmOrderToolName, ArgsFor(orderId), confirmOrderIdFlag: null);
+        var result = Gate.Evaluate(
+            ConfirmationGate.ConfirmOrderToolName, ArgsFor(orderId), confirmOrderIdFlag: null, Guid.NewGuid());
 
         // Assert — blocked, and the pending order id is surfaced so the orchestrator can preview it.
         result.Decision.Should().Be(ConfirmationDecision.Blocked);
@@ -49,7 +51,10 @@ public sealed class ConfirmationGateTests
 
         // Act
         var result = Gate.Evaluate(
-            ConfirmationGate.ConfirmOrderToolName, ArgsFor(orderId), confirmOrderIdFlag: differentOrderId);
+            ConfirmationGate.ConfirmOrderToolName,
+            ArgsFor(orderId),
+            confirmOrderIdFlag: differentOrderId,
+            Guid.NewGuid());
 
         // Assert
         result.Decision.Should().Be(ConfirmationDecision.Blocked);
@@ -64,7 +69,10 @@ public sealed class ConfirmationGateTests
 
         // Act
         var result = Gate.Evaluate(
-            ConfirmationGate.ConfirmOrderToolName, ArgsFor(orderId), confirmOrderIdFlag: orderId);
+            ConfirmationGate.ConfirmOrderToolName,
+            ArgsFor(orderId),
+            confirmOrderIdFlag: orderId,
+            Guid.NewGuid());
 
         // Assert
         result.Decision.Should().Be(ConfirmationDecision.Allowed);
@@ -85,10 +93,26 @@ public sealed class ConfirmationGateTests
         var flag = Guid.NewGuid();
 
         // Act
-        var result = Gate.Evaluate(ConfirmationGate.ConfirmOrderToolName, malformedArgs, confirmOrderIdFlag: flag);
+        var result = Gate.Evaluate(
+            ConfirmationGate.ConfirmOrderToolName, malformedArgs, confirmOrderIdFlag: flag, Guid.NewGuid());
 
         // Assert — never allow a confirm we cannot pin to a concrete order id.
         result.Decision.Should().Be(ConfirmationDecision.Blocked);
         result.OrderId.Should().BeNull();
+    }
+
+    [Fact]
+    public void Evaluate_blocks_confirm_order_without_a_client_selected_delivery_address()
+    {
+        var orderId = Guid.NewGuid();
+
+        var result = Gate.Evaluate(
+            ConfirmationGate.ConfirmOrderToolName,
+            ArgsFor(orderId),
+            confirmOrderIdFlag: orderId,
+            deliveryAddressIdFlag: null);
+
+        result.Decision.Should().Be(ConfirmationDecision.Blocked);
+        result.DeliveryAddressId.Should().BeNull();
     }
 }

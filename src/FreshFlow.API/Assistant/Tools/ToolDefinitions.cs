@@ -173,24 +173,29 @@ public static class ToolDefinitions
         ParametersSchema: ToolArgsSchema.Object(
             properties: new
             {
-                orderId = new { type = "string", description = "Id đơn hàng (UUID)." },
-                deliveryAddressId = new { type = "string", description = "Id địa chỉ giao hàng đã chọn (UUID)." }
+                orderId = new { type = "string", description = "Id đơn hàng (UUID)." }
             },
-            required: ["orderId", "deliveryAddressId"]),
+            required: ["orderId"]),
         Handler: async (argsJson, ctx, ct) =>
         {
             // The two-phase ConfirmationGate (T4) sits in front of this tool in the orchestrator —
             // it intercepts the "confirm_order" call before the registry ever dispatches here, so
             // this handler can assume the explicit-confirmation invariant already holds.
-            if (!ToolArgsParser.TryParse<ConfirmOrderArgs>(argsJson, out var args, out var error))
+            if (!ToolArgsParser.TryParse<OrderIdArgs>(argsJson, out var args, out var error))
             {
                 return error!;
             }
 
-            if (args!.OrderId is not { } orderId || args.DeliveryAddressId is not { } deliveryAddressId)
+            if (args!.OrderId is not { } orderId)
             {
                 return ToolResultJson.Error(
-                    "INVALID_TOOL_ARGS", "Tool arguments must include orderId and deliveryAddressId.");
+                    "INVALID_TOOL_ARGS", "Tool arguments must include orderId.");
+            }
+
+            if (ctx.DeliveryAddressId is not { } deliveryAddressId)
+            {
+                return ToolResultJson.Error(
+                    "DELIVERY_ADDRESS_REQUIRED", "The client must select a delivery address.");
             }
 
             var command = new ConfirmOrderCommand(
@@ -236,5 +241,4 @@ public static class ToolDefinitions
     // dispatch with Guid.Empty (System.Text.Json does not enforce required-ness on its own).
     private sealed record OrderIdArgs(Guid? OrderId = null);
 
-    private sealed record ConfirmOrderArgs(Guid? OrderId = null, Guid? DeliveryAddressId = null);
 }

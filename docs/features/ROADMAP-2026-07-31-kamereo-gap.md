@@ -87,7 +87,14 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
 ### Change record
 
 - Files changed:
+  - `src/FreshFlow.API/Assistant/AssistantOrchestrator.cs`
+  - `src/FreshFlow.API/Assistant/Dtos/AssistantChatRequest.cs`
+  - `src/FreshFlow.API/Assistant/Dtos/AssistantChatResponse.cs`
+  - `src/FreshFlow.API/Assistant/Safety/ConfirmationGate.cs`
+  - `src/FreshFlow.API/Assistant/Safety/ConfirmationGateResult.cs`
+  - `src/FreshFlow.API/Assistant/Tools/AssistantTool.cs`
   - `src/FreshFlow.API/Assistant/Tools/ToolDefinitions.cs`
+  - `src/FreshFlow.API/Controllers/AssistantController.cs`
   - `src/FreshFlow.API/Controllers/OrdersController.cs`
   - `src/FreshFlow.Infrastructure.Persistence/Migrations/20260801143556_AddOrderDeliveryAddressSnapshot.cs`
   - `src/FreshFlow.Infrastructure.Persistence/Migrations/20260801143556_AddOrderDeliveryAddressSnapshot.Designer.cs`
@@ -104,6 +111,9 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
   - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/CrossModule/RestaurantRowConfiguration.cs`
   - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/Persistence/Configurations/OrderConfiguration.cs`
   - `tests/Integration/FreshFlow.IntegrationTests/Orders/AtomicStockReservationEndpointTests.cs`
+  - `tests/Integration/FreshFlow.IntegrationTests/Assistant/AssistantChatEndpointTests.cs`
+  - `tests/Unit/FreshFlow.Assistant.UnitTests/Orchestration/AssistantOrchestratorTests.cs`
+  - `tests/Unit/FreshFlow.Assistant.UnitTests/Safety/ConfirmationGateTests.cs`
   - `tests/Unit/FreshFlow.Assistant.UnitTests/Tools/ToolDefinitionsTests.cs`
   - `tests/Unit/FreshFlow.Orders.UnitTests/Commands/ConfirmOrderCommandHandlerTests.cs`
   - `tests/Unit/FreshFlow.Orders.UnitTests/Commands/ConfirmOrderCommandValidatorTests.cs`
@@ -111,11 +121,14 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
   - `tests/Unit/FreshFlow.Orders.UnitTests/Persistence/PersistenceConfigurationTests.cs`
 - Migration: `20260801143556_AddOrderDeliveryAddressSnapshot` adds six nullable snapshot columns to
   `orders`; no foreign key is retained to the mutable source address.
-- API contract: `POST /api/orders/{id}/confirm` and the assistant `confirm_order` tool now require
-  `deliveryAddressId`; order detail returns the selected immutable `DeliveryAddress` snapshot.
+- API contract: `POST /api/orders/{id}/confirm` requires `deliveryAddressId`; Assistant chat accepts
+  a client-selected `deliveryAddressId`, binds it in the confirmation gate, and never exposes it as
+  an LLM-controlled tool argument. Pending confirmation echoes the selected address id.
+  Order detail returns the selected immutable `DeliveryAddress` snapshot.
   Invalid ownership, missing, or deleted addresses return `DELIVERY_ADDRESS_NOT_FOUND`.
-- Test results: solution build passed (0 errors, 21 existing warnings); Orders unit tests 545/545;
-  Assistant unit tests 82/82; related PostgreSQL integration tests 9/9; EF model has no pending changes.
+- Test results: solution build passed (0 errors, 23 existing warnings); Orders unit tests 545/545;
+  Assistant unit tests 83/83; related Orders PostgreSQL integration tests 9/9; Assistant HTTP/tool
+  integration tests 6/6; EF model has no pending changes.
 
 ## Decision log
 
@@ -135,3 +148,8 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
   orders remain valid and confirmed orders survive source address edits or deletion.
 - 2026-08-01: Capture the address inside the existing serializable confirmation transaction so stock,
   credit, order status, and the snapshot commit or roll back together.
+- 2026-08-01: GAP-02 initial commit `22a9cbc` received a P1 review finding: Assistant confirmation
+  must bind the client-selected delivery address in the safety gate. GAP-03 remains blocked until the
+  follow-up fix is committed.
+- 2026-08-01: P1 fixed by moving `deliveryAddressId` out of LLM tool arguments into server-injected
+  context, requiring it in the gate, and echoing it with the pending preview.

@@ -8,6 +8,10 @@ namespace FreshFlow.API.Assistant.Dtos;
 /// <param name="SessionId">Client-generated conversation handle; new id ⇒ fresh conversation.</param>
 /// <param name="Message">The user's natural-language message for this turn.</param>
 /// <param name="MarketId">Active market context for product search; carried into the session.</param>
+/// <param name="DeliveryAddressId">
+/// Address explicitly selected by the client. It is injected into confirmation server-side and is
+/// never accepted from the LLM.
+/// </param>
 /// <param name="ConfirmOrderId">
 /// Set only when the user explicitly confirmed an order via the UI. Must match the order the assistant
 /// is about to confirm, or the <see cref="Safety.ConfirmationGate"/> blocks the confirmation.
@@ -16,4 +20,5 @@ public sealed record AssistantChatRequest(
     string SessionId,
     string Message,
     Guid? MarketId,
+    Guid? DeliveryAddressId = null,
     Guid? ConfirmOrderId = null);

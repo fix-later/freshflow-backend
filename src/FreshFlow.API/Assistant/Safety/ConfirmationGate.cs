@@ -5,8 +5,9 @@ namespace FreshFlow.API.Assistant.Safety;
 /// <summary>
 /// Two-phase confirmation safety gate (T4). Sits in front of the <c>confirm_order</c> tool inside the
 /// orchestrator (T5): an order is only ever confirmed when the <em>client</em> sends back an explicit
-/// <c>confirmOrderId</c> flag — set by the user pressing a confirm button on a preview the assistant
-/// already showed — that matches the order id the LLM is trying to confirm. The LLM can never satisfy
+/// <c>confirmOrderId</c> flag and a client-selected delivery address — set by the user pressing a
+/// confirm button on a preview the assistant already showed — that match the order being confirmed.
+/// The LLM can never satisfy
 /// this on its own: it does not control the request body, so a model that "decides" to confirm without
 /// the user's button press is blocked here before <c>ConfirmOrderCommand</c> is ever dispatched.
 /// <para>
@@ -14,7 +15,8 @@ namespace FreshFlow.API.Assistant.Safety;
 /// (missing flag / mismatched flag / matching flag) are exhaustively unit-testable.
 /// </para>
 /// <para>
-/// Scope note (M1): the gate only proves "the client explicitly confirmed the order id the LLM named".
+/// Scope note (M1): the gate proves the client explicitly confirmed the order id the LLM named and
+/// supplied the delivery address injected into the confirm command.
 /// It does not cross-check that id against the session's <c>CurrentDraftOrderId</c> — the guarantee that
 /// the order actually belongs to this session's user comes from the Tier-1 handlers
 /// (<c>ConfirmOrderCommandHandler</c>/<c>PreviewOrderConfirmationQueryHandler</c>), which independently
@@ -31,7 +33,8 @@ public sealed class ConfirmationGate
     /// gate is <see cref="ConfirmationDecision.NotApplicable"/> and the orchestrator dispatches normally.
     /// For <c>confirm_order</c> it is <see cref="ConfirmationDecision.Allowed"/> only when
     /// <paramref name="confirmOrderIdFlag"/> is present and equals the <c>orderId</c> in
-    /// <paramref name="toolArgsJson"/>; otherwise it is <see cref="ConfirmationDecision.Blocked"/> and the
+    /// <paramref name="toolArgsJson"/>, and <paramref name="deliveryAddressIdFlag"/> is present;
+    /// otherwise it is <see cref="ConfirmationDecision.Blocked"/> and the
     /// orchestrator must run a preview / ask the user instead of confirming.
     /// </summary>
     /// <param name="toolName">Tool the LLM asked to call.</param>
@@ -40,7 +43,12 @@ public sealed class ConfirmationGate
     /// Explicit confirmation flag from the client request body — non-null only when the user pressed the
     /// confirm button for a specific order. Never populated from the LLM.
     /// </param>
-    public ConfirmationGateResult Evaluate(string toolName, string? toolArgsJson, Guid? confirmOrderIdFlag)
+    /// <param name="deliveryAddressIdFlag">Address explicitly selected by the client.</param>
+    public ConfirmationGateResult Evaluate(
+        string toolName,
+        string? toolArgsJson,
+        Guid? confirmOrderIdFlag,
+        Guid? deliveryAddressIdFlag)
     {
         if (!string.Equals(toolName, ConfirmOrderToolName, StringComparison.Ordinal))
         {
@@ -51,12 +59,15 @@ public sealed class ConfirmationGate
 
         // The only path to a real confirmation: a client-supplied flag that matches the exact order the
         // LLM named. A missing flag, a mismatched flag, or args the LLM mangled all fall through to Block.
-        if (confirmOrderIdFlag is not null && orderId is not null && confirmOrderIdFlag.Value == orderId.Value)
+        if (confirmOrderIdFlag is not null
+            && orderId is not null
+            && confirmOrderIdFlag.Value == orderId.Value
+            && deliveryAddressIdFlag is not null)
         {
-            return ConfirmationGateResult.Allow(orderId.Value);
+            return ConfirmationGateResult.Allow(orderId.Value, deliveryAddressIdFlag.Value);
         }
 
-        return ConfirmationGateResult.Block(orderId);
+        return ConfirmationGateResult.Block(orderId, deliveryAddressIdFlag);
     }
 
     /// <summary>

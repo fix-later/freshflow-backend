@@ -27,7 +27,7 @@ public sealed class ToolDefinitionsTests
     private readonly Guid _orderId = Guid.NewGuid();
     private readonly Guid _deliveryAddressId = Guid.NewGuid();
 
-    private AssistantToolInvocationContext Ctx => new(_userId, _marketId);
+    private AssistantToolInvocationContext Ctx => new(_userId, _marketId, _deliveryAddressId);
 
     private IReadOnlyDictionary<string, AssistantTool> Tools =>
         ToolDefinitions.CreateAll(_sender).ToDictionary(t => t.Name);
@@ -259,14 +259,13 @@ public sealed class ToolDefinitionsTests
     // ── confirm_order ────────────────────────────────────────────────────────
 
     [Fact]
-    public void confirm_order_schema_requires_deliveryAddressId_without_changing_get_order()
+    public void confirm_order_schema_keeps_deliveryAddressId_out_of_llm_control()
     {
         var confirmSchema = Tools["confirm_order"].ParametersSchema;
         var getOrderSchema = Tools["get_order"].ParametersSchema;
 
-        confirmSchema.GetProperty("required").EnumerateArray()
-            .Select(value => value.GetString())
-            .Should().Contain("deliveryAddressId");
+        confirmSchema.GetProperty("properties").TryGetProperty(
+            "deliveryAddressId", out _).Should().BeFalse();
         getOrderSchema.GetProperty("properties").TryGetProperty(
             "deliveryAddressId", out _).Should().BeFalse();
     }
@@ -317,11 +316,12 @@ public sealed class ToolDefinitionsTests
     public async Task confirm_order_rejects_missing_deliveryAddressId()
     {
         var args = JsonSerializer.SerializeToElement(new { orderId = _orderId });
+        var ctx = new AssistantToolInvocationContext(_userId, _marketId);
 
-        var result = await Tools["confirm_order"].Handler!(args, Ctx, CancellationToken.None);
+        var result = await Tools["confirm_order"].Handler!(args, ctx, CancellationToken.None);
 
         JsonDocument.Parse(result).RootElement.GetProperty("error").GetString()
-            .Should().Be("INVALID_TOOL_ARGS");
+            .Should().Be("DELIVERY_ADDRESS_REQUIRED");
         await _sender.DidNotReceive().Send(
             Arg.Any<ConfirmOrderCommand>(), Arg.Any<CancellationToken>());
     }

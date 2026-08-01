@@ -46,9 +46,10 @@ public sealed class AssistantOrchestrator(
     public async Task<AssistantTurnOutcome> RunAsync(
         ConversationState state,
         Guid? confirmOrderIdFlag,
+        Guid? deliveryAddressIdFlag,
         CancellationToken ct = default)
     {
-        var ctx = new AssistantToolInvocationContext(state.UserId, state.MarketId);
+        var ctx = new AssistantToolInvocationContext(state.UserId, state.MarketId, deliveryAddressIdFlag);
         var tools = toolRegistry.Tools;
         var draftOrderId = state.CurrentDraftOrderId;
 
@@ -63,10 +64,12 @@ public sealed class AssistantOrchestrator(
                 return new AssistantTurnOutcome(turn.Text ?? string.Empty, state, PendingConfirmation: null, draftOrderId);
             }
 
-            var gate = confirmationGate.Evaluate(turn.ToolName!, turn.ToolArgsJson, confirmOrderIdFlag);
+            var gate = confirmationGate.Evaluate(
+                turn.ToolName!, turn.ToolArgsJson, confirmOrderIdFlag, deliveryAddressIdFlag);
             if (gate.IsBlocked)
             {
-                return await BuildPendingConfirmationAsync(state, gate.OrderId, ctx, draftOrderId, ct);
+                return await BuildPendingConfirmationAsync(
+                    state, gate.OrderId, gate.DeliveryAddressId, ctx, draftOrderId, ct);
             }
 
             var resultJson = await toolRegistry.InvokeAsync(turn.ToolName!, ParseArgs(turn.ToolArgsJson), ctx, ct);
@@ -94,6 +97,7 @@ public sealed class AssistantOrchestrator(
     private async Task<AssistantTurnOutcome> BuildPendingConfirmationAsync(
         ConversationState state,
         Guid? pendingOrderId,
+        Guid? deliveryAddressId,
         AssistantToolInvocationContext ctx,
         Guid? draftOrderId,
         CancellationToken ct)
@@ -105,13 +109,24 @@ public sealed class AssistantOrchestrator(
             return new AssistantTurnOutcome(clarify, AppendAssistantText(state, clarify), PendingConfirmation: null, draftOrderId);
         }
 
+        if (deliveryAddressId is null)
+        {
+            const string selectAddress =
+                "Vui lòng chọn địa chỉ giao hàng trước khi xác nhận đơn.";
+            return new AssistantTurnOutcome(
+                selectAddress,
+                AppendAssistantText(state, selectAddress),
+                PendingConfirmation: null,
+                draftOrderId);
+        }
+
         var previewArgs = ToJsonElement(new { orderId = pendingOrderId.Value });
         var previewJson = await toolRegistry.InvokeAsync(PreviewConfirmationToolName, previewArgs, ctx, ct);
 
         const string reply =
             "Đơn hàng của bạn đã sẵn sàng. Vui lòng kiểm tra tóm tắt và bấm xác nhận để tôi đặt đơn giúp bạn.";
         var updatedState = AppendAssistantText(state, reply);
-        var pending = new PendingConfirmation(pendingOrderId.Value, previewJson);
+        var pending = new PendingConfirmation(pendingOrderId.Value, deliveryAddressId.Value, previewJson);
         return new AssistantTurnOutcome(reply, updatedState, pending, draftOrderId);
     }
 

@@ -64,7 +64,8 @@ public sealed class AssistantController(
         AssistantTurnOutcome outcome;
         try
         {
-            outcome = await orchestrator.RunAsync(state, request.ConfirmOrderId, ct);
+            outcome = await orchestrator.RunAsync(
+                state, request.ConfirmOrderId, request.DeliveryAddressId, ct);
         }
         catch (AssistantProviderException ex)
         {

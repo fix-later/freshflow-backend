@@ -23,20 +23,24 @@ public enum ConfirmationDecision
 /// The order id parsed from the LLM's tool arguments, or null when the call carried no valid id
 /// (only ever meaningful for the <c>confirm_order</c> tool).
 /// </param>
-public sealed record ConfirmationGateResult(ConfirmationDecision Decision, Guid? OrderId)
+/// <param name="DeliveryAddressId">Client-selected address bound to this decision.</param>
+public sealed record ConfirmationGateResult(
+    ConfirmationDecision Decision,
+    Guid? OrderId,
+    Guid? DeliveryAddressId)
 {
     /// <summary>Whether the orchestrator must withhold confirmation and ask the user first.</summary>
     public bool IsBlocked => Decision == ConfirmationDecision.Blocked;
 
     /// <summary>The gate does not guard this tool — dispatch normally.</summary>
     public static readonly ConfirmationGateResult NotApplicable =
-        new(ConfirmationDecision.NotApplicable, null);
+        new(ConfirmationDecision.NotApplicable, null, null);
 
     /// <summary>A matching confirmation flag was supplied — allow the confirm for <paramref name="orderId"/>.</summary>
-    public static ConfirmationGateResult Allow(Guid orderId) =>
-        new(ConfirmationDecision.Allowed, orderId);
+    public static ConfirmationGateResult Allow(Guid orderId, Guid deliveryAddressId) =>
+        new(ConfirmationDecision.Allowed, orderId, deliveryAddressId);
 
     /// <summary>No matching flag — block the confirm; <paramref name="orderId"/> (if any) is the pending order.</summary>
-    public static ConfirmationGateResult Block(Guid? orderId) =>
-        new(ConfirmationDecision.Blocked, orderId);
+    public static ConfirmationGateResult Block(Guid? orderId, Guid? deliveryAddressId) =>
+        new(ConfirmationDecision.Blocked, orderId, deliveryAddressId);
 }

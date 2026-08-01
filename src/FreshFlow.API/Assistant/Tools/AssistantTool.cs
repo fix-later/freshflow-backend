@@ -16,7 +16,7 @@ namespace FreshFlow.API.Assistant.Tools;
 /// <param name="ParametersSchema">JSON schema (object) describing the tool's input arguments.</param>
 /// <param name="Handler">
 /// Dispatch delegate: receives the LLM-supplied JSON args plus the server-injected invocation
-/// context (UserId/MarketId — never supplied by the LLM) and returns the JSON result to append to
+/// context (UserId/MarketId/DeliveryAddressId — never supplied by the LLM) and returns the JSON result to append to
 /// conversation history. Populated by <c>AssistantToolRegistry</c> (T2); left <c>null</c> here only
 /// so this record compiles standalone in T1 unit tests.
 /// </param>
@@ -28,9 +28,14 @@ public sealed record AssistantTool(
 
 /// <summary>
 /// Server-injected context passed to an <see cref="AssistantTool"/> handler. <see cref="UserId"/>
-/// and <see cref="MarketId"/> come from the authenticated request (JWT claim / session), never from
+/// <see cref="UserId"/>, <see cref="MarketId"/>, and <see cref="DeliveryAddressId"/> come from the
+/// authenticated request/session, never from
 /// LLM-supplied tool arguments — see the data-handling constraint in §2 of the design doc.
 /// </summary>
 /// <param name="UserId">Authenticated user, injected server-side.</param>
 /// <param name="MarketId">Active market context, injected server-side.</param>
-public sealed record AssistantToolInvocationContext(Guid UserId, Guid? MarketId);
+/// <param name="DeliveryAddressId">Delivery address explicitly selected by the client.</param>
+public sealed record AssistantToolInvocationContext(
+    Guid UserId,
+    Guid? MarketId,
+    Guid? DeliveryAddressId = null);
