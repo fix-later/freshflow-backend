@@ -33,6 +33,7 @@ internal static class OrderDtoMapper
                 i.UnitPrice,
                 i.Subtotal,
                 i.ActualQuantity,
+                i.ActualUnitPrice,
                 images?.GetValueOrDefault(i.MarketProductId),
                 i.VatRateCode,
                 i.VatRatePercent,

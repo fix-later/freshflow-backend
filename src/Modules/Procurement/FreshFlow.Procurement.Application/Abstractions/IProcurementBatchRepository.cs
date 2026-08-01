@@ -6,6 +6,10 @@ namespace FreshFlow.Procurement.Application.Abstractions;
 
 public interface IProcurementBatchRepository
 {
+    public Task<Result> ExecuteInSerializableTransactionAsync(
+        Func<CancellationToken, Task<Result>> operation,
+        CancellationToken ct);
+
     public Task AddRangeAsync(
         IReadOnlyCollection<ProcurementBatch> batches,
         CancellationToken ct);

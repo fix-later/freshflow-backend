@@ -299,6 +299,17 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
 
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", agentAToken);
+        await SetReservedQuantityAsync(seed.MarketProductId, 0);
+        var rejectedHandover = await _client.PatchAsync(
+            $"/api/v1/procurement/tasks/{batchId}/handover",
+            null);
+        rejectedHandover.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var rejectedHandoverError = await rejectedHandover.Content
+            .ReadFromJsonAsync<ErrorEnvelope>();
+        rejectedHandoverError!.Error!.Code.Should().Be("STOCK_RESERVATION_CONFLICT");
+        await AssertPurchaseStateAsync(batchId, seed.MarketProductId, 5, 11_000m);
+
+        await SetReservedQuantityAsync(seed.MarketProductId, 5);
         var handover = await _client.PatchAsync(
             $"/api/v1/procurement/tasks/{batchId}/handover",
             null);
@@ -565,6 +576,11 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
 
         db.Set<Order>().Add(order);
         await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE market_products
+            SET "ReservedQuantity" = "ReservedQuantity" + 5
+            WHERE "Id" = {marketProductId}
+            """);
 
         return new SeededOrder(
             order.Id,
@@ -572,6 +588,38 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             hubId,
             marketProductId,
             productName);
+    }
+
+    private async Task SeedCreditChargeAsync(Guid restaurantId, Guid orderId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var amount = await db.Set<Order>()
+            .Where(order => order.Id == orderId)
+            .Select(order => order.TotalAmount)
+            .SingleAsync();
+        var account = new RestaurantCredit(restaurantId, amount);
+        account.Charge(amount);
+        account.ClearDomainEvents();
+        db.Set<RestaurantCredit>().Add(account);
+        db.Set<CreditTransaction>().Add(new CreditTransaction(
+            restaurantId,
+            orderId,
+            CreditTransactionType.Charge,
+            amount,
+            account.OutstandingBalance,
+            "Integration fixture"));
+        await db.SaveChangesAsync();
+    }
+
+    private async Task SetReservedQuantityAsync(Guid marketProductId, int quantity)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Set<MarketProduct>()
+            .Where(product => product.Id == marketProductId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(product => product.ReservedQuantity, quantity));
     }
 
     private async Task SeedActiveCoverageAsync(
@@ -737,6 +785,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         var restaurantId = await CreateRestaurantAsync();
         var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1);
         var seed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+        await SeedCreditChargeAsync(restaurantId, seed.OrderId);
         await _client.PostAsJsonAsync(
             "/api/v1/admin/order-groups/auto-batch",
             new { targetDate, dryRun = false, force = false });

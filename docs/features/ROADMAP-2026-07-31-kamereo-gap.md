@@ -8,7 +8,7 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
 | GAP-01 | PostgreSQL atomic stock reservation | Done | Confirmation reserves available stock and charges credit atomically; confirmed cancellation releases both once; procurement handover consumes reservations once; price board, search, and favorites expose `CurrentQuantity - ReservedQuantity`; concurrency and rollback paths are covered by PostgreSQL tests. |
 | GAP-02 | Delivery-address snapshot | Done | An order keeps the delivery address captured at placement even if the restaurant address later changes. |
 | GAP-03 | MOQ, VAT, and distance delivery fee | Done | Confirmation validates MOQ and returns deterministic VAT and distance-based delivery fee amounts. |
-| GAP-04 | Actual purchase price and pro-rata shortage allocation | Planned | Purchased quantities/prices are recorded and shortages are allocated deterministically across affected orders. |
+| GAP-04 | Actual purchase price and pro-rata shortage allocation | Done | Purchased quantities/prices are recorded and shortages are allocated deterministically across affected orders. |
 | GAP-05 | E-invoice readiness | Planned | Invoice data required for compliant e-invoice issuance is captured, validated, and exportable. |
 | GAP-06 | Organizations, branches, and approval | Planned | Organization/branch boundaries and approval rules are enforced for ordering and administration. |
 | GAP-07 | Spend analytics | Planned | Authorized users can query consistent spend aggregates over supported periods and dimensions. |
@@ -161,6 +161,16 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
 - 2026-08-01: Delivery fee defaults to 5,000 VND/km and is managed through operational settings.
 - 2026-08-01: GAP-03 review fixed partial hub coordinates so the origin falls back as one complete
   market coordinate pair instead of mixing a hub latitude/longitude with its market counterpart.
+- 2026-08-01: GAP-04 reuses procurement purchase confirmation and extends only the handover event;
+  price-band approval and credit reconciliation remain outside this GAP because its acceptance
+  criteria require recording actuals and deterministic shortage allocation, not repricing debt.
+- 2026-08-01: Shortages use two-decimal largest-remainder allocation with stable order/item ID
+  tie-breaks. Reservation consumption, shortfall release, actual snapshots, and order transitions
+  share one serializable transaction.
+- 2026-08-01: GAP-04 review found that post-commit domain dispatch could leave Procurement handed
+  off while Orders rolled back, or broadcast uncommitted statuses. Handover now invokes a dedicated
+  Orders finalizer inside the shared serializable PostgreSQL transaction, captures status events,
+  commits Procurement/Orders/stock together, then publishes captured events once after commit.
 
 ## GAP-03 — MOQ, VAT, and distance delivery fee
 
@@ -254,3 +264,69 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
   Orders unit tests 551/551; Invoicing unit tests 36/36; Assistant unit tests 83/83; related Orders and
   Invoicing PostgreSQL integration tests 14/14; Assistant HTTP/tool integration tests 6/6; EF model has
   no pending changes.
+
+## GAP-04 — Actual purchase price and pro-rata shortage allocation
+
+### Scope and API contract
+
+- Reuse the existing procurement purchase-confirmation request and batch-item actual quantity/price.
+- Include purchased actuals in the handover integration event and snapshot the actual unit price on
+  affected order items.
+- When purchased quantity is short, allocate it proportionally across covered order items at two
+  decimal places using largest remainder; break ties by order ID then order-item ID.
+- Consume only the purchased portion of the PostgreSQL reservation and release the shortfall in the
+  same serializable transaction before advancing covered orders to `AtHub`.
+- Repeated handover events are no-ops and cannot consume, release, or allocate twice.
+
+### Acceptance criteria
+
+- [x] Full purchase records ordered quantity and actual unit price on every affected order item.
+- [x] A shortage across multiple orders is allocated pro-rata, totals exactly the purchased quantity,
+  and produces the same result regardless of input order.
+- [x] Zero-purchase/unavailable items allocate zero and release their whole reservation.
+- [x] Stock consumption, reservation release, order actuals, and status transitions roll back together.
+- [x] A repeated handover event does not mutate stock or order actuals twice.
+- [x] Order detail and invoicing expose the actual purchase price snapshot when present.
+- [x] Solution build, Procurement/Orders/Invoicing unit tests, and related PostgreSQL integration tests pass.
+
+### Change record
+
+- Files changed:
+  - src/Shared/FreshFlow.Contracts/ProcurementBatchHandedOffIntegrationEvent.cs
+  - src/Modules/Procurement/FreshFlow.Procurement.Domain/Events/ProcurementBatchHandedOffDomainEvent.cs
+  - src/Modules/Procurement/FreshFlow.Procurement.Domain/Entities/ProcurementBatch.cs
+  - src/Modules/Procurement/FreshFlow.Procurement.Application/EventHandlers/ProcurementBatchHandedOffDomainEventHandler.cs
+  - src/Modules/Procurement/FreshFlow.Procurement.Application/Abstractions/IProcurementBatchRepository.cs
+  - src/Modules/Procurement/FreshFlow.Procurement.Application/Commands/HandoverBatch/HandoverBatchCommandHandler.cs
+  - src/Modules/Procurement/FreshFlow.Procurement.Infrastructure/Repositories/ProcurementBatchRepository.cs
+  - src/Modules/Orders/FreshFlow.Orders.Domain/Entities/Order.cs
+  - src/Modules/Orders/FreshFlow.Orders.Domain/Entities/OrderItem.cs
+  - src/Modules/Orders/FreshFlow.Orders.Application/Abstractions/IOrderRepository.cs
+  - src/Modules/Orders/FreshFlow.Orders.Application/Dtos/OrderDtoMapper.cs
+  - src/Modules/Orders/FreshFlow.Orders.Application/Dtos/OrderItemDto.cs
+  - src/Modules/Orders/FreshFlow.Orders.Application/EventHandlers/ProcurementBatchHandedOffIntegrationEventHandler.cs
+  - src/Modules/Orders/FreshFlow.Orders.Infrastructure/Persistence/Configurations/OrderItemConfiguration.cs
+  - src/Modules/Orders/FreshFlow.Orders.Infrastructure/Repositories/OrderRepository.cs
+  - src/Modules/Orders/FreshFlow.Orders.Infrastructure/DependencyInjection.cs
+  - src/Modules/Invoicing/FreshFlow.Invoicing.Application/Abstractions/IOrderInvoiceReader.cs
+  - src/Modules/Invoicing/FreshFlow.Invoicing.Infrastructure/CrossModule/OrderInvoiceRowConfiguration.cs
+  - src/FreshFlow.Infrastructure.Persistence/Migrations/20260801155249_AddOrderProcurementActualPrice.cs
+  - src/FreshFlow.Infrastructure.Persistence/Migrations/20260801155249_AddOrderProcurementActualPrice.Designer.cs
+  - src/FreshFlow.Infrastructure.Persistence/Migrations/AppDbContextModelSnapshot.cs
+  - tests/Unit/FreshFlow.Orders.UnitTests/EventHandlers/ProcurementBatchHandedOffIntegrationEventHandlerTests.cs
+  - tests/Unit/FreshFlow.Procurement.UnitTests/Domain/ProcurementBatchTests.cs
+  - tests/Unit/FreshFlow.Procurement.UnitTests/EventHandlers/ProcurementBatchHandedOffDomainEventHandlerTests.cs
+  - tests/Unit/FreshFlow.Procurement.UnitTests/Commands/HandoverBatchCommandTests.cs
+  - tests/Integration/FreshFlow.IntegrationTests/Orders/AtomicStockReservationEndpointTests.cs
+  - tests/Integration/FreshFlow.IntegrationTests/Procurement/ProcurementBatchEndpointTests.cs
+  - tests/Integration/FreshFlow.IntegrationTests/Invoicing/InvoicingPostgresTests.cs
+- Migration: 20260801155249_AddOrderProcurementActualPrice adds nullable
+  order_items.ActualUnitPrice; EF reports no pending model changes.
+- API contract: procurement purchase and handover HTTP requests are unchanged; the internal handover
+  event now carries per-product actual quantity/price. Order detail adds nullable
+  items[].actualUnitPrice; invoicing prefers it over the confirmation price snapshot.
+- Test results: solution build passed (0 errors, 23 existing warnings); Orders unit tests 553/553;
+  Procurement unit tests 124/124; Invoicing unit tests 36/36; related Orders/Invoicing PostgreSQL
+  integration tests 16/16; Procurement endpoint PostgreSQL integration tests 8/8, including failed
+  finalization rollback and successful retry. Scoped solution format passes while excluding only
+  BOMs in the already-committed GAP-02/GAP-03 migration files; the GAP-04 migration BOM was removed.

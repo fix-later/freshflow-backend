@@ -264,6 +264,106 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
     }
 
     [Fact]
+    public async Task Handover_Shortage_AllocatesProRataAndReleasesRemainderAsync()
+    {
+        var restaurant = await CreateRestaurantAsync();
+        var seeded = await SeedBatchedOrdersAsync(
+            restaurant.RestaurantId,
+            stock: 10,
+            quantities: [1, 3]);
+        var integrationEvent = new ProcurementBatchHandedOffIntegrationEvent(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            DateTime.UtcNow,
+            seeded.OrderIds,
+            PurchaseActuals:
+            [
+                new ProcurementPurchaseActual(seeded.MarketProductId, 2, 12_000m)
+            ]);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var publisher = scope.ServiceProvider.GetRequiredService<IPublisher>();
+            await publisher.Publish(integrationEvent);
+        }
+
+        await using var verifyScope = factory.Services.CreateAsyncScope();
+        var db = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var product = await db.Set<MarketProduct>().AsNoTracking()
+            .SingleAsync(value => value.Id == seeded.MarketProductId);
+        var orders = (await db.Set<Order>()
+            .AsNoTracking()
+            .Include(order => order.Items)
+            .Where(order => seeded.OrderIds.Contains(order.Id))
+            .ToListAsync())
+            .OrderBy(order => order.Items.Single().Quantity)
+            .ToList();
+
+        product.CurrentQuantity.Should().Be(8);
+        product.ReservedQuantity.Should().Be(0);
+        orders.Should().OnlyContain(order => order.Status == OrderStatus.AtHub);
+        orders[0].Items.Single().ActualQuantity.Should().Be(0.5m);
+        orders[1].Items.Single().ActualQuantity.Should().Be(1.5m);
+        orders.SelectMany(order => order.Items).Sum(item => item.ActualQuantity)
+            .Should().Be(2m);
+        orders.SelectMany(order => order.Items)
+            .Should().OnlyContain(item => item.ActualUnitPrice == 12_000m);
+
+        using var client = Client(restaurant.Token);
+        var detail = await client.GetFromJsonAsync<Envelope<OrderDto>>(
+            $"/api/v1/orders/{orders[0].Id}");
+        detail!.Data!.Items.Single().ActualUnitPrice.Should().Be(12_000m);
+    }
+
+    [Fact]
+    public async Task Handover_ReleaseFailure_RollsBackConsumptionAndOrderActualsAsync()
+    {
+        var restaurant = await CreateRestaurantAsync();
+        var seeded = await SeedBatchedOrdersAsync(
+            restaurant.RestaurantId,
+            stock: 10,
+            quantities: [1, 3],
+            reservedQuantity: 3);
+        var integrationEvent = new ProcurementBatchHandedOffIntegrationEvent(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            DateTime.UtcNow,
+            seeded.OrderIds,
+            PurchaseActuals:
+            [
+                new ProcurementPurchaseActual(seeded.MarketProductId, 2, 12_000m)
+            ]);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var publisher = scope.ServiceProvider.GetRequiredService<IPublisher>();
+            var act = () => publisher.Publish(integrationEvent);
+            await act.Should().ThrowAsync<ProcurementHandoverRejectedException>()
+                .Where(exception => exception.Code == "STOCK_RESERVATION_CONFLICT");
+        }
+
+        await using var verifyScope = factory.Services.CreateAsyncScope();
+        var db = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var product = await db.Set<MarketProduct>().AsNoTracking()
+            .SingleAsync(value => value.Id == seeded.MarketProductId);
+        var orders = await db.Set<Order>()
+            .AsNoTracking()
+            .Include(order => order.Items)
+            .Where(order => seeded.OrderIds.Contains(order.Id))
+            .ToListAsync();
+
+        product.CurrentQuantity.Should().Be(10);
+        product.ReservedQuantity.Should().Be(3);
+        orders.Should().OnlyContain(order => order.Status == OrderStatus.Batched);
+        orders.SelectMany(order => order.Items)
+            .Should().OnlyContain(item =>
+                item.ActualQuantity == null &&
+                item.ActualUnitPrice == null);
+    }
+
+    [Fact]
     public async Task Confirm_AddressUpdatedAfterwards_OrderKeepsOriginalSnapshotAsync()
     {
         var restaurant = await CreateRestaurantAsync();
@@ -448,6 +548,35 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
         return new SeededBatchedOrder(marketProduct.Id, order.Id);
     }
 
+    private async Task<SeededBatchedOrders> SeedBatchedOrdersAsync(
+        Guid restaurantId,
+        int stock,
+        IReadOnlyList<int> quantities,
+        int? reservedQuantity = null)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var marketProduct = await AddMarketProductAsync(db, stock);
+        var orders = quantities.Select(quantity =>
+        {
+            var order = new Order(restaurantId, null, null);
+            order.AddItem(marketProduct.Id, "Cà chua", quantity, marketProduct.CurrentPrice);
+            order.Confirm();
+            order.AdvanceStatus(OrderStatus.Batched);
+            order.ClearDomainEvents();
+            return order;
+        }).ToArray();
+
+        db.Set<Order>().AddRange(orders);
+        await db.SaveChangesAsync();
+        var reserved = reservedQuantity ?? quantities.Sum();
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE market_products SET \"ReservedQuantity\" = {reserved} WHERE \"Id\" = {marketProduct.Id}");
+        return new SeededBatchedOrders(
+            marketProduct.Id,
+            orders.Select(order => order.Id).ToArray());
+    }
+
     private static async Task<MarketProduct> AddMarketProductAsync(AppDbContext db, int stock)
     {
         var unit = new UnitOfMeasurement($"kg-{Guid.NewGuid():N}", "kg");
@@ -473,6 +602,9 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
     private sealed record SeededOrders(IReadOnlyList<Guid> MarketProductIds, IReadOnlyList<Guid> OrderIds);
     private sealed record SeededMultiLineOrder(IReadOnlyList<Guid> MarketProductIds, Guid OrderId);
     private sealed record SeededBatchedOrder(Guid MarketProductId, Guid OrderId);
+    private sealed record SeededBatchedOrders(
+        Guid MarketProductId,
+        IReadOnlyList<Guid> OrderIds);
     private sealed record UserListBody(IReadOnlyList<UserSummaryBody> Data);
     private sealed record UserSummaryBody(Guid? RestaurantId);
     private sealed record DeliveryAddressBody(Guid Id);

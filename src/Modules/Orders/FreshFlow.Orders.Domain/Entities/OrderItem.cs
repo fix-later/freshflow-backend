@@ -29,6 +29,7 @@ public sealed class OrderItem : BaseEntity
     public decimal? VatRatePercent { get; private set; }
     public decimal? LockedVatAmount { get; private set; }
     public decimal? ActualQuantity { get; private set; }
+    public decimal? ActualUnitPrice { get; private set; }
 
     public decimal Subtotal => Quantity * UnitPrice;
 
@@ -77,6 +78,12 @@ public sealed class OrderItem : BaseEntity
                 nameof(actualQuantity), actualQuantity, "Actual quantity must be non-negative.");
 
         ActualQuantity = actualQuantity;
+    }
+
+    internal void RecordProcurementActuals(decimal actualQuantity, decimal? actualUnitPrice)
+    {
+        ActualQuantity = actualQuantity;
+        ActualUnitPrice = actualUnitPrice;
     }
 
     private static void ValidateProductNameSnapshot(string productNameSnapshot)

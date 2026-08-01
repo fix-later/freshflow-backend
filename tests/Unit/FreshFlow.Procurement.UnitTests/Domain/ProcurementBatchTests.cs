@@ -581,6 +581,11 @@ public sealed class ProcurementBatchTests
         domainEvent.HubId.Should().Be(hubId);
         domainEvent.HandedOffAt.Should().Be(handedOffAt);
         domainEvent.CoveredOrderIds.Should().BeEquivalentTo(coveredOrderIds);
+        domainEvent.PurchasedLines.Should().BeEquivalentTo(batch.Items.Select(item =>
+            new ProcurementPurchasedLine(
+                item.MarketProductId,
+                item.ActualQuantity!.Value,
+                item.ActualUnitPrice)));
     }
 
     [Theory]

@@ -42,7 +42,7 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         var fivePercent = snapshot.Lines.Should().ContainSingle(line =>
             line.ProductName == FivePercentProduct).Which;
         fivePercent.Quantity.Should().Be(2.5m);
-        fivePercent.UnitPrice.Should().Be(12_000m);
+        fivePercent.UnitPrice.Should().Be(11_000m);
         fivePercent.VatRateCode.Should().Be("5");
 
         var kct = snapshot.Lines.Should().ContainSingle(line => line.ProductName == KctProduct).Which;
@@ -107,19 +107,19 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             .SingleAsync(value => value.OrderId == seed.OrderId);
         invoice.Status.Should().Be(InvoiceStatus.Issued);
         invoice.TaxAuthorityCode.Should().NotBeNullOrWhiteSpace();
-        invoice.SubTotal.Should().Be(87_000m);
-        invoice.VatAmount.Should().Be(1_680m);
-        invoice.Total.Should().Be(88_680m);
+        invoice.SubTotal.Should().Be(84_500m);
+        invoice.VatAmount.Should().Be(1_555m);
+        invoice.Total.Should().Be(86_055m);
         invoice.Lines.Should().HaveCount(5);
 
         var fivePercent = invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == FivePercentProduct).Which;
         fivePercent.Quantity.Should().Be(2.5m);
-        fivePercent.UnitPrice.Should().Be(12_000m);
+        fivePercent.UnitPrice.Should().Be(11_000m);
         fivePercent.VatRateCode.Should().Be("5");
-        fivePercent.LineSubtotal.Should().Be(30_000m);
-        fivePercent.LineVatAmount.Should().Be(1_500m);
-        fivePercent.LineTotal.Should().Be(31_500m);
+        fivePercent.LineSubtotal.Should().Be(27_500m);
+        fivePercent.LineVatAmount.Should().Be(1_375m);
+        fivePercent.LineTotal.Should().Be(28_875m);
         invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == KctProduct && line.VatRateCode == "KCT");
         invoice.Lines.Should().ContainSingle(line =>
@@ -290,10 +290,14 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
 
         var fivePercentLine = order.Items.Single(item => item.ProductNameSnapshot == FivePercentProduct);
         fivePercentLine.LockPricing(12_000m, "5", 5m);
-        order.RecordActualQuantity(fivePercentLine.Id, 2.5m).IsSuccess.Should().BeTrue();
+        order.AdvanceStatus(OrderStatus.Batched).IsSuccess.Should().BeTrue();
+        order.ApplyProcurementActuals(
+            new Dictionary<Guid, OrderItemProcurementActual>
+            {
+                [fivePercentLine.Id] = new(2.5m, 11_000m)
+            }).IsSuccess.Should().BeTrue();
         foreach (var status in new[]
                  {
-                     OrderStatus.Batched,
                      OrderStatus.PickedUp,
                      OrderStatus.AtHub,
                      OrderStatus.Delivering,

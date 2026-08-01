@@ -1,8 +1,10 @@
 using System.Reflection;
 using FluentValidation;
+using FreshFlow.Contracts;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Behaviors;
+using FreshFlow.Orders.Application.EventHandlers;
 using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Infrastructure.CrossModule;
 using FreshFlow.Orders.Infrastructure.Documents;
@@ -43,6 +45,8 @@ public static class DependencyInjection
 
         // Repositories
         services.AddScoped<IOrderRepository, OrderRepository>();
+        services.AddScoped<IProcurementHandoverOrderFinalizer,
+            ProcurementBatchHandedOffIntegrationEventHandler>();
         services.AddScoped<IOrderIssueRepository, OrderIssueRepository>();
         services.AddScoped<IScheduledOrderRepository, ScheduledOrderRepository>();
         services.AddScoped<ICreditRepository, CreditRepository>();

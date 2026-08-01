@@ -483,7 +483,14 @@ public sealed class ProcurementBatch : AggregateRoot
             HubId,
             capturedAtUtc,
             coveredOrderIds,
-            AssignedAgentUserId));
+            AssignedAgentUserId,
+            _items
+                .Select(item => new ProcurementPurchasedLine(
+                    item.MarketProductId,
+                    item.ActualQuantity ?? 0,
+                    item.ActualUnitPrice))
+                .ToList()
+                .AsReadOnly()));
 
         return Result.Success();
     }

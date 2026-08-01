@@ -17,6 +17,41 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
     private HashSet<Guid> _loadedMergeOrderIds = [];
     private bool _hasMergeSnapshot;
 
+    public async Task<Result> ExecuteInSerializableTransactionAsync(
+        Func<CancellationToken, Task<Result>> operation,
+        CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+
+        try
+        {
+            var result = await operation(ct);
+            if (result.IsFailure)
+            {
+                await transaction.RollbackAsync(ct);
+                db.ChangeTracker.Clear();
+                return result;
+            }
+
+            await transaction.CommitAsync(ct);
+            return Result.Success();
+        }
+        catch (Exception ex) when (IsSerializationFailure(ex))
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
+            return Result.Failure(Error.Conflict(
+                "SERIALIZATION_CONFLICT",
+                "The procurement handover changed concurrently. Retry the request."));
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
+            throw;
+        }
+    }
+
     public Task AddRangeAsync(
         IReadOnlyCollection<ProcurementBatch> batches,
         CancellationToken ct) =>
@@ -311,4 +346,8 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
         Result<BatchingResetCounts>.Failure(Error.Conflict(
             "BATCH_RESET_NOT_ALLOWED",
             $"Procurement batches for '{batchDate:yyyy-MM-dd}' cannot be reset because their batches or orders have moved past batching."));
+
+    private static bool IsSerializationFailure(Exception exception) =>
+        exception is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure }
+        || exception.InnerException is not null && IsSerializationFailure(exception.InnerException);
 }

@@ -27,6 +27,7 @@ internal sealed class OrderItemConfiguration : IEntityTypeConfiguration<OrderIte
         builder.Property(i => i.VatRatePercent).HasColumnName("vat_rate_percent").HasPrecision(5, 2);
         builder.Property(i => i.LockedVatAmount).HasColumnName("locked_vat_amount").HasColumnType("numeric(14,2)");
         builder.Property(i => i.ActualQuantity).HasColumnType("numeric(10,2)");
+        builder.Property(i => i.ActualUnitPrice).HasColumnType("numeric(12,2)");
 
         builder.Property(i => i.CreatedAt).IsRequired();
         builder.Property(i => i.UpdatedAt).IsRequired();

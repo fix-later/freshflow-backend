@@ -1,7 +1,11 @@
+using FreshFlow.Contracts;
 using FreshFlow.Procurement.Application.Abstractions;
 using FreshFlow.Procurement.Application.Dtos;
+using FreshFlow.Procurement.Application.EventHandlers;
+using FreshFlow.Procurement.Domain.Events;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace FreshFlow.Procurement.Application.Commands.HandoverBatch;
 
@@ -9,7 +13,10 @@ internal sealed class HandoverBatchCommandHandler(
     IProcurementBatchRepository batches,
     IConfirmedOrderReader orders,
     IHubByMarketReader hubs,
-    TimeProvider timeProvider)
+    IProcurementHandoverOrderFinalizer orderFinalizer,
+    IPublisher publisher,
+    TimeProvider timeProvider,
+    ILogger<HandoverBatchCommandHandler>? logger = null)
     : IRequestHandler<HandoverBatchCommand, Result<ProcurementBatchDto>>
 {
     public async Task<Result<ProcurementBatchDto>> Handle(
@@ -41,15 +48,69 @@ internal sealed class HandoverBatchCommandHandler(
         if (handover.IsFailure)
             return Result<ProcurementBatchDto>.Failure(handover.Error);
 
-        await batches.SaveChangesAsync(cancellationToken);
+        ProcurementBatchDto? response = null;
+        ProcurementBatchHandedOffIntegrationEvent? integrationEvent = null;
+        IReadOnlyList<INotification> orderEvents = [];
+        var transaction = await batches.ExecuteInSerializableTransactionAsync(async ct =>
+        {
+            var domainEvent = batch.DomainEvents
+                .OfType<ProcurementBatchHandedOffDomainEvent>()
+                .Single();
+            integrationEvent = ProcurementBatchHandedOffDomainEventHandler.Map(domainEvent);
+            batch.ClearDomainEvents();
 
-        var orderIds = batch.Orders
-            .Select(link => link.OrderId)
-            .Distinct()
-            .ToArray();
-        var statuses = await orders.ReadStatusesAsync(orderIds, cancellationToken);
+            try
+            {
+                orderEvents = await orderFinalizer.FinalizeAsync(integrationEvent, ct);
+            }
+            catch (ProcurementHandoverRejectedException ex)
+            {
+                return Result.Failure(Error.Conflict(ex.Code, ex.Message));
+            }
 
-        return Result<ProcurementBatchDto>.Success(
-            ProcurementBatchDtoMapper.Map(batch, statuses));
+            if (!await batches.SaveChangesAsync(ct))
+            {
+                return Result.Failure(Error.Conflict(
+                    "PROCUREMENT_HANDOVER_CONFLICT",
+                    "The procurement batch changed concurrently. Retry the handover."));
+            }
+
+            var orderIds = batch.Orders
+                .Select(link => link.OrderId)
+                .Distinct()
+                .ToArray();
+            var statuses = await orders.ReadStatusesAsync(orderIds, ct);
+            response = ProcurementBatchDtoMapper.Map(batch, statuses);
+
+            return Result.Success();
+        }, cancellationToken);
+
+        if (transaction.IsFailure)
+            return Result<ProcurementBatchDto>.Failure(transaction.Error);
+
+        foreach (var notification in orderEvents.Append<INotification>(integrationEvent!))
+        {
+            try
+            {
+                await publisher.Publish(notification, cancellationToken);
+            }
+            catch (OperationCanceledException ex)
+            {
+                logger?.LogWarning(
+                    ex,
+                    "Post-commit procurement handover dispatch cancelled for BatchId={BatchId}.",
+                    batch.Id);
+                break;
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(
+                    ex,
+                    "Post-commit procurement handover dispatch failed for BatchId={BatchId}.",
+                    batch.Id);
+            }
+        }
+
+        return Result<ProcurementBatchDto>.Success(response!);
     }
 }

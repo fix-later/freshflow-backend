@@ -18,6 +18,10 @@ public interface IOrderRepository
 
     public Task<Order?> FindByIdAsync(Guid id, CancellationToken ct);
 
+    public Task<IReadOnlyList<Order>> FindByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken ct);
+
     public Task<IReadOnlyList<Order>> GetByRestaurantIdAsync(Guid restaurantId, CancellationToken ct);
 
     public Task<(IReadOnlyList<Order> Orders, int Total)> SearchAsync(

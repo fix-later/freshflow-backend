@@ -14,6 +14,9 @@ internal sealed class OrderRepository(AppDbContext db) : IOrderRepository
         Func<CancellationToken, Task<Result>> operation,
         CancellationToken ct)
     {
+        if (db.Database.CurrentTransaction is not null)
+            return await operation(ct);
+
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
 
         try
@@ -65,6 +68,17 @@ internal sealed class OrderRepository(AppDbContext db) : IOrderRepository
         db.Set<Order>()
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == id && o.DeletedAt == null, ct);
+
+    public async Task<IReadOnlyList<Order>> FindByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken ct)
+    {
+        var distinctIds = ids.Distinct().ToArray();
+        return await db.Set<Order>()
+            .Include(order => order.Items)
+            .Where(order => distinctIds.Contains(order.Id) && order.DeletedAt == null)
+            .ToListAsync(ct);
+    }
 
     public async Task<IReadOnlyList<Order>> GetByRestaurantIdAsync(Guid restaurantId, CancellationToken ct) =>
         await db.Set<Order>()

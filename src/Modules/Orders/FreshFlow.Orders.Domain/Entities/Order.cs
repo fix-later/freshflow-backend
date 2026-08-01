@@ -294,6 +294,38 @@ public sealed class Order : AggregateRoot
         return Result.Success();
     }
 
+    public Result ApplyProcurementActuals(
+        IReadOnlyDictionary<Guid, OrderItemProcurementActual> actualsByItem)
+    {
+        if (Status != OrderStatus.Batched)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_BATCHED",
+                $"Procurement actuals cannot be applied to an order in status '{Status}'."));
+
+        foreach (var (itemId, actual) in actualsByItem)
+        {
+            var item = _items.FirstOrDefault(candidate => candidate.Id == itemId);
+            if (item is null)
+                return Result.Failure(Error.NotFound("ORDER_ITEM", itemId));
+            if (actual.Quantity < 0m || actual.Quantity > item.Quantity)
+                return Result.Failure(Error.Validation(
+                    "INVALID_ACTUAL_QUANTITY",
+                    "Actual quantity must be non-negative and cannot exceed ordered quantity."));
+            if (actual.Quantity > 0m && actual.UnitPrice is null or <= 0m)
+                return Result.Failure(Error.Validation(
+                    "INVALID_ACTUAL_UNIT_PRICE",
+                    "A positive actual quantity requires a positive actual unit price."));
+        }
+
+        foreach (var (itemId, actual) in actualsByItem)
+        {
+            var item = _items.Single(candidate => candidate.Id == itemId);
+            item.RecordProcurementActuals(actual.Quantity, actual.UnitPrice);
+        }
+
+        return Result.Success();
+    }
+
     /// <summary>
     /// Confirms that the restaurant has received an already-delivered order.
     /// </summary>
@@ -351,3 +383,5 @@ public sealed class Order : AggregateRoot
 }
 
 public sealed record OrderItemTaxSnapshot(string Code, decimal Percent);
+
+public sealed record OrderItemProcurementActual(decimal Quantity, decimal? UnitPrice);

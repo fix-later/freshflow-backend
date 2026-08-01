@@ -8,4 +8,10 @@ public sealed record ProcurementBatchHandedOffDomainEvent(
     Guid? HubId,
     DateTime HandedOffAt,
     IReadOnlyList<Guid> CoveredOrderIds,
-    Guid? HandedOffByUserId = null) : IDomainEvent;
+    Guid? HandedOffByUserId = null,
+    IReadOnlyList<ProcurementPurchasedLine>? PurchasedLines = null) : IDomainEvent;
+
+public sealed record ProcurementPurchasedLine(
+    Guid MarketProductId,
+    int ActualQuantity,
+    decimal? ActualUnitPrice);

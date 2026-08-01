@@ -9,7 +9,7 @@ internal sealed class OrderInvoiceRowConfiguration : IEntityTypeConfiguration<Or
     {
         // Read-only projection over Orders' immutable confirmation snapshots.
         // Quantity is the delivered amount (ActualQuantity when a shortage was recorded, else ordered).
-        // Unit price and VAT rate are locked at confirm (null → KCT for legacy rows).
+        // Unit price uses the procurement actual when present, then the confirmation snapshot.
         // Column casing is mixed by table and verified against each *Configuration.cs — do not guess.
         builder.HasNoKey();
         builder.ToSqlQuery(
@@ -19,7 +19,7 @@ internal sealed class OrderInvoiceRowConfiguration : IEntityTypeConfiguration<Or
                 o."RestaurantId",
                 oi."ProductNameSnapshot" AS "ProductName",
                 COALESCE(oi."ActualQuantity", oi."Quantity") AS "Quantity",
-                COALESCE(oi."LockedUnitPrice", oi."UnitPrice") AS "UnitPrice",
+                COALESCE(oi."ActualUnitPrice", oi."LockedUnitPrice", oi."UnitPrice") AS "UnitPrice",
                 oi.vat_rate_code AS "VatRateCode"
             FROM orders o
             INNER JOIN order_items oi ON oi."OrderId" = o."Id"
