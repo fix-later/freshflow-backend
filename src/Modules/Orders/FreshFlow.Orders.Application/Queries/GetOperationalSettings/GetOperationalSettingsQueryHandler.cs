@@ -17,6 +17,7 @@ internal sealed class GetOperationalSettingsQueryHandler(IOperationalSettingsRep
             current.BatchingEnabled,
             current.DefaultRouteType,
             current.DeliveryWindowDays,
+            current.DeliveryFeePerKm,
             current.UpdatedAt));
     }
 }

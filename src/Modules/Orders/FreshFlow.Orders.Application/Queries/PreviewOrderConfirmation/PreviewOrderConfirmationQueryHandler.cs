@@ -9,6 +9,7 @@ namespace FreshFlow.Orders.Application.Queries.PreviewOrderConfirmation;
 internal sealed class PreviewOrderConfirmationQueryHandler(
     IOrderRepository orderRepository,
     IRestaurantReader restaurantReader,
+    IMarketProductReader marketProductReader,
     ICreditService creditService,
     IOperationalSettingsRepository operationalSettings)
     : IRequestHandler<PreviewOrderConfirmationQuery, Result<OrderConfirmationPreviewDto>>
@@ -29,8 +30,49 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
             return Result<OrderConfirmationPreviewDto>.Failure(
                 Error.Unauthorized("FORBIDDEN", "This order does not belong to the authenticated restaurant."));
 
+        var settings = await operationalSettings.GetAsync(cancellationToken);
+        OrderPricingQuote? pricing = null;
+        if (request.DeliveryAddressId is Guid deliveryAddressId)
+        {
+            var address = await restaurantReader.FindDeliveryAddressAsync(
+                deliveryAddressId, order.RestaurantId, cancellationToken);
+            if (address is null)
+                return Result<OrderConfirmationPreviewDto>.Failure(
+                    Error.NotFound("DELIVERY_ADDRESS", deliveryAddressId));
+
+            var products = new Dictionary<Guid, MarketProductSnapshotDto>();
+            foreach (var marketProductId in order.Items.Select(item => item.MarketProductId).Distinct())
+            {
+                var product = await marketProductReader.FindAsync(marketProductId, cancellationToken);
+                if (product is null)
+                    return Result<OrderConfirmationPreviewDto>.Failure(
+                        Error.NotFound("MARKET_PRODUCT", marketProductId));
+                products[marketProductId] = product;
+            }
+
+            var pricingResult = OrderPricingCalculator.Calculate(
+                order,
+                products,
+                address.Latitude,
+                address.Longitude,
+                settings.DeliveryFeePerKm);
+            if (pricingResult.IsFailure)
+            {
+                return Result<OrderConfirmationPreviewDto>.Success(new OrderConfirmationPreviewDto(
+                    WouldSucceed: false,
+                    Issues: [new PreviewIssueDto(pricingResult.Error.Code, pricingResult.Error.Message)],
+                    TotalAmount: order.TotalAmount,
+                    ResolvedScheduledFor: null,
+                    RemainingCreditAfter: null,
+                    SubtotalAmount: order.TotalAmount));
+            }
+
+            pricing = pricingResult.Value;
+        }
+
+        var totalAmount = pricing?.TotalAmount ?? order.TotalAmount;
         var canChargeResult = await creditService.CanChargeAsync(
-            order.RestaurantId, order.TotalAmount, cancellationToken);
+            order.RestaurantId, totalAmount, cancellationToken);
         if (canChargeResult.IsFailure)
         {
             // Unlike confirm, a credit-limit failure is a displayable preview issue, not a
@@ -40,14 +82,22 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
             return Result<OrderConfirmationPreviewDto>.Success(new OrderConfirmationPreviewDto(
                 WouldSucceed: false,
                 Issues: [new PreviewIssueDto(canChargeResult.Error.Code, canChargeResult.Error.Message)],
-                TotalAmount: order.TotalAmount,
+                TotalAmount: totalAmount,
                 ResolvedScheduledFor: null,
-                RemainingCreditAfter: null));
+                RemainingCreditAfter: null,
+                SubtotalAmount: pricing?.SubtotalAmount ?? order.TotalAmount,
+                VatAmount: pricing?.VatAmount ?? 0m,
+                DeliveryFee: pricing?.DeliveryFee ?? 0m,
+                DeliveryDistanceKm: pricing?.DeliveryDistanceKm ?? 0m));
         }
 
-        var settings = await operationalSettings.GetAsync(cancellationToken);
         var evaluation = OrderConfirmationEvaluator.Evaluate(
-            order, canChargeResult.Value, nowUtc, settings.DeliveryWindowDays, settings.DailyCutoffTime.ToTimeSpan());
+            order,
+            canChargeResult.Value,
+            nowUtc,
+            settings.DeliveryWindowDays,
+            settings.DailyCutoffTime.ToTimeSpan(),
+            totalAmount);
         var issues = evaluation.Issues
             .Select(error => new PreviewIssueDto(error.Code, error.Message))
             .ToList();
@@ -57,6 +107,10 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
             Issues: issues,
             TotalAmount: evaluation.TotalAmount,
             ResolvedScheduledFor: evaluation.ResolvedScheduledFor,
-            RemainingCreditAfter: evaluation.CreditCheck.AvailableCredit - evaluation.TotalAmount));
+            RemainingCreditAfter: evaluation.CreditCheck.AvailableCredit - evaluation.TotalAmount,
+            SubtotalAmount: pricing?.SubtotalAmount ?? order.TotalAmount,
+            VatAmount: pricing?.VatAmount ?? 0m,
+            DeliveryFee: pricing?.DeliveryFee ?? 0m,
+            DeliveryDistanceKm: pricing?.DeliveryDistanceKm ?? 0m));
     }
 }

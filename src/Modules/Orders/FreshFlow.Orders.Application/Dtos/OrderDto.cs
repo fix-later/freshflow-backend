@@ -16,7 +16,11 @@ public sealed record OrderDto(
     string? CancellationReason,
     DateTime? ConfirmedReceiptAt,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    decimal SubtotalAmount = 0m,
+    decimal VatAmount = 0m,
+    decimal DeliveryFee = 0m,
+    decimal DeliveryDistanceKm = 0m);
 
 public sealed record DeliveryAddressSnapshotDto(
     Guid AddressId,

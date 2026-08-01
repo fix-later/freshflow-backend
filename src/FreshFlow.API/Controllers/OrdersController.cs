@@ -275,9 +275,13 @@ public sealed class OrdersController(ISender sender) : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PreviewOrderConfirmationAsync(Guid orderId, CancellationToken ct)
+    public async Task<IActionResult> PreviewOrderConfirmationAsync(
+        Guid orderId,
+        [FromQuery] Guid deliveryAddressId,
+        CancellationToken ct)
     {
-        var result = await sender.Send(new PreviewOrderConfirmationQuery(ResolveUserId(), orderId), ct);
+        var result = await sender.Send(
+            new PreviewOrderConfirmationQuery(ResolveUserId(), orderId, deliveryAddressId), ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }

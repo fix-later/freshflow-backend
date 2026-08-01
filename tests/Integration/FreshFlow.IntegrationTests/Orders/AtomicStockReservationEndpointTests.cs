@@ -132,6 +132,33 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
     }
 
     [Fact]
+    public async Task Confirm_PartialHubCoordinates_FallsBackToMarketCoordinatesAsync()
+    {
+        var restaurant = await CreateRestaurantAsync();
+        var seeded = await SeedOrdersAsync(restaurant.RestaurantId, stock: 1, quantities: [1]);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var marketProduct = await db.Set<MarketProduct>()
+                .SingleAsync(value => value.Id == seeded.MarketProductIds[0]);
+            db.Set<FreshFlow.Hub.Domain.Entities.Hub>().Add(
+                FreshFlow.Hub.Domain.Entities.Hub.Create(
+                    "Partial-coordinate hub", null, 11m, null, 1_000m, null, marketProduct.MarketId));
+            await db.SaveChangesAsync();
+        }
+
+        using var client = Client(restaurant.Token);
+        var response = await ConfirmAsync(client, seeded.OrderIds[0], restaurant.DeliveryAddressId);
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<Envelope<OrderDto>>();
+
+        body!.Data!.DeliveryDistanceKm.Should().Be(0m);
+        body.Data.DeliveryFee.Should().Be(0m);
+        body.Data.TotalAmount.Should().Be(10_000m);
+    }
+
+    [Fact]
     public async Task Confirm_FailureAfterReservation_RollsBackStockAndOrderAsync()
     {
         var restaurant = await CreateRestaurantAsync();
@@ -424,7 +451,9 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
     private static async Task<MarketProduct> AddMarketProductAsync(AppDbContext db, int stock)
     {
         var unit = new UnitOfMeasurement($"kg-{Guid.NewGuid():N}", "kg");
-        var market = new Market($"Stock Market {Guid.NewGuid():N}", "HCMC", "1 Test Street", null, null);
+        var market = new Market(
+            $"Stock Market {Guid.NewGuid():N}", "HCMC", "1 Test Street",
+            10.123456m, 106.123456m);
         db.Set<UnitOfMeasurement>().Add(unit);
         db.Set<Market>().Add(market);
         await db.SaveChangesAsync();

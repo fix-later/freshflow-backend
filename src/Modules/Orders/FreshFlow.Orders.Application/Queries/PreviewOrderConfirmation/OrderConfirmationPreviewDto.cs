@@ -10,4 +10,8 @@ public sealed record OrderConfirmationPreviewDto(
     IReadOnlyList<PreviewIssueDto> Issues,
     decimal TotalAmount,
     DateTime? ResolvedScheduledFor,
-    decimal? RemainingCreditAfter);
+    decimal? RemainingCreditAfter,
+    decimal SubtotalAmount = 0m,
+    decimal VatAmount = 0m,
+    decimal DeliveryFee = 0m,
+    decimal DeliveryDistanceKm = 0m);

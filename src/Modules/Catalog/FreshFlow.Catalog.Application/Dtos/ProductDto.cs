@@ -13,4 +13,6 @@ public record ProductDto(
     DateTime CreatedAt,
     DateTime UpdatedAt,
     bool IsDeleted,
-    string? ImageUrl = null);
+    string? ImageUrl = null,
+    int MinimumOrderQuantity = 1,
+    string? VatRate = null);

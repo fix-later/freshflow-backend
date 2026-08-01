@@ -8,4 +8,7 @@ public sealed record OrderItemDto(
     decimal UnitPrice,
     decimal Subtotal,
     decimal? ActualQuantity,
-    string? ImageUrl);
+    string? ImageUrl,
+    string? VatRateCode = null,
+    decimal? VatRatePercent = null,
+    decimal? VatAmount = null);

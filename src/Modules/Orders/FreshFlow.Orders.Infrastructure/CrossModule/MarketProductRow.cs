@@ -12,4 +12,8 @@ internal sealed class MarketProductRow
     public decimal CurrentPrice { get; set; }
     public int CurrentQuantity { get; set; }
     public int ReservedQuantity { get; set; }
+    public int MinimumOrderQuantity { get; set; }
+    public string? VatRate { get; set; }
+    public decimal? OriginLatitude { get; set; }
+    public decimal? OriginLongitude { get; set; }
 }

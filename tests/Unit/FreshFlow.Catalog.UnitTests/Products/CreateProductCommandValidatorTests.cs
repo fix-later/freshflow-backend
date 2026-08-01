@@ -109,4 +109,19 @@ public sealed class CreateProductCommandValidatorTests
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == "PackingCodeId");
     }
+
+    [Theory]
+    [InlineData("20", 1, "VatRate")]
+    [InlineData("5", 0, "MinimumOrderQuantity")]
+    public async Task Validate_InvalidCommercialTerms_Fails(
+        string vatRate, int minimumOrderQuantity, string propertyName)
+    {
+        var cmd = new CreateProductCommand(
+            "Cà rốt", Guid.NewGuid(), null, null, null,
+            VatRate: vatRate, MinimumOrderQuantity: minimumOrderQuantity);
+
+        var result = await _sut.ValidateAsync(cmd);
+
+        result.Errors.Should().Contain(e => e.PropertyName == propertyName);
+    }
 }

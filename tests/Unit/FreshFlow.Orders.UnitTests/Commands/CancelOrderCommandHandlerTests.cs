@@ -103,7 +103,7 @@ public sealed class CancelOrderCommandHandlerTests
     [Fact]
     public async Task Handle_ConfirmedOrder_CancelsRefundsCreditAndLetsCreditSavePersistAsync()
     {
-        var order = NewConfirmedOrder(RestaurantId);
+        var order = NewConfirmedOrder(RestaurantId, vatPercent: 8m, deliveryFee: 55_600m);
         _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
         var result = await _sut.Handle(Cmd(order.Id), default);
@@ -117,7 +117,7 @@ public sealed class CancelOrderCommandHandlerTests
             Arg.Is<IReadOnlyList<StockReservation>>(values => values.Count == 1 && values[0].Quantity == 5),
             Arg.Any<CancellationToken>());
         await _creditService.Received(1).RefundAsync(
-            RestaurantId, order.Id, 100_000m, "Order cancelled", Arg.Any<CancellationToken>());
+            RestaurantId, order.Id, 163_600m, "Order cancelled", Arg.Any<CancellationToken>());
         await _orderRepository.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
@@ -176,10 +176,18 @@ public sealed class CancelOrderCommandHandlerTests
     private static Order NewDraftOrder(Guid restaurantId) =>
         new(restaurantId, scheduledFor: null, notes: null);
 
-    private static Order NewConfirmedOrder(Guid restaurantId)
+    private static Order NewConfirmedOrder(
+        Guid restaurantId, decimal vatPercent = 0m, decimal deliveryFee = 0m)
     {
         var order = NewDraftOrder(restaurantId);
         order.AddItem(MarketProductId, "Cà chua", 5, 20_000m);
+        order.ApplyConfirmationPricing(
+            new Dictionary<Guid, OrderItemTaxSnapshot>
+            {
+                [MarketProductId] = new(vatPercent == 0m ? "KCT" : "8", vatPercent)
+            },
+            deliveryDistanceKm: deliveryFee == 0m ? 0m : 11.12m,
+            deliveryFee);
         order.Confirm();
         return order;
     }

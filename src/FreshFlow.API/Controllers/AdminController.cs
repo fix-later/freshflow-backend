@@ -203,7 +203,8 @@ public sealed class AdminController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(
             new UpdateOperationalSettingsCommand(
-                body.DailyCutoffTime, body.BatchingEnabled, body.DefaultRouteType, body.DeliveryWindowDays),
+                body.DailyCutoffTime, body.BatchingEnabled, body.DefaultRouteType,
+                body.DeliveryWindowDays, body.DeliveryFeePerKm),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -391,7 +392,11 @@ public sealed record ReplaceMarketAssignmentsRequest(IReadOnlyList<Guid> MarketI
 public sealed record SettleCreditRequest(decimal Amount, string? PaymentMethod, string? Reference, string? Note);
 public sealed record SetCreditLimitRequest(decimal CreditLimit, string? Note);
 public sealed record UpdateOperationalSettingsRequest(
-    TimeOnly DailyCutoffTime, bool BatchingEnabled, string DefaultRouteType, int DeliveryWindowDays);
+    TimeOnly DailyCutoffTime,
+    bool BatchingEnabled,
+    string DefaultRouteType,
+    int DeliveryWindowDays,
+    decimal DeliveryFeePerKm = 5000m);
 public sealed record UpdatePricingSettingsRequest(decimal PriceAlertThresholdPercent);
 public sealed record RunAutoBatchRequest(DateOnly? TargetDate, bool? DryRun, bool? Force);
 public sealed record ResetOrderGroupsRequest(DateOnly TargetDate, string Confirmation);

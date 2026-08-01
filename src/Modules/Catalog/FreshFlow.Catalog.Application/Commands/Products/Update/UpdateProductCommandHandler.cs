@@ -56,7 +56,9 @@ internal sealed class UpdateProductCommandHandler(
             legacyCategory: legacyCategory,
             legacyUnit: unit.Name,
             imageUrl: request.ImageUrl,
-            packingCodeId: request.PackingCodeId);
+            packingCodeId: request.PackingCodeId,
+            vatRate: request.VatRate,
+            minimumOrderQuantity: request.MinimumOrderQuantity);
 
         await products.SaveChangesAsync(ct);
 

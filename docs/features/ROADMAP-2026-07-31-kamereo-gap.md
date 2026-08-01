@@ -6,8 +6,8 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
 | GAP | Scope | Status | Acceptance criteria |
 | --- | --- | --- | --- |
 | GAP-01 | PostgreSQL atomic stock reservation | Done | Confirmation reserves available stock and charges credit atomically; confirmed cancellation releases both once; procurement handover consumes reservations once; price board, search, and favorites expose `CurrentQuantity - ReservedQuantity`; concurrency and rollback paths are covered by PostgreSQL tests. |
-| GAP-02 | Delivery-address snapshot | Ready for review | An order keeps the delivery address captured at placement even if the restaurant address later changes. |
-| GAP-03 | MOQ, VAT, and distance delivery fee | Planned | Confirmation validates MOQ and returns deterministic VAT and distance-based delivery fee amounts. |
+| GAP-02 | Delivery-address snapshot | Done | An order keeps the delivery address captured at placement even if the restaurant address later changes. |
+| GAP-03 | MOQ, VAT, and distance delivery fee | Done | Confirmation validates MOQ and returns deterministic VAT and distance-based delivery fee amounts. |
 | GAP-04 | Actual purchase price and pro-rata shortage allocation | Planned | Purchased quantities/prices are recorded and shortages are allocated deterministically across affected orders. |
 | GAP-05 | E-invoice readiness | Planned | Invoice data required for compliant e-invoice issuance is captured, validated, and exportable. |
 | GAP-06 | Organizations, branches, and approval | Planned | Organization/branch boundaries and approval rules are enforced for ordering and administration. |
@@ -153,3 +153,104 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
   follow-up fix is committed.
 - 2026-08-01: P1 fixed by moving `deliveryAddressId` out of LLM tool arguments into server-injected
   context, requiring it in the gate, and echoing it with the pending preview.
+- 2026-08-01: GAP-02 follow-up committed as `a8eb93d`; GAP-03 is unblocked.
+- 2026-08-01: GAP-03 uses the active market hub as the origin, falls back to market coordinates,
+  and uses the farthest Haversine distance for a consolidated order; no routing dependency is added.
+- 2026-08-01: Product VAT supports `KCT`, `0`, `5`, `8`, and `10`; the confirmation snapshot, not
+  later catalog state, is the source for invoicing.
+- 2026-08-01: Delivery fee defaults to 5,000 VND/km and is managed through operational settings.
+- 2026-08-01: GAP-03 review fixed partial hub coordinates so the origin falls back as one complete
+  market coordinate pair instead of mixing a hub latitude/longitude with its market counterpart.
+
+## GAP-03 — MOQ, VAT, and distance delivery fee
+
+### Scope and API contract
+
+- Store a configurable minimum order quantity and VAT rate on each catalog product.
+- At confirmation, aggregate quantity by market product and reject any line below MOQ.
+- Snapshot each line's VAT code/rate and the order's subtotal, VAT, delivery distance, delivery fee,
+  and final total in the existing serializable transaction.
+- Calculate straight-line Haversine distance from the market's active hub (falling back to the market
+  coordinates) to the selected delivery address; one consolidated order uses the farthest origin.
+- Use the admin-managed delivery-fee-per-kilometre setting and include VAT plus delivery fee in the
+  credit check, charge, refund, order detail, and confirmation preview.
+
+### Acceptance criteria
+
+- [x] Product create/update validates and exposes MOQ and supported VAT codes.
+- [x] Confirmation rejects aggregate quantities below MOQ without reserving stock or charging credit.
+- [x] VAT uses the product rate at confirmation and remains unchanged after the product changes.
+- [x] Preview and confirmation return the same subtotal, VAT, distance, fee, and final total.
+- [x] Missing coordinates reject confirmation deterministically without partial mutation.
+- [x] Credit failure rolls back pricing snapshots; cancellation refunds the VAT- and fee-inclusive total once.
+- [x] Solution build, Catalog/Orders/Invoicing unit tests, and related PostgreSQL integration tests pass.
+
+### Change record
+
+- Files changed:
+  - `src/FreshFlow.API/Assistant/Tools/ToolDefinitions.cs`
+  - `src/FreshFlow.API/Controllers/AdminController.cs`
+  - `src/FreshFlow.API/Controllers/OrdersController.cs`
+  - `src/FreshFlow.API/Controllers/ProductsController.cs`
+  - `src/FreshFlow.API/Extensions/ErrorExtensions.cs`
+  - `src/FreshFlow.Infrastructure.Persistence/Migrations/20260801151302_AddOrderCommercialTerms.cs`
+  - `src/FreshFlow.Infrastructure.Persistence/Migrations/20260801151302_AddOrderCommercialTerms.Designer.cs`
+  - `src/FreshFlow.Infrastructure.Persistence/Migrations/AppDbContextModelSnapshot.cs`
+  - `src/Modules/Catalog/FreshFlow.Catalog.Application/Commands/Products/Create/CreateProductCommand.cs`
+  - `src/Modules/Catalog/FreshFlow.Catalog.Application/Commands/Products/Create/CreateProductCommandHandler.cs`
+  - `src/Modules/Catalog/FreshFlow.Catalog.Application/Commands/Products/Create/CreateProductCommandValidator.cs`
+  - `src/Modules/Catalog/FreshFlow.Catalog.Application/Commands/Products/Update/UpdateProductCommand.cs`
+  - `src/Modules/Catalog/FreshFlow.Catalog.Application/Commands/Products/Update/UpdateProductCommandHandler.cs`
+  - `src/Modules/Catalog/FreshFlow.Catalog.Application/Commands/Products/Update/UpdateProductCommandValidator.cs`
+  - `src/Modules/Catalog/FreshFlow.Catalog.Application/Dtos/ProductDto.cs`
+  - `src/Modules/Catalog/FreshFlow.Catalog.Application/Mappings/ProductMappings.cs`
+  - `src/Modules/Catalog/FreshFlow.Catalog.Domain/Entities/Product.cs`
+  - `src/Modules/Catalog/FreshFlow.Catalog.Infrastructure/Persistence/Configurations/ProductConfiguration.cs`
+  - `src/Modules/Invoicing/FreshFlow.Invoicing.Infrastructure/CrossModule/OrderInvoiceRowConfiguration.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Abstractions/IMarketProductReader.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Abstractions/IOperationalSettingsRepository.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Commands/ConfirmOrder/ConfirmOrderCommandHandler.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Commands/UpdateOperationalSettings/UpdateOperationalSettingsCommand.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Commands/UpdateOperationalSettings/UpdateOperationalSettingsCommandHandler.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Commands/UpdateOperationalSettings/UpdateOperationalSettingsCommandValidator.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Dtos/OperationalSettingsDto.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Dtos/OrderDto.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Dtos/OrderDtoMapper.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Dtos/OrderItemDto.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Queries/GetOperationalSettings/GetOperationalSettingsQueryHandler.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Queries/PreviewOrderConfirmation/OrderConfirmationPreviewDto.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Queries/PreviewOrderConfirmation/PreviewOrderConfirmationQuery.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Queries/PreviewOrderConfirmation/PreviewOrderConfirmationQueryHandler.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Services/OrderConfirmationEvaluator.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Services/OrderPricingCalculator.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Domain/Entities/OperationalSettings.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Domain/Entities/Order.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Domain/Entities/OrderItem.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/CrossModule/MarketProductReader.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/CrossModule/MarketProductRow.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/CrossModule/MarketProductRowConfiguration.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/Persistence/Configurations/OperationalSettingsConfiguration.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/Persistence/Configurations/OrderConfiguration.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/Persistence/Configurations/OrderItemConfiguration.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/Repositories/OperationalSettingsRepository.cs`
+  - `tests/Integration/FreshFlow.IntegrationTests/Invoicing/InvoicingPostgresTests.cs`
+  - `tests/Integration/FreshFlow.IntegrationTests/Orders/AtomicStockReservationEndpointTests.cs`
+  - `tests/Unit/FreshFlow.Catalog.UnitTests/Products/CreateProductCommandValidatorTests.cs`
+  - `tests/Unit/FreshFlow.Catalog.UnitTests/Products/UpdateProductCommandValidatorTests.cs`
+  - `tests/Unit/FreshFlow.Orders.UnitTests/Commands/CancelOrderCommandHandlerTests.cs`
+  - `tests/Unit/FreshFlow.Orders.UnitTests/Commands/ConfirmOrderCommandHandlerTests.cs`
+  - `tests/Unit/FreshFlow.Orders.UnitTests/Commands/UpdateOperationalSettingsCommandHandlerTests.cs`
+  - `tests/Unit/FreshFlow.Orders.UnitTests/Queries/PreviewOrderConfirmationControllerTests.cs`
+  - `tests/Unit/FreshFlow.Orders.UnitTests/Queries/PreviewOrderConfirmationQueryHandlerTests.cs`
+  - `tests/Unit/FreshFlow.Orders.UnitTests/Services/OrderPricingCalculatorTests.cs`
+- Migration: `20260801151302_AddOrderCommercialTerms` adds product MOQ, the delivery-fee setting,
+  order-level pricing totals, and line-level VAT snapshots; it backfills legacy order subtotal from
+  `TotalAmount`.
+- API contract: product create/update and DTOs expose `minimumOrderQuantity` and `vatRate`;
+  operational settings expose `deliveryFeePerKm`; confirmation request is unchanged; confirmation,
+  order detail, and preview expose subtotal, VAT, distance, delivery fee, and final total. Confirmation
+  preview requires `deliveryAddressId`. MOQ/coordinate/pricing validation errors return HTTP 422.
+- Test results: solution build passed (0 errors, 21 existing warnings); Catalog unit tests 187/187;
+  Orders unit tests 551/551; Invoicing unit tests 36/36; Assistant unit tests 83/83; related Orders and
+  Invoicing PostgreSQL integration tests 14/14; Assistant HTTP/tool integration tests 6/6; EF model has
+  no pending changes.

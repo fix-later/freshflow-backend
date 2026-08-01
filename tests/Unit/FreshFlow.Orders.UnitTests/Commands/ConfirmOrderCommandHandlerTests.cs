@@ -15,6 +15,7 @@ public sealed class ConfirmOrderCommandHandlerTests
 {
     private readonly IOrderRepository _orderRepository = Substitute.For<IOrderRepository>();
     private readonly IRestaurantReader _restaurantReader = Substitute.For<IRestaurantReader>();
+    private readonly IMarketProductReader _marketProductReader = Substitute.For<IMarketProductReader>();
     private readonly ICreditService _creditService = Substitute.For<ICreditService>();
     private readonly IOperationalSettingsRepository _operationalSettings = Substitute.For<IOperationalSettingsRepository>();
 
@@ -28,7 +29,8 @@ public sealed class ConfirmOrderCommandHandlerTests
 
     public ConfirmOrderCommandHandlerTests()
     {
-        _sut = new ConfirmOrderCommandHandler(_orderRepository, _restaurantReader, _creditService, _operationalSettings);
+        _sut = new ConfirmOrderCommandHandler(
+            _orderRepository, _restaurantReader, _marketProductReader, _creditService, _operationalSettings);
 
         _orderRepository.ExecuteInSerializableTransactionAsync(
                 Arg.Any<Func<CancellationToken, Task<Result>>>(), Arg.Any<CancellationToken>())
@@ -39,6 +41,10 @@ public sealed class ConfirmOrderCommandHandlerTests
             .Returns(true);
         _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
             .Returns(OperationalSettings.CreateDefault());
+        _marketProductReader.FindAsync(MarketProductId, Arg.Any<CancellationToken>())
+            .Returns(new MarketProductSnapshotDto(
+                MarketProductId, "Cà chua", 20_000m, 100,
+                OriginLatitude: 10.123456m, OriginLongitude: 106.123456m));
 
         _restaurantReader.FindByUserIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
@@ -212,6 +218,52 @@ public sealed class ConfirmOrderCommandHandlerTests
         await _creditService.DidNotReceive().ChargeAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<string?>(),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_BelowMoq_DoesNotReserveOrChargeAsync()
+    {
+        var order = NewDraftOrderWithItem();
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _marketProductReader.FindAsync(MarketProductId, Arg.Any<CancellationToken>())
+            .Returns(new MarketProductSnapshotDto(
+                MarketProductId, "Cà chua", 20_000m, 100, 6, "5",
+                10.123456m, 106.123456m));
+
+        var result = await _sut.Handle(Command(order.Id), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("MINIMUM_ORDER_QUANTITY_NOT_MET");
+        order.Status.Should().Be(OrderStatus.Draft);
+        await _orderRepository.DidNotReceive().TryReserveStockAsync(
+            Arg.Any<IReadOnlyList<StockReservation>>(), Arg.Any<CancellationToken>());
+        await _creditService.DidNotReceive().ChargeAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<string?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_Success_SnapshotsVatAndChargesFinalTotalAsync()
+    {
+        var order = NewDraftOrderWithItem();
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _marketProductReader.FindAsync(MarketProductId, Arg.Any<CancellationToken>())
+            .Returns(new MarketProductSnapshotDto(
+                MarketProductId, "Cà chua", 20_000m, 100, 1, "8",
+                10.023456m, 106.123456m));
+
+        var result = await _sut.Handle(Command(order.Id), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.SubtotalAmount.Should().Be(100_000m);
+        result.Value.VatAmount.Should().Be(8_000m);
+        result.Value.DeliveryDistanceKm.Should().Be(11.12m);
+        result.Value.DeliveryFee.Should().Be(55_600m);
+        result.Value.TotalAmount.Should().Be(163_600m);
+        order.Items.Single().VatRateCode.Should().Be("8");
+        order.Items.Single().LockedVatAmount.Should().Be(8_000m);
+        await _creditService.Received(1).ChargeAsync(
+            RestaurantId, order.Id, 163_600m, Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

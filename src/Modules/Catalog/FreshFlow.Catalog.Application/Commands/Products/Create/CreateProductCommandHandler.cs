@@ -53,7 +53,9 @@ internal sealed class CreateProductCommandHandler(
             request.CreatedBy,
             legacyCategory: legacyCategory,
             legacyUnit: unit.Name,
-            packingCodeId: request.PackingCodeId);
+            packingCodeId: request.PackingCodeId,
+            vatRate: request.VatRate,
+            minimumOrderQuantity: request.MinimumOrderQuantity);
 
         await products.AddAsync(product, ct);
         await products.SaveChangesAsync(ct);

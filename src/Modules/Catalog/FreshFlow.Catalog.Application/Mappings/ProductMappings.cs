@@ -20,5 +20,7 @@ internal static class ProductMappings
             p.CreatedAt,
             p.UpdatedAt,
             p.DeletedAt.HasValue,
-            p.ImageUrl);
+            p.ImageUrl,
+            p.MinimumOrderQuantity,
+            p.VatRate);
 }

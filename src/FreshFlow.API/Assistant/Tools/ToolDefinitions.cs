@@ -159,7 +159,14 @@ public static class ToolDefinitions
                 return error!;
             }
 
-            var query = new PreviewOrderConfirmationQuery(UserId: ctx.UserId, OrderId: orderId);
+            if (ctx.DeliveryAddressId is not { } deliveryAddressId)
+            {
+                return ToolResultJson.Error(
+                    "DELIVERY_ADDRESS_REQUIRED", "The client must select a delivery address.");
+            }
+
+            var query = new PreviewOrderConfirmationQuery(
+                UserId: ctx.UserId, OrderId: orderId, DeliveryAddressId: deliveryAddressId);
             var result = await sender.Send(query, ct);
 
             // RemainingCreditAfter never enters the LLM prompt — it goes straight to the client in

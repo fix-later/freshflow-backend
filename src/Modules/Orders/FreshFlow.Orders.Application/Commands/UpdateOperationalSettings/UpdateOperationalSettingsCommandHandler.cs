@@ -16,6 +16,7 @@ internal sealed class UpdateOperationalSettingsCommandHandler(IOperationalSettin
             request.BatchingEnabled,
             request.DefaultRouteType,
             request.DeliveryWindowDays,
+            request.DeliveryFeePerKm,
             ct);
 
         return Result<OperationalSettingsDto>.Success(new OperationalSettingsDto(
@@ -23,6 +24,7 @@ internal sealed class UpdateOperationalSettingsCommandHandler(IOperationalSettin
             updated.BatchingEnabled,
             updated.DefaultRouteType,
             updated.DeliveryWindowDays,
+            updated.DeliveryFeePerKm,
             updated.UpdatedAt));
     }
 }

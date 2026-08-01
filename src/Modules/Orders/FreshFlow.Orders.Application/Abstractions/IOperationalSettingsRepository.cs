@@ -13,5 +13,6 @@ public interface IOperationalSettingsRepository
         bool batchingEnabled,
         string defaultRouteType,
         int deliveryWindowDays,
+        decimal deliveryFeePerKm,
         CancellationToken ct);
 }

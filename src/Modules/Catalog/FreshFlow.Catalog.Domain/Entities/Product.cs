@@ -15,8 +15,10 @@ public sealed class Product : AggregateRoot
         string? legacyCategory = null,
         string? legacyUnit = null,
         Guid? packingCodeId = null,
-        string? vatRate = null)
+        string? vatRate = null,
+        int minimumOrderQuantity = 1)
     {
+        ValidateCommercialTerms(vatRate, minimumOrderQuantity);
         Name = name;
         UnitId = unitId;
         CategoryId = categoryId;
@@ -25,7 +27,8 @@ public sealed class Product : AggregateRoot
         LegacyCategory = legacyCategory;
         LegacyUnit = legacyUnit;
         PackingCodeId = packingCodeId;
-        VatRate = vatRate;
+        VatRate = NormalizeVatRate(vatRate);
+        MinimumOrderQuantity = minimumOrderQuantity;
     }
 
     public string Name { get; private set; } = string.Empty;
@@ -57,6 +60,7 @@ public sealed class Product : AggregateRoot
     /// configured (Invoicing treats null as KCT for v1). Fresh food is not uniformly 10%.
     /// </summary>
     public string? VatRate { get; private set; }
+    public int MinimumOrderQuantity { get; private set; }
 
     public void Update(
         string name,
@@ -67,8 +71,10 @@ public sealed class Product : AggregateRoot
         string? legacyUnit = null,
         string? imageUrl = null,
         Guid? packingCodeId = null,
-        string? vatRate = null)
+        string? vatRate = null,
+        int minimumOrderQuantity = 1)
     {
+        ValidateCommercialTerms(vatRate, minimumOrderQuantity);
         Name = name;
         CategoryId = categoryId;
         UnitId = unitId;
@@ -78,8 +84,8 @@ public sealed class Product : AggregateRoot
         PackingCodeId = packingCodeId;
         if (imageUrl is not null)
             ImageUrl = imageUrl;
-        if (vatRate is not null)
-            VatRate = vatRate;
+        VatRate = NormalizeVatRate(vatRate);
+        MinimumOrderQuantity = minimumOrderQuantity;
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -88,4 +94,17 @@ public sealed class Product : AggregateRoot
         SoftDelete();
         UpdatedAt = DateTime.UtcNow;
     }
+
+    private static void ValidateCommercialTerms(string? vatRate, int minimumOrderQuantity)
+    {
+        if (minimumOrderQuantity <= 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(minimumOrderQuantity), "Minimum order quantity must be greater than zero.");
+
+        if (vatRate is not null && NormalizeVatRate(vatRate) is not ("KCT" or "0" or "5" or "8" or "10"))
+            throw new ArgumentException("VAT rate must be KCT, 0, 5, 8, or 10.", nameof(vatRate));
+    }
+
+    private static string? NormalizeVatRate(string? vatRate) =>
+        string.IsNullOrWhiteSpace(vatRate) ? null : vatRate.Trim().ToUpperInvariant();
 }

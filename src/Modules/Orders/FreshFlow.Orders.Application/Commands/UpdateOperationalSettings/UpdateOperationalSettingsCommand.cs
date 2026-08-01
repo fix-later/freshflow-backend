@@ -7,4 +7,5 @@ public sealed record UpdateOperationalSettingsCommand(
     TimeOnly DailyCutoffTime,
     bool BatchingEnabled,
     string DefaultRouteType,
-    int DeliveryWindowDays) : ICommand<OperationalSettingsDto>;
+    int DeliveryWindowDays,
+    decimal DeliveryFeePerKm = 5000m) : ICommand<OperationalSettingsDto>;

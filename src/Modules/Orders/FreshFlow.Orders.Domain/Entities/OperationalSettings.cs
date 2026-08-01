@@ -14,29 +14,41 @@ public sealed class OperationalSettings : BaseEntity
     private OperationalSettings() { } // EF Core
 
     public OperationalSettings(
-        TimeOnly dailyCutoffTime, bool batchingEnabled, string defaultRouteType, int deliveryWindowDays)
+        TimeOnly dailyCutoffTime,
+        bool batchingEnabled,
+        string defaultRouteType,
+        int deliveryWindowDays,
+        decimal deliveryFeePerKm = 5000m)
     {
         DailyCutoffTime = dailyCutoffTime;
         BatchingEnabled = batchingEnabled;
         DefaultRouteType = defaultRouteType;
         DeliveryWindowDays = deliveryWindowDays;
+        DeliveryFeePerKm = deliveryFeePerKm;
     }
 
     public static OperationalSettings CreateDefault() =>
-        new(new TimeOnly(22, 0), batchingEnabled: true, defaultRouteType: "hub_relay", deliveryWindowDays: 7);
+        new(new TimeOnly(22, 0), batchingEnabled: true, defaultRouteType: "hub_relay",
+            deliveryWindowDays: 7, deliveryFeePerKm: 5000m);
 
     public TimeOnly DailyCutoffTime { get; private set; }
     public bool BatchingEnabled { get; private set; }
     public string DefaultRouteType { get; private set; } = "hub_relay";
     public int DeliveryWindowDays { get; private set; }
+    public decimal DeliveryFeePerKm { get; private set; }
 
     public void Update(
-        TimeOnly dailyCutoffTime, bool batchingEnabled, string defaultRouteType, int deliveryWindowDays)
+        TimeOnly dailyCutoffTime,
+        bool batchingEnabled,
+        string defaultRouteType,
+        int deliveryWindowDays,
+        decimal deliveryFeePerKm = 5000m)
     {
         DailyCutoffTime = dailyCutoffTime;
         BatchingEnabled = batchingEnabled;
         DefaultRouteType = defaultRouteType;
         DeliveryWindowDays = deliveryWindowDays;
+        DeliveryFeePerKm = deliveryFeePerKm;
         Touch();
     }
 

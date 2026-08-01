@@ -68,6 +68,8 @@ public static class ErrorExtensions
                         or "INVALID_CATEGORY_PARENT"
                         or "INVALID_PRICE" or "INVALID_QUANTITY"
                         or "RESTAURANT_NOT_APPROVED" or "INVALID_PRODUCT" or "INSUFFICIENT_STOCK"
+                        or "MINIMUM_ORDER_QUANTITY_NOT_MET" or "DELIVERY_COORDINATES_REQUIRED"
+                        or "INVALID_DELIVERY_FEE" or "VAT_RATE_MISSING"
                         or "ORDER_EMPTY" or "INVALID_AMOUNT" or "CREDIT_LIMIT_EXCEEDED"
                         or "CREDIT_SETTLEMENT_EXCEEDS_BALANCE" or "CREDIT_REFUND_EXCEEDS_BALANCE"
                         or "INVALID_CREDIT_LIMIT" or "CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE"

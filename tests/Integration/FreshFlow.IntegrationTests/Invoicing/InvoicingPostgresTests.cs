@@ -51,19 +51,19 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         kct.VatRateCode.Should().Be("KCT");
 
         snapshot.Lines.Should().ContainSingle(line => line.ProductName == UnknownVatProduct)
-            .Which.VatRateCode.Should().BeNull();
+            .Which.VatRateCode.Should().Be("KCT");
 
         var deletedProduct = snapshot.Lines.Should().ContainSingle(line =>
             line.ProductName == DeletedProduct).Which;
         deletedProduct.Quantity.Should().Be(1);
         deletedProduct.UnitPrice.Should().Be(1_000m);
-        deletedProduct.VatRateCode.Should().BeNull();
+        deletedProduct.VatRateCode.Should().Be("8");
 
         var deletedMarketProduct = snapshot.Lines.Should().ContainSingle(line =>
             line.ProductName == DeletedMarketProduct).Which;
         deletedMarketProduct.Quantity.Should().Be(1);
         deletedMarketProduct.UnitPrice.Should().Be(1_000m);
-        deletedMarketProduct.VatRateCode.Should().BeNull();
+        deletedMarketProduct.VatRateCode.Should().Be("10");
 
         (await reader.GetByOrderIdAsync(seed.SoftDeletedOrderId, default)).Should().BeNull();
     }
@@ -108,8 +108,8 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         invoice.Status.Should().Be(InvoiceStatus.Issued);
         invoice.TaxAuthorityCode.Should().NotBeNullOrWhiteSpace();
         invoice.SubTotal.Should().Be(87_000m);
-        invoice.VatAmount.Should().Be(1_500m);
-        invoice.Total.Should().Be(88_500m);
+        invoice.VatAmount.Should().Be(1_680m);
+        invoice.Total.Should().Be(88_680m);
         invoice.Lines.Should().HaveCount(5);
 
         var fivePercent = invoice.Lines.Should().ContainSingle(line =>
@@ -126,16 +126,16 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             line.ProductName == UnknownVatProduct && line.VatRateCode == "KCT");
         invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == DeletedProduct &&
-            line.VatRateCode == "KCT" &&
+            line.VatRateCode == "8" &&
             line.LineSubtotal == 1_000m &&
-            line.LineVatAmount == 0 &&
-            line.LineTotal == 1_000m);
+            line.LineVatAmount == 80m &&
+            line.LineTotal == 1_080m);
         invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == DeletedMarketProduct &&
-            line.VatRateCode == "KCT" &&
+            line.VatRateCode == "10" &&
             line.LineSubtotal == 1_000m &&
-            line.LineVatAmount == 0 &&
-            line.LineTotal == 1_000m);
+            line.LineVatAmount == 100m &&
+            line.LineTotal == 1_100m);
     }
 
     [Fact]
@@ -275,10 +275,21 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             .IsSuccess.Should().BeTrue();
         order.AddItem(deletedMarketProductId, DeletedMarketProduct, 1, 1_000m)
             .IsSuccess.Should().BeTrue();
+        order.ApplyConfirmationPricing(
+            new Dictionary<Guid, OrderItemTaxSnapshot>
+            {
+                [fivePercentMarketProductId] = new("5", 5m),
+                [kctMarketProductId] = new("KCT", 0m),
+                [unknownVatMarketProductId] = new("KCT", 0m),
+                [deletedProductMarketProductId] = new("8", 8m),
+                [deletedMarketProductId] = new("10", 10m)
+            },
+            deliveryDistanceKm: 0m,
+            deliveryFee: 0m).IsSuccess.Should().BeTrue();
         order.Confirm().IsSuccess.Should().BeTrue();
 
         var fivePercentLine = order.Items.Single(item => item.ProductNameSnapshot == FivePercentProduct);
-        fivePercentLine.LockPrice(12_000m);
+        fivePercentLine.LockPricing(12_000m, "5", 5m);
         order.RecordActualQuantity(fivePercentLine.Id, 2.5m).IsSuccess.Should().BeTrue();
         foreach (var status in new[]
                  {

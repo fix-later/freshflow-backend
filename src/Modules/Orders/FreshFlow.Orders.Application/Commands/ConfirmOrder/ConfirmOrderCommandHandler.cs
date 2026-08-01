@@ -9,6 +9,7 @@ namespace FreshFlow.Orders.Application.Commands.ConfirmOrder;
 internal sealed class ConfirmOrderCommandHandler(
     IOrderRepository orderRepository,
     IRestaurantReader restaurantReader,
+    IMarketProductReader marketProductReader,
     ICreditService creditService,
     IOperationalSettingsRepository operationalSettings)
     : IRequestHandler<ConfirmOrderCommand, Result<OrderDto>>
@@ -63,16 +64,46 @@ internal sealed class ConfirmOrderCommandHandler(
             return Result<OrderDto>.Failure(
                 Error.NotFound("DELIVERY_ADDRESS", request.DeliveryAddressId));
 
+        var settings = await operationalSettings.GetAsync(cancellationToken);
+        var products = new Dictionary<Guid, MarketProductSnapshotDto>();
+        foreach (var marketProductId in order.Items.Select(item => item.MarketProductId).Distinct())
+        {
+            var product = await marketProductReader.FindAsync(marketProductId, cancellationToken);
+            if (product is null)
+                return Result<OrderDto>.Failure(Error.NotFound("MARKET_PRODUCT", marketProductId));
+            products[marketProductId] = product;
+        }
+
+        var pricing = OrderPricingCalculator.Calculate(
+            order,
+            products,
+            deliveryAddress.Latitude,
+            deliveryAddress.Longitude,
+            settings.DeliveryFeePerKm);
+        if (pricing.IsFailure)
+            return Result<OrderDto>.Failure(pricing.Error);
+
         var canChargeResult = await creditService.CanChargeAsync(
-            order.RestaurantId, order.TotalAmount, cancellationToken);
+            order.RestaurantId, pricing.Value.TotalAmount, cancellationToken);
         if (canChargeResult.IsFailure)
             return Result<OrderDto>.Failure(canChargeResult.Error);
 
-        var settings = await operationalSettings.GetAsync(cancellationToken);
         var evaluation = OrderConfirmationEvaluator.Evaluate(
-            order, canChargeResult.Value, confirmedAtUtc, settings.DeliveryWindowDays, settings.DailyCutoffTime.ToTimeSpan());
+            order,
+            canChargeResult.Value,
+            confirmedAtUtc,
+            settings.DeliveryWindowDays,
+            settings.DailyCutoffTime.ToTimeSpan(),
+            pricing.Value.TotalAmount);
         if (evaluation.Issues.Count > 0)
             return Result<OrderDto>.Failure(evaluation.Issues[0]);
+
+        var pricingResult = order.ApplyConfirmationPricing(
+            pricing.Value.TaxesByMarketProduct,
+            pricing.Value.DeliveryDistanceKm,
+            pricing.Value.DeliveryFee);
+        if (pricingResult.IsFailure)
+            return Result<OrderDto>.Failure(pricingResult.Error);
 
         var reservations = order.Items
             .GroupBy(item => item.MarketProductId)
