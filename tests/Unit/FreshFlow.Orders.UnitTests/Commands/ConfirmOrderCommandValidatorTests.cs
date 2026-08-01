@@ -11,7 +11,8 @@ public sealed class ConfirmOrderCommandValidatorTests
     [Fact]
     public async Task Validate_ValidCommand_PassesAsync()
     {
-        var result = await _sut.ValidateAsync(new ConfirmOrderCommand(Guid.NewGuid(), Guid.NewGuid()));
+        var result = await _sut.ValidateAsync(
+            new ConfirmOrderCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
 
         result.IsValid.Should().BeTrue();
     }
@@ -19,7 +20,8 @@ public sealed class ConfirmOrderCommandValidatorTests
     [Fact]
     public async Task Validate_EmptyUserId_FailsAsync()
     {
-        var result = await _sut.ValidateAsync(new ConfirmOrderCommand(Guid.Empty, Guid.NewGuid()));
+        var result = await _sut.ValidateAsync(
+            new ConfirmOrderCommand(Guid.Empty, Guid.NewGuid(), Guid.NewGuid()));
 
         result.Errors.Should().Contain(e => e.PropertyName == nameof(ConfirmOrderCommand.UserId));
     }
@@ -27,8 +29,19 @@ public sealed class ConfirmOrderCommandValidatorTests
     [Fact]
     public async Task Validate_EmptyOrderId_FailsAsync()
     {
-        var result = await _sut.ValidateAsync(new ConfirmOrderCommand(Guid.NewGuid(), Guid.Empty));
+        var result = await _sut.ValidateAsync(
+            new ConfirmOrderCommand(Guid.NewGuid(), Guid.Empty, Guid.NewGuid()));
 
         result.Errors.Should().Contain(e => e.PropertyName == nameof(ConfirmOrderCommand.OrderId));
+    }
+
+    [Fact]
+    public async Task Validate_EmptyDeliveryAddressId_FailsAsync()
+    {
+        var result = await _sut.ValidateAsync(
+            new ConfirmOrderCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.Empty));
+
+        result.Errors.Should().Contain(
+            e => e.PropertyName == nameof(ConfirmOrderCommand.DeliveryAddressId));
     }
 }

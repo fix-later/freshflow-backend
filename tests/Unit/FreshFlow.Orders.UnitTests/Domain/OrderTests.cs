@@ -57,6 +57,23 @@ public sealed class OrderTests
         order.ScheduledOrderId.Should().Be(scheduledOrderId);
     }
 
+    [Fact]
+    public void CaptureDeliveryAddress_CalledTwice_KeepsFirstSnapshot()
+    {
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        var firstAddressId = Guid.NewGuid();
+
+        order.CaptureDeliveryAddress(
+            firstAddressId, "First", "0901", "1 First Street", 10.1m, 106.1m);
+        var second = order.CaptureDeliveryAddress(
+            Guid.NewGuid(), "Second", "0902", "2 Second Street", 10.2m, 106.2m);
+
+        second.IsFailure.Should().BeTrue();
+        second.Error.Code.Should().Be("DELIVERY_ADDRESS_ALREADY_CAPTURED");
+        order.DeliveryAddressId.Should().Be(firstAddressId);
+        order.DeliveryAddressLine.Should().Be("1 First Street");
+    }
+
     // ── AddItem ──────────────────────────────────────────────────────────────
 
     [Fact]

@@ -172,6 +172,23 @@ public sealed class PersistenceConfigurationTests
     }
 
     [Fact]
+    public void OrderConfiguration_DeliverySnapshotUsesSnakeCaseColumns()
+    {
+        using var ctx = CreateInMemoryContext();
+        var orderEntity = ctx.Model.FindEntityType(typeof(Order))!;
+        var table = StoreObjectIdentifier.Table("orders", null);
+
+        orderEntity.FindProperty(nameof(Order.DeliveryAddressId))!
+            .GetColumnName(table).Should().Be("delivery_address_id");
+        orderEntity.FindProperty(nameof(Order.DeliveryAddressLine))!
+            .GetColumnName(table).Should().Be("delivery_address_line");
+        orderEntity.FindProperty(nameof(Order.DeliveryLatitude))!
+            .GetColumnName(table).Should().Be("delivery_latitude");
+        orderEntity.FindProperty(nameof(Order.DeliveryLongitude))!
+            .GetColumnName(table).Should().Be("delivery_longitude");
+    }
+
+    [Fact]
     public void OrderIssueConfiguration_UsesSnakeCaseTableAndColumns()
     {
         // Arrange

@@ -8,6 +8,7 @@ public sealed record OrderDto(
     DateTime? ScheduledFor,
     decimal TotalAmount,
     string? Notes,
+    DeliveryAddressSnapshotDto? DeliveryAddress,
     IReadOnlyList<OrderItemDto> Items,
     Guid? OrderGroupId,
     Guid? ScheduledOrderId,
@@ -16,6 +17,14 @@ public sealed record OrderDto(
     DateTime? ConfirmedReceiptAt,
     DateTime CreatedAt,
     DateTime UpdatedAt);
+
+public sealed record DeliveryAddressSnapshotDto(
+    Guid AddressId,
+    string? RecipientName,
+    string? Phone,
+    string AddressLine,
+    decimal? Latitude,
+    decimal? Longitude);
 
 public sealed record OrderListItemDto(
     Guid OrderId,

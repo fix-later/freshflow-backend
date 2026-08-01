@@ -15,6 +15,15 @@ internal static class OrderDtoMapper
         order.ScheduledFor,
         order.TotalAmount,
         order.Notes,
+        order.DeliveryAddressId.HasValue
+            ? new DeliveryAddressSnapshotDto(
+                order.DeliveryAddressId.Value,
+                order.DeliveryRecipientName,
+                order.DeliveryPhone,
+                order.DeliveryAddressLine!,
+                order.DeliveryLatitude,
+                order.DeliveryLongitude)
+            : null,
         order.Items
             .Select(i => new OrderItemDto(
                 i.Id,

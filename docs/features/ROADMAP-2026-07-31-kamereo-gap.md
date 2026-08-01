@@ -6,7 +6,7 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
 | GAP | Scope | Status | Acceptance criteria |
 | --- | --- | --- | --- |
 | GAP-01 | PostgreSQL atomic stock reservation | Done | Confirmation reserves available stock and charges credit atomically; confirmed cancellation releases both once; procurement handover consumes reservations once; price board, search, and favorites expose `CurrentQuantity - ReservedQuantity`; concurrency and rollback paths are covered by PostgreSQL tests. |
-| GAP-02 | Delivery-address snapshot | Planned | An order keeps the delivery address captured at placement even if the restaurant address later changes. |
+| GAP-02 | Delivery-address snapshot | Ready for review | An order keeps the delivery address captured at placement even if the restaurant address later changes. |
 | GAP-03 | MOQ, VAT, and distance delivery fee | Planned | Confirmation validates MOQ and returns deterministic VAT and distance-based delivery fee amounts. |
 | GAP-04 | Actual purchase price and pro-rata shortage allocation | Planned | Purchased quantities/prices are recorded and shortages are allocated deterministically across affected orders. |
 | GAP-05 | E-invoice readiness | Planned | Invoice data required for compliant e-invoice issuance is captured, validated, and exportable. |
@@ -68,6 +68,55 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
 - Test results: solution build passed (0 errors, 21 existing warnings); Orders unit tests 541/541;
   Pricing unit tests 277/277; related PostgreSQL integration tests 19/19.
 
+## GAP-02 — Delivery-address snapshot
+
+### Scope and API contract
+
+- Confirmation selects a restaurant-owned active delivery address by `deliveryAddressId`.
+- Snapshot recipient name, phone, address line, latitude, and longitude into the order in the same
+  transaction as confirmation; later address edits or deletion must not change the order.
+- Return the immutable snapshot from order-detail responses.
+
+### Acceptance criteria
+
+- [x] Confirmation rejects a missing, deleted, or other restaurant's delivery address.
+- [x] A confirmed order retains the selected address values after the source address changes.
+- [x] Snapshot creation rolls back when confirmation fails.
+- [x] Solution build, Orders unit tests, and related PostgreSQL integration tests pass.
+
+### Change record
+
+- Files changed:
+  - `src/FreshFlow.API/Assistant/Tools/ToolDefinitions.cs`
+  - `src/FreshFlow.API/Controllers/OrdersController.cs`
+  - `src/FreshFlow.Infrastructure.Persistence/Migrations/20260801143556_AddOrderDeliveryAddressSnapshot.cs`
+  - `src/FreshFlow.Infrastructure.Persistence/Migrations/20260801143556_AddOrderDeliveryAddressSnapshot.Designer.cs`
+  - `src/FreshFlow.Infrastructure.Persistence/Migrations/AppDbContextModelSnapshot.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Abstractions/IRestaurantReader.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Commands/ConfirmOrder/ConfirmOrderCommand.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Commands/ConfirmOrder/ConfirmOrderCommandHandler.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Commands/ConfirmOrder/ConfirmOrderCommandValidator.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Dtos/OrderDto.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Application/Dtos/OrderDtoMapper.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Domain/Entities/Order.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/CrossModule/RestaurantReader.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/CrossModule/RestaurantRow.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/CrossModule/RestaurantRowConfiguration.cs`
+  - `src/Modules/Orders/FreshFlow.Orders.Infrastructure/Persistence/Configurations/OrderConfiguration.cs`
+  - `tests/Integration/FreshFlow.IntegrationTests/Orders/AtomicStockReservationEndpointTests.cs`
+  - `tests/Unit/FreshFlow.Assistant.UnitTests/Tools/ToolDefinitionsTests.cs`
+  - `tests/Unit/FreshFlow.Orders.UnitTests/Commands/ConfirmOrderCommandHandlerTests.cs`
+  - `tests/Unit/FreshFlow.Orders.UnitTests/Commands/ConfirmOrderCommandValidatorTests.cs`
+  - `tests/Unit/FreshFlow.Orders.UnitTests/Domain/OrderTests.cs`
+  - `tests/Unit/FreshFlow.Orders.UnitTests/Persistence/PersistenceConfigurationTests.cs`
+- Migration: `20260801143556_AddOrderDeliveryAddressSnapshot` adds six nullable snapshot columns to
+  `orders`; no foreign key is retained to the mutable source address.
+- API contract: `POST /api/orders/{id}/confirm` and the assistant `confirm_order` tool now require
+  `deliveryAddressId`; order detail returns the selected immutable `DeliveryAddress` snapshot.
+  Invalid ownership, missing, or deleted addresses return `DELIVERY_ADDRESS_NOT_FOUND`.
+- Test results: solution build passed (0 errors, 21 existing warnings); Orders unit tests 545/545;
+  Assistant unit tests 82/82; related PostgreSQL integration tests 9/9; EF model has no pending changes.
+
 ## Decision log
 
 - 2026-07-31: Use the existing PostgreSQL column and request-scoped `AppDbContext`; do not add Redis,
@@ -80,3 +129,9 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
   quantity update from overwriting reservations owned by Orders.
 - 2026-07-31: Procurement-session cancellation uses the same serializable stock/credit transaction;
   repeated cancellation events are no-ops.
+- 2026-08-01: Require an explicit active restaurant-owned address at confirmation; do not infer a
+  default delivery address.
+- 2026-08-01: Store six nullable scalar snapshot columns without a foreign key so drafts and legacy
+  orders remain valid and confirmed orders survive source address edits or deletion.
+- 2026-08-01: Capture the address inside the existing serializable confirmation transaction so stock,
+  credit, order status, and the snapshot commit or roll back together.

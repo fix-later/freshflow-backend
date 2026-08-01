@@ -47,11 +47,40 @@ public sealed class Order : AggregateRoot
     public DateTime? ScheduledFor { get; private set; }
     public decimal TotalAmount { get; private set; }
     public string? Notes { get; private set; }
+    public Guid? DeliveryAddressId { get; private set; }
+    public string? DeliveryRecipientName { get; private set; }
+    public string? DeliveryPhone { get; private set; }
+    public string? DeliveryAddressLine { get; private set; }
+    public decimal? DeliveryLatitude { get; private set; }
+    public decimal? DeliveryLongitude { get; private set; }
     public DateTime? CancelledAt { get; private set; }
     public string? CancellationReason { get; private set; }
     public DateTime? ConfirmedReceiptAt { get; private set; }
 
     public IReadOnlyCollection<OrderItem> Items => _items.AsReadOnly();
+
+    public Result CaptureDeliveryAddress(
+        Guid addressId,
+        string? recipientName,
+        string? phone,
+        string addressLine,
+        decimal? latitude,
+        decimal? longitude)
+    {
+        if (Status != OrderStatus.Draft || DeliveryAddressId.HasValue)
+            return Result.Failure(Error.Conflict(
+                "DELIVERY_ADDRESS_ALREADY_CAPTURED",
+                "The delivery address can only be captured once while the order is a draft."));
+
+        DeliveryAddressId = addressId;
+        DeliveryRecipientName = recipientName;
+        DeliveryPhone = phone;
+        DeliveryAddressLine = addressLine;
+        DeliveryLatitude = latitude;
+        DeliveryLongitude = longitude;
+
+        return Result.Success();
+    }
 
     /// <summary>
     /// Adds a line item while the order is still a draft (cart). Recalculates <see cref="TotalAmount"/>.

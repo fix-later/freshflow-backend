@@ -7,6 +7,7 @@ using FreshFlow.Contracts;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.IntegrationTests.Infrastructure;
 using FreshFlow.Orders.Application.Abstractions;
+using FreshFlow.Orders.Application.Dtos;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Pricing.Domain.Entities;
@@ -30,8 +31,8 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
         using var secondClient = Client(restaurant.Token);
 
         var responses = await Task.WhenAll(
-            firstClient.PostAsync($"/api/v1/orders/{seeded.OrderIds[0]}/confirm", null),
-            secondClient.PostAsync($"/api/v1/orders/{seeded.OrderIds[1]}/confirm", null));
+            ConfirmAsync(firstClient, seeded.OrderIds[0], restaurant.DeliveryAddressId),
+            ConfirmAsync(secondClient, seeded.OrderIds[1], restaurant.DeliveryAddressId));
 
         responses.Count(response => response.StatusCode == HttpStatusCode.OK).Should().Be(1);
 
@@ -59,8 +60,8 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
         var endpoint = $"/api/v1/orders/{seeded.OrderIds[0]}/confirm";
 
         var responses = await Task.WhenAll(
-            firstClient.PostAsync(endpoint, null),
-            secondClient.PostAsync(endpoint, null));
+            firstClient.PostAsJsonAsync(endpoint, new { restaurant.DeliveryAddressId }),
+            secondClient.PostAsJsonAsync(endpoint, new { restaurant.DeliveryAddressId }));
 
         responses.Count(response => response.StatusCode == HttpStatusCode.OK).Should().Be(1);
 
@@ -85,7 +86,7 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
         var seeded = await SeedMultiLineOrderAsync(restaurant.RestaurantId);
         using var client = Client(restaurant.Token);
 
-        var response = await client.PostAsync($"/api/v1/orders/{seeded.OrderId}/confirm", null);
+        var response = await ConfirmAsync(client, seeded.OrderId, restaurant.DeliveryAddressId);
 
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
         var error = await response.Content.ReadFromJsonAsync<ErrorEnvelope>();
@@ -113,7 +114,8 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
             restaurant.RestaurantId, stock: 5, quantities: [1], creditLimit: 0m);
         using var client = Client(restaurant.Token);
 
-        var response = await client.PostAsync($"/api/v1/orders/{seeded.OrderIds[0]}/confirm", null);
+        var response = await ConfirmAsync(
+            client, seeded.OrderIds[0], restaurant.DeliveryAddressId);
 
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
 
@@ -126,6 +128,7 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
 
         product.ReservedQuantity.Should().Be(0);
         order.Status.Should().Be(OrderStatus.Draft);
+        order.DeliveryAddressId.Should().BeNull();
     }
 
     [Fact]
@@ -142,7 +145,14 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
                 var order = await repository.FindByIdAsync(seeded.OrderIds[0], ct);
                 (await repository.TryReserveStockAsync(
                     [new StockReservation(seeded.MarketProductIds[0], 1)], ct)).Should().BeTrue();
-                order!.Confirm();
+                order!.CaptureDeliveryAddress(
+                    restaurant.DeliveryAddressId,
+                    "Original Recipient",
+                    "0901234567",
+                    "1 Original Street",
+                    10.123456m,
+                    106.123456m);
+                order.Confirm();
                 repository.Track(order);
                 return Result.Failure(Error.Conflict("CREDIT_CHARGE_FAILED", "simulated"));
             }, default);
@@ -159,6 +169,7 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
 
         product.ReservedQuantity.Should().Be(0);
         order.Status.Should().Be(OrderStatus.Draft);
+        order.DeliveryAddressId.Should().BeNull();
     }
 
     [Fact]
@@ -168,7 +179,7 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
         var seeded = await SeedOrdersAsync(restaurant.RestaurantId, stock: 5, quantities: [2]);
         using var client = Client(restaurant.Token);
         var orderId = seeded.OrderIds[0];
-        (await client.PostAsync($"/api/v1/orders/{orderId}/confirm", null))
+        (await ConfirmAsync(client, orderId, restaurant.DeliveryAddressId))
             .StatusCode.Should().Be(HttpStatusCode.OK);
 
         var first = await client.PatchAsJsonAsync($"/api/v1/orders/{orderId}/cancel", new { reason = "test" });
@@ -225,12 +236,79 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
         order.Status.Should().Be(OrderStatus.AtHub);
     }
 
+    [Fact]
+    public async Task Confirm_AddressUpdatedAfterwards_OrderKeepsOriginalSnapshotAsync()
+    {
+        var restaurant = await CreateRestaurantAsync();
+        var seeded = await SeedOrdersAsync(restaurant.RestaurantId, stock: 2, quantities: [1]);
+        using var client = Client(restaurant.Token);
+        var orderId = seeded.OrderIds[0];
+
+        (await ConfirmAsync(client, orderId, restaurant.DeliveryAddressId))
+            .EnsureSuccessStatusCode();
+        (await client.PutAsJsonAsync(
+            $"/api/v1/restaurants/me/delivery-addresses/{restaurant.DeliveryAddressId}",
+            new
+            {
+                addressLine = "2 Changed Street",
+                recipientName = "Changed Recipient",
+                phone = "0909999999",
+                latitude = 11.111111m,
+                longitude = 107.111111m,
+                isDefault = false
+            })).EnsureSuccessStatusCode();
+
+        var body = await client.GetFromJsonAsync<Envelope<OrderDto>>(
+            $"/api/v1/orders/{orderId}");
+
+        body!.Data!.DeliveryAddress.Should().BeEquivalentTo(
+            new DeliveryAddressSnapshotDto(
+                restaurant.DeliveryAddressId,
+                "Original Recipient",
+                "0901234567",
+                "1 Original Street",
+                10.123456m,
+                106.123456m));
+    }
+
+    [Fact]
+    public async Task Confirm_InvalidDeliveryAddresses_ReturnNotFoundAsync()
+    {
+        var restaurant = await CreateRestaurantAsync();
+        var otherRestaurant = await CreateRestaurantAsync();
+        var seeded = await SeedOrdersAsync(
+            restaurant.RestaurantId, stock: 3, quantities: [1, 1, 1]);
+        using var client = Client(restaurant.Token);
+
+        (await client.DeleteAsync(
+            $"/api/v1/restaurants/me/delivery-addresses/{restaurant.DeliveryAddressId}"))
+            .EnsureSuccessStatusCode();
+
+        var responses = new[]
+        {
+            await ConfirmAsync(client, seeded.OrderIds[0], restaurant.DeliveryAddressId),
+            await ConfirmAsync(client, seeded.OrderIds[1], otherRestaurant.DeliveryAddressId),
+            await ConfirmAsync(client, seeded.OrderIds[2], Guid.NewGuid())
+        };
+
+        responses.Should().OnlyContain(
+            response => response.StatusCode == HttpStatusCode.NotFound);
+        foreach (var response in responses)
+            (await response.Content.ReadFromJsonAsync<ErrorEnvelope>())!
+                .Error!.Code.Should().Be("DELIVERY_ADDRESS_NOT_FOUND");
+    }
+
     private HttpClient Client(string token)
     {
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
     }
+
+    private static Task<HttpResponseMessage> ConfirmAsync(
+        HttpClient client, Guid orderId, Guid deliveryAddressId) =>
+        client.PostAsJsonAsync(
+            $"/api/v1/orders/{orderId}/confirm", new { deliveryAddressId });
 
     private async Task<RestaurantIdentity> CreateRestaurantAsync()
     {
@@ -253,9 +331,24 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
         (await client.PatchAsync($"/api/v1/admin/restaurants/{restaurantId}/approve", null))
             .EnsureSuccessStatusCode();
 
-        return new RestaurantIdentity(
-            restaurantId,
-            await LoginAsync(client, email, password));
+        var token = await LoginAsync(client, email, password);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var addressResponse = await client.PostAsJsonAsync(
+            "/api/v1/restaurants/me/delivery-addresses",
+            new
+            {
+                addressLine = "1 Original Street",
+                recipientName = "Original Recipient",
+                phone = "0901234567",
+                latitude = 10.123456m,
+                longitude = 106.123456m,
+                isDefault = false
+            });
+        addressResponse.EnsureSuccessStatusCode();
+        var address = await addressResponse.Content
+            .ReadFromJsonAsync<Envelope<DeliveryAddressBody>>();
+
+        return new RestaurantIdentity(restaurantId, address!.Data!.Id, token);
     }
 
     private static async Task<string> LoginAsync(HttpClient client, string identifier, string password)
@@ -346,10 +439,12 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
         return marketProduct;
     }
 
-    private sealed record RestaurantIdentity(Guid RestaurantId, string Token);
+    private sealed record RestaurantIdentity(
+        Guid RestaurantId, Guid DeliveryAddressId, string Token);
     private sealed record SeededOrders(IReadOnlyList<Guid> MarketProductIds, IReadOnlyList<Guid> OrderIds);
     private sealed record SeededMultiLineOrder(IReadOnlyList<Guid> MarketProductIds, Guid OrderId);
     private sealed record SeededBatchedOrder(Guid MarketProductId, Guid OrderId);
     private sealed record UserListBody(IReadOnlyList<UserSummaryBody> Data);
     private sealed record UserSummaryBody(Guid? RestaurantId);
+    private sealed record DeliveryAddressBody(Guid Id);
 }

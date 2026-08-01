@@ -11,3 +11,14 @@ internal sealed class RestaurantRow
     public Guid UserId { get; set; }
     public string Status { get; set; } = string.Empty;
 }
+
+internal sealed class DeliveryAddressRow
+{
+    public Guid Id { get; set; }
+    public Guid RestaurantId { get; set; }
+    public string? RecipientName { get; set; }
+    public string? Phone { get; set; }
+    public string AddressLine { get; set; } = string.Empty;
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
+}

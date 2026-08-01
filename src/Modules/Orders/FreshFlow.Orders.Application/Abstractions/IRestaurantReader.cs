@@ -12,6 +12,14 @@ public interface IRestaurantReader
 
     /// <summary>Returns a restaurant by ID, or null if it does not exist.</summary>
     public Task<RestaurantSnapshotDto?> FindByIdAsync(Guid restaurantId, CancellationToken ct);
+
+    /// <summary>Returns an active delivery address owned by the restaurant, or null.</summary>
+    public Task<DeliveryAddressSourceDto?> FindDeliveryAddressAsync(
+        Guid addressId, Guid restaurantId, CancellationToken ct);
 }
 
 public sealed record RestaurantSnapshotDto(Guid RestaurantId, bool IsApproved);
+
+public sealed record DeliveryAddressSourceDto(
+    Guid AddressId, string? RecipientName, string? Phone, string AddressLine,
+    decimal? Latitude, decimal? Longitude);

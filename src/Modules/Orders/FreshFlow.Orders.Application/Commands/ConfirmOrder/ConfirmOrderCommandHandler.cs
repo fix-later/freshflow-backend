@@ -57,6 +57,12 @@ internal sealed class ConfirmOrderCommandHandler(
         if (canConfirmResult.IsFailure)
             return Result<OrderDto>.Failure(canConfirmResult.Error);
 
+        var deliveryAddress = await restaurantReader.FindDeliveryAddressAsync(
+            request.DeliveryAddressId, order.RestaurantId, cancellationToken);
+        if (deliveryAddress is null)
+            return Result<OrderDto>.Failure(
+                Error.NotFound("DELIVERY_ADDRESS", request.DeliveryAddressId));
+
         var canChargeResult = await creditService.CanChargeAsync(
             order.RestaurantId, order.TotalAmount, cancellationToken);
         if (canChargeResult.IsFailure)
@@ -78,6 +84,16 @@ internal sealed class ConfirmOrderCommandHandler(
             return Result<OrderDto>.Failure(Error.Validation(
                 "INSUFFICIENT_STOCK",
                 "One or more products no longer have enough available stock."));
+
+        var addressResult = order.CaptureDeliveryAddress(
+            deliveryAddress.AddressId,
+            deliveryAddress.RecipientName,
+            deliveryAddress.Phone,
+            deliveryAddress.AddressLine,
+            deliveryAddress.Latitude,
+            deliveryAddress.Longitude);
+        if (addressResult.IsFailure)
+            return Result<OrderDto>.Failure(addressResult.Error);
 
         var rescheduledFor = evaluation.ResolvedScheduledFor;
         if (rescheduledFor != order.ScheduledFor && rescheduledFor is not null)

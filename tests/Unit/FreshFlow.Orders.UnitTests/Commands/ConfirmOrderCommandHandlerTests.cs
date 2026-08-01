@@ -24,6 +24,7 @@ public sealed class ConfirmOrderCommandHandlerTests
     private static readonly Guid RestaurantId = Guid.NewGuid();
     private static readonly Guid OtherRestaurantId = Guid.NewGuid();
     private static readonly Guid MarketProductId = Guid.NewGuid();
+    private static readonly Guid DeliveryAddressId = Guid.NewGuid();
 
     public ConfirmOrderCommandHandlerTests()
     {
@@ -41,6 +42,11 @@ public sealed class ConfirmOrderCommandHandlerTests
 
         _restaurantReader.FindByUserIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
+        _restaurantReader.FindDeliveryAddressAsync(
+                DeliveryAddressId, RestaurantId, Arg.Any<CancellationToken>())
+            .Returns(new DeliveryAddressSourceDto(
+                DeliveryAddressId, "Bếp trưởng", "0901234567",
+                "1 Test Street", 10.123456m, 106.123456m));
 
         _creditService.CanChargeAsync(RestaurantId, Arg.Any<decimal>(), Arg.Any<CancellationToken>())
             .Returns(Result<CreditCheckDto>.Success(
@@ -59,12 +65,15 @@ public sealed class ConfirmOrderCommandHandlerTests
         return order;
     }
 
+    private static ConfirmOrderCommand Command(Guid orderId) =>
+        new(UserId, orderId, DeliveryAddressId);
+
     [Fact]
     public async Task Handle_OrderNotFound_ReturnsNotFoundAsync()
     {
         _orderRepository.FindByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ReturnsNull();
 
-        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, Guid.NewGuid()), default);
+        var result = await _sut.Handle(Command(Guid.NewGuid()), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("ORDER_NOT_FOUND");
@@ -76,7 +85,7 @@ public sealed class ConfirmOrderCommandHandlerTests
         var order = NewDraftOrderWithItem(OtherRestaurantId);
         _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
-        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+        var result = await _sut.Handle(Command(order.Id), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("FORBIDDEN");
@@ -93,11 +102,28 @@ public sealed class ConfirmOrderCommandHandlerTests
         _restaurantReader.FindByUserIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: false));
 
-        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+        var result = await _sut.Handle(Command(order.Id), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("RESTAURANT_NOT_ACTIVE");
         order.Status.Should().Be(OrderStatus.Draft);
+        await _creditService.DidNotReceive().CanChargeAsync(
+            Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_DeliveryAddressNotFound_ReturnsNotFoundWithoutChargingAsync()
+    {
+        var order = NewDraftOrderWithItem();
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _restaurantReader.FindDeliveryAddressAsync(
+                DeliveryAddressId, RestaurantId, Arg.Any<CancellationToken>())
+            .ReturnsNull();
+
+        var result = await _sut.Handle(Command(order.Id), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("DELIVERY_ADDRESS_NOT_FOUND");
         await _creditService.DidNotReceive().CanChargeAsync(
             Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<CancellationToken>());
     }
@@ -111,7 +137,7 @@ public sealed class ConfirmOrderCommandHandlerTests
             .Returns(Result<CreditCheckDto>.Failure(
                 Error.Validation("CREDIT_LIMIT_EXCEEDED", "Requested amount exceeds available credit.")));
 
-        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+        var result = await _sut.Handle(Command(order.Id), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("CREDIT_LIMIT_EXCEEDED");
@@ -126,7 +152,7 @@ public sealed class ConfirmOrderCommandHandlerTests
         var order = new Order(RestaurantId, scheduledFor: null, notes: null);
         _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
-        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+        var result = await _sut.Handle(Command(order.Id), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("ORDER_EMPTY");
@@ -143,7 +169,7 @@ public sealed class ConfirmOrderCommandHandlerTests
         order.Confirm();
         _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
-        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+        var result = await _sut.Handle(Command(order.Id), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("ORDER_NOT_DRAFT");
@@ -163,7 +189,7 @@ public sealed class ConfirmOrderCommandHandlerTests
             .Returns(Result<RestaurantCreditDto>.Failure(
                 Error.Conflict("OPTIMISTIC_CONCURRENCY_CONFLICT", "conflict")));
 
-        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+        var result = await _sut.Handle(Command(order.Id), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("OPTIMISTIC_CONCURRENCY_CONFLICT");
@@ -178,7 +204,7 @@ public sealed class ConfirmOrderCommandHandlerTests
                 Arg.Any<IReadOnlyList<StockReservation>>(), Arg.Any<CancellationToken>())
             .Returns(false);
 
-        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+        var result = await _sut.Handle(Command(order.Id), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("INSUFFICIENT_STOCK");
@@ -194,10 +220,13 @@ public sealed class ConfirmOrderCommandHandlerTests
         var order = NewDraftOrderWithItem();
         _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
-        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+        var result = await _sut.Handle(Command(order.Id), default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Status.Should().Be("confirmed");
+        result.Value.DeliveryAddress.Should().BeEquivalentTo(new DeliveryAddressSnapshotDto(
+            DeliveryAddressId, "Bếp trưởng", "0901234567",
+            "1 Test Street", 10.123456m, 106.123456m));
         order.Status.Should().Be(OrderStatus.Confirmed);
         _orderRepository.Received(1).Track(order);
         await _creditService.Received(1).ChargeAsync(
@@ -214,8 +243,8 @@ public sealed class ConfirmOrderCommandHandlerTests
         var order = NewDraftOrderWithItem();
         _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
-        var firstResult = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
-        var secondResult = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default);
+        var firstResult = await _sut.Handle(Command(order.Id), default);
+        var secondResult = await _sut.Handle(Command(order.Id), default);
 
         firstResult.IsSuccess.Should().BeTrue();
         secondResult.IsFailure.Should().BeTrue();
@@ -234,7 +263,7 @@ public sealed class ConfirmOrderCommandHandlerTests
 
         _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
-        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default, confirmedAtUtc);
+        var result = await _sut.Handle(Command(order.Id), default, confirmedAtUtc);
 
         result.IsSuccess.Should().BeTrue();
         order.ScheduledFor.Should().NotBeNull();
@@ -253,7 +282,7 @@ public sealed class ConfirmOrderCommandHandlerTests
         var order = NewDraftOrderWithItem(scheduledFor: null);
         _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
-        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default, confirmedAtUtc);
+        var result = await _sut.Handle(Command(order.Id), default, confirmedAtUtc);
 
         result.IsSuccess.Should().BeTrue();
         order.ScheduledFor.Should().Be(new DateTime(2026, 6, 19, 17, 0, 0, DateTimeKind.Utc));
@@ -267,7 +296,7 @@ public sealed class ConfirmOrderCommandHandlerTests
 
         _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
 
-        var result = await _sut.Handle(new ConfirmOrderCommand(UserId, order.Id), default, confirmedAtUtc);
+        var result = await _sut.Handle(Command(order.Id), default, confirmedAtUtc);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("DELIVERY_DATE_OUT_OF_WINDOW");

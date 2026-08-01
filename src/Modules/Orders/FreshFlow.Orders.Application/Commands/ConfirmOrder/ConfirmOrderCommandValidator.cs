@@ -8,5 +8,6 @@ internal sealed class ConfirmOrderCommandValidator : AbstractValidator<ConfirmOr
     {
         RuleFor(x => x.UserId).NotEmpty();
         RuleFor(x => x.OrderId).NotEmpty();
+        RuleFor(x => x.DeliveryAddressId).NotEmpty();
     }
 }

@@ -8,4 +8,5 @@ namespace FreshFlow.Orders.Application.Commands.ConfirmOrder;
 /// applies the 22:00 cutoff (pushing to the next delivery cycle if needed), and charges
 /// the restaurant's credit account.
 /// </summary>
-public sealed record ConfirmOrderCommand(Guid UserId, Guid OrderId) : ICommand<OrderDto>;
+public sealed record ConfirmOrderCommand(
+    Guid UserId, Guid OrderId, Guid DeliveryAddressId) : ICommand<OrderDto>;
