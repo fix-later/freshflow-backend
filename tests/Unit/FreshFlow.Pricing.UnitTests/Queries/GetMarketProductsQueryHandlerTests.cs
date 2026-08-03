@@ -333,6 +333,7 @@ public sealed class GetMarketProductsQueryHandlerTests
         item.ProductName.Should().Be("Test Product");
         item.Category.Should().Be("thủy hải sản");
         item.Unit.Should().Be("kg");
+        item.SellingUnit.Should().Be(new SellingUnitDto("Carton", 10));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -354,7 +355,8 @@ public sealed class GetMarketProductsQueryHandlerTests
             CurrentQuantity: currentQuantity,
             AvailableQuantity: currentQuantity,
             UpdatedAt: DateTime.UtcNow,
-            UpdatedBy: null);
+            UpdatedBy: null,
+            SellingUnit: new SellingUnitDto("Carton", 10));
 
     private static IReadOnlyList<MarketProductItemDto> BuildItems(int count) =>
         Enumerable.Range(0, count)

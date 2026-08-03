@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreshFlow.Catalog.Application.Abstractions;
+using FreshFlow.Catalog.Application.Dtos;
 using FreshFlow.Catalog.Application.Queries.Products.GetProductById;
 using FreshFlow.Catalog.Domain.Entities;
 using NSubstitute;
@@ -83,6 +84,7 @@ public sealed class GetProductByIdQueryHandlerTests
         result.Value.UnitId.Should().Be(unitId);
         result.Value.CategoryName.Should().Be("Rau củ");
         result.Value.UnitName.Should().Be("kg");
+        result.Value.SellingUnit.Should().Be(new SellingUnitDto("kg", null));
         result.Value.Description.Should().Be("Mô tả");
     }
 }

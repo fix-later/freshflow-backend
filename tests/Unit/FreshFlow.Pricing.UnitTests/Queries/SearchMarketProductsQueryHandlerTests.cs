@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreshFlow.Pricing.Application.Abstractions;
+using FreshFlow.Pricing.Application.Dtos;
 using FreshFlow.Pricing.Application.Queries.SearchMarketProducts;
 using NSubstitute;
 
@@ -19,7 +20,8 @@ public sealed class SearchMarketProductsQueryHandlerTests
     }
 
     private static MarketProductSearchItemDto NewItem(string name = "Cà chua") =>
-        new(Guid.NewGuid(), Guid.NewGuid(), name, "Vegetables", 20_000m, AvailableQuantity: 50);
+        new(Guid.NewGuid(), Guid.NewGuid(), name, "Vegetables", 20_000m, AvailableQuantity: 50,
+            SellingUnit: new SellingUnitDto("Bag", 5));
 
     [Fact]
     public async Task Handle_HappyPath_ReturnsItemsAndNextCursorFromRepositoryAsync()
@@ -34,6 +36,7 @@ public sealed class SearchMarketProductsQueryHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Items.Should().BeEquivalentTo(items);
         result.Value.NextCursor.Should().Be("next-cursor-token");
+        result.Value.Items[0].SellingUnit.Should().Be(new SellingUnitDto("Bag", 5));
     }
 
     [Fact]

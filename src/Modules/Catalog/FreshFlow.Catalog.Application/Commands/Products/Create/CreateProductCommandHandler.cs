@@ -36,9 +36,10 @@ internal sealed class CreateProductCommandHandler(
             legacyCategory = category.Name;
         }
 
+        PackingCode? packingCode = null;
         if (request.PackingCodeId is Guid packingCodeId)
         {
-            var packingCode = await packingCodes.FindByIdAsync(packingCodeId, ct);
+            packingCode = await packingCodes.FindByIdAsync(packingCodeId, ct);
             if (packingCode is null || !packingCode.IsActive)
                 return Result<ProductDto>.Failure(
                     Error.Validation("INVALID_PACKING_CODE",
@@ -60,6 +61,6 @@ internal sealed class CreateProductCommandHandler(
         await products.AddAsync(product, ct);
         await products.SaveChangesAsync(ct);
 
-        return Result<ProductDto>.Success(product.ToDto());
+        return Result<ProductDto>.Success(product.ToDto(unit, packingCode));
     }
 }

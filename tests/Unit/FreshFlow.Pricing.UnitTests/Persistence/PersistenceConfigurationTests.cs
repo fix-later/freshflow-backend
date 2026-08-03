@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Pricing.Domain.Entities;
+using FreshFlow.Pricing.Infrastructure.CrossModule;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -123,5 +124,16 @@ public sealed class PersistenceConfigurationTests
         // Assert — FK column must be NOT NULL
         prop.Should().NotBeNull();
         prop!.IsNullable.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ProductDetailRowConfiguration_ProjectsSellingUnitInOneQuery()
+    {
+        using var ctx = CreateInMemoryContext();
+
+        var sql = ctx.Model.FindEntityType(typeof(ProductDetailRow))!.GetSqlQuery();
+
+        sql.Should().Contain("packing_codes");
+        sql.Should().Contain("CapacityKg");
     }
 }

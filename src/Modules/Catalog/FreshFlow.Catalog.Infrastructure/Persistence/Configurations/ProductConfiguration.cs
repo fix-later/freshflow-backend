@@ -35,12 +35,12 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
             .HasForeignKey(p => p.CategoryId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        builder.HasOne<UnitOfMeasurement>()
+        builder.HasOne(p => p.UnitOfMeasurement)
             .WithMany()
             .HasForeignKey(p => p.UnitId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne<PackingCode>()
+        builder.HasOne(p => p.PackingCode)
             .WithMany()
             .HasForeignKey(p => p.PackingCodeId)
             .OnDelete(DeleteBehavior.SetNull);

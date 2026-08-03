@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Pricing.Application.Abstractions;
+using FreshFlow.Pricing.Application.Dtos;
 using FreshFlow.Pricing.Application.Queries.SearchMarketProducts;
 using FreshFlow.Pricing.Domain.Entities;
 using FreshFlow.Pricing.Infrastructure.CrossModule;
@@ -85,7 +86,8 @@ internal sealed class MarketProductRepository(AppDbContext db) : IMarketProductR
                     x.pd.Name,
                     x.pd.Category,
                     x.mp.CurrentPrice,
-                    x.mp.CurrentQuantity - x.mp.ReservedQuantity),
+                    x.mp.CurrentQuantity - x.mp.ReservedQuantity,
+                    new SellingUnitDto(x.pd.Unit, x.pd.CapacityKg)),
                 x.mp.CreatedAt,  // sort key — must match ORDER BY clause
             })
             .ToListAsync(ct);

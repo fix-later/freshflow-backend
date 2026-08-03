@@ -38,9 +38,11 @@ public sealed class Product : AggregateRoot
 
     /// <summary>FK → units_of_measurement.</summary>
     public Guid UnitId { get; private set; }
+    public UnitOfMeasurement UnitOfMeasurement { get; private set; } = null!;
 
     /// <summary>FK → packing_codes (nullable; null = no packing code assigned).</summary>
     public Guid? PackingCodeId { get; private set; }
+    public PackingCode? PackingCode { get; private set; }
 
     public string? Description { get; private set; }
 

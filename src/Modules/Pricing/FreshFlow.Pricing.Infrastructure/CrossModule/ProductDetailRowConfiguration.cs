@@ -17,10 +17,12 @@ internal sealed class ProductDetailRowConfiguration : IEntityTypeConfiguration<P
                 p."Id",
                 p."Name",
                 u."Name"  AS "Unit",
-                c."Name"  AS "Category"
+                c."Name"  AS "Category",
+                pc."CapacityKg"
             FROM products p
             INNER JOIN units_of_measurement u ON p."UnitId" = u."Id"
             LEFT  JOIN product_categories   c ON p."CategoryId" = c."Id"
+            LEFT  JOIN packing_codes       pc ON p."PackingCodeId" = pc."Id"
             WHERE p."DeletedAt" IS NULL
             """);
 
@@ -28,5 +30,6 @@ internal sealed class ProductDetailRowConfiguration : IEntityTypeConfiguration<P
         builder.Property(p => p.Name);
         builder.Property(p => p.Unit);
         builder.Property(p => p.Category);
+        builder.Property(p => p.CapacityKg);
     }
 }

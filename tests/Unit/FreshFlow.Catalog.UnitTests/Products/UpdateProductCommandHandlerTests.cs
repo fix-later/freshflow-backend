@@ -38,6 +38,8 @@ public sealed class UpdateProductCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Name.Should().Be("Cà rốt mới");
         result.Value.Description.Should().Be("Mô tả mới");
+        result.Value.SellingUnit.UnitName.Should().Be("kg");
+        result.Value.SellingUnit.WeightKg.Should().BeNull();
         await _products.Received(1).SaveChangesAsync(default);
     }
 

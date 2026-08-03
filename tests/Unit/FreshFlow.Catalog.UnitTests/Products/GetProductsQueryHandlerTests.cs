@@ -23,7 +23,7 @@ public sealed class GetProductsQueryHandlerTests
     {
         // Arrange
         var unit = new UnitOfMeasurement("kg", "kg");
-        var product = new Product("Cá lóc", unit.Id, null, null, null);
+        var product = new Product("Cá lóc", unit.Id, null, null, null, legacyUnit: unit.Name);
         var data = (IReadOnlyList<Product>)[product];
         _products.GetPagedAsync(null, null, false, 1, 20, default).Returns((data, 1));
 
@@ -36,6 +36,7 @@ public sealed class GetProductsQueryHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Data.Should().HaveCount(1);
         result.Value.Data[0].Name.Should().Be("Cá lóc");
+        result.Value.Data[0].SellingUnit.Should().Be(new SellingUnitDto("kg", null));
         result.Value.Meta.Total.Should().Be(1);
         result.Value.Meta.Page.Should().Be(1);
         result.Value.Meta.PageSize.Should().Be(20);

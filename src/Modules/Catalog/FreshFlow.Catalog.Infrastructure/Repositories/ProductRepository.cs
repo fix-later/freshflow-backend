@@ -9,6 +9,8 @@ internal sealed class ProductRepository(AppDbContext db) : IProductRepository
 {
     public Task<Product?> FindByIdAsync(Guid id, CancellationToken ct) =>
         db.Set<Product>()
+            .Include(p => p.UnitOfMeasurement)
+            .Include(p => p.PackingCode)
             .FirstOrDefaultAsync(p => p.Id == id && p.DeletedAt == null, ct);
 
     public async Task AddAsync(Product product, CancellationToken ct) =>
@@ -46,6 +48,8 @@ internal sealed class ProductRepository(AppDbContext db) : IProductRepository
 
         var total = await query.CountAsync(ct);
         var items = await query
+            .Include(p => p.UnitOfMeasurement)
+            .Include(p => p.PackingCode)
             .OrderBy(p => p.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
