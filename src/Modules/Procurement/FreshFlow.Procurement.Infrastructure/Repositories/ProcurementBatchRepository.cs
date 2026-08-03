@@ -74,6 +74,10 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
         {
             return false;
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            return false;
+        }
     }
 
     // ponytail: EF mis-classifies children appended to a tracked batch (MergeIn) as Modified
