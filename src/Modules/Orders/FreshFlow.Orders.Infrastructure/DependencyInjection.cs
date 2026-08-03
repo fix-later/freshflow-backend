@@ -45,6 +45,7 @@ public static class DependencyInjection
 
         // Repositories
         services.AddScoped<IOrderRepository, OrderRepository>();
+        services.AddScoped<IOrderClaimRepository, OrderClaimRepository>();
         services.AddScoped<IProcurementHandoverOrderFinalizer,
             ProcurementBatchHandedOffIntegrationEventHandler>();
         services.AddScoped<IOrderIssueRepository, OrderIssueRepository>();

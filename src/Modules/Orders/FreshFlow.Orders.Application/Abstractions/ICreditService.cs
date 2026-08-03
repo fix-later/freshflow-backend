@@ -15,7 +15,7 @@ public interface ICreditService
         string? note,
         CancellationToken ct);
 
-    public Task<Result<RestaurantCreditDto>> RefundAsync(
+    public Task<Result<CreditRefundDto>> RefundAsync(
         Guid restaurantId,
         Guid orderId,
         decimal amount,

@@ -12,7 +12,7 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
 | GAP-05 | E-invoice readiness | Done | Invoice data required for compliant e-invoice issuance is captured, validated, and exportable. |
 | GAP-06 | Organizations, branches, and approval | Planned ⛔ blocked | Organization/branch boundaries and approval rules are enforced for ordering and administration. |
 | GAP-07 | Spend analytics | Planned ⚠️ reconcile | Authorized users can query consistent spend aggregates over supported periods and dimensions. |
-| GAP-08 | Claims and refunds | Planned | Claims have an auditable lifecycle and approved refunds update credit exactly once. |
+| GAP-08 | Claims and refunds | Done | Claims have an auditable lifecycle and approved refunds update credit exactly once. |
 | GAP-09 | Delivery slips | Planned | Delivery slips are generated from immutable fulfillment data and remain retrievable. |
 | GAP-10 | QC traceability | Planned | QC results can be traced from procurement/lot through fulfillment and delivery. |
 
@@ -209,6 +209,15 @@ implementation is sound; the notes below only affect the Planned GAPs and their 
   call the stub provider and remains scoped by the existing invoice RBAC/IDOR rules.
 - 2026-08-04: The existing order-invoice keyless seam also reads Catalog's selling unit and snapshots
   it into a nullable legacy-compatible `invoice_lines.unit` column; no second cross-module Row is added.
+- 2026-08-04: GAP-08 keeps claims in Orders and reuses `ICreditService.RefundAsync`; approved claims
+  are credit adjustments, not payment-gateway refunds.
+- 2026-08-04: Claim lifecycle is `Submitted -> Approved | Rejected`; `UnderReview` is omitted until a
+  workflow needs it. Approval and rejection are terminal and record reviewer, time, and decision note.
+- 2026-08-04: Claims may be filed only for actual Orders statuses `AtHub` and `Delivered`; the model
+  has no `Completed` status.
+- 2026-08-04: Exactly-once approval uses the claim's `UpdatedAt` EF concurrency token inside the
+  existing serializable order transaction. The tracked approval and existing credit refund share one
+  `AppDbContext` transaction; a stale concurrent writer returns HTTP 409 and rolls back its refund.
 
 ## GAP-03 — MOQ, VAT, and distance delivery fee
 
@@ -423,3 +432,49 @@ implementation is sound; the notes below only affect the Planned GAPs and their 
   HTTP 422; invoice detail now exposes `errorReason` and each line's persisted `unit`.
 - Test results: solution build passed (0 errors, 25 existing warnings); Invoicing unit tests 55/55;
   Invoicing PostgreSQL integration tests 5/5; solution format passes; EF has no pending model changes.
+
+## GAP-08 — Claims and refunds
+
+### Scope and API contract
+
+- Add an Orders-owned `order_claims` table and auditable `Submitted -> Approved | Rejected`
+  lifecycle. `UpdatedAt` is the optimistic concurrency token; `deleted_at` retains soft-delete
+  compatibility.
+- `POST /api/v1/orders/{orderId}/claims` files a restaurant-owned claim for an `AtHub` or `Delivered`
+  order. The claimed amount must be positive and no greater than the order's charged amount.
+- `PATCH /api/v1/claims/{claimId}/approve` and `/reject` are restricted to `admin` and
+  `operations_manager`. Approval refunds the claimed amount through `ICreditService.RefundAsync` in
+  the existing serializable transaction and stores the refund transaction ID; rejection requires a
+  decision note and never changes credit.
+- `GET /api/v1/claims/{claimId}` and `GET /api/v1/claims?restaurantId=&status=&cursor=&pageSize=` are
+  available to `admin`, `operations_manager`, and `restaurant`. Restaurants are always scoped to
+  their own claims; lists use the credit-ledger `(CreatedAt, Id)` descending cursor pattern.
+- Re-approving an already approved claim returns its existing representation without writing another
+  refund. Other terminal-state transitions return `CLAIM_INVALID_TRANSITION` (HTTP 409).
+
+### Acceptance criteria
+
+- [x] Aggregate tests cover submission, approval, rejection, audit fields, and illegal terminal transitions.
+- [x] Filing enforces restaurant ownership, claimable order state, positive amount, and amount no greater
+  than the order charge.
+- [x] Approval posts one existing credit `Refund`, records its transaction ID, and a sequential repeat is a no-op.
+- [x] Concurrent PostgreSQL approvals produce one approved claim, one refund transaction, and one credit movement.
+- [x] A failed refund rolls back claim approval; rejection records its reviewer/note without refunding.
+- [x] Claim detail/list enforce restaurant IDOR scope while admin/operations-manager roles can read all.
+- [x] Solution build, Orders unit tests, Orders PostgreSQL integration tests, formatting, and EF model checks pass.
+
+### Change record
+
+- Files changed: new `OrderClaim` aggregate + `OrderClaimStatus`, `File/Approve/RejectClaim` commands,
+  `GetClaimById`/`ListClaims` queries, `OrderClaimRepository`/config, `ClaimsController`, `CreditService`
+  `RefundAsync` refundable-amount cap + `CreditRepository.GetRefundableAmountForOrderAsync`,
+  `ErrorExtensions` code mapping, EF migration/snapshot, and Orders unit + integration tests.
+- Migration: `20260803185013_AddOrderClaims` adds the Orders-owned `order_claims` table only; EF reports
+  no pending model changes.
+- API contract: the five endpoints and error behavior above; refund reuses `ICreditService.RefundAsync`
+  (credit adjustment, no gateway or second credit/refund subsystem).
+- Test results: solution build passed (0 errors, 23 existing warnings); Orders unit tests 575/575; Orders
+  PostgreSQL integration tests 27/27 (incl. `Approve_ConcurrentRequests_RefundExactlyOnceAsync`:
+  concurrent approvals → one 200, one 409, exactly one refund transaction); `dotnet format` clean; EF has
+  no pending model changes. Reviewed by csharp-reviewer: APPROVE, no CRITICAL/HIGH. Open follow-up:
+  `GetClaimById` returns 403 (not 404) for another restaurant's claim — minor existence leak, non-blocking.

@@ -97,6 +97,19 @@ public sealed class PersistenceConfigurationTests
     }
 
     [Fact]
+    public void OrderClaimConfiguration_UsesUpdatedAtConcurrencyAndSnakeCaseSoftDelete()
+    {
+        using var ctx = CreateInMemoryContext();
+        var entity = ctx.Model.FindEntityType(typeof(OrderClaim));
+        var table = StoreObjectIdentifier.Table("order_claims", null);
+
+        entity.Should().NotBeNull();
+        entity!.FindProperty(nameof(OrderClaim.UpdatedAt))!.IsConcurrencyToken.Should().BeTrue();
+        entity.FindProperty(nameof(OrderClaim.DeletedAt))!.GetColumnName(table)
+            .Should().Be("deleted_at");
+    }
+
+    [Fact]
     public void Model_RegistersOrderIssueEntity()
     {
         // Arrange

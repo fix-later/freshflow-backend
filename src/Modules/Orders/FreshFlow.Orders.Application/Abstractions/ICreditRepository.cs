@@ -8,6 +8,9 @@ public interface ICreditRepository
     public Task AddAccountAsync(RestaurantCredit account, CancellationToken ct);
     public void Track(RestaurantCredit account);
     public void AddTransaction(CreditTransaction transaction);
+    public Task<decimal> GetRefundableAmountForOrderAsync(
+        Guid orderId,
+        CancellationToken ct);
 
     /// <summary>
     /// Returns a cursor-paginated page of balance-moving credit transactions (charge,

@@ -37,8 +37,9 @@ public sealed class ProcurementBatchCancelledIntegrationEventHandlerTests
                 Arg.Any<decimal>(),
                 Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
-            .Returns(Result<RestaurantCreditDto>.Success(
-                new RestaurantCreditDto(RestaurantId, 1_000_000m, 0m, 1_000_000m, DateTime.UtcNow)));
+            .Returns(Result<CreditRefundDto>.Success(new CreditRefundDto(
+                Guid.NewGuid(),
+                new RestaurantCreditDto(RestaurantId, 1_000_000m, 0m, 1_000_000m, DateTime.UtcNow))));
     }
 
     [Fact]

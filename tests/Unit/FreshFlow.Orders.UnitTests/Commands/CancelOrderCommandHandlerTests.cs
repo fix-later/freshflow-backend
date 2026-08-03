@@ -36,8 +36,9 @@ public sealed class CancelOrderCommandHandlerTests
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
         _creditService.RefundAsync(
                 RestaurantId, Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(Result<RestaurantCreditDto>.Success(
-                new RestaurantCreditDto(RestaurantId, 1_000m, 0m, 1_000m, DateTime.UtcNow)));
+            .Returns(Result<CreditRefundDto>.Success(new CreditRefundDto(
+                Guid.NewGuid(),
+                new RestaurantCreditDto(RestaurantId, 1_000m, 0m, 1_000m, DateTime.UtcNow))));
         _sut = new CancelOrderCommandHandler(_orderRepository, _restaurantReader, _creditService);
     }
 
@@ -141,7 +142,7 @@ public sealed class CancelOrderCommandHandlerTests
         _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
         _creditService.RefundAsync(
                 RestaurantId, order.Id, order.TotalAmount, Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(Result<RestaurantCreditDto>.Failure(
+            .Returns(Result<CreditRefundDto>.Failure(
                 Error.Validation("CREDIT_REFUND_EXCEEDS_BALANCE", "Refund amount cannot exceed balance.")));
 
         var result = await _sut.Handle(Cmd(order.Id), default);

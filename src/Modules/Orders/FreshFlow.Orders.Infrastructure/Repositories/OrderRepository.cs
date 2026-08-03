@@ -41,6 +41,14 @@ internal sealed class OrderRepository(AppDbContext db) : IOrderRepository
                 "SERIALIZATION_CONFLICT",
                 "The order changed concurrently. Retry the request."));
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
+            return Result.Failure(Error.Conflict(
+                "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                "The record changed concurrently. Refresh and retry."));
+        }
         catch
         {
             await transaction.RollbackAsync(CancellationToken.None);

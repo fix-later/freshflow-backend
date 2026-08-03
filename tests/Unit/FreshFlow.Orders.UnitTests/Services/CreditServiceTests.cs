@@ -21,6 +21,8 @@ public sealed class CreditServiceTests
     {
         _restaurantReader.FindByIdAsync(RestaurantId, default)
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
+        _creditRepository.GetRefundableAmountForOrderAsync(OrderId, default)
+            .Returns(100m);
         _sut = new CreditService(_creditRepository, _restaurantReader);
     }
 
@@ -172,7 +174,7 @@ public sealed class CreditServiceTests
         var result = await _sut.RefundAsync(RestaurantId, OrderId, 10m, "Order cancelled", default);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.OutstandingBalance.Should().Be(50m);
+        result.Value.Credit.OutstandingBalance.Should().Be(50m);
         _creditRepository.Received(1).AddTransaction(Arg.Is<CreditTransaction>(t =>
             t.RestaurantId == RestaurantId
             && t.OrderId == OrderId
@@ -182,6 +184,21 @@ public sealed class CreditServiceTests
         await _creditRepository.Received(1).SaveChangesAsync(default);
     }
 
+    [Fact]
+    public async Task Refund_ExceedsRemainingOrderCharge_ReturnsValidationAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 200m);
+        account.Charge(100m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+        _creditRepository.GetRefundableAmountForOrderAsync(OrderId, default).Returns(5m);
+
+        var result = await _sut.RefundAsync(RestaurantId, OrderId, 10m, null, default);
+
+        result.Error.Code.Should().Be("CREDIT_REFUND_EXCEEDS_ORDER_CHARGE");
+        _creditRepository.DidNotReceive().AddTransaction(Arg.Any<CreditTransaction>());
+
+        await _creditRepository.DidNotReceive().SaveChangesAsync(default);
+    }
     [Fact]
     public async Task SetCreditLimit_NewRestaurant_CreatesAccountWithoutTouchingBalanceLedgerAsync()
     {
