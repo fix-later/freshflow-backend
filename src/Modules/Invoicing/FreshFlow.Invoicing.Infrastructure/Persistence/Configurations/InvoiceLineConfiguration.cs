@@ -14,6 +14,7 @@ internal sealed class InvoiceLineConfiguration : IEntityTypeConfiguration<Invoic
         builder.Property(l => l.Id).HasColumnName("id");
         builder.Property(l => l.InvoiceId).HasColumnName("invoice_id").IsRequired();
         builder.Property(l => l.ProductName).HasColumnName("product_name").HasMaxLength(200).IsRequired();
+        builder.Property(l => l.Unit).HasColumnName("unit").HasMaxLength(100);
         builder.Property(l => l.Quantity).HasColumnName("quantity").HasColumnType("numeric(12,2)").IsRequired();
         builder.Property(l => l.UnitPrice).HasColumnName("unit_price").HasColumnType("numeric(12,2)").IsRequired();
         builder.Property(l => l.VatRateCode).HasColumnName("vat_rate_code").HasMaxLength(10).IsRequired();

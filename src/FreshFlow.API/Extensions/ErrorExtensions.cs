@@ -96,6 +96,9 @@ public static class ErrorExtensions
                         or "MARKET_INACTIVE"
                         or "HUB_INACTIVE"
                         or "HUB_NOT_CONFIGURED_FOR_MARKET"
+                        or "BUYER_TAX_CODE_REQUIRED" or "BUYER_TAX_CODE_INVALID"
+                        or "BUYER_LEGAL_NAME_REQUIRED" or "BUYER_ADDRESS_REQUIRED"
+                        or "INVOICE_LINE_UNIT_REQUIRED" or "INVOICE_NOT_ISSUED" or "INVOICE_EXPORT_INCOMPLETE"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 

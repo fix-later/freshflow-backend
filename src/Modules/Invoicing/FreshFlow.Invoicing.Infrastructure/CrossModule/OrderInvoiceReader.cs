@@ -17,7 +17,8 @@ internal sealed class OrderInvoiceReader(AppDbContext db) : IOrderInvoiceReader
             return null;
 
         var lines = rows
-            .Select(r => new OrderInvoiceLineSnapshot(r.ProductName, r.Quantity, r.UnitPrice, r.VatRateCode))
+            .Select(r => new OrderInvoiceLineSnapshot(
+                r.ProductName, r.Unit, r.Quantity, r.UnitPrice, r.VatRateCode))
             .ToList();
 
         return new OrderInvoiceSnapshot(orderId, rows[0].RestaurantId, lines);

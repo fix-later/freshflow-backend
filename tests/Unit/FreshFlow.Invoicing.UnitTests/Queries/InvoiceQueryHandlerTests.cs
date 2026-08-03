@@ -112,6 +112,6 @@ public sealed class InvoiceQueryHandlerTests
     }
 
     private static Invoice InvoiceFor(Guid restaurantId) =>
-        new(Guid.NewGuid(), restaurantId, "0312345678", "Cty A", null, null,
-            [new InvoiceLine("A", 1m, 1000m, "KCT", 0m)]);
+        new(Guid.NewGuid(), restaurantId, "0312345678", "Cty A", "123 Nguyễn Huệ", null,
+            [new InvoiceLine("A", "kg", 1m, 1000m, "KCT", 0m)]);
 }

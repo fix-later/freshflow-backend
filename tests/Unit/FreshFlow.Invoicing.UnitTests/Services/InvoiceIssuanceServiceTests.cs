@@ -63,7 +63,7 @@ public sealed class InvoiceIssuanceServiceTests
         request.Should().NotBeNull();
         request!.Lines.Should().ContainSingle();
         request.Lines[0].Should().Be(new InvoiceIssueLine(
-            "Cà chua", "kg", 10m, 5000m, "5", 5m, 50000m, 2500m, 52500m));
+            "Cà chua", "thùng", 10m, 5000m, "5", 5m, 50000m, 2500m, 52500m));
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class InvoiceIssuanceServiceTests
 
         captured()!.Status.Should().Be(InvoiceStatus.PendingIssuance);
         captured()!.RetryCount.Should().Be(0);
-        captured()!.ErrorReason.Should().Be("MISSING_BUYER_TAX_PROFILE");
+        captured()!.ErrorReason.Should().Be("BUYER_TAX_CODE_REQUIRED");
         await _provider.DidNotReceive().IssueAsync(
             Arg.Any<InvoiceIssueRequest>(), Arg.Any<CancellationToken>());
     }
@@ -109,7 +109,7 @@ public sealed class InvoiceIssuanceServiceTests
     {
         var invoice = new Invoice(
             OrderId, RestaurantId, string.Empty, string.Empty, null, null,
-            [new InvoiceLine("A", 1m, 1000m, "KCT", 0m)]);
+            [new InvoiceLine("A", "kg", 1m, 1000m, "KCT", 0m)]);
         invoice.MarkAwaitingBuyerInfo("MISSING_BUYER_TAX_PROFILE");
 
         _repo.GetRetryablePageAsync(5, Arg.Any<DateTime>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
@@ -135,7 +135,7 @@ public sealed class InvoiceIssuanceServiceTests
     {
         var invoice = new Invoice(
             OrderId, RestaurantId, "0312345678", "Cty A", "Addr", null,
-            [new InvoiceLine("A", 1m, 1000m, "KCT", 0m)]);
+            [new InvoiceLine("A", "kg", 1m, 1000m, "KCT", 0m)]);
         for (var i = 0; i < 4; i++)
             invoice.MarkIssuanceFailed("prev"); // RetryCount → 4 (cap is 5)
 
@@ -154,7 +154,7 @@ public sealed class InvoiceIssuanceServiceTests
         _orderReader.GetByOrderIdAsync(OrderId, Arg.Any<CancellationToken>())
             .Returns(new OrderInvoiceSnapshot(
                 OrderId, RestaurantId,
-                [new OrderInvoiceLineSnapshot("Cà chua", 10m, 5000m, "5")]));
+                [new OrderInvoiceLineSnapshot("Cà chua", "thùng", 10m, 5000m, "5")]));
 
     private Func<Invoice?> CaptureAddedInvoice()
     {

@@ -20,6 +20,7 @@ public sealed record OrderInvoiceSnapshot(
 
 public sealed record OrderInvoiceLineSnapshot(
     string ProductName,
+    string? Unit,
     decimal Quantity,
     decimal UnitPrice,
     string? VatRateCode);

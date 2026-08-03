@@ -20,6 +20,7 @@ public sealed record InvoiceDto(
     decimal VatAmount,
     decimal Total,
     int RetryCount,
+    string? ErrorReason,
     DateTime CreatedAt,
     IReadOnlyList<InvoiceLineDto> Lines)
 {
@@ -28,12 +29,13 @@ public sealed record InvoiceDto(
         i.BuyerTaxCode, i.BuyerLegalName, i.BuyerAddress, i.BuyerEmail,
         i.Serial, i.Number, i.TaxAuthorityCode, i.LookupUrl,
         i.IssuedAt, i.SubTotal, i.VatAmount, i.Total,
-        i.RetryCount, i.CreatedAt,
+        i.RetryCount, i.ErrorReason, i.CreatedAt,
         i.Lines.Select(InvoiceLineDto.From).ToList());
 }
 
 public sealed record InvoiceLineDto(
     string ProductName,
+    string? Unit,
     decimal Quantity,
     decimal UnitPrice,
     string VatRateCode,
@@ -43,7 +45,7 @@ public sealed record InvoiceLineDto(
     decimal LineTotal)
 {
     public static InvoiceLineDto From(InvoiceLine l) => new(
-        l.ProductName, l.Quantity, l.UnitPrice, l.VatRateCode, l.VatRatePercent,
+        l.ProductName, l.Unit, l.Quantity, l.UnitPrice, l.VatRateCode, l.VatRatePercent,
         l.LineSubtotal, l.LineVatAmount, l.LineTotal);
 }
 

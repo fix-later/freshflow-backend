@@ -7,6 +7,7 @@ internal sealed class OrderInvoiceRow
     public Guid OrderId { get; set; }
     public Guid RestaurantId { get; set; }
     public string ProductName { get; set; } = string.Empty;
+    public string? Unit { get; set; }
     public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public string? VatRateCode { get; set; }

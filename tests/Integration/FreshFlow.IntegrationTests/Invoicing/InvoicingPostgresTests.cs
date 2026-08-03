@@ -1,3 +1,7 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Xml.Linq;
 using FluentAssertions;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Domain.Aggregates;
@@ -25,6 +29,7 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
     private const string UnknownVatProduct = "Unknown-VAT herbs";
     private const string DeletedProduct = "Deleted product";
     private const string DeletedMarketProduct = "Deleted market product";
+    private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
     public async Task OrderInvoiceReader_ExecutesPostgresProjectionAsync()
@@ -44,6 +49,7 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         fivePercent.Quantity.Should().Be(2.5m);
         fivePercent.UnitPrice.Should().Be(11_000m);
         fivePercent.VatRateCode.Should().Be("5");
+        fivePercent.Unit.Should().StartWith("kg-");
 
         var kct = snapshot.Lines.Should().ContainSingle(line => line.ProductName == KctProduct).Which;
         kct.Quantity.Should().Be(2m);
@@ -117,6 +123,7 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         fivePercent.Quantity.Should().Be(2.5m);
         fivePercent.UnitPrice.Should().Be(11_000m);
         fivePercent.VatRateCode.Should().Be("5");
+        fivePercent.Unit.Should().StartWith("kg-");
         fivePercent.LineSubtotal.Should().Be(27_500m);
         fivePercent.LineVatAmount.Should().Be(1_375m);
         fivePercent.LineTotal.Should().Be(28_875m);
@@ -139,7 +146,7 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task IssueForDeliveredOrderAsync_MissingBuyerPersistsPendingInvoiceAsync()
+    public async Task IssueForDeliveredOrderAsync_InvalidMstPersistsPendingInvoiceAsync()
     {
         var seed = await SeedAsync();
         using var scope = factory.Services.CreateScope();
@@ -154,6 +161,37 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         invoice.Status.Should().Be(InvoiceStatus.PendingIssuance);
         invoice.RetryCount.Should().Be(0);
         invoice.TaxAuthorityCode.Should().BeNull();
+        invoice.ErrorReason.Should().Be("BUYER_TAX_CODE_INVALID");
+    }
+
+    [Fact]
+    public async Task ExportIssuedInvoice_ReturnsPersistedStructuredDocumentAsync()
+    {
+        var seed = await SeedAsync();
+        Guid invoiceId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<IInvoiceIssuanceService>();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            await service.IssueForDeliveredOrderAsync(seed.OrderId, default);
+            invoiceId = await db.Set<Invoice>()
+                .Where(value => value.OrderId == seed.OrderId)
+                .Select(value => value.Id)
+                .SingleAsync();
+        }
+
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await _client.GetAsync($"/api/v1/invoices/{invoiceId}/export");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Content.Headers.ContentType!.MediaType.Should().Be("application/xml");
+        var document = XDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.Root!.Element("Header")!.Element("TaxAuthorityCode")!.Value.Should().NotBeNullOrWhiteSpace();
+        document.Root.Element("Buyer")!.Element("TaxCode")!.Value.Should().Be("0312345678");
+        document.Root.Element("Lines")!.Elements("Line").Should().OnlyContain(line =>
+            line.Element("Unit")!.Value.StartsWith("kg-", StringComparison.Ordinal));
     }
 
     private async Task<SeedData> SeedAsync()
@@ -179,6 +217,13 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             "FreshFlow Integration Co.",
             "123 Nguyễn Huệ, Quận 1, TP.HCM",
             "invoice@integration.freshflow",
+            default);
+        await restaurants.UpdateTaxProfileAsync(
+            missingProfileRestaurantId,
+            "031234567A",
+            "Invalid MST Co.",
+            "456 Lê Lợi, Quận 1, TP.HCM",
+            null,
             default);
 
         var unit = new UnitOfMeasurement($"kg-{suffix}", "kg");
@@ -307,6 +352,16 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
 
         order.ClearDomainEvents();
         return order;
+    }
+
+    private async Task<string> LoginAsAdminAsync()
+    {
+        _client.DefaultRequestHeaders.Authorization = null;
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/auth/login",
+            new { identifier = "admin@test.freshflow", password = "AdminP@ss1" });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<Envelope<TokenBody>>())!.Data!.AccessToken;
     }
 
     private sealed record SeedData(

@@ -9,7 +9,7 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
 | GAP-02 | Delivery-address snapshot | Done | An order keeps the delivery address captured at placement even if the restaurant address later changes. |
 | GAP-03 | MOQ, VAT, and distance delivery fee | Done | Confirmation validates MOQ and returns deterministic VAT and distance-based delivery fee amounts. |
 | GAP-04 | Actual purchase price and pro-rata shortage allocation | Done | Purchased quantities/prices are recorded and shortages are allocated deterministically across affected orders. |
-| GAP-05 | E-invoice readiness | Planned ⚠️ reconcile | Invoice data required for compliant e-invoice issuance is captured, validated, and exportable. |
+| GAP-05 | E-invoice readiness | Ready for review | Invoice data required for compliant e-invoice issuance is captured, validated, and exportable. |
 | GAP-06 | Organizations, branches, and approval | Planned ⛔ blocked | Organization/branch boundaries and approval rules are enforced for ordering and administration. |
 | GAP-07 | Spend analytics | Planned ⚠️ reconcile | Authorized users can query consistent spend aggregates over supported periods and dimensions. |
 | GAP-08 | Claims and refunds | Planned | Claims have an auditable lifecycle and approved refunds update credit exactly once. |
@@ -201,6 +201,14 @@ implementation is sound; the notes below only affect the Planned GAPs and their 
   off while Orders rolled back, or broadcast uncommitted statuses. Handover now invokes a dedicated
   Orders finalizer inside the shared serializable PostgreSQL transaction, captures status events,
   commits Procurement/Orders/stock together, then publishes captured events once after commit.
+- 2026-08-04: GAP-05 accepts a Vietnamese MST only as 10 ASCII digits or 10 ASCII digits followed
+  by a hyphen and three ASCII branch digits. A blank legal name/address or invalid MST holds the
+  existing invoice in `PendingIssuance` with a specific validation reason and never calls the provider.
+- 2026-08-04: GAP-05 exports deterministic UTF-8 XML from the persisted invoice snapshot, using
+  explicit seller placeholders until go-live provider/seller configuration exists. Export does not
+  call the stub provider and remains scoped by the existing invoice RBAC/IDOR rules.
+- 2026-08-04: The existing order-invoice keyless seam also reads Catalog's selling unit and snapshots
+  it into a nullable legacy-compatible `invoice_lines.unit` column; no second cross-module Row is added.
 
 ## GAP-03 — MOQ, VAT, and distance delivery fee
 
@@ -360,3 +368,58 @@ implementation is sound; the notes below only affect the Planned GAPs and their 
   integration tests 16/16; Procurement endpoint PostgreSQL integration tests 8/8, including failed
   finalization rollback and successful retry. Scoped solution format passes while excluding only
   BOMs in the already-committed GAP-02/GAP-03 migration files; the GAP-04 migration BOM was removed.
+
+## GAP-05 — E-invoice readiness
+
+### Scope and API contract
+
+- Validate buyer MST, legal name, and address before calling the existing e-invoice provider.
+- Hold invalid buyer data through `MarkAwaitingBuyerInfo`; retries may refresh corrected profile data.
+- Snapshot Catalog's selling unit on each invoice line at issuance time.
+- Export an owned `Issued` invoice as deterministic structured XML from persisted invoice data.
+
+### Acceptance criteria
+
+- [x] Ten-digit and `xxxxxxxxxx-xxx` MST values are accepted; every other shape is rejected.
+- [x] Missing/invalid buyer data persists a pending invoice and never calls the provider.
+- [x] Issuance and export use the persisted non-blank selling unit.
+- [x] Only `Issued` invoices are exportable and restaurant ownership is enforced as for invoice detail.
+- [x] Solution build, Invoicing unit tests, related PostgreSQL tests, format, and EF model checks pass.
+
+### Change record
+
+- Files changed:
+  - `src/FreshFlow.API/Controllers/InvoicesController.cs`
+  - `src/FreshFlow.API/Extensions/ErrorExtensions.cs`
+  - `src/FreshFlow.Infrastructure.Persistence/Migrations/20260801143556_AddOrderDeliveryAddressSnapshot.cs`
+  - `src/FreshFlow.Infrastructure.Persistence/Migrations/20260801151302_AddOrderCommercialTerms.cs`
+  - `src/FreshFlow.Infrastructure.Persistence/Migrations/20260803180055_AddInvoiceLineUnit.cs`
+  - `src/FreshFlow.Infrastructure.Persistence/Migrations/20260803180055_AddInvoiceLineUnit.Designer.cs`
+  - `src/FreshFlow.Infrastructure.Persistence/Migrations/AppDbContextModelSnapshot.cs`
+  - `src/Modules/Invoicing/FreshFlow.Invoicing.Application/Abstractions/IOrderInvoiceReader.cs`
+  - `src/Modules/Invoicing/FreshFlow.Invoicing.Application/Dtos/InvoiceDtos.cs`
+  - `src/Modules/Invoicing/FreshFlow.Invoicing.Application/Queries/ExportInvoice/ExportInvoiceQuery.cs`
+  - `src/Modules/Invoicing/FreshFlow.Invoicing.Application/Services/InvoiceIssuanceService.cs`
+  - `src/Modules/Invoicing/FreshFlow.Invoicing.Domain/Entities/InvoiceLine.cs`
+  - `src/Modules/Invoicing/FreshFlow.Invoicing.Domain/Validation/InvoiceBuyerValidator.cs`
+  - `src/Modules/Invoicing/FreshFlow.Invoicing.Infrastructure/CrossModule/OrderInvoiceReader.cs`
+  - `src/Modules/Invoicing/FreshFlow.Invoicing.Infrastructure/CrossModule/OrderInvoiceRow.cs`
+  - `src/Modules/Invoicing/FreshFlow.Invoicing.Infrastructure/CrossModule/OrderInvoiceRowConfiguration.cs`
+  - `src/Modules/Invoicing/FreshFlow.Invoicing.Infrastructure/Persistence/Configurations/InvoiceLineConfiguration.cs`
+  - `tests/Integration/FreshFlow.IntegrationTests/Invoicing/InvoicingPostgresTests.cs`
+  - `tests/Unit/FreshFlow.Invoicing.UnitTests/Domain/InvoiceBuyerValidatorTests.cs`
+  - `tests/Unit/FreshFlow.Invoicing.UnitTests/Domain/InvoiceTests.cs`
+  - `tests/Unit/FreshFlow.Invoicing.UnitTests/Queries/ExportInvoiceQueryHandlerTests.cs`
+  - `tests/Unit/FreshFlow.Invoicing.UnitTests/Queries/InvoiceQueryHandlerTests.cs`
+  - `tests/Unit/FreshFlow.Invoicing.UnitTests/Services/InvoiceIssuanceServiceTests.cs`
+- Migration: `20260803180055_AddInvoiceLineUnit` adds nullable `invoice_lines.unit` for legacy-safe
+  selling-unit snapshots. No new keyless Row was added; the existing Invoicing Infrastructure
+  assembly is already listed in `DesignTimeDbContextFactory.ForceLoadModuleAssemblies`. The two
+  previously recorded GAP-02/GAP-03 migration BOM/namespace issues were format-only cleaned so the
+  exact solution-wide format gate passes. EF reports no pending model changes.
+- API contract: `GET /api/v1/invoices/{invoiceId}/export` returns deterministic UTF-8
+  `application/xml` for an owned `Issued` invoice. Admin/operations roles can export all invoices;
+  restaurants can export only their own. `INVOICE_NOT_ISSUED` and `INVOICE_EXPORT_INCOMPLETE` return
+  HTTP 422; invoice detail now exposes `errorReason` and each line's persisted `unit`.
+- Test results: solution build passed (0 errors, 25 existing warnings); Invoicing unit tests 55/55;
+  Invoicing PostgreSQL integration tests 5/5; solution format passes; EF has no pending model changes.

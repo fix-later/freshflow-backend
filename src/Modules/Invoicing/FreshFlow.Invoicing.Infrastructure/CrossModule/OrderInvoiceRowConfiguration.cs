@@ -18,17 +18,22 @@ internal sealed class OrderInvoiceRowConfiguration : IEntityTypeConfiguration<Or
                 o."Id" AS "OrderId",
                 o."RestaurantId",
                 oi."ProductNameSnapshot" AS "ProductName",
+                COALESCE(u."Name", p.unit) AS "Unit",
                 COALESCE(oi."ActualQuantity", oi."Quantity") AS "Quantity",
                 COALESCE(oi."ActualUnitPrice", oi."LockedUnitPrice", oi."UnitPrice") AS "UnitPrice",
                 oi.vat_rate_code AS "VatRateCode"
             FROM orders o
             INNER JOIN order_items oi ON oi."OrderId" = o."Id"
+            INNER JOIN market_products mp ON mp."Id" = oi."MarketProductId"
+            INNER JOIN products p ON p."Id" = mp."ProductId"
+            LEFT JOIN units_of_measurement u ON u."Id" = p."UnitId"
             WHERE o.deleted_at IS NULL
             """);
 
         builder.Property(r => r.OrderId);
         builder.Property(r => r.RestaurantId);
         builder.Property(r => r.ProductName);
+        builder.Property(r => r.Unit);
         builder.Property(r => r.Quantity);
         builder.Property(r => r.UnitPrice);
         builder.Property(r => r.VatRateCode);
