@@ -13,6 +13,7 @@ using FreshFlow.Logistics.Domain.ValueObjects;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Pricing.Domain.Entities;
+using FreshFlow.Procurement.Application.Abstractions;
 using FreshFlow.Procurement.Application.Dtos;
 using FreshFlow.Procurement.Domain.Entities;
 using FreshFlow.Procurement.Domain.Enums;
@@ -427,6 +428,67 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
                 .AsNoTracking()
                 .SingleAsync(order => order.Id == secondOrder.OrderId);
             persistedSecondOrder.Status.Should().Be(OrderStatus.Batched);
+        }
+        finally
+        {
+            await RemoveBatchAsync(batchId);
+        }
+    }
+
+    [Fact]
+    public async Task BatchRepository_StaleMerge_ReturnsFalseAsync()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+        var restaurantId = await CreateRestaurantAsync();
+        var targetDate = new DateOnly(2043, 5, 20);
+        var firstOrder = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+        var firstRun = await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/auto-batch",
+            new { targetDate, dryRun = false, force = false });
+        firstRun.StatusCode.Should().Be(HttpStatusCode.OK);
+        var batchId = await BatchIdCoveringAsync(firstOrder.OrderId);
+
+        try
+        {
+            var secondOrder = await SeedConfirmedOrderAsync(
+                restaurantId,
+                targetDate,
+                firstOrder.MarketId,
+                firstOrder.MarketProductId,
+                firstOrder.ProductName);
+            var thirdOrder = await SeedConfirmedOrderAsync(
+                restaurantId,
+                targetDate,
+                firstOrder.MarketId,
+                firstOrder.MarketProductId,
+                firstOrder.ProductName);
+
+            using var firstScope = factory.Services.CreateScope();
+            using var secondScope = factory.Services.CreateScope();
+            var firstRepository = firstScope.ServiceProvider
+                .GetRequiredService<IProcurementBatchRepository>();
+            var secondRepository = secondScope.ServiceProvider
+                .GetRequiredService<IProcurementBatchRepository>();
+            var firstBatch = (await firstRepository.ListMergeableByDateAsync(targetDate, default))
+                .Single(batch => batch.Id == batchId);
+            var staleBatch = (await secondRepository.ListMergeableByDateAsync(targetDate, default))
+                .Single(batch => batch.Id == batchId);
+
+            firstBatch.MergeIn(
+                    [(firstOrder.MarketProductId, firstOrder.ProductName, 5, secondOrder.OrderId)],
+                    new Dictionary<Guid, decimal>(),
+                    DateTime.UtcNow)
+                .IsSuccess.Should().BeTrue();
+            (await firstRepository.SaveChangesAsync(default)).Should().BeTrue();
+
+            staleBatch.MergeIn(
+                    [(firstOrder.MarketProductId, firstOrder.ProductName, 5, thirdOrder.OrderId)],
+                    new Dictionary<Guid, decimal>(),
+                    DateTime.UtcNow)
+                .IsSuccess.Should().BeTrue();
+            (await secondRepository.SaveChangesAsync(default)).Should().BeFalse();
         }
         finally
         {
