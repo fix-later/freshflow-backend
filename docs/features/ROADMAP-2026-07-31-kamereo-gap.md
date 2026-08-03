@@ -9,12 +9,42 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
 | GAP-02 | Delivery-address snapshot | Done | An order keeps the delivery address captured at placement even if the restaurant address later changes. |
 | GAP-03 | MOQ, VAT, and distance delivery fee | Done | Confirmation validates MOQ and returns deterministic VAT and distance-based delivery fee amounts. |
 | GAP-04 | Actual purchase price and pro-rata shortage allocation | Done | Purchased quantities/prices are recorded and shortages are allocated deterministically across affected orders. |
-| GAP-05 | E-invoice readiness | Planned | Invoice data required for compliant e-invoice issuance is captured, validated, and exportable. |
-| GAP-06 | Organizations, branches, and approval | Planned | Organization/branch boundaries and approval rules are enforced for ordering and administration. |
-| GAP-07 | Spend analytics | Planned | Authorized users can query consistent spend aggregates over supported periods and dimensions. |
+| GAP-05 | E-invoice readiness | Planned ⚠️ reconcile | Invoice data required for compliant e-invoice issuance is captured, validated, and exportable. |
+| GAP-06 | Organizations, branches, and approval | Planned ⛔ blocked | Organization/branch boundaries and approval rules are enforced for ordering and administration. |
+| GAP-07 | Spend analytics | Planned ⚠️ reconcile | Authorized users can query consistent spend aggregates over supported periods and dimensions. |
 | GAP-08 | Claims and refunds | Planned | Claims have an auditable lifecycle and approved refunds update credit exactly once. |
 | GAP-09 | Delivery slips | Planned | Delivery slips are generated from immutable fulfillment data and remain retrievable. |
 | GAP-10 | QC traceability | Planned | QC results can be traced from procurement/lot through fulfillment and delivery. |
+
+## Reconciliation review — 2026-08-04
+
+Review of GAP-01..04 (all Done, committed, merged tree builds 0 errors, Orders 553/553, Procurement
+124/124) plus a scope check of the Planned GAPs against modules that already exist. GAP-01..04
+implementation is sound; the notes below only affect the Planned GAPs and their ordering.
+
+- **GAP-05 (E-invoice) — extend, do not greenfield.** An `Invoicing` module already exists
+  (`src/Modules/Invoicing`, per-delivery issuance, VAT live from `products.VatRate`, cross-module
+  seams proven on Postgres). GAP-03 already snapshots per-line VAT code/rate at confirmation. GAP-05
+  must build on the existing Invoicing module (add compliant NCC export/validation), not rebuild
+  issuance. Avoid a second parallel invoicing path.
+- **GAP-07 (Spend analytics) — extend `Analytics`; clarify the dimension.** An `Analytics` module
+  already exists (`src/Modules/Analytics`, read-only, 0 tables). GAP-07 must extend it. Decide up
+  front whether spend aggregates are per-**restaurant** (no dependency, can ship early) or per-**org
+  /branch** (depends on GAP-06). If restaurant-level suffices, do not couple GAP-07 to GAP-06.
+- **GAP-06 (Organizations/branches/approval) — blocked pending a product decision.** This
+  contradicts DEC-003 ("no multi-user restaurant accounts", removed on purpose). It is also the
+  largest, cross-cutting change (Auth + Orders + Admin). Do not move it to In progress without an
+  explicit product decision re-opening DEC-003. Given its size/risk and lower MVP urgency, prefer
+  resequencing it after GAP-08.
+- **Suggested resequence:** GAP-05 (extend Invoicing) → GAP-08 (claims/refund, self-contained, high
+  value) → GAP-07 (analytics, restaurant-level) → GAP-09 (slips) → GAP-06 (orgs, only after the
+  DEC-003 decision) → GAP-10 (QC traceability). GAP-08 refunds stay a credit adjustment (no gateway),
+  consistent with the existing credit model.
+- **GAP-04 nit check (no change needed):** allocation quantities are `int` end-to-end
+  (`ProcurementPurchaseActual.ActualQuantity` and `OrderItem.Quantity`), so the largest-remainder
+  split reconciles exactly; `totalRequested == 0` is unreachable (`OrderItem.ValidateQuantity`
+  rejects `<= 0`). Order-independence + reconciliation is already locked by
+  `Handle_RoundingTie_UsesOrderIdThenItemIdAsync`. No defensive guard added (would be dead code).
 
 ## GAP-01 — PostgreSQL atomic stock reservation
 
