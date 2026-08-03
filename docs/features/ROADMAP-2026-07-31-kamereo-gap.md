@@ -9,7 +9,7 @@ This file is the source of truth for the sequential Kamereo GAP rollout. Each GA
 | GAP-02 | Delivery-address snapshot | Done | An order keeps the delivery address captured at placement even if the restaurant address later changes. |
 | GAP-03 | MOQ, VAT, and distance delivery fee | Done | Confirmation validates MOQ and returns deterministic VAT and distance-based delivery fee amounts. |
 | GAP-04 | Actual purchase price and pro-rata shortage allocation | Done | Purchased quantities/prices are recorded and shortages are allocated deterministically across affected orders. |
-| GAP-05 | E-invoice readiness | Ready for review | Invoice data required for compliant e-invoice issuance is captured, validated, and exportable. |
+| GAP-05 | E-invoice readiness | Done | Invoice data required for compliant e-invoice issuance is captured, validated, and exportable. |
 | GAP-06 | Organizations, branches, and approval | Planned ⛔ blocked | Organization/branch boundaries and approval rules are enforced for ordering and administration. |
 | GAP-07 | Spend analytics | Planned ⚠️ reconcile | Authorized users can query consistent spend aggregates over supported periods and dimensions. |
 | GAP-08 | Claims and refunds | Planned | Claims have an auditable lifecycle and approved refunds update credit exactly once. |
