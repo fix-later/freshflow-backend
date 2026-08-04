@@ -27,8 +27,11 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
     // ── Authentication ────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetMarketProducts_Unauthenticated_Returns401Async()
+    public async Task GetMarketProducts_Unauthenticated_IsAllowed_PublicHomepage()
     {
+        // Endpoint is [AllowAnonymous] for guest homepage browsing, so an anonymous request
+        // passes auth and falls through to the handler — here a 404 for a non-existent market
+        // (never a 401).
         // Arrange
         _client.DefaultRequestHeaders.Authorization = null;
 
@@ -36,7 +39,7 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
         var response = await _client.GetAsync(Endpoint(Guid.NewGuid()));
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     // ── 404 market not found ──────────────────────────────────────────────────

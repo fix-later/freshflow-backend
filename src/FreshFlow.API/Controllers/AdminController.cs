@@ -9,6 +9,7 @@ using FreshFlow.Auth.Application.Commands.Admin.ReplaceMarketAssignments;
 using FreshFlow.Auth.Application.Commands.Admin.SuspendRestaurant;
 using FreshFlow.Auth.Application.Commands.Admin.UnlockUser;
 using FreshFlow.Auth.Application.Queries.GetMarketAssignments;
+using FreshFlow.Auth.Application.Queries.GetRestaurantProfileById;
 using FreshFlow.Auth.Application.Queries.GetRoles;
 using FreshFlow.Auth.Application.Queries.GetUsers;
 using FreshFlow.Infrastructure.Persistence.Audit;
@@ -97,6 +98,18 @@ public sealed class AdminController(ISender sender) : ControllerBase
         Guid userId, [FromBody] AssignRoleRequest body, CancellationToken ct)
     {
         var result = await sender.Send(new AssignRoleCommand(userId, body.RoleName), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>
+    /// GET /api/v1/admin/restaurants/{restaurantId}/profile
+    /// Returns the full profile (incl. tax/invoice fields) of any restaurant, by its restaurant id.
+    /// </summary>
+    [HttpGet("restaurants/{restaurantId:guid}/profile")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetRestaurantProfileAsync(Guid restaurantId, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetRestaurantProfileByIdQuery(restaurantId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 

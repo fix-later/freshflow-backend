@@ -17,8 +17,9 @@ namespace FreshFlow.API.Controllers;
 [Authorize]
 public sealed class CategoriesController(ISender sender) : ControllerBase
 {
-    /// <summary>GET /api/v1/categories — any authenticated user; active-only by default.</summary>
+    /// <summary>GET /api/v1/categories — public (guests included); active-only by default.</summary>
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetCategoriesAsync(
         [FromQuery] bool activeOnly = true, CancellationToken ct = default)
     {
@@ -26,8 +27,9 @@ public sealed class CategoriesController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
-    /// <summary>GET /api/v1/categories/{id} — any authenticated user.</summary>
+    /// <summary>GET /api/v1/categories/{id} — public (guests included).</summary>
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetCategoryByIdAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetCategoryByIdQuery(id), ct);
