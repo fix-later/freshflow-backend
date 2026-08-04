@@ -61,6 +61,22 @@ public sealed class GetDriverRoutesTodayQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ServiceDateProvided_ReturnsRouteForThatFutureDayAsync()
+    {
+        var driverId = Guid.NewGuid();
+        var futureDate = TodayVn.AddDays(3);
+        var routes = new InMemoryDeliveryRouteRepository();
+        await routes.AddAsync(CreateAssignedRoute(driverId, futureDate), default);
+        await routes.AddAsync(CreateAssignedRoute(driverId, TodayVn), default);
+        var sut = new GetDriverRoutesTodayQueryHandler(routes, new InMemoryDeliveryRepository(), Clock);
+
+        var result = await sut.Handle(new GetDriverRoutesTodayQuery(driverId, futureDate), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().ContainSingle(dto => dto.ServiceDate == futureDate);
+    }
+
+    [Fact]
     public async Task Handle_RouteOnAnotherDate_HidesRouteAsync()
     {
         var driverId = Guid.NewGuid();
