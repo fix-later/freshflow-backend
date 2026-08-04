@@ -26,6 +26,14 @@ public sealed class DriverController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    // date omitted → VN today (same as routes/today); pass ?date=yyyy-MM-dd for future days.
+    [HttpGet("routes")]
+    public async Task<IActionResult> GetRoutesAsync([FromQuery] DateOnly? date, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetDriverRoutesTodayQuery(ResolveUserId(), date), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     [HttpPost("routes/{routeId:guid}/start")]
     public async Task<IActionResult> StartRouteAsync(Guid routeId, CancellationToken ct)
     {

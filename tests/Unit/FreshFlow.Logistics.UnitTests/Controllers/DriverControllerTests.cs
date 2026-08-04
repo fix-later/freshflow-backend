@@ -52,6 +52,29 @@ public sealed class DriverControllerTests
     }
 
     [Fact]
+    public async Task GetRoutesAsync_ForwardsJwtDriverIdAndDateAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var driverId = Guid.NewGuid();
+        var date = new DateOnly(2026, 8, 10);
+        sender.Send(Arg.Any<GetDriverRoutesTodayQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<DriverRouteDto>>.Success([]));
+        var controller = new DriverController(sender)
+        {
+            ControllerContext = CreateContext(driverId),
+        };
+
+        var result = await controller.GetRoutesAsync(date, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<GetDriverRoutesTodayQuery>(query =>
+                query.DriverUserId == driverId &&
+                query.ServiceDate == date),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task ConfirmPickupAsync_SendsJwtDriverIdAndReturnsCreatedAsync()
     {
         var sender = Substitute.For<ISender>();

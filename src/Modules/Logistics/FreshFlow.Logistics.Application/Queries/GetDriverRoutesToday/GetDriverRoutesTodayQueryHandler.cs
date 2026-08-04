@@ -20,10 +20,10 @@ internal sealed class GetDriverRoutesTodayQueryHandler(
         GetDriverRoutesTodayQuery request,
         CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(
+        var serviceDate = request.ServiceDate ?? DateOnly.FromDateTime(
             TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), VietnamTimeZone).DateTime);
 
-        var candidateRoutes = await routes.GetByDriverAndDateAsync(request.DriverUserId, today, ct);
+        var candidateRoutes = await routes.GetByDriverAndDateAsync(request.DriverUserId, serviceDate, ct);
         var visibleRoutes = candidateRoutes
             .Where(route => VisibleStatuses.Contains(route.Status))
             .ToList();
