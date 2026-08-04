@@ -159,7 +159,14 @@ public static class ToolDefinitions
                 return error!;
             }
 
-            var query = new PreviewOrderConfirmationQuery(UserId: ctx.UserId, OrderId: orderId);
+            if (ctx.DeliveryAddressId is not { } deliveryAddressId)
+            {
+                return ToolResultJson.Error(
+                    "DELIVERY_ADDRESS_REQUIRED", "The client must select a delivery address.");
+            }
+
+            var query = new PreviewOrderConfirmationQuery(
+                UserId: ctx.UserId, OrderId: orderId, DeliveryAddressId: deliveryAddressId);
             var result = await sender.Send(query, ct);
 
             // RemainingCreditAfter never enters the LLM prompt — it goes straight to the client in
@@ -181,17 +188,30 @@ public static class ToolDefinitions
             // The two-phase ConfirmationGate (T4) sits in front of this tool in the orchestrator —
             // it intercepts the "confirm_order" call before the registry ever dispatches here, so
             // this handler can assume the explicit-confirmation invariant already holds.
-            if (!TryParseOrderId(argsJson, out var orderId, out var error))
+            if (!ToolArgsParser.TryParse<OrderIdArgs>(argsJson, out var args, out var error))
             {
                 return error!;
             }
 
-            var command = new ConfirmOrderCommand(UserId: ctx.UserId, OrderId: orderId);
+            if (args!.OrderId is not { } orderId)
+            {
+                return ToolResultJson.Error(
+                    "INVALID_TOOL_ARGS", "Tool arguments must include orderId.");
+            }
+
+            if (ctx.DeliveryAddressId is not { } deliveryAddressId)
+            {
+                return ToolResultJson.Error(
+                    "DELIVERY_ADDRESS_REQUIRED", "The client must select a delivery address.");
+            }
+
+            var command = new ConfirmOrderCommand(
+                UserId: ctx.UserId, OrderId: orderId, DeliveryAddressId: deliveryAddressId);
             var result = await sender.Send(command, ct);
             return ToolResultJson.From(result);
         });
 
-    /// <summary>Shared arg parsing for the 3 tools that only take an <c>orderId</c>.</summary>
+    /// <summary>Shared arg parsing for tools that only take an <c>orderId</c>.</summary>
     private static bool TryParseOrderId(JsonElement argsJson, out Guid orderId, out string? error)
     {
         if (!ToolArgsParser.TryParse<OrderIdArgs>(argsJson, out var args, out error))
@@ -227,4 +247,5 @@ public static class ToolDefinitions
     // Guid? rather than Guid — a missing "orderId" must surface as INVALID_TOOL_ARGS, not silently
     // dispatch with Guid.Empty (System.Text.Json does not enforce required-ness on its own).
     private sealed record OrderIdArgs(Guid? OrderId = null);
+
 }

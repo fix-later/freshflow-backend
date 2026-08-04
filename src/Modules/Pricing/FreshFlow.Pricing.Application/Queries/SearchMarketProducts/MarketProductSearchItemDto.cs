@@ -1,3 +1,5 @@
+using FreshFlow.Pricing.Application.Dtos;
+
 namespace FreshFlow.Pricing.Application.Queries.SearchMarketProducts;
 
 /// <summary>
@@ -12,4 +14,5 @@ public sealed record MarketProductSearchItemDto(
     decimal CurrentPrice,
 
     // current − reserved, matching IMarketProductReader.FindAsync semantics.
-    int AvailableQuantity);
+    int AvailableQuantity,
+    SellingUnitDto SellingUnit);

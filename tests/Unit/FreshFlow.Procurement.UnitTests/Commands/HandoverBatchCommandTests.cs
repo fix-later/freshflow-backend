@@ -1,8 +1,11 @@
 using FluentAssertions;
+using FreshFlow.Contracts;
 using FreshFlow.Procurement.Application.Abstractions;
 using FreshFlow.Procurement.Application.Commands.HandoverBatch;
 using FreshFlow.Procurement.Domain.Entities;
 using FreshFlow.Procurement.Domain.Enums;
+using FreshFlow.SharedKernel.Application;
+using MediatR;
 using NSubstitute;
 
 namespace FreshFlow.Procurement.UnitTests.Commands;
@@ -34,16 +37,21 @@ public sealed class HandoverBatchCommandTests
         var repository = Substitute.For<IProcurementBatchRepository>();
         repository.FindByIdAsync(batch.Id, default).Returns(batch);
         repository.SaveChangesAsync(default).Returns(true);
+        ExecuteOperations(repository);
         var orders = Substitute.For<IConfirmedOrderReader>();
         orders.ReadStatusesAsync(
                 Arg.Is<IReadOnlyCollection<Guid>>(ids =>
                     ids.SequenceEqual(new[] { orderId })),
                 default)
             .Returns(new Dictionary<Guid, string> { [orderId] = "AtHub" });
+        var finalizer = Substitute.For<IProcurementHandoverOrderFinalizer>();
+        var publisher = Substitute.For<IPublisher>();
         var handler = new HandoverBatchCommandHandler(
             repository,
             orders,
             ActiveHubReader(),
+            finalizer,
+            publisher,
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -56,6 +64,13 @@ public sealed class HandoverBatchCommandTests
         result.Value.HubId.Should().Be(hubId);
         result.Value.Members.Should().ContainSingle()
             .Which.Status.Should().Be("AtHub");
+        await finalizer.Received(1).FinalizeAsync(
+            Arg.Is<ProcurementBatchHandedOffIntegrationEvent>(value =>
+                value.BatchId == batch.Id && value.CoveredOrderIds.SequenceEqual(new[] { orderId })),
+            default);
+        await publisher.Received(1).Publish(
+            Arg.Any<ProcurementBatchHandedOffIntegrationEvent>(),
+            default);
         await repository.Received(1).SaveChangesAsync(default);
     }
 
@@ -70,6 +85,8 @@ public sealed class HandoverBatchCommandTests
             repository,
             Substitute.For<IConfirmedOrderReader>(),
             ActiveHubReader(),
+            Substitute.For<IProcurementHandoverOrderFinalizer>(),
+            Substitute.For<IPublisher>(),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -91,6 +108,8 @@ public sealed class HandoverBatchCommandTests
             repository,
             Substitute.For<IConfirmedOrderReader>(),
             ActiveHubReader(),
+            Substitute.For<IProcurementHandoverOrderFinalizer>(),
+            Substitute.For<IPublisher>(),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -114,6 +133,8 @@ public sealed class HandoverBatchCommandTests
             repository,
             Substitute.For<IConfirmedOrderReader>(),
             ActiveHubReader(isActive: false),
+            Substitute.For<IProcurementHandoverOrderFinalizer>(),
+            Substitute.For<IPublisher>(),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -137,6 +158,8 @@ public sealed class HandoverBatchCommandTests
             repository,
             Substitute.For<IConfirmedOrderReader>(),
             ActiveHubReader(),
+            Substitute.For<IProcurementHandoverOrderFinalizer>(),
+            Substitute.For<IPublisher>(),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -159,6 +182,8 @@ public sealed class HandoverBatchCommandTests
             repository,
             Substitute.For<IConfirmedOrderReader>(),
             ActiveHubReader(),
+            Substitute.For<IProcurementHandoverOrderFinalizer>(),
+            Substitute.For<IPublisher>(),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -206,6 +231,13 @@ public sealed class HandoverBatchCommandTests
             .Returns(isActive);
         return reader;
     }
+
+    private static void ExecuteOperations(IProcurementBatchRepository repository) =>
+        repository.ExecuteInSerializableTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<Result>>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call => call.ArgAt<Func<CancellationToken, Task<Result>>>(0)(
+                call.ArgAt<CancellationToken>(1)));
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {

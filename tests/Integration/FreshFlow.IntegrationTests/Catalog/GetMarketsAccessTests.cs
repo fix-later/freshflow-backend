@@ -19,13 +19,14 @@ public sealed class GetMarketsAccessTests(AuthWebAppFactory factory)
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
-    public async Task GetMarkets_Unauthenticated_Returns401()
+    public async Task GetMarkets_Unauthenticated_Returns200_PublicHomepage()
     {
+        // GET /api/v1/markets is [AllowAnonymous] so guests can browse the homepage.
         _client.DefaultRequestHeaders.Authorization = null;
 
         var response = await _client.GetAsync("/api/v1/markets");
 
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]

@@ -17,9 +17,7 @@ namespace FreshFlow.IntegrationTests.Pricing;
 /// overlays live price/quantity/availableQuantity onto the paginated DB product list.
 ///
 /// Key UC-PRI-09 behaviours under test:
-/// - AvailableQuantity = CurrentQuantity (v1: no soft-reserved counter yet).
-///   In particular, market_products.ReservedQuantity (hard DB reservation, owned by Orders)
-///   is intentionally NOT subtracted — that comes from the future Redis reservation counter.
+/// - AvailableQuantity = CurrentQuantity - ReservedQuantity.
 /// - Price board read failure (simulated by seeding an empty dict via all-miss scenario)
 ///   does not fail the endpoint — DB values are returned unchanged.
 /// </summary>
@@ -32,16 +30,10 @@ public sealed class PriceBoardOverlayEndpointTests(AuthWebAppFactory factory)
 
     private readonly HttpClient _client = factory.CreateClient();
 
-    // ── AvailableQuantity = CurrentQuantity (UC-PRI-09 core behaviour) ────────
+    // ── AvailableQuantity = CurrentQuantity - ReservedQuantity ───────────────
 
-    /// <summary>
-    /// Pre-overlay: AvailableQuantity = CurrentQuantity − ReservedQuantity (DB formula).
-    /// Post-overlay: AvailableQuantity = CurrentQuantity (price board v1 formula).
-    ///
-    /// Seeds ReservedQuantity > 0 directly in the DB to prove the overlay takes effect.
-    /// </summary>
     [Fact]
-    public async Task GetMarketProducts_WhenReservedQuantityNonZero_AvailableQuantityEqualsCurrentQuantityAsync()
+    public async Task GetMarketProducts_WhenReservedQuantityNonZero_ReturnsUnreservedQuantityAsync()
     {
         // Arrange
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
@@ -55,9 +47,7 @@ public sealed class PriceBoardOverlayEndpointTests(AuthWebAppFactory factory)
         // Seed with CurrentQuantity = 100
         var mpId = await SeedMarketProductAsync(marketId, productId, 50_000m, 100);
 
-        // Directly set ReservedQuantity = 20 to simulate hard DB reservation
-        // (normally set by the Orders module). Without the overlay, AvailableQuantity
-        // would be 80; with the UC-PRI-09 overlay it must be 100 (= CurrentQuantity).
+        // Simulate stock reserved by confirmed orders.
         await SetReservedQuantityAsync(mpId, 20);
 
         // Act
@@ -72,9 +62,8 @@ public sealed class PriceBoardOverlayEndpointTests(AuthWebAppFactory factory)
 
         var item = env.Data![0];
         item.CurrentQuantity.Should().Be(100);
-        item.AvailableQuantity.Should().Be(100,
-            "UC-PRI-09 price board sets AvailableQuantity = CurrentQuantity (v1; " +
-            "soft-reserved from Redis order:reservation counter is not yet integrated)");
+        item.AvailableQuantity.Should().Be(80,
+            "all product surfaces expose CurrentQuantity minus ReservedQuantity");
     }
 
     // ── Price overlay ─────────────────────────────────────────────────────────

@@ -18,6 +18,10 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
                 row.Id,
                 row.ProductName,
                 row.CurrentPrice,
-                row.CurrentQuantity - row.ReservedQuantity);
+                row.CurrentQuantity - row.ReservedQuantity,
+                row.MinimumOrderQuantity,
+                row.VatRate,
+                row.OriginLatitude,
+                row.OriginLongitude);
     }
 }

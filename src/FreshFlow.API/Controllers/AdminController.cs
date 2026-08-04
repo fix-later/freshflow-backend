@@ -9,6 +9,7 @@ using FreshFlow.Auth.Application.Commands.Admin.ReplaceMarketAssignments;
 using FreshFlow.Auth.Application.Commands.Admin.SuspendRestaurant;
 using FreshFlow.Auth.Application.Commands.Admin.UnlockUser;
 using FreshFlow.Auth.Application.Queries.GetMarketAssignments;
+using FreshFlow.Auth.Application.Queries.GetRestaurantProfileById;
 using FreshFlow.Auth.Application.Queries.GetRoles;
 using FreshFlow.Auth.Application.Queries.GetUsers;
 using FreshFlow.Infrastructure.Persistence.Audit;
@@ -97,6 +98,18 @@ public sealed class AdminController(ISender sender) : ControllerBase
         Guid userId, [FromBody] AssignRoleRequest body, CancellationToken ct)
     {
         var result = await sender.Send(new AssignRoleCommand(userId, body.RoleName), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    /// <summary>
+    /// GET /api/v1/admin/restaurants/{restaurantId}/profile
+    /// Returns the full profile (incl. tax/invoice fields) of any restaurant, by its restaurant id.
+    /// </summary>
+    [HttpGet("restaurants/{restaurantId:guid}/profile")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetRestaurantProfileAsync(Guid restaurantId, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetRestaurantProfileByIdQuery(restaurantId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -203,7 +216,8 @@ public sealed class AdminController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(
             new UpdateOperationalSettingsCommand(
-                body.DailyCutoffTime, body.BatchingEnabled, body.DefaultRouteType, body.DeliveryWindowDays),
+                body.DailyCutoffTime, body.BatchingEnabled, body.DefaultRouteType,
+                body.DeliveryWindowDays, body.DeliveryFeePerKm),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -391,7 +405,11 @@ public sealed record ReplaceMarketAssignmentsRequest(IReadOnlyList<Guid> MarketI
 public sealed record SettleCreditRequest(decimal Amount, string? PaymentMethod, string? Reference, string? Note);
 public sealed record SetCreditLimitRequest(decimal CreditLimit, string? Note);
 public sealed record UpdateOperationalSettingsRequest(
-    TimeOnly DailyCutoffTime, bool BatchingEnabled, string DefaultRouteType, int DeliveryWindowDays);
+    TimeOnly DailyCutoffTime,
+    bool BatchingEnabled,
+    string DefaultRouteType,
+    int DeliveryWindowDays,
+    decimal DeliveryFeePerKm = 5000m);
 public sealed record UpdatePricingSettingsRequest(decimal PriceAlertThresholdPercent);
 public sealed record RunAutoBatchRequest(DateOnly? TargetDate, bool? DryRun, bool? Force);
 public sealed record ResetOrderGroupsRequest(DateOnly TargetDate, string Confirmation);

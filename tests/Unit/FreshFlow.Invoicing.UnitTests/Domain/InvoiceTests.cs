@@ -10,7 +10,7 @@ public sealed class InvoiceTests
     [Fact]
     public void Line_ComputesSubtotalVatAndTotal()
     {
-        var line = new InvoiceLine("Cà chua", 10m, 5000m, "5", 5m);
+        var line = new InvoiceLine("Cà chua", "kg", 10m, 5000m, "5", 5m);
 
         line.LineSubtotal.Should().Be(50000m);
         line.LineVatAmount.Should().Be(2500m);
@@ -20,7 +20,7 @@ public sealed class InvoiceTests
     [Fact]
     public void Line_SubtotalMidpoint_RoundsAwayFromZero()
     {
-        var line = new InvoiceLine("A", 0.01m, 0.50m, "KCT", 0m);
+        var line = new InvoiceLine("A", "kg", 0.01m, 0.50m, "KCT", 0m);
 
         line.LineSubtotal.Should().Be(0.01m);
     }
@@ -28,7 +28,7 @@ public sealed class InvoiceTests
     [Fact]
     public void Line_VatMidpoint_RoundsAwayFromZero()
     {
-        var line = new InvoiceLine("A", 1m, 0.05m, "10", 10m);
+        var line = new InvoiceLine("A", "kg", 1m, 0.05m, "10", 10m);
 
         line.LineVatAmount.Should().Be(0.01m);
         line.LineTotal.Should().Be(0.06m);
@@ -37,7 +37,7 @@ public sealed class InvoiceTests
     [Fact]
     public void Line_Kct_HasZeroVat()
     {
-        var line = new InvoiceLine("Rau muống", 3m, 10000m, "KCT", 0m);
+        var line = new InvoiceLine("Rau muống", "kg", 3m, 10000m, "KCT", 0m);
 
         line.LineVatAmount.Should().Be(0m);
         line.LineTotal.Should().Be(30000m);
@@ -49,8 +49,8 @@ public sealed class InvoiceTests
         var invoice = new Invoice(
             Guid.NewGuid(), Guid.NewGuid(), "0312345678", "Cty A", null, null,
             [
-                new InvoiceLine("A", 10m, 5000m, "5", 5m),
-                new InvoiceLine("B", 2m, 10000m, "KCT", 0m)
+                new InvoiceLine("A", "kg", 10m, 5000m, "5", 5m),
+                new InvoiceLine("B", "box", 2m, 10000m, "KCT", 0m)
             ]);
 
         invoice.SubTotal.Should().Be(70000m);
@@ -156,5 +156,5 @@ public sealed class InvoiceTests
 
     private static Invoice NewInvoice() =>
         new(Guid.NewGuid(), Guid.NewGuid(), "0312345678", "Cty A", null, null,
-            [new InvoiceLine("A", 1m, 1000m, "KCT", 0m)]);
+            [new InvoiceLine("A", "kg", 1m, 1000m, "KCT", 0m)]);
 }

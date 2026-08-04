@@ -25,7 +25,11 @@ public sealed class OrderItem : BaseEntity
     public decimal UnitPrice { get; private set; }
     public decimal? LockedUnitPrice { get; private set; }
     public decimal? LockedTotal { get; private set; }
+    public string? VatRateCode { get; private set; }
+    public decimal? VatRatePercent { get; private set; }
+    public decimal? LockedVatAmount { get; private set; }
     public decimal? ActualQuantity { get; private set; }
+    public decimal? ActualUnitPrice { get; private set; }
 
     public decimal Subtotal => Quantity * UnitPrice;
 
@@ -42,13 +46,26 @@ public sealed class OrderItem : BaseEntity
     /// Locks the unit price at order-confirm time, immune to subsequent market price changes.
     /// </summary>
     public void LockPrice(decimal lockedUnitPrice)
+        => LockPricing(lockedUnitPrice, "KCT", 0m);
+
+    public void LockPricing(decimal lockedUnitPrice, string vatRateCode, decimal vatRatePercent)
     {
         if (lockedUnitPrice < 0)
             throw new ArgumentOutOfRangeException(
                 nameof(lockedUnitPrice), lockedUnitPrice, "Locked unit price must be non-negative.");
 
+        if (string.IsNullOrWhiteSpace(vatRateCode))
+            throw new ArgumentException("VAT rate code is required.", nameof(vatRateCode));
+        if (vatRatePercent < 0m)
+            throw new ArgumentOutOfRangeException(
+                nameof(vatRatePercent), vatRatePercent, "VAT rate must be non-negative.");
+
         LockedUnitPrice = lockedUnitPrice;
         LockedTotal = Quantity * lockedUnitPrice;
+        VatRateCode = vatRateCode;
+        VatRatePercent = vatRatePercent;
+        LockedVatAmount = decimal.Round(
+            LockedTotal.Value * vatRatePercent / 100m, 2, MidpointRounding.AwayFromZero);
     }
 
     /// <summary>
@@ -61,6 +78,12 @@ public sealed class OrderItem : BaseEntity
                 nameof(actualQuantity), actualQuantity, "Actual quantity must be non-negative.");
 
         ActualQuantity = actualQuantity;
+    }
+
+    internal void RecordProcurementActuals(decimal actualQuantity, decimal? actualUnitPrice)
+    {
+        ActualQuantity = actualQuantity;
+        ActualUnitPrice = actualUnitPrice;
     }
 
     private static void ValidateProductNameSnapshot(string productNameSnapshot)

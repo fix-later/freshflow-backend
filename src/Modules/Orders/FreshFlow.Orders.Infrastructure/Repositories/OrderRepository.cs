@@ -1,16 +1,92 @@
+using System.Data;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Domain.Entities;
+using FreshFlow.SharedKernel.Application;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FreshFlow.Orders.Infrastructure.Repositories;
 
 internal sealed class OrderRepository(AppDbContext db) : IOrderRepository
 {
+    public async Task<Result> ExecuteInSerializableTransactionAsync(
+        Func<CancellationToken, Task<Result>> operation,
+        CancellationToken ct)
+    {
+        if (db.Database.CurrentTransaction is not null)
+            return await operation(ct);
+
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+
+        try
+        {
+            var result = await operation(ct);
+            if (result.IsFailure)
+            {
+                await transaction.RollbackAsync(ct);
+                db.ChangeTracker.Clear();
+                return result;
+            }
+
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return Result.Success();
+        }
+        catch (Exception ex) when (IsSerializationFailure(ex))
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
+            return Result.Failure(Error.Conflict(
+                "SERIALIZATION_CONFLICT",
+                "The order changed concurrently. Retry the request."));
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
+            return Result.Failure(Error.Conflict(
+                "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                "The record changed concurrently. Refresh and retry."));
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
+            throw;
+        }
+    }
+
+    public Task<bool> TryReserveStockAsync(
+        IReadOnlyList<StockReservation> reservations,
+        CancellationToken ct) =>
+        UpdateStockAsync(reservations, StockUpdate.Reserve, ct);
+
+    public Task<bool> ReleaseStockAsync(
+        IReadOnlyList<StockReservation> reservations,
+        CancellationToken ct) =>
+        UpdateStockAsync(reservations, StockUpdate.Release, ct);
+
+    public Task<bool> ConsumeStockAsync(
+        IReadOnlyList<StockReservation> reservations,
+        CancellationToken ct) =>
+        UpdateStockAsync(reservations, StockUpdate.Consume, ct);
+
     public Task<Order?> FindByIdAsync(Guid id, CancellationToken ct) =>
         db.Set<Order>()
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == id && o.DeletedAt == null, ct);
+
+    public async Task<IReadOnlyList<Order>> FindByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken ct)
+    {
+        var distinctIds = ids.Distinct().ToArray();
+        return await db.Set<Order>()
+            .Include(order => order.Items)
+            .Where(order => distinctIds.Contains(order.Id) && order.DeletedAt == null)
+            .ToListAsync(ct);
+    }
 
     public async Task<IReadOnlyList<Order>> GetByRestaurantIdAsync(Guid restaurantId, CancellationToken ct) =>
         await db.Set<Order>()
@@ -88,4 +164,57 @@ internal sealed class OrderRepository(AppDbContext db) : IOrderRepository
         db.Entry(item).State = EntityState.Added;
 
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
+
+    private async Task<bool> UpdateStockAsync(
+        IReadOnlyList<StockReservation> reservations,
+        StockUpdate update,
+        CancellationToken ct)
+    {
+        foreach (var reservation in reservations.OrderBy(value => value.MarketProductId))
+        {
+            var affected = update switch
+            {
+                StockUpdate.Reserve => await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE market_products
+                    SET "ReservedQuantity" = "ReservedQuantity" + {reservation.Quantity}
+                    WHERE "Id" = {reservation.MarketProductId}
+                      AND deleted_at IS NULL
+                      AND "CurrentQuantity" - "ReservedQuantity" >= {reservation.Quantity}
+                    """, ct),
+                StockUpdate.Release => await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE market_products
+                    SET "ReservedQuantity" = "ReservedQuantity" - {reservation.Quantity}
+                    WHERE "Id" = {reservation.MarketProductId}
+                      AND deleted_at IS NULL
+                      AND "ReservedQuantity" >= {reservation.Quantity}
+                    """, ct),
+                StockUpdate.Consume => await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE market_products
+                    SET "CurrentQuantity" = "CurrentQuantity" - {reservation.Quantity},
+                        "ReservedQuantity" = "ReservedQuantity" - {reservation.Quantity}
+                    WHERE "Id" = {reservation.MarketProductId}
+                      AND deleted_at IS NULL
+                      AND "CurrentQuantity" >= {reservation.Quantity}
+                      AND "ReservedQuantity" >= {reservation.Quantity}
+                    """, ct),
+                _ => throw new ArgumentOutOfRangeException(nameof(update)),
+            };
+
+            if (affected != 1)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsSerializationFailure(Exception exception) =>
+        exception is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure }
+        || exception.InnerException is not null && IsSerializationFailure(exception.InnerException);
+
+    private enum StockUpdate
+    {
+        Reserve,
+        Release,
+        Consume,
+    }
 }

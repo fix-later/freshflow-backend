@@ -112,6 +112,107 @@ public sealed class ProcurementBatch : AggregateRoot
         return result;
     }
 
+    public Result MergeIn(
+        IEnumerable<(Guid MarketProductId, string ProductName, int Quantity, Guid OrderId)> lines,
+        IReadOnlyDictionary<Guid, decimal> referencePricesForNewItems,
+        DateTime capturedAtUtc)
+    {
+        if (Status is not ProcurementBatchStatus.Built and not ProcurementBatchStatus.Manifested)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_NOT_MERGEABLE",
+                $"Procurement batch '{Id}' cannot accept new orders from status '{Status}'."));
+        }
+
+        var input = lines?.ToList() ?? [];
+        if (input.Count == 0 || input.Any(line =>
+                line.MarketProductId == Guid.Empty ||
+                line.OrderId == Guid.Empty ||
+                string.IsNullOrWhiteSpace(line.ProductName) ||
+                line.Quantity <= 0))
+        {
+            return Result.Failure(Error.Validation(
+                "INVALID_PROCUREMENT_BATCH",
+                "A procurement batch requires positive product lines."));
+        }
+
+        var existingOrderIds = _orders.Select(order => order.OrderId).ToHashSet();
+        var newlyAddedOrderIds = input
+            .Select(line => line.OrderId)
+            .Distinct()
+            .Where(orderId => !existingOrderIds.Contains(orderId))
+            .ToList();
+        var newlyAddedOrderIdSet = newlyAddedOrderIds.ToHashSet();
+        var aggregated = input
+            .Where(line => newlyAddedOrderIdSet.Contains(line.OrderId))
+            .GroupBy(line => line.MarketProductId)
+            .Select(group => new
+            {
+                MarketProductId = group.Key,
+                ProductName = group.First().ProductName.Trim(),
+                TotalQuantity = group.Sum(line => (long)line.Quantity)
+            })
+            .ToList();
+        var existingByProduct = _items.ToDictionary(item => item.MarketProductId);
+
+        if (aggregated.Any(line =>
+                line.TotalQuantity > int.MaxValue ||
+                existingByProduct.TryGetValue(line.MarketProductId, out var item) &&
+                item.TotalQuantity + line.TotalQuantity > int.MaxValue))
+        {
+            return Result.Failure(Error.Validation(
+                "INVALID_PROCUREMENT_BATCH",
+                "An aggregated product quantity exceeds the supported limit."));
+        }
+
+        var missingPrice = Status == ProcurementBatchStatus.Manifested
+            ? aggregated.FirstOrDefault(line =>
+                !existingByProduct.ContainsKey(line.MarketProductId) &&
+                (referencePricesForNewItems is null ||
+                 !referencePricesForNewItems.ContainsKey(line.MarketProductId)))
+            : null;
+        if (missingPrice is not null)
+        {
+            return Result.Failure(Error.Validation(
+                "REFERENCE_PRICE_MISSING",
+                $"Reference price is missing for market product '{missingPrice.MarketProductId}'."));
+        }
+
+        foreach (var line in aggregated)
+        {
+            if (existingByProduct.TryGetValue(line.MarketProductId, out var item))
+            {
+                item.AddQuantity((int)line.TotalQuantity);
+                continue;
+            }
+
+            var newItem = new ProcurementBatchItem(
+                Id,
+                line.MarketProductId,
+                line.ProductName,
+                (int)line.TotalQuantity);
+            if (Status == ProcurementBatchStatus.Manifested)
+                newItem.SetReferencePrice(referencePricesForNewItems[line.MarketProductId]);
+            _items.Add(newItem);
+        }
+
+        _orders.AddRange(newlyAddedOrderIds.Select(orderId =>
+            new ProcurementBatchOrder(Id, orderId)));
+
+        TotalItemCount = _items.Count;
+        UpdatedAt = capturedAtUtc;
+        if (newlyAddedOrderIds.Count > 0)
+        {
+            RaiseDomainEvent(new ProcurementBatchBuiltDomainEvent(
+                Id,
+                MarketId,
+                BatchDate,
+                newlyAddedOrderIds.AsReadOnly()));
+        }
+
+        return Result.Success();
+    }
+
     public Result Manifest(
         IReadOnlyDictionary<Guid, decimal> referenceUnitPrices,
         DateTime capturedAtUtc)
@@ -382,7 +483,14 @@ public sealed class ProcurementBatch : AggregateRoot
             HubId,
             capturedAtUtc,
             coveredOrderIds,
-            AssignedAgentUserId));
+            AssignedAgentUserId,
+            _items
+                .Select(item => new ProcurementPurchasedLine(
+                    item.MarketProductId,
+                    item.ActualQuantity ?? 0,
+                    item.ActualUnitPrice))
+                .ToList()
+                .AsReadOnly()));
 
         return Result.Success();
     }

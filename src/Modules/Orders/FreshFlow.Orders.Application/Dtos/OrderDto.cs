@@ -8,6 +8,7 @@ public sealed record OrderDto(
     DateTime? ScheduledFor,
     decimal TotalAmount,
     string? Notes,
+    DeliveryAddressSnapshotDto? DeliveryAddress,
     IReadOnlyList<OrderItemDto> Items,
     Guid? OrderGroupId,
     Guid? ScheduledOrderId,
@@ -15,7 +16,19 @@ public sealed record OrderDto(
     string? CancellationReason,
     DateTime? ConfirmedReceiptAt,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    decimal SubtotalAmount = 0m,
+    decimal VatAmount = 0m,
+    decimal DeliveryFee = 0m,
+    decimal DeliveryDistanceKm = 0m);
+
+public sealed record DeliveryAddressSnapshotDto(
+    Guid AddressId,
+    string? RecipientName,
+    string? Phone,
+    string AddressLine,
+    decimal? Latitude,
+    decimal? Longitude);
 
 public sealed record OrderListItemDto(
     Guid OrderId,

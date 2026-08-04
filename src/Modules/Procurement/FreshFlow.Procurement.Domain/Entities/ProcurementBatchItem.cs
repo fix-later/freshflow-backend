@@ -27,6 +27,8 @@ public sealed class ProcurementBatchItem : BaseEntity
     public decimal? ActualUnitPrice { get; private set; }
     public DateTime? PurchasedAt { get; private set; }
 
+    internal void AddQuantity(int extraQuantity) => TotalQuantity += extraQuantity;
+
     internal void SetReferencePrice(decimal price) => ReferenceUnitPrice = price;
 
     internal void ConfirmPurchase(int actualQuantity, decimal actualUnitPrice, DateTime purchasedAt)

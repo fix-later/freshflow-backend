@@ -13,4 +13,9 @@ public record ProductDto(
     DateTime CreatedAt,
     DateTime UpdatedAt,
     bool IsDeleted,
-    string? ImageUrl = null);
+    string? ImageUrl = null,
+    int MinimumOrderQuantity = 1,
+    string? VatRate = null,
+    SellingUnitDto SellingUnit = null!);
+
+public sealed record SellingUnitDto(string UnitName, decimal? WeightKg);

@@ -1,7 +1,10 @@
 using FluentAssertions;
 using FreshFlow.Procurement.Application.Abstractions;
+using FreshFlow.Procurement.Application.Dtos;
 using FreshFlow.Procurement.Application.Services;
 using FreshFlow.Procurement.Domain.Entities;
+using FreshFlow.Procurement.Domain.Enums;
+using FreshFlow.Procurement.Domain.Events;
 using NSubstitute;
 
 namespace FreshFlow.Procurement.UnitTests.Services;
@@ -20,6 +23,9 @@ public sealed class BatchConfirmedOrdersServiceTests
         _hubs.ReadActiveHubsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
             .Returns(call => ((IReadOnlyCollection<Guid>)call[0])
                 .ToDictionary(marketId => marketId, _ => Guid.NewGuid()));
+        _batches.ListMergeableByDateAsync(Date, default)
+            .Returns(Array.Empty<ProcurementBatch>());
+        _batches.SaveChangesAsync(default).Returns(true);
     }
 
     [Fact]
@@ -112,6 +118,8 @@ public sealed class BatchConfirmedOrdersServiceTests
             .AddRangeAsync(default!, default);
         await _batches.DidNotReceiveWithAnyArgs()
             .SaveChangesAsync(default);
+        await _batches.DidNotReceiveWithAnyArgs()
+            .ListMergeableByDateAsync(default, default);
     }
 
     [Fact]
@@ -157,10 +165,120 @@ public sealed class BatchConfirmedOrdersServiceTests
             .AddRangeAsync(default!, default);
     }
 
+    [Fact]
+    public async Task BuildBatches_BuiltBatch_MergesWithoutCreatingAsync()
+    {
+        var marketId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        var existingOrderId = Guid.NewGuid();
+        var newOrderId = Guid.NewGuid();
+        var batch = ProcurementBatch.Build(
+            Date,
+            marketId,
+            [(productId, "Tomato", 2, existingOrderId)],
+            Guid.NewGuid()).Value;
+        batch.ClearDomainEvents();
+        ArrangeOrder(newOrderId, marketId, (productId, "Tomato", 3));
+        _batches.ListMergeableByDateAsync(Date, default).Returns([batch]);
+
+        var result = await CreateSut().BuildBatchesAsync(Date, false, false, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.BatchesCreated.Should().Be(0);
+        result.Value.OrdersBatched.Should().Be(1);
+        batch.Items.Should().ContainSingle().Which.TotalQuantity.Should().Be(5);
+        batch.Orders.Select(order => order.OrderId)
+            .Should().BeEquivalentTo([existingOrderId, newOrderId]);
+        batch.UpdatedAt.Should().Be(Now.UtcDateTime);
+        batch.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<ProcurementBatchBuiltDomainEvent>()
+            .Which.CoveredOrderIds.Should().Equal(newOrderId);
+        await _batches.DidNotReceiveWithAnyArgs()
+            .AddRangeAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task BuildBatches_ManifestedBatch_PricesNewItemsFromReaderAsync()
+    {
+        var marketId = Guid.NewGuid();
+        var existingProductId = Guid.NewGuid();
+        var newProductId = Guid.NewGuid();
+        var batch = ProcurementBatch.Build(
+            Date,
+            marketId,
+            [(existingProductId, "Tomato", 2, Guid.NewGuid())],
+            Guid.NewGuid()).Value;
+        batch.Manifest(
+            new Dictionary<Guid, decimal> { [existingProductId] = 10_000m },
+            Now.UtcDateTime.AddHours(-1));
+        batch.ClearDomainEvents();
+        ArrangeOrder(
+            Guid.NewGuid(),
+            marketId,
+            (existingProductId, "Tomato", 3),
+            (newProductId, "Fish", 4));
+        _batches.ListMergeableByDateAsync(Date, default).Returns([batch]);
+        _markets.ReadReferencePricesAsync(
+                Arg.Any<IReadOnlyCollection<Guid>>(),
+                default)
+            .Returns(new Dictionary<Guid, decimal> { [newProductId] = 12_000m });
+
+        var result = await CreateSut().BuildBatchesAsync(Date, false, false, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.BatchesCreated.Should().Be(0);
+        result.Value.ItemsAggregated.Should().Be(2);
+        batch.Items.Should().Contain(item =>
+            item.MarketProductId == existingProductId &&
+            item.TotalQuantity == 5 &&
+            item.ReferenceUnitPrice == 10_000m);
+        batch.Items.Should().Contain(item =>
+            item.MarketProductId == newProductId &&
+            item.TotalQuantity == 4 &&
+            item.ReferenceUnitPrice == 12_000m);
+        await _markets.Received(1).ReadReferencePricesAsync(
+            Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { newProductId })),
+            default);
+    }
+
+    [Theory]
+    [InlineData(ProcurementBatchStatus.Purchasing)]
+    [InlineData(ProcurementBatchStatus.HandedOff)]
+    [InlineData(ProcurementBatchStatus.Cancelled)]
+    public async Task BuildBatches_NonMergeableBatch_CreatesNewAsync(ProcurementBatchStatus status)
+    {
+        var marketId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        var oldBatch = ProcurementBatch.Build(
+            Date,
+            marketId,
+            [(productId, "Tomato", 2, Guid.NewGuid())],
+            Guid.NewGuid()).Value;
+        typeof(ProcurementBatch).GetProperty(nameof(ProcurementBatch.Status))!
+            .SetValue(oldBatch, status);
+        ArrangeOrder(Guid.NewGuid(), marketId, (productId, "Tomato", 3));
+        _batches.ListMergeableByDateAsync(Date, default)
+            .Returns(oldBatch.Status is ProcurementBatchStatus.Built or ProcurementBatchStatus.Manifested
+                ? [oldBatch]
+                : []);
+        IReadOnlyCollection<ProcurementBatch>? added = null;
+        _batches.AddRangeAsync(
+                Arg.Do<IReadOnlyCollection<ProcurementBatch>>(value => added = value),
+                default)
+            .Returns(Task.CompletedTask);
+
+        var result = await CreateSut().BuildBatchesAsync(Date, false, false, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.BatchesCreated.Should().Be(1);
+        added.Should().ContainSingle().Which.Status.Should().Be(ProcurementBatchStatus.Built);
+    }
+
     private static readonly DateOnly Date = new(2026, 7, 15);
+    private static readonly DateTimeOffset Now = new(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
 
     private BatchConfirmedOrdersService CreateSut() =>
-        new(_orders, _markets, _hubs, _settings, _batches);
+        new(_orders, _markets, _hubs, _settings, _batches, new FixedTimeProvider(Now));
 
     private void ArrangeEnabled() =>
         _settings.ReadAsync(default)
@@ -176,5 +294,30 @@ public sealed class BatchConfirmedOrdersServiceTests
                 Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
                 [new ConfirmedOrderItemDto(productId, "Tomato", 3)])
         ]);
+    }
+
+    private void ArrangeOrder(
+        Guid orderId,
+        Guid marketId,
+        params (Guid ProductId, string ProductName, int Quantity)[] items)
+    {
+        ArrangeEnabled();
+        _orders.ReadEligibleAsync(Date, false, default).Returns(
+        [
+            new ConfirmedOrderDto(
+                orderId,
+                Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+                items.Select(item => new ConfirmedOrderItemDto(
+                    item.ProductId,
+                    item.ProductName,
+                    item.Quantity)).ToList())
+        ]);
+        _markets.ReadMarketsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
+            .Returns(items.ToDictionary(item => item.ProductId, _ => marketId));
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 }

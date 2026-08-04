@@ -5,4 +5,5 @@ public sealed record OperationalSettingsDto(
     bool BatchingEnabled,
     string DefaultRouteType,
     int DeliveryWindowDays,
+    decimal DeliveryFeePerKm,
     DateTime UpdatedAt);

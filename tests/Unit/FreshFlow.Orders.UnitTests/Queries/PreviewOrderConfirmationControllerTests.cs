@@ -74,7 +74,8 @@ public sealed class PreviewOrderConfirmationControllerTests
         var sut = CreateController("restaurant");
 
         // Act
-        var response = await sut.PreviewOrderConfirmationAsync(orderId, default);
+        var deliveryAddressId = Guid.NewGuid();
+        var response = await sut.PreviewOrderConfirmationAsync(orderId, deliveryAddressId, default);
 
         // Assert — response is wrapped in { success: true, data: dto } envelope
         response.Should().BeOfType<OkObjectResult>();
@@ -86,7 +87,8 @@ public sealed class PreviewOrderConfirmationControllerTests
         data.Should().Be(dto);
 
         await _sender.Received(1).Send(
-            Arg.Is<PreviewOrderConfirmationQuery>(q => q.OrderId == orderId),
+            Arg.Is<PreviewOrderConfirmationQuery>(q =>
+                q.OrderId == orderId && q.DeliveryAddressId == deliveryAddressId),
             Arg.Any<CancellationToken>());
     }
 
@@ -109,7 +111,7 @@ public sealed class PreviewOrderConfirmationControllerTests
         var sut = CreateController("restaurant");
 
         // Act
-        var response = await sut.PreviewOrderConfirmationAsync(orderId, default);
+        var response = await sut.PreviewOrderConfirmationAsync(orderId, Guid.NewGuid(), default);
 
         // Assert
         response.Should().BeOfType<OkObjectResult>();
@@ -132,7 +134,7 @@ public sealed class PreviewOrderConfirmationControllerTests
         var sut = CreateController("restaurant");
 
         // Act
-        var response = await sut.PreviewOrderConfirmationAsync(orderId, default);
+        var response = await sut.PreviewOrderConfirmationAsync(orderId, Guid.NewGuid(), default);
 
         // Assert
         response.Should().BeOfType<NotFoundObjectResult>();
@@ -150,7 +152,7 @@ public sealed class PreviewOrderConfirmationControllerTests
         var sut = CreateController("restaurant");
 
         // Act
-        var response = await sut.PreviewOrderConfirmationAsync(orderId, default);
+        var response = await sut.PreviewOrderConfirmationAsync(orderId, Guid.NewGuid(), default);
 
         // Assert
         response.Should().BeOfType<ObjectResult>();

@@ -30,6 +30,7 @@ public static class ErrorExtensions
                         or "PENDING_HUB_DISCREPANCY"
                         or "DELIVERY_STATUS_INVALID"
                         or "ORDER_ALREADY_IN_ACTIVE_GROUP"
+                        or "BATCH_NOT_MERGEABLE"
                         or "BATCH_NOT_MANIFESTABLE"
                         or "BATCH_NOT_MANIFESTED"
                         or "BATCH_ALREADY_HANDED_OFF"
@@ -48,7 +49,8 @@ public static class ErrorExtensions
         if (error.Code is "FORBIDDEN" or "MARKET_ACCESS_DENIED" or "HUB_ACCESS_DENIED")
             return new ObjectResult(body) { StatusCode = 403 };
 
-        if (error.Code is "OPTIMISTIC_CONCURRENCY_CONFLICT")
+        if (error.Code is "OPTIMISTIC_CONCURRENCY_CONFLICT" or "SERIALIZATION_CONFLICT"
+                          or "STOCK_RESERVATION_CONFLICT")
             return new ConflictObjectResult(body);
 
         if (error.Code is "VALIDATION_ERROR" or "INVALID_ROLE" or "WEAK_PASSWORD")
@@ -66,7 +68,11 @@ public static class ErrorExtensions
                         or "INVALID_CATEGORY_PARENT"
                         or "INVALID_PRICE" or "INVALID_QUANTITY"
                         or "RESTAURANT_NOT_APPROVED" or "INVALID_PRODUCT" or "INSUFFICIENT_STOCK"
+                        or "MINIMUM_ORDER_QUANTITY_NOT_MET" or "DELIVERY_COORDINATES_REQUIRED"
+                        or "INVALID_DELIVERY_FEE" or "VAT_RATE_MISSING"
                         or "ORDER_EMPTY" or "INVALID_AMOUNT" or "CREDIT_LIMIT_EXCEEDED"
+                        or "INVALID_CLAIM_AMOUNT" or "INVALID_CLAIM_DECISION_NOTE"
+                        or "CREDIT_REFUND_EXCEEDS_ORDER_CHARGE"
                         or "CREDIT_SETTLEMENT_EXCEEDS_BALANCE" or "CREDIT_REFUND_EXCEEDS_BALANCE"
                         or "INVALID_CREDIT_LIMIT" or "CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE"
                         or "DELIVERY_DATE_OUT_OF_WINDOW" or "INVALID_ACTUAL_QUANTITY"
@@ -92,12 +98,16 @@ public static class ErrorExtensions
                         or "MARKET_INACTIVE"
                         or "HUB_INACTIVE"
                         or "HUB_NOT_CONFIGURED_FOR_MARKET"
+                        or "BUYER_TAX_CODE_REQUIRED" or "BUYER_TAX_CODE_INVALID"
+                        or "BUYER_LEGAL_NAME_REQUIRED" or "BUYER_ADDRESS_REQUIRED"
+                        or "INVOICE_LINE_UNIT_REQUIRED" or "INVOICE_NOT_ISSUED" or "INVOICE_EXPORT_INCOMPLETE"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 
         if (error.Code is "ORDER_NOT_DRAFT" or "ORDER_CANNOT_CANCEL" or "ORDER_INVALID_TRANSITION"
                         or "ORDER_CANNOT_RESCHEDULE" or "ORDER_NOT_CANCELLABLE" or "ORDER_CANNOT_ADJUST"
                         or "ORDER_NOT_DELIVERED" or "ORDER_RECEIPT_ALREADY_CONFIRMED"
+                        or "CLAIM_ORDER_NOT_CLAIMABLE" or "CLAIM_INVALID_TRANSITION"
                         or "ORDER_ISSUE_NOT_ALLOWED" or "ORDER_ISSUE_ALREADY_RESOLVED"
                         or "SCHEDULED_ORDER_NOT_ACTIVE" or "SCHEDULED_ORDER_ALREADY_CANCELLED"
                         or "ROUTE_INVALID_TRANSITION" or "HUB_HAS_PENDING_DELIVERIES"

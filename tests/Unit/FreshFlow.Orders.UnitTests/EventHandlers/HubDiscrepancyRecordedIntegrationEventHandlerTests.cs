@@ -38,8 +38,9 @@ public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
                 50_000m,
                 Arg.Any<string?>(),
                 default)
-            .Returns(Result<RestaurantCreditDto>.Success(
-                new RestaurantCreditDto(RestaurantId, 1_000_000m, 0m, 1_000_000m, DateTime.UtcNow)));
+            .Returns(Result<CreditRefundDto>.Success(new CreditRefundDto(
+                Guid.NewGuid(),
+                new RestaurantCreditDto(RestaurantId, 1_000_000m, 0m, 1_000_000m, DateTime.UtcNow))));
         var sut = CreateSut();
 
         await sut.Handle(new HubDiscrepancyRecordedIntegrationEvent(

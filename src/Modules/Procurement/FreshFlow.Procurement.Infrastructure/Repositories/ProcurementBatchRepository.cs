@@ -13,6 +13,45 @@ namespace FreshFlow.Procurement.Infrastructure.Repositories;
 
 internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurementBatchRepository
 {
+    private HashSet<Guid> _loadedMergeItemIds = [];
+    private HashSet<Guid> _loadedMergeOrderIds = [];
+    private bool _hasMergeSnapshot;
+
+    public async Task<Result> ExecuteInSerializableTransactionAsync(
+        Func<CancellationToken, Task<Result>> operation,
+        CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+
+        try
+        {
+            var result = await operation(ct);
+            if (result.IsFailure)
+            {
+                await transaction.RollbackAsync(ct);
+                db.ChangeTracker.Clear();
+                return result;
+            }
+
+            await transaction.CommitAsync(ct);
+            return Result.Success();
+        }
+        catch (Exception ex) when (IsSerializationFailure(ex))
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
+            return Result.Failure(Error.Conflict(
+                "SERIALIZATION_CONFLICT",
+                "The procurement handover changed concurrently. Retry the request."));
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
+            throw;
+        }
+    }
+
     public Task AddRangeAsync(
         IReadOnlyCollection<ProcurementBatch> batches,
         CancellationToken ct) =>
@@ -22,6 +61,7 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
     {
         try
         {
+            TrackAddedMergeChildren();
             await db.SaveChangesAsync(ct);
             return true;
         }
@@ -34,6 +74,44 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
         {
             return false;
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            return false;
+        }
+    }
+
+    // ponytail: EF mis-classifies children appended to a tracked batch (MergeIn) as Modified
+    // instead of Added, because BaseEntity sets Id client-side while the column is
+    // ValueGeneratedOnAdd (HasDefaultValueSql) — a set key reads as "existing row". Without this
+    // flip the merge issues an UPDATE against a non-existent row and dies on the concurrency token.
+    // Snapshot is single-operation only; reset after each save so a later unrelated save can't reuse it.
+    // Upgrade path: mark child Id .ValueGeneratedNever() so EF trusts the client Guid and drops this hack.
+    private void TrackAddedMergeChildren()
+    {
+        if (!_hasMergeSnapshot)
+            return;
+
+        foreach (var entry in db.ChangeTracker.Entries<ProcurementBatchItem>())
+        {
+            if (entry.State == EntityState.Modified &&
+                !_loadedMergeItemIds.Contains(entry.Entity.Id))
+            {
+                entry.State = EntityState.Added;
+            }
+        }
+
+        foreach (var entry in db.ChangeTracker.Entries<ProcurementBatchOrder>())
+        {
+            if (entry.State == EntityState.Modified &&
+                !_loadedMergeOrderIds.Contains(entry.Entity.Id))
+            {
+                entry.State = EntityState.Added;
+            }
+        }
+
+        _hasMergeSnapshot = false;
+        _loadedMergeItemIds = [];
+        _loadedMergeOrderIds = [];
     }
 
     public Task<ProcurementBatch?> FindByIdAsync(Guid batchId, CancellationToken ct) =>
@@ -133,6 +211,36 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
             .OrderByDescending(batch => batch.BatchDate)
             .ThenBy(batch => batch.MarketId)
             .ToListAsync(ct);
+
+        return result.AsReadOnly();
+    }
+
+    public async Task<IReadOnlyList<ProcurementBatch>> ListMergeableByDateAsync(
+        DateOnly date,
+        CancellationToken ct)
+    {
+        var result = await db.Set<ProcurementBatch>()
+            .Include(batch => batch.Items)
+            .Include(batch => batch.Orders)
+            .Where(batch =>
+                batch.DeletedAt == null &&
+                batch.BatchDate == date &&
+                (batch.Status == ProcurementBatchStatus.Built ||
+                 batch.Status == ProcurementBatchStatus.Manifested))
+            .OrderByDescending(batch => batch.Status == ProcurementBatchStatus.Built)
+            .ThenBy(batch => batch.CreatedAt)
+            .ThenBy(batch => batch.Id)
+            .ToListAsync(ct);
+
+        _loadedMergeItemIds = result
+            .SelectMany(batch => batch.Items)
+            .Select(item => item.Id)
+            .ToHashSet();
+        _loadedMergeOrderIds = result
+            .SelectMany(batch => batch.Orders)
+            .Select(order => order.Id)
+            .ToHashSet();
+        _hasMergeSnapshot = true;
 
         return result.AsReadOnly();
     }
@@ -242,4 +350,8 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
         Result<BatchingResetCounts>.Failure(Error.Conflict(
             "BATCH_RESET_NOT_ALLOWED",
             $"Procurement batches for '{batchDate:yyyy-MM-dd}' cannot be reset because their batches or orders have moved past batching."));
+
+    private static bool IsSerializationFailure(Exception exception) =>
+        exception is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure }
+        || exception.InnerException is not null && IsSerializationFailure(exception.InnerException);
 }

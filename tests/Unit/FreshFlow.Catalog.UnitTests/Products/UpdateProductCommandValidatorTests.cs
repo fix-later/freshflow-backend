@@ -101,4 +101,19 @@ public sealed class UpdateProductCommandValidatorTests
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == "ImageUrl");
     }
+
+    [Theory]
+    [InlineData("20", 1, "VatRate")]
+    [InlineData("8", 0, "MinimumOrderQuantity")]
+    public async Task Validate_InvalidCommercialTerms_Fails(
+        string vatRate, int minimumOrderQuantity, string propertyName)
+    {
+        var cmd = new UpdateProductCommand(
+            Guid.NewGuid(), "Cà rốt", Guid.NewGuid(), null, null,
+            VatRate: vatRate, MinimumOrderQuantity: minimumOrderQuantity);
+
+        var result = await _sut.ValidateAsync(cmd);
+
+        result.Errors.Should().Contain(e => e.PropertyName == propertyName);
+    }
 }

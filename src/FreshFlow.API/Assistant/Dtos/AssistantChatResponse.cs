@@ -8,7 +8,8 @@ namespace FreshFlow.API.Assistant.Dtos;
 /// <param name="PendingConfirmation">
 /// Present when the assistant prepared an order that now needs the user's explicit confirmation. The
 /// client renders a confirm button that, when pressed, re-calls <c>chat</c> with
-/// <c>ConfirmOrderId = PendingConfirmation.OrderId</c>.
+/// <c>ConfirmOrderId = PendingConfirmation.OrderId</c> while echoing the pending
+/// <c>DeliveryAddressId</c>.
 /// </param>
 /// <param name="DraftOrderId">The draft order built/updated during this turn, if any.</param>
 public sealed record AssistantChatResponse(
@@ -22,8 +23,9 @@ public sealed record AssistantChatResponse(
 /// the user approves it explicitly (two-phase gate, T4).
 /// </summary>
 /// <param name="OrderId">The order awaiting the user's explicit confirm.</param>
+/// <param name="DeliveryAddressId">The client-selected address included in the confirmation.</param>
 /// <param name="PreviewJson">
 /// Raw JSON of the confirmation preview (credit/cutoff checks) the assistant ran, for the client to
 /// render the confirmation summary. Sensitive fields stripped by the tool-result mapper.
 /// </param>
-public sealed record PendingConfirmation(Guid OrderId, string PreviewJson);
+public sealed record PendingConfirmation(Guid OrderId, Guid DeliveryAddressId, string PreviewJson);

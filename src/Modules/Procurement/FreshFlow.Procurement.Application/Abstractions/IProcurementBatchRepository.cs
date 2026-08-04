@@ -6,6 +6,10 @@ namespace FreshFlow.Procurement.Application.Abstractions;
 
 public interface IProcurementBatchRepository
 {
+    public Task<Result> ExecuteInSerializableTransactionAsync(
+        Func<CancellationToken, Task<Result>> operation,
+        CancellationToken ct);
+
     public Task AddRangeAsync(
         IReadOnlyCollection<ProcurementBatch> batches,
         CancellationToken ct);
@@ -32,6 +36,10 @@ public interface IProcurementBatchRepository
     public Task<DateOnly?> GetLatestCycleDateAsync(CancellationToken ct);
 
     public Task<IReadOnlyList<ProcurementBatch>> ListByDateAsync(
+        DateOnly date,
+        CancellationToken ct);
+
+    public Task<IReadOnlyList<ProcurementBatch>> ListMergeableByDateAsync(
         DateOnly date,
         CancellationToken ct);
 

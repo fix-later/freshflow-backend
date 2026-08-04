@@ -30,7 +30,8 @@ public sealed class MarketProductRepositorySearchTests(AuthWebAppFactory factory
         var unitId = await GetOrCreateUnitAsync("kg");
         var matchingProductId = await CreateProductAsync($"Cá lóc {Guid.NewGuid():N}", unitId);
         var otherProductId = await CreateProductAsync($"Tôm sú {Guid.NewGuid():N}", unitId);
-        await SeedMarketProductAsync(marketId, matchingProductId, 100_000m, 50);
+        var matchingMarketProductId = await SeedMarketProductAsync(marketId, matchingProductId, 100_000m, 50);
+        await ReserveAllAsync(matchingMarketProductId, 7);
         await SeedMarketProductAsync(marketId, otherProductId, 200_000m, 30);
 
         var repository = GetRepository();
@@ -43,7 +44,7 @@ public sealed class MarketProductRepositorySearchTests(AuthWebAppFactory factory
         // Assert
         items.Should().ContainSingle();
         items[0].ProductId.Should().Be(matchingProductId);
-        items[0].AvailableQuantity.Should().Be(50);
+        items[0].AvailableQuantity.Should().Be(43);
         nextCursor.Should().BeNull();
     }
 

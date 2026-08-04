@@ -1,6 +1,7 @@
 using FreshFlow.Catalog.Application.Abstractions;
 using FreshFlow.Catalog.Application.Dtos;
 using FreshFlow.Catalog.Application.Mappings;
+using FreshFlow.Catalog.Domain.Entities;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 
@@ -39,9 +40,10 @@ internal sealed class UpdateProductCommandHandler(
             legacyCategory = category.Name;
         }
 
+        PackingCode? packingCode = null;
         if (request.PackingCodeId is Guid packingCodeId)
         {
-            var packingCode = await packingCodes.FindByIdAsync(packingCodeId, ct);
+            packingCode = await packingCodes.FindByIdAsync(packingCodeId, ct);
             if (packingCode is null || !packingCode.IsActive)
                 return Result<ProductDto>.Failure(
                     Error.Validation("INVALID_PACKING_CODE",
@@ -56,10 +58,12 @@ internal sealed class UpdateProductCommandHandler(
             legacyCategory: legacyCategory,
             legacyUnit: unit.Name,
             imageUrl: request.ImageUrl,
-            packingCodeId: request.PackingCodeId);
+            packingCodeId: request.PackingCodeId,
+            vatRate: request.VatRate,
+            minimumOrderQuantity: request.MinimumOrderQuantity);
 
         await products.SaveChangesAsync(ct);
 
-        return Result<ProductDto>.Success(product.ToDto());
+        return Result<ProductDto>.Success(product.ToDto(unit, packingCode));
     }
 }

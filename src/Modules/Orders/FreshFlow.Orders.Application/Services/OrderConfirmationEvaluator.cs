@@ -20,7 +20,12 @@ namespace FreshFlow.Orders.Application.Services;
 internal static class OrderConfirmationEvaluator
 {
     public static OrderConfirmationEvaluation Evaluate(
-        Order order, CreditCheckDto creditCheck, DateTime nowUtc, int windowDays, TimeSpan? cutoffLocalTime = null)
+        Order order,
+        CreditCheckDto creditCheck,
+        DateTime nowUtc,
+        int windowDays,
+        TimeSpan? cutoffLocalTime = null,
+        decimal? totalAmount = null)
     {
         var issues = new List<Error>();
 
@@ -41,7 +46,8 @@ internal static class OrderConfirmationEvaluator
                 $"Delivery date must be within the next {windowDays} days and not in the past."));
         }
 
-        return new OrderConfirmationEvaluation(issues, resolvedScheduledFor, order.TotalAmount, creditCheck);
+        return new OrderConfirmationEvaluation(
+            issues, resolvedScheduledFor, totalAmount ?? order.TotalAmount, creditCheck);
     }
 }
 

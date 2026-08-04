@@ -13,6 +13,7 @@ using FreshFlow.Logistics.Domain.ValueObjects;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Pricing.Domain.Entities;
+using FreshFlow.Procurement.Application.Abstractions;
 using FreshFlow.Procurement.Application.Dtos;
 using FreshFlow.Procurement.Domain.Entities;
 using FreshFlow.Procurement.Domain.Enums;
@@ -29,7 +30,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
-    public async Task AutoBatch_PersistsFlipsListsAndRejectsDoubleCoverAsync()
+    public async Task AutoBatch_PersistsFlipsListsAndDeduplicatesExistingCoverageAsync()
     {
         var token = await LoginAsAdminAsync();
         _client.DefaultRequestHeaders.Authorization =
@@ -299,6 +300,17 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
 
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", agentAToken);
+        await SetReservedQuantityAsync(seed.MarketProductId, 0);
+        var rejectedHandover = await _client.PatchAsync(
+            $"/api/v1/procurement/tasks/{batchId}/handover",
+            null);
+        rejectedHandover.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var rejectedHandoverError = await rejectedHandover.Content
+            .ReadFromJsonAsync<ErrorEnvelope>();
+        rejectedHandoverError!.Error!.Code.Should().Be("STOCK_RESERVATION_CONFLICT");
+        await AssertPurchaseStateAsync(batchId, seed.MarketProductId, 5, 11_000m);
+
+        await SetReservedQuantityAsync(seed.MarketProductId, 5);
         var handover = await _client.PatchAsync(
             $"/api/v1/procurement/tasks/{batchId}/handover",
             null);
@@ -352,9 +364,136 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             "/api/v1/admin/order-groups/auto-batch",
             new { targetDate, dryRun = false, force = true });
 
-        doubleCover.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        var error = await doubleCover.Content.ReadFromJsonAsync<ErrorEnvelope>();
-        error!.Error!.Code.Should().Be("ORDER_ALREADY_IN_ACTIVE_GROUP");
+        doubleCover.StatusCode.Should().Be(HttpStatusCode.OK);
+        var doubleCoverResult = await doubleCover.Content
+            .ReadFromJsonAsync<Envelope<BatchingResult>>();
+        doubleCoverResult!.Data!.BatchesCreated.Should().Be(0);
+        doubleCoverResult.Data.OrdersBatched.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AutoBatch_SecondRunSameMarketDate_MergesIntoBuiltBatchAsync()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+        var restaurantId = await CreateRestaurantAsync();
+        var targetDate = new DateOnly(2043, 5, 19);
+        var firstOrder = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+
+        var firstRun = await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/auto-batch",
+            new { targetDate, dryRun = false, force = false });
+        firstRun.StatusCode.Should().Be(HttpStatusCode.OK);
+        var batchId = await BatchIdCoveringAsync(firstOrder.OrderId);
+
+        try
+        {
+            var secondOrder = await SeedConfirmedOrderAsync(
+                restaurantId,
+                targetDate,
+                firstOrder.MarketId,
+                firstOrder.MarketProductId,
+                firstOrder.ProductName);
+
+            var secondRun = await _client.PostAsJsonAsync(
+                "/api/v1/admin/order-groups/auto-batch",
+                new { targetDate, dryRun = false, force = false });
+
+            var responseBody = await secondRun.Content.ReadAsStringAsync();
+            secondRun.StatusCode.Should().Be(HttpStatusCode.OK, responseBody);
+            var result = await secondRun.Content.ReadFromJsonAsync<Envelope<BatchingResult>>();
+            result!.Data!.BatchesCreated.Should().Be(0);
+            result.Data.OrdersBatched.Should().Be(1);
+
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var batches = await db.Set<ProcurementBatch>()
+                .AsNoTracking()
+                .Include(batch => batch.Items)
+                .Include(batch => batch.Orders)
+                .Where(batch =>
+                    batch.DeletedAt == null &&
+                    batch.BatchDate == targetDate &&
+                    batch.MarketId == firstOrder.MarketId)
+                .ToListAsync();
+            var batch = batches.Should().ContainSingle().Subject;
+            batch.Id.Should().Be(batchId);
+            batch.Items.Should().ContainSingle(item =>
+                item.MarketProductId == firstOrder.MarketProductId &&
+                item.TotalQuantity == 10);
+            batch.Orders.Select(order => order.OrderId)
+                .Should().BeEquivalentTo([firstOrder.OrderId, secondOrder.OrderId]);
+            var persistedSecondOrder = await db.Set<Order>()
+                .AsNoTracking()
+                .SingleAsync(order => order.Id == secondOrder.OrderId);
+            persistedSecondOrder.Status.Should().Be(OrderStatus.Batched);
+        }
+        finally
+        {
+            await RemoveBatchAsync(batchId);
+        }
+    }
+
+    [Fact]
+    public async Task BatchRepository_StaleMerge_ReturnsFalseAsync()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+        var restaurantId = await CreateRestaurantAsync();
+        var targetDate = new DateOnly(2043, 5, 20);
+        var firstOrder = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+        var firstRun = await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/auto-batch",
+            new { targetDate, dryRun = false, force = false });
+        firstRun.StatusCode.Should().Be(HttpStatusCode.OK);
+        var batchId = await BatchIdCoveringAsync(firstOrder.OrderId);
+
+        try
+        {
+            var secondOrder = await SeedConfirmedOrderAsync(
+                restaurantId,
+                targetDate,
+                firstOrder.MarketId,
+                firstOrder.MarketProductId,
+                firstOrder.ProductName);
+            var thirdOrder = await SeedConfirmedOrderAsync(
+                restaurantId,
+                targetDate,
+                firstOrder.MarketId,
+                firstOrder.MarketProductId,
+                firstOrder.ProductName);
+
+            using var firstScope = factory.Services.CreateScope();
+            using var secondScope = factory.Services.CreateScope();
+            var firstRepository = firstScope.ServiceProvider
+                .GetRequiredService<IProcurementBatchRepository>();
+            var secondRepository = secondScope.ServiceProvider
+                .GetRequiredService<IProcurementBatchRepository>();
+            var firstBatch = (await firstRepository.ListMergeableByDateAsync(targetDate, default))
+                .Single(batch => batch.Id == batchId);
+            var staleBatch = (await secondRepository.ListMergeableByDateAsync(targetDate, default))
+                .Single(batch => batch.Id == batchId);
+
+            firstBatch.MergeIn(
+                    [(firstOrder.MarketProductId, firstOrder.ProductName, 5, secondOrder.OrderId)],
+                    new Dictionary<Guid, decimal>(),
+                    DateTime.UtcNow)
+                .IsSuccess.Should().BeTrue();
+            (await firstRepository.SaveChangesAsync(default)).Should().BeTrue();
+
+            staleBatch.MergeIn(
+                    [(firstOrder.MarketProductId, firstOrder.ProductName, 5, thirdOrder.OrderId)],
+                    new Dictionary<Guid, decimal>(),
+                    DateTime.UtcNow)
+                .IsSuccess.Should().BeTrue();
+            (await secondRepository.SaveChangesAsync(default)).Should().BeFalse();
+        }
+        finally
+        {
+            await RemoveBatchAsync(batchId);
+        }
     }
 
     private Task<string> LoginAsAdminAsync() =>
@@ -499,6 +638,11 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
 
         db.Set<Order>().Add(order);
         await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE market_products
+            SET "ReservedQuantity" = "ReservedQuantity" + 5
+            WHERE "Id" = {marketProductId}
+            """);
 
         return new SeededOrder(
             order.Id,
@@ -506,6 +650,38 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             hubId,
             marketProductId,
             productName);
+    }
+
+    private async Task SeedCreditChargeAsync(Guid restaurantId, Guid orderId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var amount = await db.Set<Order>()
+            .Where(order => order.Id == orderId)
+            .Select(order => order.TotalAmount)
+            .SingleAsync();
+        var account = new RestaurantCredit(restaurantId, amount);
+        account.Charge(amount);
+        account.ClearDomainEvents();
+        db.Set<RestaurantCredit>().Add(account);
+        db.Set<CreditTransaction>().Add(new CreditTransaction(
+            restaurantId,
+            orderId,
+            CreditTransactionType.Charge,
+            amount,
+            account.OutstandingBalance,
+            "Integration fixture"));
+        await db.SaveChangesAsync();
+    }
+
+    private async Task SetReservedQuantityAsync(Guid marketProductId, int quantity)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Set<MarketProduct>()
+            .Where(product => product.Id == marketProductId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(product => product.ReservedQuantity, quantity));
     }
 
     private async Task SeedActiveCoverageAsync(
@@ -671,6 +847,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         var restaurantId = await CreateRestaurantAsync();
         var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1);
         var seed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+        await SeedCreditChargeAsync(restaurantId, seed.OrderId);
         await _client.PostAsJsonAsync(
             "/api/v1/admin/order-groups/auto-batch",
             new { targetDate, dryRun = false, force = false });
@@ -935,7 +1112,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         }
         finally
         {
-            // AutoBatch_PersistsFlipsListsAndRejectsDoubleCoverAsync counts every row in
+            // AutoBatch_PersistsFlipsListsAndDeduplicatesExistingCoverageAsync counts every row in
             // procurement_batches across the shared test database, so batches seeded directly
             // here must not outlive this test.
             await RemoveBatchAsync(batchAId);

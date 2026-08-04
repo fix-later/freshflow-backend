@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Catalog.Application.Abstractions;
 using FreshFlow.Catalog.Application.Commands.Products.Create;
+using FreshFlow.Catalog.Application.Dtos;
 using FreshFlow.Catalog.Domain.Entities;
 using NSubstitute;
 
@@ -66,6 +67,26 @@ public sealed class CreateProductCommandHandlerTests
         // Assert
         result.IsSuccess.Should().BeTrue();
         result.Value.CategoryId.Should().BeNull();
+        result.Value.SellingUnit.UnitName.Should().Be("kg");
+        result.Value.SellingUnit.WeightKg.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Kilogram", 1)]
+    [InlineData("Bag", 5)]
+    [InlineData("Carton", 10)]
+    public async Task Handle_WithPackingCode_ReturnsSellingUnit(string unitName, int weightKg)
+    {
+        var unit = ActiveUnit(unitName);
+        var packingCode = new PackingCode("PACK", null, weightKg);
+        _units.FindByIdAsync(unit.Id, default).Returns(unit);
+        _packingCodes.FindByIdAsync(packingCode.Id, default).Returns(packingCode);
+
+        var result = await _sut.Handle(
+            new CreateProductCommand("Product", unit.Id, null, null, null, packingCode.Id),
+            default);
+
+        result.Value.SellingUnit.Should().Be(new SellingUnitDto(unitName, weightKg));
     }
 
     [Fact]

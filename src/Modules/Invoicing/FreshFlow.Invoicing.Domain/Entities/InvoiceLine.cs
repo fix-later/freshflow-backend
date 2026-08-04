@@ -11,6 +11,7 @@ public sealed class InvoiceLine
 
     public InvoiceLine(
         string productName,
+        string unit,
         decimal quantity,
         decimal unitPrice,
         string vatRateCode,
@@ -18,6 +19,8 @@ public sealed class InvoiceLine
     {
         if (string.IsNullOrWhiteSpace(productName))
             throw new ArgumentException("Product name is required.", nameof(productName));
+        if (string.IsNullOrWhiteSpace(unit))
+            throw new ArgumentException("Unit is required.", nameof(unit));
         if (quantity < 0m)
             throw new ArgumentOutOfRangeException(nameof(quantity), quantity, "Quantity must be non-negative.");
         if (unitPrice < 0m)
@@ -28,6 +31,7 @@ public sealed class InvoiceLine
 
         Id = Guid.NewGuid();
         ProductName = productName;
+        Unit = unit;
         Quantity = quantity;
         UnitPrice = unitPrice;
         VatRateCode = vatRateCode;
@@ -42,6 +46,7 @@ public sealed class InvoiceLine
     public Guid Id { get; private set; }
     public Guid InvoiceId { get; private set; }
     public string ProductName { get; private set; } = string.Empty;
+    public string? Unit { get; private set; }
     public decimal Quantity { get; private set; }
     public decimal UnitPrice { get; private set; }
 

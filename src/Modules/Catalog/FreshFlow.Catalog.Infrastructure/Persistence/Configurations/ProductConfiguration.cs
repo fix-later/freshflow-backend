@@ -24,6 +24,7 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         builder.Property(p => p.ImageUrl).HasMaxLength(512);
         builder.Property(p => p.VatRate).HasMaxLength(10);
+        builder.Property(p => p.MinimumOrderQuantity).IsRequired().HasDefaultValue(1);
 
         builder.Property(p => p.CreatedAt).IsRequired();
         builder.Property(p => p.UpdatedAt).IsRequired();
@@ -34,12 +35,12 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
             .HasForeignKey(p => p.CategoryId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        builder.HasOne<UnitOfMeasurement>()
+        builder.HasOne(p => p.UnitOfMeasurement)
             .WithMany()
             .HasForeignKey(p => p.UnitId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne<PackingCode>()
+        builder.HasOne(p => p.PackingCode)
             .WithMany()
             .HasForeignKey(p => p.PackingCodeId)
             .OnDelete(DeleteBehavior.SetNull);

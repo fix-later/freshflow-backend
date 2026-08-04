@@ -15,4 +15,7 @@ public sealed record MarketProductItemDto(
     int CurrentQuantity,
     int AvailableQuantity,
     DateTime UpdatedAt,
-    Guid? UpdatedBy);
+    Guid? UpdatedBy,
+    SellingUnitDto SellingUnit);
+
+public sealed record SellingUnitDto(string UnitName, decimal? WeightKg);

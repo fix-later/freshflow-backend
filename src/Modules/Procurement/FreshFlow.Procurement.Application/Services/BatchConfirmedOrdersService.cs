@@ -1,6 +1,7 @@
 using FreshFlow.Procurement.Application.Abstractions;
 using FreshFlow.Procurement.Application.Dtos;
 using FreshFlow.Procurement.Domain.Entities;
+using FreshFlow.Procurement.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
 
 namespace FreshFlow.Procurement.Application.Services;
@@ -10,7 +11,8 @@ public sealed class BatchConfirmedOrdersService(
     IMarketProductMarketReader marketProducts,
     IHubByMarketReader hubsByMarket,
     IOperationalSettingsReader settings,
-    IProcurementBatchRepository batches) : IProcurementBatchingService
+    IProcurementBatchRepository batches,
+    TimeProvider timeProvider) : IProcurementBatchingService
 {
     public async Task<Result<BatchingResult>> BuildBatchesAsync(
         DateOnly batchDate,
@@ -68,45 +70,117 @@ public sealed class BatchConfirmedOrdersService(
                 $"Market '{marketWithoutHub}' has no active hub."));
         }
 
-        var builtBatches = new List<ProcurementBatch>();
-        foreach (var marketGroup in lines.GroupBy(line => line.MarketId))
+        var marketGroups = lines.GroupBy(line => line.MarketId).ToList();
+        var previewItemCount = marketGroups.Sum(group =>
+            group.Select(line => line.MarketProductId).Distinct().Count());
+
+        if (dryRun)
         {
-            var build = ProcurementBatch.Build(
-                batchDate,
-                marketGroup.Key,
+            var previewBatches = new List<ProcurementBatch>();
+            foreach (var marketGroup in marketGroups)
+            {
+                var build = Build(
+                    marketGroup.Key,
+                    marketGroup.Select(line => (
+                        line.MarketProductId,
+                        line.ProductNameSnapshot,
+                        line.Quantity,
+                        line.OrderId)));
+                if (build.IsFailure)
+                    return Result<BatchingResult>.Failure(build.Error);
+                previewBatches.Add(build.Value);
+            }
+
+            return Result<BatchingResult>.Success(new BatchingResult(
+                0,
+                0,
+                previewItemCount,
+                false,
+                null,
+                previewBatches.Select(ToPreview).ToList().AsReadOnly()));
+        }
+
+        var mergeable = await batches.ListMergeableByDateAsync(batchDate, ct);
+        var mergeByMarket = mergeable
+            .GroupBy(batch => batch.MarketId)
+            .ToDictionary(group => group.Key, group => group.First());
+        var newBatches = new List<ProcurementBatch>();
+        var affectedBatches = new List<ProcurementBatch>();
+        var batchedOrderIds = new HashSet<Guid>();
+        var itemsAggregated = 0;
+        var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
+
+        foreach (var marketGroup in marketGroups)
+        {
+            if (!mergeByMarket.TryGetValue(marketGroup.Key, out var existing))
+            {
+                var build = Build(
+                    marketGroup.Key,
+                    marketGroup.Select(line => (
+                        line.MarketProductId,
+                        line.ProductNameSnapshot,
+                        line.Quantity,
+                        line.OrderId)));
+                if (build.IsFailure)
+                    return Result<BatchingResult>.Failure(build.Error);
+                newBatches.Add(build.Value);
+                affectedBatches.Add(build.Value);
+                batchedOrderIds.UnionWith(marketGroup.Select(line => line.OrderId));
+                itemsAggregated += marketGroup
+                    .Select(line => line.MarketProductId)
+                    .Distinct()
+                    .Count();
+                continue;
+            }
+
+            var existingOrderIds = existing.Orders
+                .Select(order => order.OrderId)
+                .ToHashSet();
+            var newOrderIds = marketGroup
+                .Select(line => line.OrderId)
+                .Distinct()
+                .Where(orderId => !existingOrderIds.Contains(orderId))
+                .ToHashSet();
+            batchedOrderIds.UnionWith(newOrderIds);
+            itemsAggregated += marketGroup
+                .Where(line => newOrderIds.Contains(line.OrderId))
+                .Select(line => line.MarketProductId)
+                .Distinct()
+                .Count();
+
+            IReadOnlyDictionary<Guid, decimal> prices = new Dictionary<Guid, decimal>();
+            if (existing.Status == ProcurementBatchStatus.Manifested)
+            {
+                var existingProductIds = existing.Items
+                    .Select(item => item.MarketProductId)
+                    .ToHashSet();
+                var newProductIds = marketGroup
+                    .Where(line => newOrderIds.Contains(line.OrderId))
+                    .Select(line => line.MarketProductId)
+                    .Distinct()
+                    .Where(productId => !existingProductIds.Contains(productId))
+                    .ToArray();
+                if (newProductIds.Length > 0)
+                {
+                    prices = await marketProducts.ReadReferencePricesAsync(newProductIds, ct);
+                }
+            }
+
+            var merge = existing.MergeIn(
                 marketGroup.Select(line => (
                     line.MarketProductId,
                     line.ProductNameSnapshot,
                     line.Quantity,
                     line.OrderId)),
-                hubs[marketGroup.Key]);
-
-            if (build.IsFailure)
-                return Result<BatchingResult>.Failure(build.Error);
-
-            builtBatches.Add(build.Value);
+                prices,
+                nowUtc);
+            if (merge.IsFailure)
+                return Result<BatchingResult>.Failure(merge.Error);
+            affectedBatches.Add(existing);
         }
 
-        var preview = builtBatches.Select(ToPreview).ToList().AsReadOnly();
-        var distinctOrderCount = builtBatches
-            .SelectMany(batch => batch.Orders)
-            .Select(link => link.OrderId)
-            .Distinct()
-            .Count();
-        var itemCount = builtBatches.Sum(batch => batch.TotalItemCount);
-
-        if (dryRun)
-        {
-            return Result<BatchingResult>.Success(new BatchingResult(
-                0,
-                0,
-                itemCount,
-                false,
-                null,
-                preview));
-        }
-
-        await batches.AddRangeAsync(builtBatches.AsReadOnly(), ct);
+        if (newBatches.Count > 0)
+            await batches.AddRangeAsync(newBatches.AsReadOnly(), ct);
         if (!await batches.SaveChangesAsync(ct))
         {
             return Result<BatchingResult>.Failure(Error.Conflict(
@@ -115,12 +189,21 @@ public sealed class BatchConfirmedOrdersService(
         }
 
         return Result<BatchingResult>.Success(new BatchingResult(
-            builtBatches.Count,
-            distinctOrderCount,
-            itemCount,
+            newBatches.Count,
+            batchedOrderIds.Count,
+            itemsAggregated,
             false,
             null,
-            preview));
+            affectedBatches.Select(ToPreview).ToList().AsReadOnly()));
+
+        Result<ProcurementBatch> Build(
+            Guid marketId,
+            IEnumerable<(Guid MarketProductId, string ProductName, int Quantity, Guid OrderId)> groupLines) =>
+            ProcurementBatch.Build(
+                batchDate,
+                marketId,
+                groupLines,
+                hubs[marketId]);
     }
 
     private static Result<BatchingResult> Skipped(string reason) =>

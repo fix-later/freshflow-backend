@@ -25,8 +25,9 @@ public sealed class ToolDefinitionsTests
     private readonly Guid _userId = Guid.NewGuid();
     private readonly Guid _marketId = Guid.NewGuid();
     private readonly Guid _orderId = Guid.NewGuid();
+    private readonly Guid _deliveryAddressId = Guid.NewGuid();
 
-    private AssistantToolInvocationContext Ctx => new(_userId, _marketId);
+    private AssistantToolInvocationContext Ctx => new(_userId, _marketId, _deliveryAddressId);
 
     private IReadOnlyDictionary<string, AssistantTool> Tools =>
         ToolDefinitions.CreateAll(_sender).ToDictionary(t => t.Name);
@@ -258,11 +259,28 @@ public sealed class ToolDefinitionsTests
     // ── confirm_order ────────────────────────────────────────────────────────
 
     [Fact]
+    public void confirm_order_schema_keeps_deliveryAddressId_out_of_llm_control()
+    {
+        var confirmSchema = Tools["confirm_order"].ParametersSchema;
+        var getOrderSchema = Tools["get_order"].ParametersSchema;
+
+        confirmSchema.GetProperty("properties").TryGetProperty(
+            "deliveryAddressId", out _).Should().BeFalse();
+        getOrderSchema.GetProperty("properties").TryGetProperty(
+            "deliveryAddressId", out _).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task confirm_order_injects_UserId_from_context_and_ignores_any_LLM_supplied_value()
     {
         // Arrange
         var spoofedUserId = Guid.NewGuid();
-        var args = JsonSerializer.SerializeToElement(new { orderId = _orderId, userId = spoofedUserId });
+        var args = JsonSerializer.SerializeToElement(new
+        {
+            orderId = _orderId,
+            deliveryAddressId = _deliveryAddressId,
+            userId = spoofedUserId
+        });
         _sender.Send(Arg.Any<ConfirmOrderCommand>(), Arg.Any<CancellationToken>())
             .Returns(Result<OrderDto>.Success(SampleOrder()));
 
@@ -271,7 +289,10 @@ public sealed class ToolDefinitionsTests
 
         // Assert
         await _sender.Received(1).Send(
-            Arg.Is<ConfirmOrderCommand>(c => c.UserId == _userId && c.OrderId == _orderId),
+            Arg.Is<ConfirmOrderCommand>(c =>
+                c.UserId == _userId &&
+                c.OrderId == _orderId &&
+                c.DeliveryAddressId == _deliveryAddressId),
             Arg.Any<CancellationToken>());
     }
 
@@ -279,7 +300,8 @@ public sealed class ToolDefinitionsTests
     public async Task confirm_order_maps_a_credit_limit_failure_to_a_structured_error_the_llm_can_explain()
     {
         // Arrange
-        var args = JsonSerializer.SerializeToElement(new { orderId = _orderId });
+        var args = JsonSerializer.SerializeToElement(
+            new { orderId = _orderId, deliveryAddressId = _deliveryAddressId });
         _sender.Send(Arg.Any<ConfirmOrderCommand>(), Arg.Any<CancellationToken>())
             .Returns(Result<OrderDto>.Failure(new Error("CREDIT_LIMIT_EXCEEDED", "Vượt hạn mức công nợ.")));
 
@@ -290,6 +312,20 @@ public sealed class ToolDefinitionsTests
         JsonDocument.Parse(result).RootElement.GetProperty("error").GetString().Should().Be("CREDIT_LIMIT_EXCEEDED");
     }
 
+    [Fact]
+    public async Task confirm_order_rejects_missing_deliveryAddressId()
+    {
+        var args = JsonSerializer.SerializeToElement(new { orderId = _orderId });
+        var ctx = new AssistantToolInvocationContext(_userId, _marketId);
+
+        var result = await Tools["confirm_order"].Handler!(args, ctx, CancellationToken.None);
+
+        JsonDocument.Parse(result).RootElement.GetProperty("error").GetString()
+            .Should().Be("DELIVERY_ADDRESS_REQUIRED");
+        await _sender.DidNotReceive().Send(
+            Arg.Any<ConfirmOrderCommand>(), Arg.Any<CancellationToken>());
+    }
+
     private static OrderDto SampleOrder() => new(
         OrderId: Guid.NewGuid(),
         RestaurantId: Guid.NewGuid(),
@@ -298,6 +334,7 @@ public sealed class ToolDefinitionsTests
         ScheduledFor: null,
         TotalAmount: 0m,
         Notes: null,
+        DeliveryAddress: null,
         Items: [],
         OrderGroupId: null,
         ScheduledOrderId: null,

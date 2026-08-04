@@ -30,7 +30,7 @@ internal sealed class DbPriceBoardReader(AppDbContext db) : IPriceBoardReader
             .Where(mp => mp.MarketId == marketId
                          && productIds.Contains(mp.ProductId)
                          && mp.DeletedAt == null)
-            .Select(mp => new { mp.ProductId, mp.CurrentPrice, mp.CurrentQuantity })
+            .Select(mp => new { mp.ProductId, mp.CurrentPrice, mp.CurrentQuantity, mp.ReservedQuantity })
             .ToListAsync(ct);
 
         return rows.ToDictionary(
@@ -38,9 +38,6 @@ internal sealed class DbPriceBoardReader(AppDbContext db) : IPriceBoardReader
             r => new LivePriceEntry(
                 Price: r.CurrentPrice,
                 Quantity: r.CurrentQuantity,
-                // TODO: subtract soft-reserved from Redis order:reservation:{marketProductId}
-                // when the Orders module reservation counter is integrated.
-                // For v1, AvailableQuantity = Quantity (no soft-reservation source yet).
-                AvailableQuantity: r.CurrentQuantity));
+                AvailableQuantity: r.CurrentQuantity - r.ReservedQuantity));
     }
 }

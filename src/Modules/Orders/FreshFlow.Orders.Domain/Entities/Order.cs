@@ -33,6 +33,7 @@ public sealed class Order : AggregateRoot
         ScheduledFor = scheduledFor;
         Notes = notes;
         TotalAmount = 0;
+        SubtotalAmount = 0;
         OrderGroupId = orderGroupId;
         ScheduledOrderId = scheduledOrderId;
 
@@ -46,12 +47,45 @@ public sealed class Order : AggregateRoot
     public OrderPaymentStatus PaymentStatus { get; private set; }
     public DateTime? ScheduledFor { get; private set; }
     public decimal TotalAmount { get; private set; }
+    public decimal SubtotalAmount { get; private set; }
+    public decimal VatAmount { get; private set; }
+    public decimal DeliveryFee { get; private set; }
+    public decimal DeliveryDistanceKm { get; private set; }
     public string? Notes { get; private set; }
+    public Guid? DeliveryAddressId { get; private set; }
+    public string? DeliveryRecipientName { get; private set; }
+    public string? DeliveryPhone { get; private set; }
+    public string? DeliveryAddressLine { get; private set; }
+    public decimal? DeliveryLatitude { get; private set; }
+    public decimal? DeliveryLongitude { get; private set; }
     public DateTime? CancelledAt { get; private set; }
     public string? CancellationReason { get; private set; }
     public DateTime? ConfirmedReceiptAt { get; private set; }
 
     public IReadOnlyCollection<OrderItem> Items => _items.AsReadOnly();
+
+    public Result CaptureDeliveryAddress(
+        Guid addressId,
+        string? recipientName,
+        string? phone,
+        string addressLine,
+        decimal? latitude,
+        decimal? longitude)
+    {
+        if (Status != OrderStatus.Draft || DeliveryAddressId.HasValue)
+            return Result.Failure(Error.Conflict(
+                "DELIVERY_ADDRESS_ALREADY_CAPTURED",
+                "The delivery address can only be captured once while the order is a draft."));
+
+        DeliveryAddressId = addressId;
+        DeliveryRecipientName = recipientName;
+        DeliveryPhone = phone;
+        DeliveryAddressLine = addressLine;
+        DeliveryLatitude = latitude;
+        DeliveryLongitude = longitude;
+
+        return Result.Success();
+    }
 
     /// <summary>
     /// Adds a line item while the order is still a draft (cart). Recalculates <see cref="TotalAmount"/>.
@@ -124,6 +158,35 @@ public sealed class Order : AggregateRoot
         return Result.Success();
     }
 
+    public Result ApplyConfirmationPricing(
+        IReadOnlyDictionary<Guid, OrderItemTaxSnapshot> taxesByMarketProduct,
+        decimal deliveryDistanceKm,
+        decimal deliveryFee)
+    {
+        if (Status != OrderStatus.Draft)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_DRAFT", "Pricing can only be applied while the order is a draft."));
+        if (deliveryDistanceKm < 0m || deliveryFee < 0m)
+            return Result.Failure(Error.Validation(
+                "INVALID_DELIVERY_FEE", "Delivery distance and fee must be non-negative."));
+
+        foreach (var item in _items)
+        {
+            if (!taxesByMarketProduct.TryGetValue(item.MarketProductId, out var tax))
+                return Result.Failure(Error.Validation(
+                    "VAT_RATE_MISSING", $"VAT rate is missing for market product '{item.MarketProductId}'."));
+
+            item.LockPricing(item.UnitPrice, tax.Code, tax.Percent);
+        }
+
+        SubtotalAmount = _items.Sum(item => item.LockedTotal ?? 0m);
+        VatAmount = _items.Sum(item => item.LockedVatAmount ?? 0m);
+        DeliveryDistanceKm = deliveryDistanceKm;
+        DeliveryFee = deliveryFee;
+        TotalAmount = SubtotalAmount + VatAmount + DeliveryFee;
+        return Result.Success();
+    }
+
     /// <summary>
     /// Transitions the order from Draft to Confirmed, locking item prices and accruing
     /// the total as outstanding debt (B2B credit model).
@@ -134,8 +197,16 @@ public sealed class Order : AggregateRoot
         if (canConfirm.IsFailure)
             return canConfirm;
 
-        foreach (var item in _items)
-            item.LockPrice(item.UnitPrice);
+        if (_items.Any(item => item.LockedUnitPrice is null))
+        {
+            var defaultTaxes = _items
+                .Select(item => item.MarketProductId)
+                .Distinct()
+                .ToDictionary(id => id, _ => new OrderItemTaxSnapshot("KCT", 0m));
+            var pricing = ApplyConfirmationPricing(defaultTaxes, 0m, 0m);
+            if (pricing.IsFailure)
+                return pricing;
+        }
 
         TransitionTo(OrderStatus.Confirmed);
         PaymentStatus = OrderPaymentStatus.Outstanding;
@@ -223,6 +294,38 @@ public sealed class Order : AggregateRoot
         return Result.Success();
     }
 
+    public Result ApplyProcurementActuals(
+        IReadOnlyDictionary<Guid, OrderItemProcurementActual> actualsByItem)
+    {
+        if (Status != OrderStatus.Batched)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_BATCHED",
+                $"Procurement actuals cannot be applied to an order in status '{Status}'."));
+
+        foreach (var (itemId, actual) in actualsByItem)
+        {
+            var item = _items.FirstOrDefault(candidate => candidate.Id == itemId);
+            if (item is null)
+                return Result.Failure(Error.NotFound("ORDER_ITEM", itemId));
+            if (actual.Quantity < 0m || actual.Quantity > item.Quantity)
+                return Result.Failure(Error.Validation(
+                    "INVALID_ACTUAL_QUANTITY",
+                    "Actual quantity must be non-negative and cannot exceed ordered quantity."));
+            if (actual.Quantity > 0m && actual.UnitPrice is null or <= 0m)
+                return Result.Failure(Error.Validation(
+                    "INVALID_ACTUAL_UNIT_PRICE",
+                    "A positive actual quantity requires a positive actual unit price."));
+        }
+
+        foreach (var (itemId, actual) in actualsByItem)
+        {
+            var item = _items.Single(candidate => candidate.Id == itemId);
+            item.RecordProcurementActuals(actual.Quantity, actual.UnitPrice);
+        }
+
+        return Result.Success();
+    }
+
     /// <summary>
     /// Confirms that the restaurant has received an already-delivered order.
     /// </summary>
@@ -269,5 +372,16 @@ public sealed class Order : AggregateRoot
         RaiseDomainEvent(new OrderStatusChangedDomainEvent(Id, RestaurantId, previous, next, DateTime.UtcNow));
     }
 
-    private void RecalculateTotal() => TotalAmount = _items.Sum(i => i.Subtotal);
+    private void RecalculateTotal()
+    {
+        SubtotalAmount = _items.Sum(i => i.Subtotal);
+        VatAmount = 0m;
+        DeliveryFee = 0m;
+        DeliveryDistanceKm = 0m;
+        TotalAmount = SubtotalAmount;
+    }
 }
+
+public sealed record OrderItemTaxSnapshot(string Code, decimal Percent);
+
+public sealed record OrderItemProcurementActual(decimal Quantity, decimal? UnitPrice);

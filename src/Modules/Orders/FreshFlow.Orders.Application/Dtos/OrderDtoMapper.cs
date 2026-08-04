@@ -15,6 +15,15 @@ internal static class OrderDtoMapper
         order.ScheduledFor,
         order.TotalAmount,
         order.Notes,
+        order.DeliveryAddressId.HasValue
+            ? new DeliveryAddressSnapshotDto(
+                order.DeliveryAddressId.Value,
+                order.DeliveryRecipientName,
+                order.DeliveryPhone,
+                order.DeliveryAddressLine!,
+                order.DeliveryLatitude,
+                order.DeliveryLongitude)
+            : null,
         order.Items
             .Select(i => new OrderItemDto(
                 i.Id,
@@ -24,7 +33,11 @@ internal static class OrderDtoMapper
                 i.UnitPrice,
                 i.Subtotal,
                 i.ActualQuantity,
-                images?.GetValueOrDefault(i.MarketProductId)))
+                i.ActualUnitPrice,
+                images?.GetValueOrDefault(i.MarketProductId),
+                i.VatRateCode,
+                i.VatRatePercent,
+                i.LockedVatAmount))
             .ToList(),
         order.OrderGroupId,
         order.ScheduledOrderId,
@@ -32,7 +45,11 @@ internal static class OrderDtoMapper
         order.CancellationReason,
         order.ConfirmedReceiptAt,
         order.CreatedAt,
-        order.UpdatedAt);
+        order.UpdatedAt,
+        order.SubtotalAmount,
+        order.VatAmount,
+        order.DeliveryFee,
+        order.DeliveryDistanceKm);
 
     public static OrderListItemDto ToListItemDto(Order order) => new(
         order.Id,

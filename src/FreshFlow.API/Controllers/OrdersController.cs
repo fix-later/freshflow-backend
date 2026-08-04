@@ -257,9 +257,11 @@ public sealed class OrdersController(ISender sender) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
-    public async Task<IActionResult> ConfirmOrderAsync(Guid orderId, CancellationToken ct)
+    public async Task<IActionResult> ConfirmOrderAsync(
+        Guid orderId, [FromBody] ConfirmOrderRequest body, CancellationToken ct)
     {
-        var result = await sender.Send(new ConfirmOrderCommand(ResolveUserId(), orderId), ct);
+        var result = await sender.Send(
+            new ConfirmOrderCommand(ResolveUserId(), orderId, body.DeliveryAddressId), ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -273,9 +275,13 @@ public sealed class OrdersController(ISender sender) : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PreviewOrderConfirmationAsync(Guid orderId, CancellationToken ct)
+    public async Task<IActionResult> PreviewOrderConfirmationAsync(
+        Guid orderId,
+        [FromQuery] Guid deliveryAddressId,
+        CancellationToken ct)
     {
-        var result = await sender.Send(new PreviewOrderConfirmationQuery(ResolveUserId(), orderId), ct);
+        var result = await sender.Send(
+            new PreviewOrderConfirmationQuery(ResolveUserId(), orderId, deliveryAddressId), ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -492,6 +498,8 @@ public sealed record CreateDraftOrderRequest(
 public sealed record AddOrderItemRequest(Guid MarketProductId, int Quantity);
 
 public sealed record UpdateOrderItemRequest(int Quantity);
+
+public sealed record ConfirmOrderRequest(Guid DeliveryAddressId);
 
 public sealed record CancelOrderRequest(string? Reason);
 

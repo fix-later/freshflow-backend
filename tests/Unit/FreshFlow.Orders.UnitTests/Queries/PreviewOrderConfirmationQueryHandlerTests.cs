@@ -15,6 +15,7 @@ public sealed class PreviewOrderConfirmationQueryHandlerTests
 {
     private readonly IOrderRepository _orderRepository = Substitute.For<IOrderRepository>();
     private readonly IRestaurantReader _restaurantReader = Substitute.For<IRestaurantReader>();
+    private readonly IMarketProductReader _marketProductReader = Substitute.For<IMarketProductReader>();
     private readonly ICreditService _creditService = Substitute.For<ICreditService>();
     private readonly IOperationalSettingsRepository _operationalSettings = Substitute.For<IOperationalSettingsRepository>();
 
@@ -24,11 +25,12 @@ public sealed class PreviewOrderConfirmationQueryHandlerTests
     private static readonly Guid RestaurantId = Guid.NewGuid();
     private static readonly Guid OtherRestaurantId = Guid.NewGuid();
     private static readonly Guid MarketProductId = Guid.NewGuid();
+    private static readonly Guid DeliveryAddressId = Guid.NewGuid();
 
     public PreviewOrderConfirmationQueryHandlerTests()
     {
         _sut = new PreviewOrderConfirmationQueryHandler(
-            _orderRepository, _restaurantReader, _creditService, _operationalSettings);
+            _orderRepository, _restaurantReader, _marketProductReader, _creditService, _operationalSettings);
 
         _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
             .Returns(OperationalSettings.CreateDefault());
@@ -84,6 +86,34 @@ public sealed class PreviewOrderConfirmationQueryHandlerTests
         result.Value.Issues.Should().BeEmpty();
         result.Value.TotalAmount.Should().Be(100_000m);
         result.Value.RemainingCreditAfter.Should().Be(1_000m - 100_000m);
+        order.Status.Should().Be(OrderStatus.Draft);
+    }
+
+    [Fact]
+    public async Task Handle_WithAddress_ReturnsSameCommercialTotalAsConfirmationAsync()
+    {
+        var order = NewDraftOrderWithItem();
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _restaurantReader.FindDeliveryAddressAsync(
+                DeliveryAddressId, RestaurantId, Arg.Any<CancellationToken>())
+            .Returns(new DeliveryAddressSourceDto(
+                DeliveryAddressId, "Bếp trưởng", "0901234567",
+                "1 Test Street", 10.123456m, 106.123456m));
+        _marketProductReader.FindAsync(MarketProductId, Arg.Any<CancellationToken>())
+            .Returns(new MarketProductSnapshotDto(
+                MarketProductId, "Cà chua", 20_000m, 100, 1, "8",
+                10.023456m, 106.123456m));
+
+        var result = await _sut.Handle(
+            new PreviewOrderConfirmationQuery(UserId, order.Id, DeliveryAddressId), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.WouldSucceed.Should().BeTrue();
+        result.Value.SubtotalAmount.Should().Be(100_000m);
+        result.Value.VatAmount.Should().Be(8_000m);
+        result.Value.DeliveryDistanceKm.Should().Be(11.12m);
+        result.Value.DeliveryFee.Should().Be(55_600m);
+        result.Value.TotalAmount.Should().Be(163_600m);
         order.Status.Should().Be(OrderStatus.Draft);
     }
 

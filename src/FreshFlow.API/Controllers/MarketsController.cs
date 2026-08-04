@@ -25,8 +25,9 @@ namespace FreshFlow.API.Controllers;
 [Authorize]
 public sealed class MarketsController(ISender sender) : ControllerBase
 {
-    /// <summary>GET /api/v1/markets — any authenticated user; active-only by default.</summary>
+    /// <summary>GET /api/v1/markets — public (guests included); active-only by default.</summary>
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetMarketsAsync(
         [FromQuery] bool activeOnly = true, CancellationToken ct = default)
     {
@@ -34,8 +35,9 @@ public sealed class MarketsController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
-    /// <summary>GET /api/v1/markets/{id} — any authenticated user.</summary>
+    /// <summary>GET /api/v1/markets/{id} — public (guests included).</summary>
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetMarketByIdAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetMarketByIdQuery(id), ct);
@@ -116,11 +118,11 @@ public sealed class MarketsController(ISender sender) : ControllerBase
     /// GET /api/v1/markets/{marketId}/products
     /// Returns active products at a specific market with current price and stock.
     /// Cursor-paginated; optionally filtered by category.
-    /// Any authenticated user.
+    /// Public (guests included).
     /// </summary>
     [HttpGet("{marketId:guid}/products")]
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMarketProductsAsync(
         Guid marketId,

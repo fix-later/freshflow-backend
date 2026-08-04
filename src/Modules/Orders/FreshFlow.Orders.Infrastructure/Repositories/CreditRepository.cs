@@ -35,6 +35,19 @@ internal sealed class CreditRepository(AppDbContext db) : ICreditRepository
     public void AddTransaction(CreditTransaction transaction) =>
         db.Set<CreditTransaction>().Add(transaction);
 
+    public Task<decimal> GetRefundableAmountForOrderAsync(
+        Guid orderId,
+        CancellationToken ct) =>
+        db.Set<CreditTransaction>()
+            .Where(transaction =>
+                transaction.OrderId == orderId
+                && (transaction.Type == CreditTransactionType.Charge
+                    || transaction.Type == CreditTransactionType.Refund))
+            .SumAsync(
+                transaction => transaction.Type == CreditTransactionType.Charge
+                    ? transaction.Amount : -transaction.Amount,
+                ct);
+
     // Balance-moving types only — Adjustment (credit-limit changes) is not a balance
     // movement and must never appear in the ledger, even if legacy rows exist.
     private static readonly CreditTransactionType[] BalanceMovingTypes =

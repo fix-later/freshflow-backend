@@ -10,5 +10,7 @@ public record CreateProductCommand(
     Guid? CategoryId,
     string? Description,
     Guid? CreatedBy,
-    Guid? PackingCodeId = null)
+    Guid? PackingCodeId = null,
+    string? VatRate = null,
+    int MinimumOrderQuantity = 1)
     : IRequest<Result<ProductDto>>;

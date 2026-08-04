@@ -80,7 +80,8 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
                     x.mp.CurrentQuantity,
                     x.mp.CurrentQuantity - x.mp.ReservedQuantity,
                     x.mp.UpdatedAt,
-                    x.mp.UpdatedBy),
+                    x.mp.UpdatedBy,
+                    new SellingUnitDto(x.pd.Unit, x.pd.CapacityKg)),
                 x.mp.CreatedAt,  // sort key — must match ORDER BY clause
             })
             .ToListAsync(ct);

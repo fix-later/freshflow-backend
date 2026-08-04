@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using System.Text;
 using FreshFlow.API.Extensions;
+using FreshFlow.Invoicing.Application.Queries.ExportInvoice;
 using FreshFlow.Invoicing.Application.Queries.GetInvoiceById;
 using FreshFlow.Invoicing.Application.Queries.GetInvoices;
 using MediatR;
@@ -37,6 +39,17 @@ public sealed class InvoicesController(ISender sender) : ControllerBase
         var result = await sender.Send(query, ct);
         return result.IsSuccess
             ? Ok(ApiResponse.Ok(result.Value))
+            : result.Error.ToActionResult();
+    }
+
+    /// <summary>Exports one issued invoice as its persisted structured XML document.</summary>
+    [HttpGet("{invoiceId:guid}/export")]
+    public async Task<IActionResult> ExportAsync(Guid invoiceId, CancellationToken ct)
+    {
+        var query = new ExportInvoiceQuery(ResolveUserId(), IsPrivileged(), invoiceId);
+        var result = await sender.Send(query, ct);
+        return result.IsSuccess
+            ? File(Encoding.UTF8.GetBytes(result.Value.Xml), "application/xml", result.Value.FileName)
             : result.Error.ToActionResult();
     }
 

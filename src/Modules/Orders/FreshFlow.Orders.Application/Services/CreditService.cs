@@ -59,7 +59,7 @@ public sealed class CreditService(
         return await SaveAndReturnAsync(account, ct);
     }
 
-    public async Task<Result<RestaurantCreditDto>> RefundAsync(
+    public async Task<Result<CreditRefundDto>> RefundAsync(
         Guid restaurantId,
         Guid orderId,
         decimal amount,
@@ -67,15 +67,22 @@ public sealed class CreditService(
         CancellationToken ct)
     {
         if (amount <= 0m)
-            return Result<RestaurantCreditDto>.Failure(InvalidAmount());
+            return Result<CreditRefundDto>.Failure(InvalidAmount());
 
         var accountResult = await GetAccountOrDefaultAsync(restaurantId, ct);
         if (accountResult.IsFailure)
-            return Result<RestaurantCreditDto>.Failure(accountResult.Error);
+            return Result<CreditRefundDto>.Failure(accountResult.Error);
+
+        var refundableAmount = await creditRepository.GetRefundableAmountForOrderAsync(orderId, ct);
+        if (amount > refundableAmount)
+            return Result<CreditRefundDto>.Failure(Error.Validation(
+                "CREDIT_REFUND_EXCEEDS_ORDER_CHARGE",
+                $"Refund amount cannot exceed the order's remaining charged amount. "
+                + $"Requested amount {amount}; refundable amount {refundableAmount}."));
 
         var account = accountResult.Value;
         if (amount > account.OutstandingBalance)
-            return Result<RestaurantCreditDto>.Failure(CreditBalanceExceeded(
+            return Result<CreditRefundDto>.Failure(CreditBalanceExceeded(
                 "CREDIT_REFUND_EXCEEDS_BALANCE",
                 "Refund amount cannot exceed outstanding balance.",
                 account,
@@ -84,15 +91,20 @@ public sealed class CreditService(
         account.Refund(amount);
         await EnsureTrackedAccountAsync(account, ct);
         creditRepository.Track(account);
-        creditRepository.AddTransaction(new CreditTransaction(
+        var transaction = new CreditTransaction(
             restaurantId,
             orderId,
             CreditTransactionType.Refund,
             amount,
             account.OutstandingBalance,
-            note));
+            note);
+        creditRepository.AddTransaction(transaction);
 
-        return await SaveAndReturnAsync(account, ct);
+        var saved = await SaveAndReturnAsync(account, ct);
+        return saved.IsFailure
+            ? Result<CreditRefundDto>.Failure(saved.Error)
+            : Result<CreditRefundDto>.Success(
+                new CreditRefundDto(transaction.Id, saved.Value));
     }
 
     public async Task<Result<RestaurantCreditDto>> SettleAsync(

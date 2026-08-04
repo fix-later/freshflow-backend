@@ -22,4 +22,8 @@ public sealed record MarketProductSnapshotDto(
     Guid MarketProductId,
     string ProductName,
     decimal CurrentPrice,
-    int AvailableQuantity);
+    int AvailableQuantity,
+    int MinimumOrderQuantity = 1,
+    string? VatRate = null,
+    decimal? OriginLatitude = null,
+    decimal? OriginLongitude = null);

@@ -11,5 +11,7 @@ public record UpdateProductCommand(
     Guid? CategoryId,
     string? Description,
     string? ImageUrl = null,
-    Guid? PackingCodeId = null)
+    Guid? PackingCodeId = null,
+    string? VatRate = null,
+    int MinimumOrderQuantity = 1)
     : IRequest<Result<ProductDto>>;

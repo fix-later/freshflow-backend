@@ -33,7 +33,38 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.TotalAmount)
             .IsRequired()
             .HasColumnType("numeric(14,2)");
+        builder.Property(o => o.SubtotalAmount)
+            .HasColumnName("subtotal_amount")
+            .HasColumnType("numeric(14,2)")
+            .IsRequired();
+        builder.Property(o => o.VatAmount)
+            .HasColumnName("vat_amount")
+            .HasColumnType("numeric(14,2)")
+            .IsRequired();
+        builder.Property(o => o.DeliveryFee)
+            .HasColumnName("delivery_fee")
+            .HasColumnType("numeric(14,2)")
+            .IsRequired();
+        builder.Property(o => o.DeliveryDistanceKm)
+            .HasColumnName("delivery_distance_km")
+            .HasColumnType("numeric(10,2)")
+            .IsRequired();
         builder.Property(o => o.Notes);
+        builder.Property(o => o.DeliveryAddressId)
+            .HasColumnName("delivery_address_id");
+        builder.Property(o => o.DeliveryRecipientName)
+            .HasColumnName("delivery_recipient_name");
+        builder.Property(o => o.DeliveryPhone)
+            .HasColumnName("delivery_phone")
+            .HasMaxLength(20);
+        builder.Property(o => o.DeliveryAddressLine)
+            .HasColumnName("delivery_address_line");
+        builder.Property(o => o.DeliveryLatitude)
+            .HasColumnName("delivery_latitude")
+            .HasPrecision(9, 6);
+        builder.Property(o => o.DeliveryLongitude)
+            .HasColumnName("delivery_longitude")
+            .HasPrecision(9, 6);
         builder.Property(o => o.CancelledAt);
         builder.Property(o => o.CancellationReason);
         builder.Property(o => o.ConfirmedReceiptAt)

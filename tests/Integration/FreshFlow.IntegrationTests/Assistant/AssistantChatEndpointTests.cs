@@ -63,6 +63,7 @@ public sealed class AssistantChatEndpointTests(AssistantWebAppFactory factory)
         // Arrange — the LLM requests confirm_order, but the client sent no confirmOrderId flag. The
         // two-phase gate must withhold the confirmation and surface a pendingConfirmation instead.
         var orderId = Guid.NewGuid();
+        var deliveryAddressId = Guid.NewGuid();
         _factory.ChatClient.Reset();
         _factory.ChatClient.Enqueue(
             AssistantTurnResult.FromToolCall("call-1", "confirm_order", JsonSerializer.Serialize(new { orderId })));
@@ -71,13 +72,49 @@ public sealed class AssistantChatEndpointTests(AssistantWebAppFactory factory)
         // Act — no confirmOrderId in the request body.
         var response = await _client.PostAsJsonAsync(
             "/api/v1/assistant/chat",
-            new { sessionId = Guid.NewGuid().ToString(), message = "xác nhận đơn giúp tôi", marketId = (Guid?)null });
+            new
+            {
+                sessionId = Guid.NewGuid().ToString(),
+                message = "xác nhận đơn giúp tôi",
+                marketId = (Guid?)null,
+                deliveryAddressId
+            });
 
         // Assert — request succeeds, but confirmation is pending (never auto-confirmed).
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<Envelope<ChatData>>(JsonOpts);
         body!.Data!.PendingConfirmation.Should().NotBeNull();
         body.Data.PendingConfirmation!.OrderId.Should().Be(orderId);
+        body.Data.PendingConfirmation.DeliveryAddressId.Should().Be(deliveryAddressId);
+    }
+
+    [Fact]
+    public async Task Chat_WithMatchingOrderAndClientAddress_DispatchesRealConfirmTool()
+    {
+        var orderId = Guid.NewGuid();
+        var deliveryAddressId = Guid.NewGuid();
+        _factory.ChatClient.Reset();
+        _factory.ChatClient.Enqueue(
+            AssistantTurnResult.FromToolCall(
+                "call-1", "confirm_order", JsonSerializer.Serialize(new { orderId })),
+            AssistantTurnResult.FromText("Đã xử lý yêu cầu xác nhận."));
+        await AuthenticateAsRestaurantAsync();
+
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/assistant/chat",
+            new
+            {
+                sessionId = Guid.NewGuid().ToString(),
+                message = "tôi xác nhận đơn và địa chỉ này",
+                marketId = (Guid?)null,
+                deliveryAddressId,
+                confirmOrderId = orderId
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<Envelope<ChatData>>(JsonOpts);
+        body!.Data!.PendingConfirmation.Should().BeNull();
+        body.Data.Reply.Should().Be("Đã xử lý yêu cầu xác nhận.");
     }
 
     [Fact]
@@ -163,5 +200,5 @@ public sealed class AssistantChatEndpointTests(AssistantWebAppFactory factory)
         PendingConfirmationBody? PendingConfirmation,
         Guid? DraftOrderId);
 
-    private sealed record PendingConfirmationBody(Guid OrderId, string PreviewJson);
+    private sealed record PendingConfirmationBody(Guid OrderId, Guid DeliveryAddressId, string PreviewJson);
 }

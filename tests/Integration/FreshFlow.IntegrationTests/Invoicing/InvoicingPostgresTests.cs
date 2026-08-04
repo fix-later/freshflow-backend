@@ -1,3 +1,7 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Xml.Linq;
 using FluentAssertions;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Domain.Aggregates;
@@ -25,6 +29,7 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
     private const string UnknownVatProduct = "Unknown-VAT herbs";
     private const string DeletedProduct = "Deleted product";
     private const string DeletedMarketProduct = "Deleted market product";
+    private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
     public async Task OrderInvoiceReader_ExecutesPostgresProjectionAsync()
@@ -42,8 +47,9 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         var fivePercent = snapshot.Lines.Should().ContainSingle(line =>
             line.ProductName == FivePercentProduct).Which;
         fivePercent.Quantity.Should().Be(2.5m);
-        fivePercent.UnitPrice.Should().Be(12_000m);
+        fivePercent.UnitPrice.Should().Be(11_000m);
         fivePercent.VatRateCode.Should().Be("5");
+        fivePercent.Unit.Should().StartWith("kg-");
 
         var kct = snapshot.Lines.Should().ContainSingle(line => line.ProductName == KctProduct).Which;
         kct.Quantity.Should().Be(2m);
@@ -51,19 +57,19 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         kct.VatRateCode.Should().Be("KCT");
 
         snapshot.Lines.Should().ContainSingle(line => line.ProductName == UnknownVatProduct)
-            .Which.VatRateCode.Should().BeNull();
+            .Which.VatRateCode.Should().Be("KCT");
 
         var deletedProduct = snapshot.Lines.Should().ContainSingle(line =>
             line.ProductName == DeletedProduct).Which;
         deletedProduct.Quantity.Should().Be(1);
         deletedProduct.UnitPrice.Should().Be(1_000m);
-        deletedProduct.VatRateCode.Should().BeNull();
+        deletedProduct.VatRateCode.Should().Be("8");
 
         var deletedMarketProduct = snapshot.Lines.Should().ContainSingle(line =>
             line.ProductName == DeletedMarketProduct).Which;
         deletedMarketProduct.Quantity.Should().Be(1);
         deletedMarketProduct.UnitPrice.Should().Be(1_000m);
-        deletedMarketProduct.VatRateCode.Should().BeNull();
+        deletedMarketProduct.VatRateCode.Should().Be("10");
 
         (await reader.GetByOrderIdAsync(seed.SoftDeletedOrderId, default)).Should().BeNull();
     }
@@ -107,39 +113,40 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             .SingleAsync(value => value.OrderId == seed.OrderId);
         invoice.Status.Should().Be(InvoiceStatus.Issued);
         invoice.TaxAuthorityCode.Should().NotBeNullOrWhiteSpace();
-        invoice.SubTotal.Should().Be(87_000m);
-        invoice.VatAmount.Should().Be(1_500m);
-        invoice.Total.Should().Be(88_500m);
+        invoice.SubTotal.Should().Be(84_500m);
+        invoice.VatAmount.Should().Be(1_555m);
+        invoice.Total.Should().Be(86_055m);
         invoice.Lines.Should().HaveCount(5);
 
         var fivePercent = invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == FivePercentProduct).Which;
         fivePercent.Quantity.Should().Be(2.5m);
-        fivePercent.UnitPrice.Should().Be(12_000m);
+        fivePercent.UnitPrice.Should().Be(11_000m);
         fivePercent.VatRateCode.Should().Be("5");
-        fivePercent.LineSubtotal.Should().Be(30_000m);
-        fivePercent.LineVatAmount.Should().Be(1_500m);
-        fivePercent.LineTotal.Should().Be(31_500m);
+        fivePercent.Unit.Should().StartWith("kg-");
+        fivePercent.LineSubtotal.Should().Be(27_500m);
+        fivePercent.LineVatAmount.Should().Be(1_375m);
+        fivePercent.LineTotal.Should().Be(28_875m);
         invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == KctProduct && line.VatRateCode == "KCT");
         invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == UnknownVatProduct && line.VatRateCode == "KCT");
         invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == DeletedProduct &&
-            line.VatRateCode == "KCT" &&
+            line.VatRateCode == "8" &&
             line.LineSubtotal == 1_000m &&
-            line.LineVatAmount == 0 &&
-            line.LineTotal == 1_000m);
+            line.LineVatAmount == 80m &&
+            line.LineTotal == 1_080m);
         invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == DeletedMarketProduct &&
-            line.VatRateCode == "KCT" &&
+            line.VatRateCode == "10" &&
             line.LineSubtotal == 1_000m &&
-            line.LineVatAmount == 0 &&
-            line.LineTotal == 1_000m);
+            line.LineVatAmount == 100m &&
+            line.LineTotal == 1_100m);
     }
 
     [Fact]
-    public async Task IssueForDeliveredOrderAsync_MissingBuyerPersistsPendingInvoiceAsync()
+    public async Task IssueForDeliveredOrderAsync_InvalidMstPersistsPendingInvoiceAsync()
     {
         var seed = await SeedAsync();
         using var scope = factory.Services.CreateScope();
@@ -154,6 +161,37 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         invoice.Status.Should().Be(InvoiceStatus.PendingIssuance);
         invoice.RetryCount.Should().Be(0);
         invoice.TaxAuthorityCode.Should().BeNull();
+        invoice.ErrorReason.Should().Be("BUYER_TAX_CODE_INVALID");
+    }
+
+    [Fact]
+    public async Task ExportIssuedInvoice_ReturnsPersistedStructuredDocumentAsync()
+    {
+        var seed = await SeedAsync();
+        Guid invoiceId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<IInvoiceIssuanceService>();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            await service.IssueForDeliveredOrderAsync(seed.OrderId, default);
+            invoiceId = await db.Set<Invoice>()
+                .Where(value => value.OrderId == seed.OrderId)
+                .Select(value => value.Id)
+                .SingleAsync();
+        }
+
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await _client.GetAsync($"/api/v1/invoices/{invoiceId}/export");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Content.Headers.ContentType!.MediaType.Should().Be("application/xml");
+        var document = XDocument.Parse(await response.Content.ReadAsStringAsync());
+        document.Root!.Element("Header")!.Element("TaxAuthorityCode")!.Value.Should().NotBeNullOrWhiteSpace();
+        document.Root.Element("Buyer")!.Element("TaxCode")!.Value.Should().Be("0312345678");
+        document.Root.Element("Lines")!.Elements("Line").Should().OnlyContain(line =>
+            line.Element("Unit")!.Value.StartsWith("kg-", StringComparison.Ordinal));
     }
 
     private async Task<SeedData> SeedAsync()
@@ -179,6 +217,13 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             "FreshFlow Integration Co.",
             "123 Nguyễn Huệ, Quận 1, TP.HCM",
             "invoice@integration.freshflow",
+            default);
+        await restaurants.UpdateTaxProfileAsync(
+            missingProfileRestaurantId,
+            "031234567A",
+            "Invalid MST Co.",
+            "456 Lê Lợi, Quận 1, TP.HCM",
+            null,
             default);
 
         var unit = new UnitOfMeasurement($"kg-{suffix}", "kg");
@@ -275,14 +320,29 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             .IsSuccess.Should().BeTrue();
         order.AddItem(deletedMarketProductId, DeletedMarketProduct, 1, 1_000m)
             .IsSuccess.Should().BeTrue();
+        order.ApplyConfirmationPricing(
+            new Dictionary<Guid, OrderItemTaxSnapshot>
+            {
+                [fivePercentMarketProductId] = new("5", 5m),
+                [kctMarketProductId] = new("KCT", 0m),
+                [unknownVatMarketProductId] = new("KCT", 0m),
+                [deletedProductMarketProductId] = new("8", 8m),
+                [deletedMarketProductId] = new("10", 10m)
+            },
+            deliveryDistanceKm: 0m,
+            deliveryFee: 0m).IsSuccess.Should().BeTrue();
         order.Confirm().IsSuccess.Should().BeTrue();
 
         var fivePercentLine = order.Items.Single(item => item.ProductNameSnapshot == FivePercentProduct);
-        fivePercentLine.LockPrice(12_000m);
-        order.RecordActualQuantity(fivePercentLine.Id, 2.5m).IsSuccess.Should().BeTrue();
+        fivePercentLine.LockPricing(12_000m, "5", 5m);
+        order.AdvanceStatus(OrderStatus.Batched).IsSuccess.Should().BeTrue();
+        order.ApplyProcurementActuals(
+            new Dictionary<Guid, OrderItemProcurementActual>
+            {
+                [fivePercentLine.Id] = new(2.5m, 11_000m)
+            }).IsSuccess.Should().BeTrue();
         foreach (var status in new[]
                  {
-                     OrderStatus.Batched,
                      OrderStatus.PickedUp,
                      OrderStatus.AtHub,
                      OrderStatus.Delivering,
@@ -292,6 +352,16 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
 
         order.ClearDomainEvents();
         return order;
+    }
+
+    private async Task<string> LoginAsAdminAsync()
+    {
+        _client.DefaultRequestHeaders.Authorization = null;
+        var response = await _client.PostAsJsonAsync(
+            "/api/v1/auth/login",
+            new { identifier = "admin@test.freshflow", password = "AdminP@ss1" });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<Envelope<TokenBody>>())!.Data!.AccessToken;
     }
 
     private sealed record SeedData(

@@ -14,5 +14,7 @@ internal sealed class UpdateOperationalSettingsCommandValidator : AbstractValida
         RuleFor(c => c.DeliveryWindowDays)
             .InclusiveBetween(1, 30)
             .WithMessage("DeliveryWindowDays must be between 1 and 30.");
+        RuleFor(c => c.DeliveryFeePerKm)
+            .InclusiveBetween(0m, 1_000_000m);
     }
 }

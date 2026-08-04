@@ -1,6 +1,7 @@
 using FreshFlow.Invoicing.Application.Abstractions;
 using FreshFlow.Invoicing.Application.Common;
 using FreshFlow.Invoicing.Domain.Entities;
+using FreshFlow.Invoicing.Domain.Validation;
 using Microsoft.Extensions.Logging;
 
 namespace FreshFlow.Invoicing.Application.Services;
@@ -16,8 +17,6 @@ public sealed class InvoiceIssuanceService(
     IEInvoiceProvider provider,
     ILogger<InvoiceIssuanceService> logger) : IInvoiceIssuanceService
 {
-    // ponytail: FreshFlow currently sells everything by kg; plumb Catalog's per-product unit when it exists.
-    private const string DefaultUnit = "kg";
     private const string ProviderExceptionReason = "PROVIDER_EXCEPTION";
 
     public async Task IssueForDeliveredOrderAsync(Guid orderId, CancellationToken ct)
@@ -34,6 +33,7 @@ public sealed class InvoiceIssuanceService(
 
         if (order.Lines.Any(l =>
                 string.IsNullOrWhiteSpace(l.ProductName) ||
+                string.IsNullOrWhiteSpace(l.Unit) ||
                 l.Quantity < 0m ||
                 l.UnitPrice < 0m))
         {
@@ -46,14 +46,15 @@ public sealed class InvoiceIssuanceService(
         var lines = order.Lines.Select(l =>
         {
             var code = VatRateResolver.Normalize(l.VatRateCode);
-            return new InvoiceLine(l.ProductName, l.Quantity, l.UnitPrice, code, VatRateResolver.ToPercent(code));
+            return new InvoiceLine(
+                l.ProductName, l.Unit!, l.Quantity, l.UnitPrice, code, VatRateResolver.ToPercent(code));
         }).ToList();
 
         var invoice = new Invoice(
             order.OrderId,
             order.RestaurantId,
             profile?.TaxCode ?? string.Empty,
-            profile?.LegalName ?? profile?.Name ?? string.Empty,
+            profile?.LegalName ?? string.Empty,
             profile?.Address,
             profile?.Email,
             lines);
@@ -77,8 +78,8 @@ public sealed class InvoiceIssuanceService(
             try
             {
                 var profile = await restaurantReader.GetTaxProfileAsync(invoice.RestaurantId, ct);
-                var legalName = profile?.LegalName ?? profile?.Name;
-                if (IsBuyerComplete(profile?.TaxCode, legalName, profile?.Address))
+                var legalName = profile?.LegalName;
+                if (InvoiceBuyerValidator.GetErrorCode(profile?.TaxCode, legalName, profile?.Address) is null)
                     invoice.UpdateBuyer(profile!.TaxCode!, legalName!, profile.Address, profile.Email);
 
                 await AttemptIssueAsync(invoice, maxAttempts, ct);
@@ -100,9 +101,17 @@ public sealed class InvoiceIssuanceService(
 
     private async Task AttemptIssueAsync(Invoice invoice, int maxAttempts, CancellationToken ct)
     {
-        if (!IsBuyerComplete(invoice.BuyerTaxCode, invoice.BuyerLegalName, invoice.BuyerAddress))
+        var buyerError = InvoiceBuyerValidator.GetErrorCode(
+            invoice.BuyerTaxCode, invoice.BuyerLegalName, invoice.BuyerAddress);
+        if (buyerError is not null)
         {
-            invoice.MarkAwaitingBuyerInfo("MISSING_BUYER_TAX_PROFILE");
+            invoice.MarkAwaitingBuyerInfo(buyerError);
+            return;
+        }
+
+        if (invoice.Lines.Any(line => string.IsNullOrWhiteSpace(line.Unit)))
+        {
+            invoice.MarkFailed("INVOICE_LINE_UNIT_REQUIRED");
             return;
         }
 
@@ -121,7 +130,7 @@ public sealed class InvoiceIssuanceService(
                 invoice.Lines
                     .Select(l => new InvoiceIssueLine(
                         l.ProductName,
-                        DefaultUnit,
+                        l.Unit!,
                         l.Quantity,
                         l.UnitPrice,
                         l.VatRateCode,
@@ -157,11 +166,6 @@ public sealed class InvoiceIssuanceService(
             FailOrGiveUp(invoice, ProviderExceptionReason, maxAttempts);
         }
     }
-
-    private static bool IsBuyerComplete(string? taxCode, string? legalName, string? address) =>
-        !string.IsNullOrWhiteSpace(taxCode) &&
-        !string.IsNullOrWhiteSpace(legalName) &&
-        !string.IsNullOrWhiteSpace(address);
 
     private static void FailOrGiveUp(Invoice invoice, string reason, int maxAttempts)
     {

@@ -97,6 +97,19 @@ public sealed class PersistenceConfigurationTests
     }
 
     [Fact]
+    public void OrderClaimConfiguration_UsesUpdatedAtConcurrencyAndSnakeCaseSoftDelete()
+    {
+        using var ctx = CreateInMemoryContext();
+        var entity = ctx.Model.FindEntityType(typeof(OrderClaim));
+        var table = StoreObjectIdentifier.Table("order_claims", null);
+
+        entity.Should().NotBeNull();
+        entity!.FindProperty(nameof(OrderClaim.UpdatedAt))!.IsConcurrencyToken.Should().BeTrue();
+        entity.FindProperty(nameof(OrderClaim.DeletedAt))!.GetColumnName(table)
+            .Should().Be("deleted_at");
+    }
+
+    [Fact]
     public void Model_RegistersOrderIssueEntity()
     {
         // Arrange
@@ -169,6 +182,23 @@ public sealed class PersistenceConfigurationTests
         prop.Should().NotBeNull();
         prop!.GetColumnName(StoreObjectIdentifier.Table("orders", null))
             .Should().Be("confirmed_receipt_at");
+    }
+
+    [Fact]
+    public void OrderConfiguration_DeliverySnapshotUsesSnakeCaseColumns()
+    {
+        using var ctx = CreateInMemoryContext();
+        var orderEntity = ctx.Model.FindEntityType(typeof(Order))!;
+        var table = StoreObjectIdentifier.Table("orders", null);
+
+        orderEntity.FindProperty(nameof(Order.DeliveryAddressId))!
+            .GetColumnName(table).Should().Be("delivery_address_id");
+        orderEntity.FindProperty(nameof(Order.DeliveryAddressLine))!
+            .GetColumnName(table).Should().Be("delivery_address_line");
+        orderEntity.FindProperty(nameof(Order.DeliveryLatitude))!
+            .GetColumnName(table).Should().Be("delivery_latitude");
+        orderEntity.FindProperty(nameof(Order.DeliveryLongitude))!
+            .GetColumnName(table).Should().Be("delivery_longitude");
     }
 
     [Fact]
