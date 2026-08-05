@@ -14,6 +14,7 @@ public sealed record MarketProductItemDto(
     decimal CurrentPrice,
     int CurrentQuantity,
     int AvailableQuantity,
+    bool IsFeatured,
     DateTime UpdatedAt,
     Guid? UpdatedBy,
     SellingUnitDto SellingUnit);

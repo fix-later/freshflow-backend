@@ -219,6 +219,55 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
         env2.Meta!.NextCursor.Should().BeNull("only 2 products total");
     }
 
+    // ── Featured-first (page 1 only) ──────────────────────────────────────────
+
+    /// <summary>
+    /// A featured item is pinned to the top of page 1 and appears exactly once —
+    /// it must NOT reappear in the keyset-paginated stream on page 2.
+    /// </summary>
+    [Fact]
+    public async Task GetMarketProducts_FeaturedItem_PinnedToTopOfPage1OnlyAsync()
+    {
+        // Arrange
+        var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var marketId = await CreateMarketAsync($"IT-Mkt-Feat-{Guid.NewGuid():N}");
+        var unitId = await GetOrCreateUnitAsync("kg");
+        var plain1Id = await CreateProductAsync($"Feat-Plain1-{Guid.NewGuid():N}", unitId);
+        var plain2Id = await CreateProductAsync($"Feat-Plain2-{Guid.NewGuid():N}", unitId);
+        var featuredId = await CreateProductAsync($"Feat-Star-{Guid.NewGuid():N}", unitId);
+
+        // Two plain products, then one featured (created last → latest CreatedAt).
+        await SeedMarketProductAsync(marketId, plain1Id, 10_000m, 10);
+        await SeedMarketProductAsync(marketId, plain2Id, 20_000m, 20);
+        await SeedMarketProductAsync(marketId, featuredId, 30_000m, 30, isFeatured: true);
+
+        // Act — page 1 with pageSize=1
+        var page1 = await _client.GetAsync(Endpoint(marketId) + "?pageSize=1");
+        page1.StatusCode.Should().Be(HttpStatusCode.OK);
+        var env1 = await page1.Content.ReadFromJsonAsync<PagedEnvelope<MarketProductItemBody>>();
+
+        // Assert — featured is pinned first despite being created last; plus one plain item.
+        env1!.Data!.Should().HaveCount(2, "featured item is prepended on top of the pageSize page");
+        env1.Data![0].ProductId.Should().Be(featuredId);
+        env1.Data[0].IsFeatured.Should().BeTrue();
+        env1.Data[1].IsFeatured.Should().BeFalse();
+        env1.Meta!.NextCursor.Should().NotBeNullOrEmpty("one plain product remains for page 2");
+
+        // Act — page 2 via cursor
+        var cursor = Uri.EscapeDataString(env1.Meta.NextCursor!);
+        var page2 = await _client.GetAsync(Endpoint(marketId) + $"?pageSize=1&cursor={cursor}");
+        var env2 = await page2.Content.ReadFromJsonAsync<PagedEnvelope<MarketProductItemBody>>();
+
+        // Assert — featured does NOT reappear; only the remaining plain product.
+        env2!.Data!.Should().HaveCount(1);
+        env2.Data![0].ProductId.Should().NotBe(featuredId);
+        env2.Data[0].IsFeatured.Should().BeFalse();
+        env2.Meta!.NextCursor.Should().BeNull("both plain products have now been paged");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private async Task<string> LoginAsync(string identifier, string password)
@@ -277,11 +326,13 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
     }
 
     private async Task<Guid> SeedMarketProductAsync(
-        Guid marketId, Guid productId, decimal price, int quantity)
+        Guid marketId, Guid productId, decimal price, int quantity, bool isFeatured = false)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var mp = new MarketProduct(marketId, productId, price, quantity, null);
+        if (isFeatured)
+            mp.SetFeatured(true, null);
         await db.Set<MarketProduct>().AddAsync(mp);
         await db.SaveChangesAsync();
         return mp.Id;
@@ -317,6 +368,7 @@ public sealed record MarketProductItemBody(
     decimal CurrentPrice,
     int CurrentQuantity,
     int AvailableQuantity,
+    bool IsFeatured,
     DateTime UpdatedAt,
     Guid? UpdatedBy);
 

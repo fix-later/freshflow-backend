@@ -434,6 +434,39 @@ public sealed class MarketProductTests
         mp.DeletedAt.Should().NotBeNull();
     }
 
+    // ── SetFeatured ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void SetFeatured_True_MarksFeaturedAndBumpsActor()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, null);
+        mp.IsFeatured.Should().BeFalse();
+
+        // Act
+        mp.SetFeatured(true, ActorId);
+
+        // Assert
+        mp.IsFeatured.Should().BeTrue();
+        mp.UpdatedBy.Should().Be(ActorId);
+    }
+
+    [Fact]
+    public void SetFeatured_SameValue_IsNoOp()
+    {
+        // Arrange — already not featured
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, ActorId);
+        var before = mp.UpdatedAt;
+
+        // Act
+        mp.SetFeatured(false, Guid.NewGuid());
+
+        // Assert — no change to flag, actor, or concurrency token
+        mp.IsFeatured.Should().BeFalse();
+        mp.UpdatedBy.Should().Be(ActorId);
+        mp.UpdatedAt.Should().Be(before);
+    }
+
     // ── DomainEvents ─────────────────────────────────────────────────────────
 
     [Fact]

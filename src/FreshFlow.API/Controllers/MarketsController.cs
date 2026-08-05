@@ -10,6 +10,7 @@ using FreshFlow.Catalog.Application.Queries.Markets.GetMarketById;
 using FreshFlow.Catalog.Application.Queries.Markets.GetMarkets;
 using FreshFlow.Pricing.Application.Commands.CreateMarketProduct;
 using FreshFlow.Pricing.Application.Commands.DeleteMarketProduct;
+using FreshFlow.Pricing.Application.Commands.SetMarketProductFeatured;
 using FreshFlow.Pricing.Application.Commands.UpdateAvailableQuantity;
 using FreshFlow.Pricing.Application.Commands.UpdateProductPrice;
 using FreshFlow.Pricing.Application.Queries.GetMarketProducts;
@@ -305,6 +306,31 @@ public sealed class MarketsController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    /// <summary>
+    /// PATCH /api/v1/markets/{marketId}/products/{productId}/featured
+    /// Marks (or unmarks) a product as a signature/featured item of this market.
+    /// Featured items are pinned to the top of the market product board. Admin or Market Agent.
+    /// </summary>
+    [HttpPatch("{marketId:guid}/products/{productId:guid}/featured")]
+    [Authorize(Roles = "admin,market_agent")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetMarketProductFeaturedAsync(
+        Guid marketId,
+        Guid productId,
+        [FromBody] SetMarketProductFeaturedRequest body,
+        CancellationToken ct)
+    {
+        TryResolveAgentId(out var actorId);
+        var command = new SetMarketProductFeaturedCommand(
+            marketId, productId, body.IsFeatured, actorId);
+
+        var result = await sender.Send(command, ct);
+        return result.IsSuccess ? NoContent() : result.Error.ToActionResult();
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private bool TryResolveAgentId(out Guid agentId)
@@ -348,3 +374,5 @@ public sealed record CreateMarketProductRequest(
     Guid ProductId,
     decimal InitialPrice,
     int InitialQuantity);
+
+public sealed record SetMarketProductFeaturedRequest(bool IsFeatured);

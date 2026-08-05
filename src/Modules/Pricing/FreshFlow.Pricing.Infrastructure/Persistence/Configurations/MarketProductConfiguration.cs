@@ -18,6 +18,10 @@ internal sealed class MarketProductConfiguration : IEntityTypeConfiguration<Mark
             .HasColumnType("numeric(12,2)");
         builder.Property(mp => mp.CurrentQuantity).IsRequired();
         builder.Property(mp => mp.ReservedQuantity).IsRequired().HasDefaultValue(0);
+        builder.Property(mp => mp.IsFeatured)
+            .HasColumnName("is_featured")
+            .IsRequired()
+            .HasDefaultValue(false);
         builder.Property(mp => mp.UpdatedBy);
         builder.Property(mp => mp.CreatedAt).IsRequired();
         builder.Property(mp => mp.UpdatedAt).IsRequired().IsConcurrencyToken();
