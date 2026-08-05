@@ -25,6 +25,7 @@ public sealed class MarketProduct : AggregateRoot
     public decimal CurrentPrice { get; private set; }
     public int CurrentQuantity { get; private set; }
     public int ReservedQuantity { get; private set; }
+    public bool IsFeatured { get; private set; }
     public Guid? UpdatedBy { get; private set; }
 
     public int AvailableQuantity => CurrentQuantity - ReservedQuantity;
@@ -33,6 +34,20 @@ public sealed class MarketProduct : AggregateRoot
     public void Delete()
     {
         SoftDelete();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Marks this listing as a signature/featured product of its market (or clears the flag).
+    /// No-op when the value is unchanged, so it never bumps the concurrency token needlessly.
+    /// </summary>
+    public void SetFeatured(bool value, Guid? actor)
+    {
+        if (IsFeatured == value)
+            return;
+
+        IsFeatured = value;
+        UpdatedBy = actor;
         UpdatedAt = DateTime.UtcNow;
     }
 

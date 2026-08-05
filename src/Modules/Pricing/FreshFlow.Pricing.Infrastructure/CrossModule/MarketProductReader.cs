@@ -39,7 +39,7 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
         var decoded = Cursor.TryDecode(cursor);
 
         // ProductDetailRow already excludes deleted products via its SQL query.
-        var query =
+        var baseQuery =
             from mp in db.Set<MarketProduct>()
             join pd in db.Set<ProductDetailRow>()
                 on mp.ProductId equals pd.Id
@@ -47,7 +47,37 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
             select new { mp, pd };
 
         if (category is not null)
-            query = query.Where(x => x.pd.Category == category);
+            baseQuery = baseQuery.Where(x => x.pd.Category == category);
+
+        // Featured items are pinned to the top of page 1 only (cursor == null).
+        // The keyset stream below always excludes featured items, so nothing repeats
+        // across pages and the cursor logic stays unchanged.
+        // ponytail: assumes few featured items per market — they all land on page 1.
+        IReadOnlyList<MarketProductItemDto> featured = [];
+        if (decoded is null)
+        {
+            featured = await baseQuery
+                .Where(x => x.mp.IsFeatured)
+                .OrderBy(x => x.mp.CreatedAt)
+                .ThenBy(x => x.mp.Id)
+                .Select(x => new MarketProductItemDto(
+                    x.mp.Id,
+                    x.mp.ProductId,
+                    x.mp.MarketId,
+                    x.pd.Name,
+                    x.pd.Category,
+                    x.pd.Unit,
+                    x.mp.CurrentPrice,
+                    x.mp.CurrentQuantity,
+                    x.mp.CurrentQuantity - x.mp.ReservedQuantity,
+                    x.mp.IsFeatured,
+                    x.mp.UpdatedAt,
+                    x.mp.UpdatedBy,
+                    new SellingUnitDto(x.pd.Unit, x.pd.CapacityKg)))
+                .ToListAsync(ct);
+        }
+
+        var query = baseQuery.Where(x => !x.mp.IsFeatured);
 
         if (decoded is not null)
         {
@@ -79,6 +109,7 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
                     x.mp.CurrentPrice,
                     x.mp.CurrentQuantity,
                     x.mp.CurrentQuantity - x.mp.ReservedQuantity,
+                    x.mp.IsFeatured,
                     x.mp.UpdatedAt,
                     x.mp.UpdatedBy,
                     new SellingUnitDto(x.pd.Unit, x.pd.CapacityKg)),
@@ -94,7 +125,9 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
             nextCursor = Cursor.Encode(last.Dto.MarketProductId, last.CreatedAt); // ← CreatedAt, not UpdatedAt
         }
 
-        return (rows.Select(r => r.Dto).ToList().AsReadOnly(), nextCursor);
+        var pageItems = rows.Select(r => r.Dto);
+        var items = decoded is null ? featured.Concat(pageItems) : pageItems;
+        return (items.ToList().AsReadOnly(), nextCursor);
     }
 
     // ── Cursor helpers ────────────────────────────────────────────────────────

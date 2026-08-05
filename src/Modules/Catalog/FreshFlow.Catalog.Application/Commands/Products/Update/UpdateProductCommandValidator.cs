@@ -26,9 +26,9 @@ internal sealed class UpdateProductCommandValidator : AbstractValidator<UpdatePr
 
         RuleFor(x => x.MinimumOrderQuantity).GreaterThan(0);
         RuleFor(x => x.VatRate)
-            .Must(rate => rate is null || new[] { "KCT", "0", "5", "8", "10" }
+            .Must(rate => rate is null || new[] { "KCT", "KKKNT", "0", "5", "8", "10" }
                 .Contains(rate.Trim().ToUpperInvariant()))
-            .WithMessage("VatRate must be KCT, 0, 5, 8, or 10.");
+            .WithMessage("VatRate must be KCT, KKKNT, 0, 5, 8, or 10.");
 
         RuleFor(x => x.PackingCodeId)
             .Cascade(CascadeMode.Stop)

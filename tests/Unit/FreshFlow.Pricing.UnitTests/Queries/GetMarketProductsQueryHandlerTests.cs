@@ -354,6 +354,7 @@ public sealed class GetMarketProductsQueryHandlerTests
             CurrentPrice: currentPrice,
             CurrentQuantity: currentQuantity,
             AvailableQuantity: currentQuantity,
+            IsFeatured: false,
             UpdatedAt: DateTime.UtcNow,
             UpdatedBy: null,
             SellingUnit: new SellingUnitDto("Carton", 10));

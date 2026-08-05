@@ -58,8 +58,9 @@ public sealed class Product : AggregateRoot
     public string? ImageUrl { get; private set; }
 
     /// <summary>
-    /// VAT rate code for invoicing: "KCT" (không chịu thuế), "0", "5", "8" or "10". Null = not
-    /// configured (Invoicing treats null as KCT for v1). Fresh food is not uniformly 10%.
+    /// VAT rate code for invoicing: "KCT" (không chịu thuế), "KKKNT" (không phải kê khai, tính
+    /// nộp — fresh produce resold B2B), "0", "5", "8" or "10". Null = not configured (Invoicing
+    /// treats null as KCT for v1). Fresh food is not uniformly 10%.
     /// </summary>
     public string? VatRate { get; private set; }
     public int MinimumOrderQuantity { get; private set; }
@@ -103,8 +104,8 @@ public sealed class Product : AggregateRoot
             throw new ArgumentOutOfRangeException(
                 nameof(minimumOrderQuantity), "Minimum order quantity must be greater than zero.");
 
-        if (vatRate is not null && NormalizeVatRate(vatRate) is not ("KCT" or "0" or "5" or "8" or "10"))
-            throw new ArgumentException("VAT rate must be KCT, 0, 5, 8, or 10.", nameof(vatRate));
+        if (vatRate is not null && NormalizeVatRate(vatRate) is not ("KCT" or "KKKNT" or "0" or "5" or "8" or "10"))
+            throw new ArgumentException("VAT rate must be KCT, KKKNT, 0, 5, 8, or 10.", nameof(vatRate));
     }
 
     private static string? NormalizeVatRate(string? vatRate) =>
