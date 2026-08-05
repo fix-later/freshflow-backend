@@ -10,10 +10,13 @@ public static class VatRateResolver
 {
     public const string CodeKct = "KCT";
 
+    /// <summary>Không phải kê khai, tính nộp thuế GTGT — fresh produce resold B2B at commercial stage.</summary>
+    public const string CodeKkknt = "KKKNT";
+
     // ponytail: null/unknown → 0% (KCT). Tighten to fail-closed once per-category rates are signed off.
     public static decimal ToPercent(string? code) => Normalize(code) switch
     {
-        CodeKct or "0" => 0m,
+        CodeKct or CodeKkknt or "0" => 0m,
         "5" => 5m,
         "8" => 8m,
         "10" => 10m,

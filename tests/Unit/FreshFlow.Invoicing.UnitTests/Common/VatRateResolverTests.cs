@@ -8,6 +8,7 @@ public sealed class VatRateResolverTests
 {
     [Theory]
     [InlineData("KCT", 0)]
+    [InlineData("KKKNT", 0)]
     [InlineData("0", 0)]
     [InlineData("5", 5)]
     [InlineData("8", 8)]
