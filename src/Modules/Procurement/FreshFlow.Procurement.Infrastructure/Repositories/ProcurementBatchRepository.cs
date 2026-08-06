@@ -123,6 +123,16 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
                 batch => batch.Id == batchId && batch.DeletedAt == null,
                 ct);
 
+    public Task<ProcurementBatch?> FindByOrderIdAsync(Guid orderId, CancellationToken ct) =>
+        db.Set<ProcurementBatch>()
+            .Include(batch => batch.Items)
+            .Include(batch => batch.Orders)
+            .Include(batch => batch.Exceptions)
+            .SingleOrDefaultAsync(
+                batch => batch.DeletedAt == null &&
+                    batch.Orders.Any(order => order.OrderId == orderId && order.DeletedAt == null),
+                ct);
+
     public Task<bool> CycleExistsAsync(DateOnly batchDate, CancellationToken ct) =>
         db.Set<ProcurementBatch>()
             .AsNoTracking()

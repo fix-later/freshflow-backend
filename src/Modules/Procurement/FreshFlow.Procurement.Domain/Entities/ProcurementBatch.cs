@@ -24,6 +24,7 @@ public sealed class ProcurementBatch : AggregateRoot
     public int TotalItemCount { get; private set; }
     public DateTime? CancelledAt { get; private set; }
     public string? CancellationReason { get; private set; }
+    public DateTime? CompletedAt { get; private set; }
 
     public IReadOnlyCollection<ProcurementBatchItem> Items => _items.AsReadOnly();
     public IReadOnlyCollection<ProcurementBatchOrder> Orders => _orders.AsReadOnly();
@@ -491,6 +492,30 @@ public sealed class ProcurementBatch : AggregateRoot
                     item.ActualUnitPrice))
                 .ToList()
                 .AsReadOnly()));
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Flips the session to Completed once every order it covers has settled (delivered or
+    /// cancelled). Idempotent: a re-fired delivery event after completion is a no-op success.
+    /// </summary>
+    public Result MarkCompleted(DateTime capturedAtUtc)
+    {
+        if (Status == ProcurementBatchStatus.Completed)
+            return Result.Success();
+
+        if (Status != ProcurementBatchStatus.HandedOff)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_NOT_COMPLETABLE",
+                $"Procurement batch '{Id}' cannot complete from status '{Status}'."));
+        }
+
+        Status = ProcurementBatchStatus.Completed;
+        CompletedAt = capturedAtUtc;
+        UpdatedAt = capturedAtUtc;
+        RaiseDomainEvent(new ProcurementBatchCompletedDomainEvent(Id, MarketId, capturedAtUtc));
 
         return Result.Success();
     }

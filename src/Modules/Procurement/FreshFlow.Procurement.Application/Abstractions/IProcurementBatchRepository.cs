@@ -18,6 +18,8 @@ public interface IProcurementBatchRepository
 
     public Task<ProcurementBatch?> FindByIdAsync(Guid batchId, CancellationToken ct);
 
+    public Task<ProcurementBatch?> FindByOrderIdAsync(Guid orderId, CancellationToken ct);
+
     public Task<bool> CycleExistsAsync(DateOnly batchDate, CancellationToken ct);
 
     public Task<(IReadOnlyList<ProcurementBatch> Batches, int Total)> ListAsync(

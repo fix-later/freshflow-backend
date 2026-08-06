@@ -720,6 +720,65 @@ public sealed class ProcurementBatchTests
         batch.Status.Should().Be(ProcurementBatchStatus.Cancelled);
     }
 
+    [Fact]
+    public void MarkCompleted_HandedOffBatch_SetsCompletedAtAndRaisesEvent()
+    {
+        var batch = BuildPurchasingBatch(Guid.NewGuid());
+        batch.HandoverToHub(new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc));
+        batch.ClearDomainEvents();
+        var completedAt = new DateTime(2026, 7, 16, 9, 0, 0, DateTimeKind.Utc);
+
+        var result = batch.MarkCompleted(completedAt);
+
+        result.IsSuccess.Should().BeTrue();
+        batch.Status.Should().Be(ProcurementBatchStatus.Completed);
+        batch.CompletedAt.Should().Be(completedAt);
+        batch.UpdatedAt.Should().Be(completedAt);
+        var domainEvent = batch.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<ProcurementBatchCompletedDomainEvent>().Subject;
+        domainEvent.BatchId.Should().Be(batch.Id);
+        domainEvent.MarketId.Should().Be(batch.MarketId);
+        domainEvent.CompletedAt.Should().Be(completedAt);
+    }
+
+    [Theory]
+    [InlineData(ProcurementBatchStatus.Built)]
+    [InlineData(ProcurementBatchStatus.Manifested)]
+    [InlineData(ProcurementBatchStatus.Purchasing)]
+    [InlineData(ProcurementBatchStatus.Cancelled)]
+    public void MarkCompleted_NotHandedOff_ReturnsConflict(ProcurementBatchStatus status)
+    {
+        var batch = BuildBatch(Guid.NewGuid());
+        typeof(ProcurementBatch).GetProperty(nameof(ProcurementBatch.Status))!
+            .SetValue(batch, status);
+        batch.ClearDomainEvents();
+
+        var result = batch.MarkCompleted(DateTime.UtcNow);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("BATCH_NOT_COMPLETABLE");
+        batch.Status.Should().Be(status);
+        batch.CompletedAt.Should().BeNull();
+        batch.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MarkCompleted_AlreadyCompleted_IsIdempotentWithNoSecondEvent()
+    {
+        var batch = BuildPurchasingBatch(Guid.NewGuid());
+        batch.HandoverToHub(new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc));
+        var firstCompletion = new DateTime(2026, 7, 16, 9, 0, 0, DateTimeKind.Utc);
+        batch.MarkCompleted(firstCompletion);
+        batch.ClearDomainEvents();
+
+        var result = batch.MarkCompleted(firstCompletion.AddHours(1));
+
+        result.IsSuccess.Should().BeTrue();
+        batch.Status.Should().Be(ProcurementBatchStatus.Completed);
+        batch.CompletedAt.Should().Be(firstCompletion);
+        batch.DomainEvents.Should().BeEmpty();
+    }
+
     private static ProcurementBatch BuildManifestedBatch()
     {
         var productId = Guid.NewGuid();

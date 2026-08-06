@@ -107,7 +107,7 @@ public sealed class GetProcurementMetricsQueryHandlerTests
         result.Value.PriceVariancePercent.Should().BeNull();
         result.Value.AvgLeadTimeMinutes.Should().BeNull();
         result.Value.ExceptionCount.Should().Be(0);
-        result.Value.StatusCounts.Should().HaveCount(5);
+        result.Value.StatusCounts.Should().HaveCount(6);
         result.Value.StatusCounts.Values.Should().OnlyContain(count => count == 0);
         result.Value.ExceptionsByType.Should().HaveCount(4);
         result.Value.ExceptionsByType.Values.Should().OnlyContain(count => count == 0);
