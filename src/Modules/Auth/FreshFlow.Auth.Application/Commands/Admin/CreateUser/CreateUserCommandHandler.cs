@@ -56,7 +56,7 @@ internal sealed class CreateUserCommandHandler(
         await users.SaveChangesAsync(ct);
 
         if (roleName == RoleNames.Restaurant)
-            await restaurants.CreateAsync(user.Id, request.RestaurantName!, ct);
+            await restaurants.CreateAsync(user.Id, request.RestaurantName!, taxCode: null, ct);
         else if (roleName == RoleNames.Driver)
             await driverProfileCreator.CreateAsync(user.Id, ct);
 
