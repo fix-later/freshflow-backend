@@ -85,4 +85,38 @@ public sealed class RegisterRestaurantCommandValidatorTests
                 "owner@test.com", "ValidP@ss1!", "My Restaurant", null));
         result.IsValid.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("0312345678")]
+    [InlineData("0312345678-001")]
+    public async Task Validate_ValidTaxCode_Passes(string taxCode)
+    {
+        var result = await _sut.ValidateAsync(
+            new RegisterRestaurantCommand(
+                "owner@test.com", "ValidP@ss1!", "My Restaurant", null, taxCode));
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("123")]
+    [InlineData("abcdefghij")]
+    [InlineData("0312345678-01")]
+    [InlineData("03123456789")]
+    public async Task Validate_InvalidTaxCode_Fails(string taxCode)
+    {
+        var result = await _sut.ValidateAsync(
+            new RegisterRestaurantCommand(
+                "owner@test.com", "ValidP@ss1!", "My Restaurant", null, taxCode));
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(RegisterRestaurantCommand.TaxCode));
+    }
+
+    [Fact]
+    public async Task Validate_NullTaxCode_Passes()
+    {
+        var result = await _sut.ValidateAsync(
+            new RegisterRestaurantCommand(
+                "owner@test.com", "ValidP@ss1!", "My Restaurant", null, null));
+        result.IsValid.Should().BeTrue();
+    }
 }

@@ -39,7 +39,8 @@ internal sealed class RegisterRestaurantCommandHandler(
         await users.AddAsync(user, ct);
         // No SaveChangesAsync here — CreateAsync commits both User and RestaurantRow
         // atomically via the shared scoped AppDbContext.
-        var restaurantId = await restaurants.CreateAsync(user.Id, request.RestaurantName, ct);
+        var taxCode = string.IsNullOrWhiteSpace(request.TaxCode) ? null : request.TaxCode.Trim();
+        var restaurantId = await restaurants.CreateAsync(user.Id, request.RestaurantName, taxCode, ct);
 
         return Result<RegisterRestaurantResponse>.Success(new RegisterRestaurantResponse(
             user.Id,

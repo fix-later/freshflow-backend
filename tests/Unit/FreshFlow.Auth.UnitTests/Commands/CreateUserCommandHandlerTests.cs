@@ -100,13 +100,13 @@ public sealed class CreateUserCommandHandlerTests
     {
         _users.ExistsAsync(Arg.Any<string>(), default).Returns(false);
         _roles.FindByNameAsync("restaurant", default).Returns(new Role("restaurant", "Restaurant"));
-        _restaurants.CreateAsync(Arg.Any<Guid>(), "Pho Ba Tu", default).Returns(Guid.NewGuid());
+        _restaurants.CreateAsync(Arg.Any<Guid>(), "Pho Ba Tu", null, default).Returns(Guid.NewGuid());
 
         var result = await _sut.Handle(
             new CreateUserCommand("r@test.com", "P@ss1", "restaurant", null, "Pho Ba Tu"), default);
 
         result.IsSuccess.Should().BeTrue();
-        await _restaurants.Received(1).CreateAsync(Arg.Any<Guid>(), "Pho Ba Tu", default);
+        await _restaurants.Received(1).CreateAsync(Arg.Any<Guid>(), "Pho Ba Tu", null, default);
     }
 
     [Fact]

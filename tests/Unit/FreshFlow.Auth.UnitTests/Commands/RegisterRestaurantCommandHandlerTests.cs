@@ -48,7 +48,7 @@ public sealed class RegisterRestaurantCommandHandlerTests
         // Arrange
         var restaurantId = Guid.NewGuid();
         _users.ExistsAsync("owner@phobaatu.vn", default).Returns(false);
-        _restaurants.CreateAsync(Arg.Any<Guid>(), "Phở Bà Tú", default).Returns(restaurantId);
+        _restaurants.CreateAsync(Arg.Any<Guid>(), "Phở Bà Tú", Arg.Any<string?>(), default).Returns(restaurantId);
 
         var cmd = new RegisterRestaurantCommand(
             "owner@phobaatu.vn", "MySecureP@ss1", "Phở Bà Tú", "+84901234567");
@@ -67,7 +67,7 @@ public sealed class RegisterRestaurantCommandHandlerTests
         await _users.Received(1).AddAsync(Arg.Any<FreshFlow.Auth.Domain.Aggregates.User>(), default);
         // SaveChangesAsync is NOT called on users — CreateAsync commits both atomically.
         await _users.DidNotReceive().SaveChangesAsync(default);
-        await _restaurants.Received(1).CreateAsync(Arg.Any<Guid>(), "Phở Bà Tú", default);
+        await _restaurants.Received(1).CreateAsync(Arg.Any<Guid>(), "Phở Bà Tú", Arg.Any<string?>(), default);
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class RegisterRestaurantCommandHandlerTests
         // Arrange
         var restaurantId = Guid.NewGuid();
         _users.ExistsAsync("owner@test.vn", default).Returns(false);
-        _restaurants.CreateAsync(Arg.Any<Guid>(), "Test Restaurant", default).Returns(restaurantId);
+        _restaurants.CreateAsync(Arg.Any<Guid>(), "Test Restaurant", Arg.Any<string?>(), default).Returns(restaurantId);
 
         var cmd = new RegisterRestaurantCommand("owner@test.vn", "MySecureP@ss1", "Test Restaurant", null);
 
@@ -86,6 +86,45 @@ public sealed class RegisterRestaurantCommandHandlerTests
         // Assert
         result.IsSuccess.Should().BeTrue();
         result.Value.IsApproved.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Handle_WithTaxCode_ForwardsTrimmedTaxCodeToRepository()
+    {
+        // Arrange
+        _users.ExistsAsync("owner@test.vn", default).Returns(false);
+        _restaurants.CreateAsync(Arg.Any<Guid>(), "Test Restaurant", Arg.Any<string?>(), default)
+            .Returns(Guid.NewGuid());
+
+        var cmd = new RegisterRestaurantCommand(
+            "owner@test.vn", "MySecureP@ss1", "Test Restaurant", null, "  0312345678  ");
+
+        // Act
+        var result = await _sut.Handle(cmd, default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        await _restaurants.Received(1)
+            .CreateAsync(Arg.Any<Guid>(), "Test Restaurant", "0312345678", default);
+    }
+
+    [Fact]
+    public async Task Handle_BlankTaxCode_ForwardsNullToRepository()
+    {
+        // Arrange
+        _users.ExistsAsync("owner@test.vn", default).Returns(false);
+        _restaurants.CreateAsync(Arg.Any<Guid>(), "Test Restaurant", Arg.Any<string?>(), default)
+            .Returns(Guid.NewGuid());
+
+        var cmd = new RegisterRestaurantCommand(
+            "owner@test.vn", "MySecureP@ss1", "Test Restaurant", null, "   ");
+
+        // Act
+        await _sut.Handle(cmd, default);
+
+        // Assert — whitespace-only tax code is normalised to null, not stored as blank.
+        await _restaurants.Received(1)
+            .CreateAsync(Arg.Any<Guid>(), "Test Restaurant", null, default);
     }
 
     [Fact]
@@ -113,7 +152,7 @@ public sealed class RegisterRestaurantCommandHandlerTests
     {
         // Arrange
         _users.ExistsAsync("owner@test.vn", default).Returns(false);
-        _restaurants.CreateAsync(Arg.Any<Guid>(), Arg.Any<string>(), default)
+        _restaurants.CreateAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string?>(), default)
             .Returns(Task.FromException<Guid>(new InvalidOperationException("DB error")));
 
         var cmd = new RegisterRestaurantCommand("owner@test.vn", "MySecureP@ss1", "Test Restaurant", null);

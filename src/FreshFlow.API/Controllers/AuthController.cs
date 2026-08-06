@@ -26,7 +26,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     public async Task<IActionResult> Register([FromBody] RegisterRestaurantRequest body, CancellationToken ct)
     {
         var result = await sender.Send(
-            new RegisterRestaurantCommand(body.Email, body.Password, body.RestaurantName, body.Phone), ct);
+            new RegisterRestaurantCommand(body.Email, body.Password, body.RestaurantName, body.Phone, body.TaxCode), ct);
         return result.IsSuccess
             ? Created(string.Empty, ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
@@ -119,7 +119,8 @@ public sealed record RegisterRestaurantRequest(
     string Email,
     string Password,
     string RestaurantName,
-    string? Phone);
+    string? Phone,
+    string? TaxCode);
 
 /// <param name="Identifier">Email address or phone number.</param>
 public sealed record LoginRequest(string Identifier, string Password);

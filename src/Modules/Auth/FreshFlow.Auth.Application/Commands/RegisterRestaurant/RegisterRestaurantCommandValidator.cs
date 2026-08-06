@@ -22,6 +22,14 @@ public sealed class RegisterRestaurantCommandValidator : AbstractValidator<Regis
         RuleFor(x => x.RestaurantName)
             .NotEmpty().MaximumLength(200);
 
+        // Tax code (mã số thuế) is optional at registration; when provided it must be a
+        // valid Vietnam MST: 10 digits, with an optional 3-digit branch suffix.
+        RuleFor(x => x.TaxCode)
+            .Matches(@"^\d{10}(-\d{3})?$")
+            .WithMessage("Tax code must be a valid Vietnam tax code (10 digits, optional -xxx branch suffix).")
+            .MaximumLength(20)
+            .When(x => !string.IsNullOrWhiteSpace(x.TaxCode));
+
         // Phone is optional; when provided the trimmed form must match the format.
         // Normalisation (trim + lowercase) happens in the domain: User.Create stores phone?.Trim().ToLowerInvariant().
         RuleFor(x => x.Phone)
