@@ -21,6 +21,7 @@ internal sealed class GetProcurementMetricsQueryHandler(IProcurementMetricsReade
         "Manifested",
         "Purchasing",
         HandedOffStatus,
+        "Completed",
         "Cancelled"
     ];
     private static readonly string[] ExceptionTypes =

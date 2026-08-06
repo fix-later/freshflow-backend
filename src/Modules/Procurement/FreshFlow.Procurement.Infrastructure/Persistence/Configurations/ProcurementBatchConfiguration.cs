@@ -45,6 +45,8 @@ internal sealed class ProcurementBatchConfiguration : IEntityTypeConfiguration<P
         builder.Property(batch => batch.CancellationReason)
             .HasColumnName("cancellation_reason")
             .HasMaxLength(500);
+        builder.Property(batch => batch.CompletedAt)
+            .HasColumnName("completed_at");
         builder.Property(batch => batch.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();

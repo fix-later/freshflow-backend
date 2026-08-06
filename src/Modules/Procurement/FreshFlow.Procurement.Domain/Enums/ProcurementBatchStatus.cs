@@ -6,5 +6,6 @@ public enum ProcurementBatchStatus
     Manifested,
     Purchasing,
     HandedOff,
+    Completed,
     Cancelled
 }

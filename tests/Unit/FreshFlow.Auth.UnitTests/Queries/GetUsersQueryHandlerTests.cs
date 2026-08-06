@@ -47,6 +47,7 @@ public sealed class GetUsersQueryHandlerTests
         result.Value.Data[0].IsApproved.Should().BeTrue();
         result.Value.Data[0].RestaurantId.Should().Be(restaurantId);
         result.Value.Data[0].RestaurantStatus.Should().Be("active");
+        result.Value.Data[0].RestaurantName.Should().Be("Test");
     }
 
     [Fact]

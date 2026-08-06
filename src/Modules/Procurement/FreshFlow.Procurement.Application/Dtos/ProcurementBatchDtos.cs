@@ -23,7 +23,8 @@ public sealed record ProcurementBatchDto(
     IReadOnlyList<ProcurementExceptionDto> Exceptions,
     bool IsCompleted,
     DateTime? CancelledAt,
-    string? CancellationReason);
+    string? CancellationReason,
+    DateTime? CompletedAt);
 
 public sealed record ProcurementBatchItemDto(
     Guid MarketProductId,
@@ -54,11 +55,17 @@ public sealed record ProcurementBatchPaginationDto(
     int Page,
     int PageSize);
 
-internal static class ProcurementBatchDtoMapper
+/// <summary>Single source of truth for what "settled" means for an order inside a session.</summary>
+internal static class ProcurementOrderSettlement
 {
     /// <summary>Order statuses that need no further work from a session's point of view.</summary>
-    private static readonly string[] SettledOrderStatuses = ["Delivered", "Cancelled"];
+    public static readonly string[] SettledOrderStatuses = ["Delivered", "Cancelled"];
 
+    public static bool IsSettled(string? orderStatus) => SettledOrderStatuses.Contains(orderStatus);
+}
+
+internal static class ProcurementBatchDtoMapper
+{
     /// <summary>
     /// A session is done once every order it covers is settled — the whole point being that
     /// callers never have to walk the orders themselves. Derived, not stored: the roll-up follows
@@ -69,7 +76,7 @@ internal static class ProcurementBatchDtoMapper
         IReadOnlyDictionary<Guid, string> orderStatuses) =>
         batch.Status == ProcurementBatchStatus.Cancelled ||
         (batch.Orders.Count > 0 && batch.Orders.All(link =>
-            SettledOrderStatuses.Contains(orderStatuses.GetValueOrDefault(link.OrderId))));
+            ProcurementOrderSettlement.IsSettled(orderStatuses.GetValueOrDefault(link.OrderId))));
 
     public static ProcurementBatchDto Map(
         ProcurementBatch batch,
@@ -117,5 +124,6 @@ internal static class ProcurementBatchDtoMapper
                 .AsReadOnly(),
             IsCompleted(batch, orderStatuses),
             batch.CancelledAt,
-            batch.CancellationReason);
+            batch.CancellationReason,
+            batch.CompletedAt);
 }

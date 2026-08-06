@@ -44,6 +44,7 @@ public sealed class GetProcurementProgressQueryHandlerTests
                 ["Manifested"] = 1,
                 ["Purchasing"] = 1,
                 ["HandedOff"] = 1,
+                ["Completed"] = 0,
                 ["Cancelled"] = 0
             },
             TotalItems = 5,

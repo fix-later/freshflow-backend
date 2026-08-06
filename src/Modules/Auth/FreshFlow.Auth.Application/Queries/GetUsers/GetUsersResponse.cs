@@ -10,6 +10,8 @@ public sealed record UserSummaryDto(
     bool? IsApproved,
     Guid? RestaurantId,
     string? RestaurantStatus,
+    string? RestaurantName,
+    string? Phone,
     DateTime CreatedAt);
 
 public sealed record PaginationMeta(int Page, int PageSize, int Total);
