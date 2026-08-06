@@ -21,17 +21,20 @@ internal sealed class GetUsersQueryHandler(
             bool? isApproved = null;
             Guid? restaurantId = null;
             string? restaurantStatus = null;
+            string? restaurantName = null;
             if (user.Role.Name == RoleNames.Restaurant)
             {
                 var restaurant = await restaurants.FindByUserIdAsync(user.Id, ct);
                 isApproved = restaurant?.IsApproved;
                 restaurantId = restaurant?.Id;
                 restaurantStatus = restaurant?.Status.ToString().ToLowerInvariant();
+                restaurantName = restaurant?.Name;
             }
 
             dtos.Add(new UserSummaryDto(
                 user.Id, user.Email, user.Role.Name,
-                user.IsActive, isApproved, restaurantId, restaurantStatus, user.CreatedAt));
+                user.IsActive, isApproved, restaurantId, restaurantStatus,
+                restaurantName, user.Phone, user.CreatedAt));
         }
 
         return Result<GetUsersResponse>.Success(new GetUsersResponse(
