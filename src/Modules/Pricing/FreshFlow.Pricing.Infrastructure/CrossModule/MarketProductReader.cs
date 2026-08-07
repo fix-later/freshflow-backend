@@ -50,23 +50,24 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
         if (category is not null)
             baseQuery = baseQuery.Where(x => x.pd.Category == category);
 
-        // Stored tags are normalized (trim + lowercase-invariant) on write, so the filter
+        // Stored tag names are normalized (trim + lowercase-invariant) on write, so the filter
         // input must be normalized the same way or a mixed-case ?tag= silently matches nothing.
+        // Soft-deleted tags are already excluded by Tag's global query filter.
         if (tag is not null)
         {
             var normalizedTag = tag.Trim().ToLowerInvariant();
-            baseQuery = baseQuery.Where(x => x.mp.Tags.Contains(normalizedTag));
+            baseQuery = baseQuery.Where(x => x.mp.Tags.Any(t => t.Name == normalizedTag));
         }
 
-        // Featured items (tagged with MarketProduct.FeaturedTag) are pinned to the top of
-        // page 1 only (cursor == null). The keyset stream below always excludes featured
-        // items, so nothing repeats across pages and the cursor logic stays unchanged.
+        // Featured items (carrying any tag with PinsToTop) are pinned to the top of page 1 only
+        // (cursor == null). The keyset stream below always excludes featured items, so nothing
+        // repeats across pages and the cursor logic stays unchanged.
         // ponytail: assumes few featured items per market — they all land on page 1.
         IReadOnlyList<MarketProductItemDto> featured = [];
         if (decoded is null)
         {
             featured = await baseQuery
-                .Where(x => x.mp.Tags.Contains(MarketProduct.FeaturedTag))
+                .Where(x => x.mp.Tags.Any(t => t.PinsToTop))
                 .OrderBy(x => x.mp.CreatedAt)
                 .ThenBy(x => x.mp.Id)
                 .Select(x => new MarketProductItemDto(
@@ -79,14 +80,14 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
                     x.mp.CurrentPrice,
                     x.mp.CurrentQuantity,
                     x.mp.CurrentQuantity - x.mp.ReservedQuantity,
-                    x.mp.Tags,
+                    Array.Empty<MarketProductTagDto>(), // Tags filled in by LoadTagsAsync below — see its doc comment for why.
                     x.mp.UpdatedAt,
                     x.mp.UpdatedBy,
                     new SellingUnitDto(x.pd.Unit, x.pd.CapacityKg)))
                 .ToListAsync(ct);
         }
 
-        var query = baseQuery.Where(x => !x.mp.Tags.Contains(MarketProduct.FeaturedTag));
+        var query = baseQuery.Where(x => !x.mp.Tags.Any(t => t.PinsToTop));
 
         if (decoded is not null)
         {
@@ -118,7 +119,7 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
                     x.mp.CurrentPrice,
                     x.mp.CurrentQuantity,
                     x.mp.CurrentQuantity - x.mp.ReservedQuantity,
-                    x.mp.Tags,
+                    Array.Empty<MarketProductTagDto>(), // Tags filled in by LoadTagsAsync below — see its doc comment for why.
                     x.mp.UpdatedAt,
                     x.mp.UpdatedBy,
                     new SellingUnitDto(x.pd.Unit, x.pd.CapacityKg)),
@@ -135,8 +136,43 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
         }
 
         var pageItems = rows.Select(r => r.Dto);
-        var items = decoded is null ? featured.Concat(pageItems) : pageItems;
-        return (items.ToList().AsReadOnly(), nextCursor);
+        var items = (decoded is null ? featured.Concat(pageItems) : pageItems).ToList();
+        var tagsByMarketProductId = await LoadTagsAsync(items.Select(i => i.MarketProductId), ct);
+        items = items
+            .Select(i => i with
+            {
+                Tags = tagsByMarketProductId.GetValueOrDefault(
+                    i.MarketProductId, (IReadOnlyList<MarketProductTagDto>)[])
+            })
+            .ToList();
+
+        return (items.AsReadOnly(), nextCursor);
+    }
+
+    /// <summary>
+    /// Loads tags for a set of market products in one round-trip, keyed by MarketProductId.
+    /// Deliberately a separate query rooted at the keyed <c>MarketProduct</c> entity (not
+    /// projected inline above): EF Core cannot translate a collection subquery inside a
+    /// projection that also joins a keyless entity (<see cref="ProductDetailRow"/>) — "Unable to
+    /// translate a collection subquery in a projection... This can happen when trying to
+    /// correlate on keyless entity type."
+    /// </summary>
+    private async Task<Dictionary<Guid, IReadOnlyList<MarketProductTagDto>>> LoadTagsAsync(
+        IEnumerable<Guid> marketProductIds, CancellationToken ct)
+    {
+        var ids = marketProductIds.Distinct().ToList();
+        if (ids.Count == 0) return [];
+
+        var rows = await db.Set<MarketProduct>()
+            .Where(mp => ids.Contains(mp.Id))
+            .Select(mp => new
+            {
+                mp.Id,
+                Tags = mp.Tags.Select(t => new MarketProductTagDto(t.Id, t.Name, t.PinsToTop)).ToList(),
+            })
+            .ToListAsync(ct);
+
+        return rows.ToDictionary(r => r.Id, r => (IReadOnlyList<MarketProductTagDto>)r.Tags);
     }
 
     // ── Cursor helpers ────────────────────────────────────────────────────────

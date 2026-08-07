@@ -29,6 +29,16 @@ internal sealed class MarketProductRepository(AppDbContext db) : IMarketProductR
                       && mp.DeletedAt == null,
                 ct);
 
+    public Task<MarketProduct?> FindTrackedWithTagsByMarketAndProductAsync(
+        Guid marketId, Guid productId, CancellationToken ct) =>
+        db.Set<MarketProduct>()
+            .Include(mp => mp.Tags)
+            .FirstOrDefaultAsync(
+                mp => mp.MarketId == marketId
+                      && mp.ProductId == productId
+                      && mp.DeletedAt == null,
+                ct);
+
     public async Task<IReadOnlyList<MarketProduct>> GetByMarketIdAsync(
         Guid marketId, CancellationToken ct) =>
         await db.Set<MarketProduct>()

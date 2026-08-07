@@ -14,9 +14,12 @@ public sealed record MarketProductItemDto(
     decimal CurrentPrice,
     int CurrentQuantity,
     int AvailableQuantity,
-    IReadOnlyList<string> Tags,
+    IReadOnlyList<MarketProductTagDto> Tags,
     DateTime UpdatedAt,
     Guid? UpdatedBy,
     SellingUnitDto SellingUnit);
 
 public sealed record SellingUnitDto(string UnitName, decimal? WeightKg);
+
+/// <summary>Tag assigned to a market product listing, projected from the catalog.</summary>
+public sealed record MarketProductTagDto(Guid Id, string Name, bool PinsToTop);

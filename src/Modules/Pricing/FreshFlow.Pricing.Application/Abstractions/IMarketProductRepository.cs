@@ -10,6 +10,15 @@ public interface IMarketProductRepository
     public Task<MarketProduct?> FindByMarketAndProductAsync(
         Guid marketId, Guid productId, CancellationToken ct);
 
+    /// <summary>
+    /// Tracked fetch with <c>Tags</c> included, for <c>SetMarketProductTags</c> only. A tracking
+    /// query (not the usual AsNoTracking + <see cref="Track"/> reattach) so EF's change tracker
+    /// has the original join-table snapshot and can correctly diff the skip-navigation collection
+    /// — the disconnected reattach pattern does not reliably diff many-to-many joins.
+    /// </summary>
+    public Task<MarketProduct?> FindTrackedWithTagsByMarketAndProductAsync(
+        Guid marketId, Guid productId, CancellationToken ct);
+
     public Task<IReadOnlyList<MarketProduct>> GetByMarketIdAsync(
         Guid marketId, CancellationToken ct);
 

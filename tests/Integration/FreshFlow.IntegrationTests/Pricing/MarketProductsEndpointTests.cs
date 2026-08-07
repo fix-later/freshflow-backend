@@ -240,10 +240,12 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
         var plain2Id = await CreateProductAsync($"Feat-Plain2-{Guid.NewGuid():N}", unitId);
         var featuredId = await CreateProductAsync($"Feat-Star-{Guid.NewGuid():N}", unitId);
 
+        var pinnedTag = await CreateTagAsync($"nổi bật {Guid.NewGuid().ToString("N")[..6]}", pinsToTop: true);
+
         // Two plain products, then one featured (created last → latest CreatedAt).
         await SeedMarketProductAsync(marketId, plain1Id, 10_000m, 10);
         await SeedMarketProductAsync(marketId, plain2Id, 20_000m, 20);
-        await SeedMarketProductAsync(marketId, featuredId, 30_000m, 30, tags: [MarketProduct.FeaturedTag]);
+        await SeedMarketProductAsync(marketId, featuredId, 30_000m, 30, tagIds: [pinnedTag]);
 
         // Act — page 1 with pageSize=1
         var page1 = await _client.GetAsync(Endpoint(marketId) + "?pageSize=1");
@@ -253,7 +255,7 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
         // Assert — featured is pinned first despite being created last; plus one plain item.
         env1!.Data!.Should().HaveCount(2, "featured item is prepended on top of the pageSize page");
         env1.Data![0].ProductId.Should().Be(featuredId);
-        env1.Data[0].Tags.Should().Contain(MarketProduct.FeaturedTag);
+        env1.Data[0].Tags.Should().ContainSingle(t => t.Id == pinnedTag && t.PinsToTop);
         env1.Data[1].Tags.Should().BeEmpty();
         env1.Meta!.NextCursor.Should().NotBeNullOrEmpty("one plain product remains for page 2");
 
@@ -284,11 +286,14 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
         var promoId = await CreateProductAsync($"Tag-Promo-{Guid.NewGuid():N}", unitId);
         var plainId = await CreateProductAsync($"Tag-Plain-{Guid.NewGuid():N}", unitId);
 
-        await SeedMarketProductAsync(marketId, promoId, 10_000m, 10, tags: ["khuyến mãi"]);
+        var promoTagName = $"khuyến mãi {Guid.NewGuid().ToString("N")[..6]}";
+        var promoTagId = await CreateTagAsync(promoTagName, pinsToTop: false);
+
+        await SeedMarketProductAsync(marketId, promoId, 10_000m, 10, tagIds: [promoTagId]);
         await SeedMarketProductAsync(marketId, plainId, 20_000m, 20);
 
         // Act
-        var tagParam = Uri.EscapeDataString("khuyến mãi");
+        var tagParam = Uri.EscapeDataString(promoTagName);
         var response = await _client.GetAsync(Endpoint(marketId) + $"?tag={tagParam}");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var env = await response.Content.ReadFromJsonAsync<PagedEnvelope<MarketProductItemBody>>();
@@ -296,7 +301,7 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
         // Assert — only the tagged listing is returned.
         env!.Data!.Should().ContainSingle();
         env.Data![0].ProductId.Should().Be(promoId);
-        env.Data[0].Tags.Should().Contain("khuyến mãi");
+        env.Data[0].Tags.Should().ContainSingle(t => t.Id == promoTagId);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -357,16 +362,27 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
     }
 
     private async Task<Guid> SeedMarketProductAsync(
-        Guid marketId, Guid productId, decimal price, int quantity, IReadOnlyList<string>? tags = null)
+        Guid marketId, Guid productId, decimal price, int quantity, IReadOnlyList<Guid>? tagIds = null)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var mp = new MarketProduct(marketId, productId, price, quantity, null);
-        if (tags is not null)
+        if (tagIds is not null)
+        {
+            var tags = await db.Set<Tag>().Where(t => tagIds.Contains(t.Id)).ToListAsync();
             mp.SetTags(tags, null);
+        }
         await db.Set<MarketProduct>().AddAsync(mp);
         await db.SaveChangesAsync();
         return mp.Id;
+    }
+
+    private async Task<Guid> CreateTagAsync(string name, bool pinsToTop)
+    {
+        var resp = await _client.PostAsJsonAsync("/api/v1/tags", new { name, pinsToTop });
+        resp.EnsureSuccessStatusCode();
+        var env = await resp.Content.ReadFromJsonAsync<Envelope<IdBody>>();
+        return env!.Data!.Id;
     }
 
     /// <summary>
@@ -399,9 +415,11 @@ public sealed record MarketProductItemBody(
     decimal CurrentPrice,
     int CurrentQuantity,
     int AvailableQuantity,
-    IReadOnlyList<string> Tags,
+    IReadOnlyList<MarketProductTagBody> Tags,
     DateTime UpdatedAt,
     Guid? UpdatedBy);
+
+public sealed record MarketProductTagBody(Guid Id, string Name, bool PinsToTop);
 
 public sealed record IdBody(Guid Id);
 

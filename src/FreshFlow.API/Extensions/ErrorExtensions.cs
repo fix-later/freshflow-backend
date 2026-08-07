@@ -15,7 +15,7 @@ public static class ErrorExtensions
         if (error.Code is "EMAIL_ALREADY_EXISTS" or "PHONE_ALREADY_EXISTS"
                         or "REFRESH_TOKEN_REUSE" or "ALREADY_APPROVED"
                         or "CATEGORY_NAME_CONFLICT" or "UNIT_NAME_CONFLICT"
-                        or "PACKING_CODE_CONFLICT"
+                        or "PACKING_CODE_CONFLICT" or "TAG_NAME_CONFLICT"
                         or "CATEGORY_HAS_ACTIVE_CHILDREN"
                         or "PLATE_NUMBER_DUPLICATE"
                         or "VEHICLE_NOT_AVAILABLE"

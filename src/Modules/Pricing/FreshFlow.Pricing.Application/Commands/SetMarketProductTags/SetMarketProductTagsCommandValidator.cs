@@ -4,8 +4,8 @@ namespace FreshFlow.Pricing.Application.Commands.SetMarketProductTags;
 
 /// <summary>
 /// Validates structural constraints of <see cref="SetMarketProductTagsCommand"/> (400).
-/// Normalization (trim/lowercase/dedupe) and the same caps are re-enforced in the domain
-/// (<c>MarketProduct.SetTags</c>) as defence in depth.
+/// Existence of each <c>TagId</c> in the live catalog is a DB lookup, not a structural rule —
+/// checked in the handler (also 400, VALIDATION_ERROR).
 /// </summary>
 internal sealed class SetMarketProductTagsCommandValidator : AbstractValidator<SetMarketProductTagsCommand>
 {
@@ -14,13 +14,11 @@ internal sealed class SetMarketProductTagsCommandValidator : AbstractValidator<S
         RuleFor(x => x.MarketId).NotEmpty();
         RuleFor(x => x.ProductId).NotEmpty();
 
-        RuleFor(x => x.Tags)
+        RuleFor(x => x.TagIds)
             .NotNull()
-            .Must(tags => tags.Count <= 8)
+            .Must(tagIds => tagIds.Count <= 8)
             .WithMessage("A market product may carry at most 8 tags.");
 
-        RuleForEach(x => x.Tags)
-            .MaximumLength(30)
-            .WithMessage("Each tag must be at most 30 characters.");
+        RuleForEach(x => x.TagIds).NotEmpty();
     }
 }

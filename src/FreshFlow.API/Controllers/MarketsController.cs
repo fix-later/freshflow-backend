@@ -309,9 +309,9 @@ public sealed class MarketsController(ISender sender) : ControllerBase
 
     /// <summary>
     /// PUT /api/v1/markets/{marketId}/products/{productId}/tags
-    /// Replaces the tag set of a product listing at this market. The special tag
-    /// <see cref="FreshFlow.Pricing.Domain.Entities.MarketProduct.FeaturedTag"/> ("nổi bật")
-    /// pins the listing to the top of the market product board. Admin or Market Agent.
+    /// Replaces the tag assignment set of a product listing at this market, by catalog
+    /// <c>Tag.Id</c> (see /api/v1/tags). A tag with <c>PinsToTop</c> pins the listing to the top
+    /// of the market product board. Admin or Market Agent.
     /// </summary>
     [HttpPut("{marketId:guid}/products/{productId:guid}/tags")]
     [Authorize(Roles = "admin,market_agent")]
@@ -328,7 +328,7 @@ public sealed class MarketsController(ISender sender) : ControllerBase
     {
         TryResolveAgentId(out var actorId);
         var command = new SetMarketProductTagsCommand(
-            marketId, productId, body.Tags, actorId);
+            marketId, productId, body.TagIds, actorId);
 
         var result = await sender.Send(command, ct);
         return result.IsSuccess ? NoContent() : result.Error.ToActionResult();
@@ -378,4 +378,4 @@ public sealed record CreateMarketProductRequest(
     decimal InitialPrice,
     int InitialQuantity);
 
-public sealed record SetMarketProductTagsRequest(IReadOnlyList<string> Tags);
+public sealed record SetMarketProductTagsRequest(IReadOnlyList<Guid> TagIds);
