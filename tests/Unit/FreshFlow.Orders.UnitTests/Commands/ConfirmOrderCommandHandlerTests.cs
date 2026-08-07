@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Commands.ConfirmOrder;
 using FreshFlow.Orders.Application.Dtos;
+using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
@@ -29,8 +30,9 @@ public sealed class ConfirmOrderCommandHandlerTests
 
     public ConfirmOrderCommandHandlerTests()
     {
-        _sut = new ConfirmOrderCommandHandler(
+        var confirmationService = new OrderConfirmationService(
             _orderRepository, _restaurantReader, _marketProductReader, _creditService, _operationalSettings);
+        _sut = new ConfirmOrderCommandHandler(_orderRepository, _restaurantReader, confirmationService);
 
         _orderRepository.ExecuteInSerializableTransactionAsync(
                 Arg.Any<Func<CancellationToken, Task<Result>>>(), Arg.Any<CancellationToken>())

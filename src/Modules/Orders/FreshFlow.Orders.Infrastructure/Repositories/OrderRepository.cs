@@ -157,7 +157,12 @@ internal sealed class OrderRepository(AppDbContext db) : IOrderRepository
         if (entry.State == EntityState.Detached)
             db.Attach(order);
 
-        entry.State = EntityState.Modified;
+        // A freshly-added order (e.g. ScheduledOrderGenerationService auto-confirming an order
+        // it just created in the same transaction) is already staged for INSERT — forcing it to
+        // Modified would issue an UPDATE against a row that doesn't exist yet and trip the
+        // UpdatedAt concurrency token (0 rows affected → DbUpdateConcurrencyException).
+        if (entry.State != EntityState.Added)
+            entry.State = EntityState.Modified;
     }
 
     public void TrackNewItem(OrderItem item) =>

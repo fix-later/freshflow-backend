@@ -39,13 +39,26 @@ internal sealed class UpdateScheduledOrderCommandHandler(
             return Result<ScheduledOrderDto>.Failure(Error.Validation(
                 "SCHEDULED_ORDER_FIRST_RUN_IN_PAST", "FirstRunAt must be in the future."));
 
+        if (request.DeliveryAddressId.HasValue)
+        {
+            var deliveryAddress = await restaurantReader.FindDeliveryAddressAsync(
+                request.DeliveryAddressId.Value, scheduledOrder.RestaurantId, cancellationToken);
+            if (deliveryAddress is null)
+                return Result<ScheduledOrderDto>.Failure(
+                    Error.NotFound("DELIVERY_ADDRESS", request.DeliveryAddressId.Value));
+        }
+
         var updateResult = scheduledOrder.UpdateSchedule(
             recurrenceType,
             firstRunAt,
-            request.Notes ?? scheduledOrder.Notes);
+            request.Notes ?? scheduledOrder.Notes,
+            request.DeliveryAddressId);
 
         if (updateResult.IsFailure)
             return Result<ScheduledOrderDto>.Failure(updateResult.Error);
+
+        if (request.Items is not null)
+            scheduledOrder.ReplaceItems(request.Items.Select(i => (i.MarketProductId, i.Quantity)));
 
         scheduledOrderRepository.Track(scheduledOrder);
         await scheduledOrderRepository.SaveChangesAsync(cancellationToken);

@@ -32,11 +32,21 @@ internal sealed class CreateScheduledOrderCommandHandler(
             return Result<ScheduledOrderDto>.Failure(Error.Validation(
                 "SCHEDULED_ORDER_FIRST_RUN_IN_PAST", "FirstRunAt must be in the future."));
 
+        // Fail fast — validating on every job run instead would repeat the same error forever.
+        var deliveryAddress = await restaurantReader.FindDeliveryAddressAsync(
+            request.DeliveryAddressId, restaurant.RestaurantId, cancellationToken);
+        if (deliveryAddress is null)
+            return Result<ScheduledOrderDto>.Failure(
+                Error.NotFound("DELIVERY_ADDRESS", request.DeliveryAddressId));
+
         var scheduledOrder = new ScheduledOrder(
             restaurant.RestaurantId,
             recurrenceType,
             request.FirstRunAt,
-            request.Notes);
+            request.Notes,
+            request.DeliveryAddressId);
+        foreach (var item in request.Items)
+            scheduledOrder.AddItem(item.MarketProductId, item.Quantity);
 
         await scheduledOrderRepository.AddAsync(scheduledOrder, cancellationToken);
         await scheduledOrderRepository.SaveChangesAsync(cancellationToken);

@@ -11,8 +11,12 @@ public sealed record ScheduledOrderDto(
     DateTime? LastExecutedAt,
     DateTime? CancelledAt,
     string? Notes,
+    Guid? DeliveryAddressId,
+    IReadOnlyList<ScheduledOrderItemDto> Items,
     DateTime CreatedAt,
     DateTime UpdatedAt);
+
+public sealed record ScheduledOrderItemDto(Guid MarketProductId, int Quantity);
 
 public sealed record ScheduledOrderListResponseDto(
     IReadOnlyList<ScheduledOrderDto> Data,
@@ -34,6 +38,10 @@ internal static class ScheduledOrderDtoMapper
         scheduledOrder.LastExecutedAt,
         scheduledOrder.CancelledAt,
         scheduledOrder.Notes,
+        scheduledOrder.DeliveryAddressId,
+        scheduledOrder.Items
+            .Select(item => new ScheduledOrderItemDto(item.MarketProductId, item.Quantity))
+            .ToList(),
         scheduledOrder.CreatedAt,
         scheduledOrder.UpdatedAt);
 
