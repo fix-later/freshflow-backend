@@ -45,6 +45,22 @@ public sealed class OrderingWindowEndpointTests(AuthWebAppFactory factory)
         data.TryGetProperty("defaultRouteType", out _).Should().BeFalse();
     }
 
+    [Fact]
+    public async Task GetOrderingWindow_AsGuest_ReturnsOnlyPublicSettingsAsync()
+    {
+        _client.DefaultRequestHeaders.Authorization = null;
+
+        var response = await _client.GetAsync("/api/v1/orders/ordering-window");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = document.RootElement.GetProperty("data");
+        data.TryGetProperty("dailyCutoffTime", out _).Should().BeTrue();
+        data.TryGetProperty("deliveryWindowDays", out _).Should().BeTrue();
+        data.TryGetProperty("batchingEnabled", out _).Should().BeFalse();
+        data.TryGetProperty("defaultRouteType", out _).Should().BeFalse();
+    }
+
     private async Task<string> LoginAsync(string identifier, string password)
     {
         _client.DefaultRequestHeaders.Authorization = null;

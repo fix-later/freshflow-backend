@@ -68,7 +68,8 @@ public sealed class OrdersController(ISender sender) : ControllerBase
         ListOrdersInternalAsync(restaurantId, status, from, to, sort, page, pageSize, ct);
 
     [HttpGet("ordering-window")]
-    [Authorize(Roles = "admin,operations_manager,restaurant")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetOrderingWindowAsync(CancellationToken ct)
     {
         var result = await sender.Send(new GetOperationalSettingsQuery(), ct);
@@ -190,7 +191,9 @@ public sealed class OrdersController(ISender sender) : ControllerBase
                 ResolveUserId(),
                 body.RecurrenceType,
                 body.FirstRunAt,
-                body.Notes),
+                body.Notes,
+                body.DeliveryAddressId,
+                body.Items),
             ct);
 
         return result.IsSuccess
@@ -423,7 +426,9 @@ public sealed class OrdersController(ISender sender) : ControllerBase
                 scheduledOrderId,
                 body.RecurrenceType,
                 body.FirstRunAt,
-                body.Notes),
+                body.Notes,
+                body.DeliveryAddressId,
+                body.Items),
             ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
@@ -520,9 +525,13 @@ public sealed record ReorderFromHistoryRequest(
 public sealed record CreateScheduledOrderRequest(
     string RecurrenceType,
     DateTime FirstRunAt,
-    string? Notes);
+    string? Notes,
+    Guid DeliveryAddressId,
+    IReadOnlyList<DraftOrderItemRequest> Items);
 
 public sealed record UpdateScheduledOrderRequest(
     string? RecurrenceType,
     DateTime? FirstRunAt,
-    string? Notes);
+    string? Notes,
+    Guid? DeliveryAddressId,
+    IReadOnlyList<DraftOrderItemRequest>? Items);

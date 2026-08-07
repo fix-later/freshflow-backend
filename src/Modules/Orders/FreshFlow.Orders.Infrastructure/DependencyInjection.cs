@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.AddScoped<IScheduledOrderGenerationService, ScheduledOrderGenerationService>();
         services.AddScoped<IOrderBroadcastService, OrderBroadcastService>();
         services.AddScoped<IStatementPdfRenderer, StatementPdfRenderer>();
+        services.AddScoped<IOrderConfirmationService, OrderConfirmationService>();
         services.AddHostedService<ScheduledOrderGenerationHostedService>();
         services.AddHostedService<MonthlyCreditStatementHostedService>();
 

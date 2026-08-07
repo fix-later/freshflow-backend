@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Commands.UpdateScheduledOrder;
+using FreshFlow.Orders.Application.Dtos;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
 using NSubstitute;
@@ -18,11 +19,17 @@ public sealed class UpdateScheduledOrderCommandHandlerTests
     private static readonly Guid UserId = Guid.NewGuid();
     private static readonly Guid RestaurantId = Guid.NewGuid();
     private static readonly Guid OtherRestaurantId = Guid.NewGuid();
+    private static readonly Guid DeliveryAddressId = Guid.NewGuid();
+    private static readonly Guid MarketProductId = Guid.NewGuid();
 
     public UpdateScheduledOrderCommandHandlerTests()
     {
         _restaurantReader.FindByUserIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
+        _restaurantReader.FindDeliveryAddressAsync(
+                DeliveryAddressId, RestaurantId, Arg.Any<CancellationToken>())
+            .Returns(new DeliveryAddressSourceDto(
+                DeliveryAddressId, "Bếp trưởng", "0901234567", "1 Test Street", 10.123456m, 106.123456m));
         _sut = new UpdateScheduledOrderCommandHandler(_scheduledOrderRepository, _restaurantReader);
     }
 
@@ -153,6 +160,66 @@ public sealed class UpdateScheduledOrderCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         await _restaurantReader.DidNotReceive().FindByUserIdAsync(UserId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ItemsProvided_ReplacesItemTemplateAsync()
+    {
+        var scheduledOrder = NewSchedule(RestaurantId);
+        scheduledOrder.AddItem(Guid.NewGuid(), 1);
+        _scheduledOrderRepository.FindByIdAsync(scheduledOrder.Id, Arg.Any<CancellationToken>())
+            .Returns(scheduledOrder);
+
+        var result = await _sut.Handle(
+            new UpdateScheduledOrderCommand(
+                UserId, IsAdmin: false, scheduledOrder.Id,
+                RecurrenceType: null, FirstRunAt: null, Notes: null,
+                DeliveryAddressId: null,
+                Items: [new DraftOrderItemRequest(MarketProductId, 7)]),
+            default);
+
+        result.IsSuccess.Should().BeTrue();
+        scheduledOrder.Items.Should().ContainSingle(i => i.MarketProductId == MarketProductId && i.Quantity == 7);
+    }
+
+    [Fact]
+    public async Task Handle_DeliveryAddressIdProvided_ValidatesOwnershipAndReplacesAsync()
+    {
+        var scheduledOrder = NewSchedule(RestaurantId);
+        _scheduledOrderRepository.FindByIdAsync(scheduledOrder.Id, Arg.Any<CancellationToken>())
+            .Returns(scheduledOrder);
+
+        var result = await _sut.Handle(
+            new UpdateScheduledOrderCommand(
+                UserId, IsAdmin: false, scheduledOrder.Id,
+                RecurrenceType: null, FirstRunAt: null, Notes: null,
+                DeliveryAddressId: DeliveryAddressId),
+            default);
+
+        result.IsSuccess.Should().BeTrue();
+        scheduledOrder.DeliveryAddressId.Should().Be(DeliveryAddressId);
+    }
+
+    [Fact]
+    public async Task Handle_DeliveryAddressIdNotOwnedByRestaurant_ReturnsNotFoundAsync()
+    {
+        var scheduledOrder = NewSchedule(RestaurantId);
+        _scheduledOrderRepository.FindByIdAsync(scheduledOrder.Id, Arg.Any<CancellationToken>())
+            .Returns(scheduledOrder);
+        _restaurantReader.FindDeliveryAddressAsync(
+                DeliveryAddressId, RestaurantId, Arg.Any<CancellationToken>())
+            .ReturnsNull();
+
+        var result = await _sut.Handle(
+            new UpdateScheduledOrderCommand(
+                UserId, IsAdmin: false, scheduledOrder.Id,
+                RecurrenceType: null, FirstRunAt: null, Notes: null,
+                DeliveryAddressId: DeliveryAddressId),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("DELIVERY_ADDRESS_NOT_FOUND");
+        _scheduledOrderRepository.DidNotReceive().Track(scheduledOrder);
     }
 
     private static UpdateScheduledOrderCommand Cmd(Guid scheduledOrderId) =>

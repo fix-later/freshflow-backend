@@ -9,17 +9,20 @@ internal sealed class ScheduledOrderRepository(AppDbContext db) : IScheduledOrde
 {
     public Task<ScheduledOrder?> FindByIdAsync(Guid id, CancellationToken ct) =>
         db.Set<ScheduledOrder>()
+            .Include(s => s.Items)
             .FirstOrDefaultAsync(s => s.Id == id && s.DeletedAt == null, ct);
 
     public async Task<IReadOnlyList<ScheduledOrder>> GetByRestaurantIdAsync(
         Guid restaurantId, CancellationToken ct) =>
         await db.Set<ScheduledOrder>()
+            .Include(s => s.Items)
             .Where(s => s.RestaurantId == restaurantId && s.DeletedAt == null)
             .OrderByDescending(s => s.CreatedAt)
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<ScheduledOrder>> GetActiveAsync(CancellationToken ct) =>
         await db.Set<ScheduledOrder>()
+            .Include(s => s.Items)
             .Where(s => s.CancelledAt == null && s.DeletedAt == null)
             .ToListAsync(ct);
 
@@ -28,6 +31,7 @@ internal sealed class ScheduledOrderRepository(AppDbContext db) : IScheduledOrde
     {
         var query = db.Set<ScheduledOrder>()
             .AsNoTracking()
+            .Include(s => s.Items)
             .Where(s => s.DeletedAt == null);
 
         if (criteria.RestaurantId.HasValue)
