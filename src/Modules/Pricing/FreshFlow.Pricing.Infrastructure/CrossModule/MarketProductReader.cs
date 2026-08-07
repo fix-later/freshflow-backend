@@ -29,6 +29,7 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
         string? category,
         string? cursor,
         int pageSize,
+        string? tag,
         CancellationToken ct)
     {
         // Guard: pageSize=0 would cause Take(1) to over-fetch, then rows[^1] on an empty list
@@ -49,15 +50,23 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
         if (category is not null)
             baseQuery = baseQuery.Where(x => x.pd.Category == category);
 
-        // Featured items are pinned to the top of page 1 only (cursor == null).
-        // The keyset stream below always excludes featured items, so nothing repeats
-        // across pages and the cursor logic stays unchanged.
+        // Stored tags are normalized (trim + lowercase-invariant) on write, so the filter
+        // input must be normalized the same way or a mixed-case ?tag= silently matches nothing.
+        if (tag is not null)
+        {
+            var normalizedTag = tag.Trim().ToLowerInvariant();
+            baseQuery = baseQuery.Where(x => x.mp.Tags.Contains(normalizedTag));
+        }
+
+        // Featured items (tagged with MarketProduct.FeaturedTag) are pinned to the top of
+        // page 1 only (cursor == null). The keyset stream below always excludes featured
+        // items, so nothing repeats across pages and the cursor logic stays unchanged.
         // ponytail: assumes few featured items per market — they all land on page 1.
         IReadOnlyList<MarketProductItemDto> featured = [];
         if (decoded is null)
         {
             featured = await baseQuery
-                .Where(x => x.mp.IsFeatured)
+                .Where(x => x.mp.Tags.Contains(MarketProduct.FeaturedTag))
                 .OrderBy(x => x.mp.CreatedAt)
                 .ThenBy(x => x.mp.Id)
                 .Select(x => new MarketProductItemDto(
@@ -70,14 +79,14 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
                     x.mp.CurrentPrice,
                     x.mp.CurrentQuantity,
                     x.mp.CurrentQuantity - x.mp.ReservedQuantity,
-                    x.mp.IsFeatured,
+                    x.mp.Tags,
                     x.mp.UpdatedAt,
                     x.mp.UpdatedBy,
                     new SellingUnitDto(x.pd.Unit, x.pd.CapacityKg)))
                 .ToListAsync(ct);
         }
 
-        var query = baseQuery.Where(x => !x.mp.IsFeatured);
+        var query = baseQuery.Where(x => !x.mp.Tags.Contains(MarketProduct.FeaturedTag));
 
         if (decoded is not null)
         {
@@ -109,7 +118,7 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
                     x.mp.CurrentPrice,
                     x.mp.CurrentQuantity,
                     x.mp.CurrentQuantity - x.mp.ReservedQuantity,
-                    x.mp.IsFeatured,
+                    x.mp.Tags,
                     x.mp.UpdatedAt,
                     x.mp.UpdatedBy,
                     new SellingUnitDto(x.pd.Unit, x.pd.CapacityKg)),

@@ -18,10 +18,10 @@ internal sealed class MarketProductConfiguration : IEntityTypeConfiguration<Mark
             .HasColumnType("numeric(12,2)");
         builder.Property(mp => mp.CurrentQuantity).IsRequired();
         builder.Property(mp => mp.ReservedQuantity).IsRequired().HasDefaultValue(0);
-        builder.Property(mp => mp.IsFeatured)
-            .HasColumnName("is_featured")
-            .IsRequired()
-            .HasDefaultValue(false);
+        builder.Property(mp => mp.Tags)
+            .HasColumnName("tags")
+            .HasDefaultValueSql("'{}'")
+            .IsRequired();
         builder.Property(mp => mp.UpdatedBy);
         builder.Property(mp => mp.CreatedAt).IsRequired();
         builder.Property(mp => mp.UpdatedAt).IsRequired().IsConcurrencyToken();
@@ -33,6 +33,7 @@ internal sealed class MarketProductConfiguration : IEntityTypeConfiguration<Mark
         // Ignore computed properties — not stored in DB
         builder.Ignore(mp => mp.AvailableQuantity);
         builder.Ignore(mp => mp.IsOutOfStock);
+        builder.Ignore(mp => mp.IsFeatured);
 
         builder.HasIndex(mp => new { mp.MarketId, mp.ProductId })
             .IsUnique()
@@ -44,5 +45,9 @@ internal sealed class MarketProductConfiguration : IEntityTypeConfiguration<Mark
 
         builder.HasIndex(mp => mp.DeletedAt)
             .HasDatabaseName("IX_market_products_deleted_at");
+
+        builder.HasIndex(mp => mp.Tags)
+            .HasMethod("GIN")
+            .HasDatabaseName("idx_market_products_tags");
     }
 }

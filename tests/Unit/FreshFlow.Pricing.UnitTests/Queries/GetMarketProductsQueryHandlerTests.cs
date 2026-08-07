@@ -58,7 +58,7 @@ public sealed class GetMarketProductsQueryHandlerTests
         // Assert — short-circuit: page query must NOT be called
         await _reader.DidNotReceive()
             .GetPageAsync(Arg.Any<Guid>(), Arg.Any<string?>(), Arg.Any<string?>(),
-                Arg.Any<int>(), Arg.Any<CancellationToken>());
+                Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     // ── Success path ──────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ public sealed class GetMarketProductsQueryHandlerTests
         // Arrange
         SetupMarketExists();
         var items = BuildItems(2);
-        _reader.GetPageAsync(MarketId, null, null, 20, default).Returns((items, (string?)null));
+        _reader.GetPageAsync(MarketId, null, null, 20, null, default).Returns((items, (string?)null));
 
         // Act
         var result = await _sut.Handle(new GetMarketProductsQuery(MarketId), default);
@@ -86,7 +86,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     {
         // Arrange
         SetupMarketExists();
-        _reader.GetPageAsync(MarketId, null, null, 20, default)
+        _reader.GetPageAsync(MarketId, null, null, 20, null, default)
             .Returns((Array.Empty<MarketProductItemDto>() as IReadOnlyList<MarketProductItemDto>, (string?)null));
 
         // Act
@@ -105,16 +105,17 @@ public sealed class GetMarketProductsQueryHandlerTests
         const string cursor = "some-cursor";
         const string category = "thủy hải sản";
         const int pageSize = 50;
-        _reader.GetPageAsync(MarketId, category, cursor, pageSize, default)
+        const string tag = "khuyến mãi";
+        _reader.GetPageAsync(MarketId, category, cursor, pageSize, tag, default)
             .Returns((Array.Empty<MarketProductItemDto>() as IReadOnlyList<MarketProductItemDto>, (string?)null));
 
         // Act
         await _sut.Handle(
-            new GetMarketProductsQuery(MarketId, category, cursor, pageSize), default);
+            new GetMarketProductsQuery(MarketId, category, cursor, pageSize, tag), default);
 
         // Assert
         await _reader.Received(1)
-            .GetPageAsync(MarketId, category, cursor, pageSize, default);
+            .GetPageAsync(MarketId, category, cursor, pageSize, tag, default);
     }
 
     [Fact]
@@ -124,7 +125,7 @@ public sealed class GetMarketProductsQueryHandlerTests
         SetupMarketExists();
         const string nextCursor = "next-cursor-value";
         var items = BuildItems(20);
-        _reader.GetPageAsync(MarketId, null, null, 20, default).Returns((items, nextCursor));
+        _reader.GetPageAsync(MarketId, null, null, 20, null, default).Returns((items, nextCursor));
 
         // Act
         var result = await _sut.Handle(new GetMarketProductsQuery(MarketId), default);
@@ -138,7 +139,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     {
         // Arrange
         SetupMarketExists();
-        _reader.GetPageAsync(MarketId, null, null, 50, default)
+        _reader.GetPageAsync(MarketId, null, null, 50, null, default)
             .Returns((Array.Empty<MarketProductItemDto>() as IReadOnlyList<MarketProductItemDto>, (string?)null));
 
         // Act
@@ -156,7 +157,7 @@ public sealed class GetMarketProductsQueryHandlerTests
         // Arrange
         SetupMarketExists();
         var product = BuildItem(currentPrice: 100_000m, currentQuantity: 50);
-        _reader.GetPageAsync(MarketId, null, null, 20, default)
+        _reader.GetPageAsync(MarketId, null, null, 20, null, default)
             .Returns((new[] { product } as IReadOnlyList<MarketProductItemDto>, (string?)null));
 
         _priceBoardReader
@@ -185,7 +186,7 @@ public sealed class GetMarketProductsQueryHandlerTests
         // Arrange — price board returns empty dict (all miss)
         SetupMarketExists();
         var product = BuildItem(currentPrice: 100_000m, currentQuantity: 50);
-        _reader.GetPageAsync(MarketId, null, null, 20, default)
+        _reader.GetPageAsync(MarketId, null, null, 20, null, default)
             .Returns((new[] { product } as IReadOnlyList<MarketProductItemDto>, (string?)null));
 
         // Default mock already returns empty dict
@@ -207,7 +208,7 @@ public sealed class GetMarketProductsQueryHandlerTests
         SetupMarketExists();
         var p1 = BuildItem(currentPrice: 100_000m, currentQuantity: 50);
         var p2 = BuildItem(currentPrice: 200_000m, currentQuantity: 100);
-        _reader.GetPageAsync(MarketId, null, null, 20, default)
+        _reader.GetPageAsync(MarketId, null, null, 20, null, default)
             .Returns((new[] { p1, p2 } as IReadOnlyList<MarketProductItemDto>, (string?)null));
 
         // Only p1 has a price board entry
@@ -235,7 +236,7 @@ public sealed class GetMarketProductsQueryHandlerTests
         // Arrange
         SetupMarketExists();
         var items = BuildItems(1);
-        _reader.GetPageAsync(MarketId, null, null, 20, default).Returns((items, (string?)null));
+        _reader.GetPageAsync(MarketId, null, null, 20, null, default).Returns((items, (string?)null));
         _priceBoardReader
             .GetBatchAsync(Arg.Any<Guid>(), Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new Exception("Price board unavailable"));
@@ -253,7 +254,7 @@ public sealed class GetMarketProductsQueryHandlerTests
         // Arrange
         SetupMarketExists();
         var product = BuildItem(currentPrice: 99_000m, currentQuantity: 20);
-        _reader.GetPageAsync(MarketId, null, null, 20, default)
+        _reader.GetPageAsync(MarketId, null, null, 20, null, default)
             .Returns((new[] { product } as IReadOnlyList<MarketProductItemDto>, (string?)null));
         _priceBoardReader
             .GetBatchAsync(Arg.Any<Guid>(), Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>())
@@ -273,7 +274,7 @@ public sealed class GetMarketProductsQueryHandlerTests
     {
         // Arrange
         SetupMarketExists();
-        _reader.GetPageAsync(MarketId, null, null, 20, default)
+        _reader.GetPageAsync(MarketId, null, null, 20, null, default)
             .Returns((Array.Empty<MarketProductItemDto>() as IReadOnlyList<MarketProductItemDto>, (string?)null));
 
         // Act
@@ -291,7 +292,7 @@ public sealed class GetMarketProductsQueryHandlerTests
         SetupMarketExists();
         var p1 = BuildItem();
         var p2 = BuildItem();
-        _reader.GetPageAsync(MarketId, null, null, 20, default)
+        _reader.GetPageAsync(MarketId, null, null, 20, null, default)
             .Returns((new[] { p1, p2 } as IReadOnlyList<MarketProductItemDto>, (string?)null));
 
         // Act
@@ -313,7 +314,7 @@ public sealed class GetMarketProductsQueryHandlerTests
         // Arrange — price board provides live price but name/unit/category must stay from DB
         SetupMarketExists();
         var product = BuildItem(currentPrice: 100_000m, currentQuantity: 50);
-        _reader.GetPageAsync(MarketId, null, null, 20, default)
+        _reader.GetPageAsync(MarketId, null, null, 20, null, default)
             .Returns((new[] { product } as IReadOnlyList<MarketProductItemDto>, (string?)null));
 
         _priceBoardReader
@@ -354,7 +355,7 @@ public sealed class GetMarketProductsQueryHandlerTests
             CurrentPrice: currentPrice,
             CurrentQuantity: currentQuantity,
             AvailableQuantity: currentQuantity,
-            IsFeatured: false,
+            Tags: [],
             UpdatedAt: DateTime.UtcNow,
             UpdatedBy: null,
             SellingUnit: new SellingUnitDto("Carton", 10));

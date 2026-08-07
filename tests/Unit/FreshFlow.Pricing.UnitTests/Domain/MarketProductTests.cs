@@ -434,35 +434,90 @@ public sealed class MarketProductTests
         mp.DeletedAt.Should().NotBeNull();
     }
 
-    // ── SetFeatured ──────────────────────────────────────────────────────────
+    // ── SetTags ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public void SetFeatured_True_MarksFeaturedAndBumpsActor()
+    public void SetTags_TrimsLowercasesAndDedupes()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, null);
+
+        // Act
+        mp.SetTags(["  Nổi Bật ", "khuyến mãi", "KHUYẾN MÃI", " khuyến mãi"], ActorId);
+
+        // Assert
+        mp.Tags.Should().BeEquivalentTo(["nổi bật", "khuyến mãi"]);
+        mp.UpdatedBy.Should().Be(ActorId);
+    }
+
+    [Fact]
+    public void SetTags_DropsEmptyAndWhitespaceOnlyEntries()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, null);
+
+        // Act
+        mp.SetTags(["fresh", "", "   "], ActorId);
+
+        // Assert
+        mp.Tags.Should().BeEquivalentTo(["fresh"]);
+    }
+
+    [Fact]
+    public void SetTags_FeaturedTagPresent_IsFeaturedIsTrue()
     {
         // Arrange
         var mp = new MarketProduct(MarketId, ProductId, 100m, 10, null);
         mp.IsFeatured.Should().BeFalse();
 
         // Act
-        mp.SetFeatured(true, ActorId);
+        mp.SetTags([MarketProduct.FeaturedTag], ActorId);
 
         // Assert
         mp.IsFeatured.Should().BeTrue();
-        mp.UpdatedBy.Should().Be(ActorId);
     }
 
     [Fact]
-    public void SetFeatured_SameValue_IsNoOp()
+    public void SetTags_MoreThanEightTags_ThrowsArgumentException()
     {
-        // Arrange — already not featured
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, null);
+        var tooMany = Enumerable.Range(0, 9).Select(i => $"tag{i}");
+
+        // Act
+        var act = () => mp.SetTags(tooMany, ActorId);
+
+        // Assert
+        act.Should().Throw<ArgumentException>().WithParameterName("tags");
+    }
+
+    [Fact]
+    public void SetTags_TagLongerThanThirtyChars_ThrowsArgumentException()
+    {
+        // Arrange
+        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, null);
+        var tooLong = new string('a', 31);
+
+        // Act
+        var act = () => mp.SetTags([tooLong], ActorId);
+
+        // Assert
+        act.Should().Throw<ArgumentException>().WithParameterName("tags");
+    }
+
+    [Fact]
+    public void SetTags_SameNormalizedSet_IsNoOp()
+    {
+        // Arrange — same tags, different order/casing normalize to the same set
         var mp = new MarketProduct(MarketId, ProductId, 100m, 10, ActorId);
+        mp.SetTags(["fresh", "organic"], ActorId);
         var before = mp.UpdatedAt;
 
         // Act
-        mp.SetFeatured(false, Guid.NewGuid());
+        mp.SetTags(["Organic", "FRESH"], Guid.NewGuid());
 
-        // Assert — no change to flag, actor, or concurrency token
-        mp.IsFeatured.Should().BeFalse();
+        // Assert — no change to tags, actor, or concurrency token
+        mp.Tags.Should().BeEquivalentTo(["fresh", "organic"]);
         mp.UpdatedBy.Should().Be(ActorId);
         mp.UpdatedAt.Should().Be(before);
     }

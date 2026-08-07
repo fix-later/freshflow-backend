@@ -20,7 +20,7 @@ internal sealed class GetMarketProductsQueryHandler(
                 Error.NotFound("MARKET", request.MarketId));
 
         var (items, nextCursor) = await reader.GetPageAsync(
-            request.MarketId, request.Category, request.Cursor, request.PageSize, ct);
+            request.MarketId, request.Category, request.Cursor, request.PageSize, request.Tag, ct);
 
         // UC-PRI-09: overlay live price/quantity/availableQuantity from the price board.
         // TODO: switch to Redis cache (IPriceBoardCache) when ready — see UC-PRI-07.

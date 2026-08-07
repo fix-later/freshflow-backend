@@ -7,5 +7,6 @@ public sealed record GetMarketProductsQuery(
     Guid MarketId,
     string? Category = null,
     string? Cursor = null,
-    int PageSize = 20)
+    int PageSize = 20,
+    string? Tag = null)
     : IQuery<MarketProductPageDto>;

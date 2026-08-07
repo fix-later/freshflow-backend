@@ -30,7 +30,7 @@ public sealed class MarketProductReaderPageSizeTests
 
         // Act
         var act = async () => await sut.GetPageAsync(
-            Guid.NewGuid(), null, null, pageSize: 0, CancellationToken.None);
+            Guid.NewGuid(), null, null, pageSize: 0, null, CancellationToken.None);
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>()
@@ -47,7 +47,7 @@ public sealed class MarketProductReaderPageSizeTests
 
         // Act
         var act = async () => await sut.GetPageAsync(
-            Guid.NewGuid(), null, null, pageSize, CancellationToken.None);
+            Guid.NewGuid(), null, null, pageSize, null, CancellationToken.None);
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>()
@@ -62,7 +62,7 @@ public sealed class MarketProductReaderPageSizeTests
 
         // Act
         var act = async () => await sut.GetPageAsync(
-            Guid.NewGuid(), null, null, pageSize: 1, CancellationToken.None);
+            Guid.NewGuid(), null, null, pageSize: 1, null, CancellationToken.None);
 
         // Assert
         await act.Should().NotThrowAsync<ArgumentException>();

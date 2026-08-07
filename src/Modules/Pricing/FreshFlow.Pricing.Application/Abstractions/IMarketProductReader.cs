@@ -18,12 +18,14 @@ public interface IMarketProductReader
     /// <summary>
     /// Returns a cursor-paginated page of active market products,
     /// enriched with productName, unit, and category from the Catalog tables.
+    /// Optionally filtered to listings carrying <paramref name="tag"/>.
     /// </summary>
     public Task<(IReadOnlyList<MarketProductItemDto> Items, string? NextCursor)> GetPageAsync(
         Guid marketId,
         string? category,
         string? cursor,
         int pageSize,
+        string? tag,
         CancellationToken ct);
 
 }

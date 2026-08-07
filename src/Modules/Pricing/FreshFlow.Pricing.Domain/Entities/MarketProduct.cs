@@ -25,8 +25,23 @@ public sealed class MarketProduct : AggregateRoot
     public decimal CurrentPrice { get; private set; }
     public int CurrentQuantity { get; private set; }
     public int ReservedQuantity { get; private set; }
-    public bool IsFeatured { get; private set; }
+
+    /// <summary>
+    /// Free-form tags. Normalized (trimmed, lowercased, deduped) on write via <see cref="SetTags"/>.
+    /// CLR type is <see cref="List{T}"/> (not <see cref="IReadOnlyList{T}"/>) so it maps directly to
+    /// Postgres <c>text[]</c> and LINQ queries (<c>Tags.Contains(...)</c>) translate to <c>@&gt;</c>.
+    /// </summary>
+    public List<string> Tags { get; private set; } = [];
+
     public Guid? UpdatedBy { get; private set; }
+
+    /// <summary>Tag value that pins a listing to the top of the market product board.</summary>
+    public const string FeaturedTag = "nổi bật";
+
+    private const int MaxTags = 8;
+    private const int MaxTagLength = 30;
+
+    public bool IsFeatured => Tags.Contains(FeaturedTag);
 
     public int AvailableQuantity => CurrentQuantity - ReservedQuantity;
     public bool IsOutOfStock => CurrentQuantity == 0;
@@ -38,15 +53,18 @@ public sealed class MarketProduct : AggregateRoot
     }
 
     /// <summary>
-    /// Marks this listing as a signature/featured product of its market (or clears the flag).
-    /// No-op when the value is unchanged, so it never bumps the concurrency token needlessly.
+    /// Replaces the tag set. Each tag is trimmed, lowercased (invariant), empties are dropped,
+    /// and duplicates removed. No-op (no concurrency bump) when the normalized set is unchanged —
+    /// mirrors the old <c>SetFeatured</c> guard. <see cref="FeaturedTag"/> pins the listing to the
+    /// top of the market product board (see <c>MarketProductReader</c>).
     /// </summary>
-    public void SetFeatured(bool value, Guid? actor)
+    public void SetTags(IEnumerable<string> tags, Guid? actor)
     {
-        if (IsFeatured == value)
+        var normalized = NormalizeTags(tags);
+        if (Tags.Count == normalized.Count && Tags.ToHashSet().SetEquals(normalized))
             return;
 
-        IsFeatured = value;
+        Tags = normalized;
         UpdatedBy = actor;
         UpdatedAt = DateTime.UtcNow;
     }
@@ -126,5 +144,24 @@ public sealed class MarketProduct : AggregateRoot
     {
         if (quantity < 0)
             throw new ArgumentOutOfRangeException(nameof(quantity), quantity, "Quantity must be non-negative.");
+    }
+
+    private static List<string> NormalizeTags(IEnumerable<string> tags)
+    {
+        ArgumentNullException.ThrowIfNull(tags);
+
+        var normalized = tags
+            .Select(t => t.Trim().ToLowerInvariant())
+            .Where(t => t.Length > 0)
+            .Distinct()
+            .ToList();
+
+        if (normalized.Count > MaxTags)
+            throw new ArgumentException($"A market product may carry at most {MaxTags} tags.", nameof(tags));
+
+        if (normalized.Any(t => t.Length > MaxTagLength))
+            throw new ArgumentException($"Each tag must be at most {MaxTagLength} characters.", nameof(tags));
+
+        return normalized;
     }
 }

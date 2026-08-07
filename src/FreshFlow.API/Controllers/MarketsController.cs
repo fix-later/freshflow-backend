@@ -10,7 +10,7 @@ using FreshFlow.Catalog.Application.Queries.Markets.GetMarketById;
 using FreshFlow.Catalog.Application.Queries.Markets.GetMarkets;
 using FreshFlow.Pricing.Application.Commands.CreateMarketProduct;
 using FreshFlow.Pricing.Application.Commands.DeleteMarketProduct;
-using FreshFlow.Pricing.Application.Commands.SetMarketProductFeatured;
+using FreshFlow.Pricing.Application.Commands.SetMarketProductTags;
 using FreshFlow.Pricing.Application.Commands.UpdateAvailableQuantity;
 using FreshFlow.Pricing.Application.Commands.UpdateProductPrice;
 using FreshFlow.Pricing.Application.Queries.GetMarketProducts;
@@ -130,9 +130,10 @@ public sealed class MarketsController(ISender sender) : ControllerBase
         [FromQuery] string? category,
         [FromQuery] string? cursor,
         [FromQuery] int pageSize = 20,
+        [FromQuery] string? tag = null,
         CancellationToken ct = default)
     {
-        var query = new GetMarketProductsQuery(marketId, category, cursor, pageSize);
+        var query = new GetMarketProductsQuery(marketId, category, cursor, pageSize, tag);
         var result = await sender.Send(query, ct);
 
         if (!result.IsSuccess)
@@ -307,25 +308,27 @@ public sealed class MarketsController(ISender sender) : ControllerBase
     }
 
     /// <summary>
-    /// PATCH /api/v1/markets/{marketId}/products/{productId}/featured
-    /// Marks (or unmarks) a product as a signature/featured item of this market.
-    /// Featured items are pinned to the top of the market product board. Admin or Market Agent.
+    /// PUT /api/v1/markets/{marketId}/products/{productId}/tags
+    /// Replaces the tag set of a product listing at this market. The special tag
+    /// <see cref="FreshFlow.Pricing.Domain.Entities.MarketProduct.FeaturedTag"/> ("nổi bật")
+    /// pins the listing to the top of the market product board. Admin or Market Agent.
     /// </summary>
-    [HttpPatch("{marketId:guid}/products/{productId:guid}/featured")]
+    [HttpPut("{marketId:guid}/products/{productId:guid}/tags")]
     [Authorize(Roles = "admin,market_agent")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> SetMarketProductFeaturedAsync(
+    public async Task<IActionResult> SetMarketProductTagsAsync(
         Guid marketId,
         Guid productId,
-        [FromBody] SetMarketProductFeaturedRequest body,
+        [FromBody] SetMarketProductTagsRequest body,
         CancellationToken ct)
     {
         TryResolveAgentId(out var actorId);
-        var command = new SetMarketProductFeaturedCommand(
-            marketId, productId, body.IsFeatured, actorId);
+        var command = new SetMarketProductTagsCommand(
+            marketId, productId, body.Tags, actorId);
 
         var result = await sender.Send(command, ct);
         return result.IsSuccess ? NoContent() : result.Error.ToActionResult();
@@ -375,4 +378,4 @@ public sealed record CreateMarketProductRequest(
     decimal InitialPrice,
     int InitialQuantity);
 
-public sealed record SetMarketProductFeaturedRequest(bool IsFeatured);
+public sealed record SetMarketProductTagsRequest(IReadOnlyList<string> Tags);
