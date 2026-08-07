@@ -1,4 +1,5 @@
 using FreshFlow.Pricing.Domain.Entities;
+using FreshFlow.Pricing.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -18,10 +19,6 @@ internal sealed class MarketProductConfiguration : IEntityTypeConfiguration<Mark
             .HasColumnType("numeric(12,2)");
         builder.Property(mp => mp.CurrentQuantity).IsRequired();
         builder.Property(mp => mp.ReservedQuantity).IsRequired().HasDefaultValue(0);
-        builder.Property(mp => mp.Tags)
-            .HasColumnName("tags")
-            .HasDefaultValueSql("'{}'")
-            .IsRequired();
         builder.Property(mp => mp.UpdatedBy);
         builder.Property(mp => mp.CreatedAt).IsRequired();
         builder.Property(mp => mp.UpdatedAt).IsRequired().IsConcurrencyToken();
@@ -46,8 +43,28 @@ internal sealed class MarketProductConfiguration : IEntityTypeConfiguration<Mark
         builder.HasIndex(mp => mp.DeletedAt)
             .HasDatabaseName("IX_market_products_deleted_at");
 
-        builder.HasIndex(mp => mp.Tags)
-            .HasMethod("GIN")
-            .HasDatabaseName("idx_market_products_tags");
+        // Skip-navigation many-to-many through an explicit join entity (not a shadow join) so
+        // TagRepository can bulk-clear assignments (ExecuteDeleteAsync) without a second seam.
+        builder.HasMany(mp => mp.Tags)
+            .WithMany()
+            .UsingEntity<MarketProductTagLink>(
+                j => j.HasOne<Tag>()
+                    .WithMany()
+                    .HasForeignKey(l => l.TagId)
+                    .HasConstraintName("fk_market_product_tags_tag")
+                    .OnDelete(DeleteBehavior.Restrict),
+                j => j.HasOne<MarketProduct>()
+                    .WithMany()
+                    .HasForeignKey(l => l.MarketProductId)
+                    .HasConstraintName("fk_market_product_tags_market_product")
+                    .OnDelete(DeleteBehavior.Cascade),
+                j =>
+                {
+                    j.ToTable("market_product_tags");
+                    j.HasKey(l => new { l.MarketProductId, l.TagId });
+                    j.Property(l => l.MarketProductId).HasColumnName("market_product_id");
+                    j.Property(l => l.TagId).HasColumnName("tag_id");
+                    j.HasIndex(l => l.TagId).HasDatabaseName("idx_market_product_tags_tag_id");
+                });
     }
 }

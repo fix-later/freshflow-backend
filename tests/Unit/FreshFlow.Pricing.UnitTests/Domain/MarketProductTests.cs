@@ -435,43 +435,34 @@ public sealed class MarketProductTests
     }
 
     // ── SetTags ──────────────────────────────────────────────────────────────
+    // Normalization/length caps now live on Tag itself (see TagTests). SetTags here only
+    // diffs the assigned Tag.Id set and enforces the ≤8 cap.
 
     [Fact]
-    public void SetTags_TrimsLowercasesAndDedupes()
+    public void SetTags_AssignsGivenTags()
     {
         // Arrange
         var mp = new MarketProduct(MarketId, ProductId, 100m, 10, null);
+        var fresh = Tag.Create("fresh", false, null);
 
         // Act
-        mp.SetTags(["  Nổi Bật ", "khuyến mãi", "KHUYẾN MÃI", " khuyến mãi"], ActorId);
+        mp.SetTags([fresh], ActorId);
 
         // Assert
-        mp.Tags.Should().BeEquivalentTo(["nổi bật", "khuyến mãi"]);
+        mp.Tags.Should().BeEquivalentTo([fresh]);
         mp.UpdatedBy.Should().Be(ActorId);
     }
 
     [Fact]
-    public void SetTags_DropsEmptyAndWhitespaceOnlyEntries()
-    {
-        // Arrange
-        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, null);
-
-        // Act
-        mp.SetTags(["fresh", "", "   "], ActorId);
-
-        // Assert
-        mp.Tags.Should().BeEquivalentTo(["fresh"]);
-    }
-
-    [Fact]
-    public void SetTags_FeaturedTagPresent_IsFeaturedIsTrue()
+    public void SetTags_TagWithPinsToTop_IsFeaturedIsTrue()
     {
         // Arrange
         var mp = new MarketProduct(MarketId, ProductId, 100m, 10, null);
         mp.IsFeatured.Should().BeFalse();
+        var pinned = Tag.Create("nổi bật", true, null);
 
         // Act
-        mp.SetTags([MarketProduct.FeaturedTag], ActorId);
+        mp.SetTags([pinned], ActorId);
 
         // Assert
         mp.IsFeatured.Should().BeTrue();
@@ -482,7 +473,7 @@ public sealed class MarketProductTests
     {
         // Arrange
         var mp = new MarketProduct(MarketId, ProductId, 100m, 10, null);
-        var tooMany = Enumerable.Range(0, 9).Select(i => $"tag{i}");
+        var tooMany = Enumerable.Range(0, 9).Select(i => Tag.Create($"tag{i}", false, null)).ToList();
 
         // Act
         var act = () => mp.SetTags(tooMany, ActorId);
@@ -492,32 +483,20 @@ public sealed class MarketProductTests
     }
 
     [Fact]
-    public void SetTags_TagLongerThanThirtyChars_ThrowsArgumentException()
+    public void SetTags_SameIdSetDifferentOrder_IsNoOp()
     {
-        // Arrange
-        var mp = new MarketProduct(MarketId, ProductId, 100m, 10, null);
-        var tooLong = new string('a', 31);
-
-        // Act
-        var act = () => mp.SetTags([tooLong], ActorId);
-
-        // Assert
-        act.Should().Throw<ArgumentException>().WithParameterName("tags");
-    }
-
-    [Fact]
-    public void SetTags_SameNormalizedSet_IsNoOp()
-    {
-        // Arrange — same tags, different order/casing normalize to the same set
+        // Arrange — same tag ids, different order/instance is still a no-op
         var mp = new MarketProduct(MarketId, ProductId, 100m, 10, ActorId);
-        mp.SetTags(["fresh", "organic"], ActorId);
+        var fresh = Tag.Create("fresh", false, null);
+        var organic = Tag.Create("organic", false, null);
+        mp.SetTags([fresh, organic], ActorId);
         var before = mp.UpdatedAt;
 
         // Act
-        mp.SetTags(["Organic", "FRESH"], Guid.NewGuid());
+        mp.SetTags([organic, fresh], Guid.NewGuid());
 
         // Assert — no change to tags, actor, or concurrency token
-        mp.Tags.Should().BeEquivalentTo(["fresh", "organic"]);
+        mp.Tags.Select(t => t.Id).Should().BeEquivalentTo([fresh.Id, organic.Id]);
         mp.UpdatedBy.Should().Be(ActorId);
         mp.UpdatedAt.Should().Be(before);
     }

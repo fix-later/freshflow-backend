@@ -27,21 +27,19 @@ public sealed class MarketProduct : AggregateRoot
     public int ReservedQuantity { get; private set; }
 
     /// <summary>
-    /// Free-form tags. Normalized (trimmed, lowercased, deduped) on write via <see cref="SetTags"/>.
-    /// CLR type is <see cref="List{T}"/> (not <see cref="IReadOnlyList{T}"/>) so it maps directly to
-    /// Postgres <c>text[]</c> and LINQ queries (<c>Tags.Contains(...)</c>) translate to <c>@&gt;</c>.
+    /// Catalog tags assigned to this listing (SCRUM-386), a many-to-many through
+    /// <c>market_product_tags</c>. Assignment is by <see cref="Tag.Id"/> only — see
+    /// <see cref="SetTags"/>. CLR type is <see cref="List{T}"/> (not <see cref="IReadOnlyList{T}"/>)
+    /// because it is an EF Core skip-navigation collection.
     /// </summary>
-    public List<string> Tags { get; private set; } = [];
+    public List<Tag> Tags { get; private set; } = [];
 
     public Guid? UpdatedBy { get; private set; }
 
-    /// <summary>Tag value that pins a listing to the top of the market product board.</summary>
-    public const string FeaturedTag = "nổi bật";
-
     private const int MaxTags = 8;
-    private const int MaxTagLength = 30;
 
-    public bool IsFeatured => Tags.Contains(FeaturedTag);
+    /// <summary>A listing is featured/pinned iff it carries any tag with <see cref="Tag.PinsToTop"/>.</summary>
+    public bool IsFeatured => Tags.Any(t => t.PinsToTop);
 
     public int AvailableQuantity => CurrentQuantity - ReservedQuantity;
     public bool IsOutOfStock => CurrentQuantity == 0;
@@ -53,18 +51,22 @@ public sealed class MarketProduct : AggregateRoot
     }
 
     /// <summary>
-    /// Replaces the tag set. Each tag is trimmed, lowercased (invariant), empties are dropped,
-    /// and duplicates removed. No-op (no concurrency bump) when the normalized set is unchanged —
-    /// mirrors the old <c>SetFeatured</c> guard. <see cref="FeaturedTag"/> pins the listing to the
-    /// top of the market product board (see <c>MarketProductReader</c>).
+    /// Replaces the tag association set (by catalog <see cref="Tag.Id"/>). No-op (no concurrency
+    /// bump) when the id set is unchanged — mirrors the old string-tag guard. Caps at
+    /// <see cref="MaxTags"/>; the caller (handler) is responsible for loading live catalog tags.
     /// </summary>
-    public void SetTags(IEnumerable<string> tags, Guid? actor)
+    public void SetTags(IReadOnlyCollection<Tag> tags, Guid? actor)
     {
-        var normalized = NormalizeTags(tags);
-        if (Tags.Count == normalized.Count && Tags.ToHashSet().SetEquals(normalized))
+        ArgumentNullException.ThrowIfNull(tags);
+        if (tags.Count > MaxTags)
+            throw new ArgumentException($"A market product may carry at most {MaxTags} tags.", nameof(tags));
+
+        var newIds = tags.Select(t => t.Id).ToHashSet();
+        var currentIds = Tags.Select(t => t.Id).ToHashSet();
+        if (currentIds.SetEquals(newIds))
             return;
 
-        Tags = normalized;
+        Tags = tags.ToList();
         UpdatedBy = actor;
         UpdatedAt = DateTime.UtcNow;
     }
@@ -144,24 +146,5 @@ public sealed class MarketProduct : AggregateRoot
     {
         if (quantity < 0)
             throw new ArgumentOutOfRangeException(nameof(quantity), quantity, "Quantity must be non-negative.");
-    }
-
-    private static List<string> NormalizeTags(IEnumerable<string> tags)
-    {
-        ArgumentNullException.ThrowIfNull(tags);
-
-        var normalized = tags
-            .Select(t => t.Trim().ToLowerInvariant())
-            .Where(t => t.Length > 0)
-            .Distinct()
-            .ToList();
-
-        if (normalized.Count > MaxTags)
-            throw new ArgumentException($"A market product may carry at most {MaxTags} tags.", nameof(tags));
-
-        if (normalized.Any(t => t.Length > MaxTagLength))
-            throw new ArgumentException($"Each tag must be at most {MaxTagLength} characters.", nameof(tags));
-
-        return normalized;
     }
 }
