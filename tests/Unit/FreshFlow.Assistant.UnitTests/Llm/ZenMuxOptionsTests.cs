@@ -15,8 +15,7 @@ public class ZenMuxOptionsTests
             BaseUrl = "https://zenmux.ai/api/v1",
             Model = "z-ai/glm-5.2-free",
             ApiKey = "sk-test-key",
-            TimeoutSeconds = 60,
-            MaxToolHops = 6
+            TimeoutSeconds = 60
         };
 
         // Act
@@ -78,21 +77,6 @@ public class ZenMuxOptionsTests
 
         // Assert
         results.Should().ContainSingle(r => r.MemberNames.Contains(nameof(ZenMuxOptions.TimeoutSeconds)));
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(21)]
-    public void Validate_fails_when_max_tool_hops_is_out_of_range(int maxToolHops)
-    {
-        // Arrange
-        var options = new ZenMuxOptions { ApiKey = "sk-test-key", MaxToolHops = maxToolHops };
-
-        // Act
-        var results = Validate(options);
-
-        // Assert
-        results.Should().ContainSingle(r => r.MemberNames.Contains(nameof(ZenMuxOptions.MaxToolHops)));
     }
 
     private static List<ValidationResult> Validate(ZenMuxOptions options)

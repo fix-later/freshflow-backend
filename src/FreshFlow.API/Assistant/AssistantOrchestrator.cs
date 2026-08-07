@@ -2,7 +2,6 @@ using System.Text.Json;
 using FreshFlow.API.Assistant.Abstractions;
 using FreshFlow.API.Assistant.Conversation;
 using FreshFlow.API.Assistant.Dtos;
-using FreshFlow.API.Assistant.Llm;
 using FreshFlow.API.Assistant.Safety;
 using FreshFlow.API.Assistant.Tools;
 using Microsoft.Extensions.Options;
@@ -12,7 +11,7 @@ namespace FreshFlow.API.Assistant;
 /// <summary>
 /// Drives one assistant chat turn (T5, non-streaming): repeatedly asks the LLM for the next step and
 /// dispatches any tool call it requests, until the model returns a final text reply or the tool-hop
-/// budget (<see cref="ZenMuxOptions.MaxToolHops"/>) is exhausted. The orchestrator is provider-agnostic
+/// budget (<see cref="AssistantOptions.MaxToolHops"/>) is exhausted. The orchestrator is provider-agnostic
 /// (depends only on <see cref="IAssistantChatClient"/>) and storage-agnostic (the caller owns load/save
 /// of <see cref="ConversationState"/>), which keeps it unit-testable with a scripted fake chat client.
 /// <para>
@@ -25,7 +24,7 @@ public sealed class AssistantOrchestrator(
     IAssistantChatClient chatClient,
     IAssistantToolRegistry toolRegistry,
     ConfirmationGate confirmationGate,
-    IOptions<ZenMuxOptions> options)
+    IOptions<AssistantOptions> options)
 {
     private const string CreateDraftOrderToolName = "create_draft_order";
     private const string PreviewConfirmationToolName = "preview_confirmation";

@@ -21,7 +21,4 @@ public sealed class ZenMuxOptions
 
     [Range(1, 600)]
     public int TimeoutSeconds { get; init; } = 60;
-
-    [Range(1, 20)]
-    public int MaxToolHops { get; init; } = 6;
 }
