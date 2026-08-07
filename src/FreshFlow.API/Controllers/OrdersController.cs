@@ -68,7 +68,8 @@ public sealed class OrdersController(ISender sender) : ControllerBase
         ListOrdersInternalAsync(restaurantId, status, from, to, sort, page, pageSize, ct);
 
     [HttpGet("ordering-window")]
-    [Authorize(Roles = "admin,operations_manager,restaurant")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetOrderingWindowAsync(CancellationToken ct)
     {
         var result = await sender.Send(new GetOperationalSettingsQuery(), ct);
