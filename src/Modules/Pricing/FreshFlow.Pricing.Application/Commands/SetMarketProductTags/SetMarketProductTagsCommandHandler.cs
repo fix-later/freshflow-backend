@@ -2,19 +2,19 @@ using FreshFlow.Pricing.Application.Abstractions;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 
-namespace FreshFlow.Pricing.Application.Commands.SetMarketProductFeatured;
+namespace FreshFlow.Pricing.Application.Commands.SetMarketProductTags;
 
-internal sealed class SetMarketProductFeaturedCommandHandler(IMarketProductRepository marketProducts)
-    : IRequestHandler<SetMarketProductFeaturedCommand, Result>
+internal sealed class SetMarketProductTagsCommandHandler(IMarketProductRepository marketProducts)
+    : IRequestHandler<SetMarketProductTagsCommand, Result>
 {
-    public async Task<Result> Handle(SetMarketProductFeaturedCommand request, CancellationToken ct)
+    public async Task<Result> Handle(SetMarketProductTagsCommand request, CancellationToken ct)
     {
         var marketProduct = await marketProducts.FindByMarketAndProductAsync(
             request.MarketId, request.ProductId, ct);
         if (marketProduct is null)
             return Result.Failure(Error.NotFound("MARKET_PRODUCT", request.ProductId));
 
-        marketProduct.SetFeatured(request.IsFeatured, request.Actor);
+        marketProduct.SetTags(request.Tags, request.Actor);
         marketProducts.Track(marketProduct);
         await marketProducts.SaveChangesAsync(ct);
 

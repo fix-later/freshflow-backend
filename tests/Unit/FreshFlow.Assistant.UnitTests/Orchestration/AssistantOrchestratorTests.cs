@@ -3,7 +3,6 @@ using FluentAssertions;
 using FreshFlow.API.Assistant;
 using FreshFlow.API.Assistant.Abstractions;
 using FreshFlow.API.Assistant.Conversation;
-using FreshFlow.API.Assistant.Llm;
 using FreshFlow.API.Assistant.Safety;
 using FreshFlow.API.Assistant.Tools;
 using Microsoft.Extensions.Options;
@@ -28,7 +27,7 @@ public sealed class AssistantOrchestratorTests
             chatClient,
             registry,
             new ConfirmationGate(),
-            Options.Create(new ZenMuxOptions { ApiKey = "test", MaxToolHops = maxToolHops }));
+            Options.Create(new AssistantOptions { Providers = [AssistantProviders.ZenMux], MaxToolHops = maxToolHops }));
 
     [Fact]
     public async Task RunAsync_returns_text_reply_without_dispatching_tools_when_llm_answers_directly()
