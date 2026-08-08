@@ -76,7 +76,8 @@ public static class DependencyInjection
                     OnMessageReceived = ctx =>
                     {
                         var accessToken = ctx.Request.Query["access_token"];
-                        if (!string.IsNullOrEmpty(accessToken))
+                        if (!string.IsNullOrEmpty(accessToken)
+                            && ctx.Request.Path.StartsWithSegments("/hubs"))
                             ctx.Token = accessToken;
                         return Task.CompletedTask;
                     },

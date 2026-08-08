@@ -8,6 +8,7 @@ using FreshFlow.Notifications.Infrastructure.CrossModule;
 using FreshFlow.Notifications.Infrastructure.Email;
 using FreshFlow.Notifications.Infrastructure.Jobs;
 using FreshFlow.Notifications.Infrastructure.Push;
+using FreshFlow.Notifications.Infrastructure.Realtime;
 using FreshFlow.Notifications.Infrastructure.Repositories;
 using MediatR;
 using Microsoft.Extensions.Configuration;
@@ -43,6 +44,7 @@ public static class DependencyInjection
 
         // Application services and cross-module read projections
         services.AddScoped<INotificationWriter, NotificationWriter>();
+        services.AddScoped<INotificationBroadcastService, NotificationBroadcastService>();
 
         var pushSection = config.GetSection("Notifications:Push");
         var pushOptions = new ExpoPushOptions

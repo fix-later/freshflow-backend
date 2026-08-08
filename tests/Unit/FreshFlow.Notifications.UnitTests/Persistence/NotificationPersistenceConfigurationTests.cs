@@ -150,6 +150,7 @@ public sealed class NotificationPersistenceConfigurationTests
         services.AddDbContext<AppDbContext>(options =>
             options.UseInMemoryDatabase($"notifications-{Guid.NewGuid()}"));
         services.AddLogging();
+        services.AddSignalR();
 
         services.AddNotificationsModule(new ConfigurationBuilder().Build());
         using var provider = services.BuildServiceProvider();
@@ -157,6 +158,7 @@ public sealed class NotificationPersistenceConfigurationTests
         provider.GetRequiredService<INotificationDeviceRepository>().Should().NotBeNull();
         provider.GetRequiredService<INotificationRepository>().Should().NotBeNull();
         provider.GetRequiredService<INotificationWriter>().Should().NotBeNull();
+        provider.GetRequiredService<INotificationBroadcastService>().Should().NotBeNull();
         provider.GetRequiredService<IPushSender>().Should().BeOfType<LogPushSender>();
         provider.GetRequiredService<INotificationRetryService>().Should().NotBeNull();
         provider.GetRequiredService<INotificationRecipientResolver>().Should().NotBeNull();

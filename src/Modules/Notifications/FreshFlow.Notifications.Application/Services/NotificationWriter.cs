@@ -1,14 +1,18 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FreshFlow.Notifications.Application.Abstractions;
+using FreshFlow.Notifications.Application.Mappers;
 using FreshFlow.Notifications.Domain.Entities;
 using FreshFlow.Notifications.Domain.Enums;
+using Microsoft.Extensions.Logging;
 
 namespace FreshFlow.Notifications.Application.Services;
 
 public sealed class NotificationWriter(
     INotificationRepository notifications,
-    IPushSender pushSender) : INotificationWriter
+    IPushSender pushSender,
+    INotificationBroadcastService broadcast,
+    ILogger<NotificationWriter> logger) : INotificationWriter
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -31,6 +35,23 @@ public sealed class NotificationWriter(
             SerializePayload(payload));
 
         var persisted = await notifications.AddAsync(notification, ct);
+
+        try
+        {
+            await broadcast.BroadcastCreatedAsync(persisted.UserId, persisted.ToDto(), ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Failed to broadcast notification {NotificationId} to user {UserId}.",
+                persisted.Id,
+                persisted.UserId);
+        }
 
         try
         {

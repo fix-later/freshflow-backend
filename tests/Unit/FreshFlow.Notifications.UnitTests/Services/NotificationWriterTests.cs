@@ -1,9 +1,11 @@
 using FluentAssertions;
 using FreshFlow.Notifications.Application.Abstractions;
+using FreshFlow.Notifications.Application.Dtos;
 using FreshFlow.Notifications.Application.Services;
 using FreshFlow.Notifications.Domain.Entities;
 using FreshFlow.Notifications.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace FreshFlow.Notifications.UnitTests.Services;
@@ -16,6 +18,7 @@ public sealed class NotificationWriterTests
     {
         var repository = Substitute.For<INotificationRepository>();
         var pushSender = Substitute.For<IPushSender>();
+        var broadcast = Substitute.For<INotificationBroadcastService>();
         Notification? captured = null;
         repository.AddAsync(Arg.Do<Notification>(n => captured = n), default)
             .Returns(call => (Notification)call[0]!);
@@ -23,7 +26,8 @@ public sealed class NotificationWriterTests
             .Returns(Task.CompletedTask);
         pushSender.SendAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(Result.Success()));
-        var sut = new NotificationWriter(repository, pushSender);
+        var sut = new NotificationWriter(
+            repository, pushSender, broadcast, NullLogger<NotificationWriter>.Instance);
         var userId = Guid.NewGuid();
         var orderId = Guid.NewGuid();
 
@@ -59,6 +63,7 @@ public sealed class NotificationWriterTests
     {
         var repository = Substitute.For<INotificationRepository>();
         var pushSender = Substitute.For<IPushSender>();
+        var broadcast = Substitute.For<INotificationBroadcastService>();
         NotificationSendStatus? statusAtPush = null;
         int? attemptCountAtPush = null;
         DateTime? lastAttemptAtPush = null;
@@ -77,7 +82,8 @@ public sealed class NotificationWriterTests
                 }),
                 Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(Result.Success()));
-        var sut = new NotificationWriter(repository, pushSender);
+        var sut = new NotificationWriter(
+            repository, pushSender, broadcast, NullLogger<NotificationWriter>.Instance);
 
         var result = await sut.WriteAsync(
             Guid.NewGuid(),
@@ -103,13 +109,15 @@ public sealed class NotificationWriterTests
     {
         var repository = Substitute.For<INotificationRepository>();
         var pushSender = Substitute.For<IPushSender>();
+        var broadcast = Substitute.For<INotificationBroadcastService>();
         repository.AddAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
             .Returns(call => (Notification)call[0]!);
         repository.UpdateAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
         pushSender.SendAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(Result.Failure(Error.Validation("PUSH_FAILED", "provider down"))));
-        var sut = new NotificationWriter(repository, pushSender);
+        var sut = new NotificationWriter(
+            repository, pushSender, broadcast, NullLogger<NotificationWriter>.Instance);
 
         var result = await sut.WriteAsync(
             Guid.NewGuid(),
@@ -131,13 +139,15 @@ public sealed class NotificationWriterTests
     {
         var repository = Substitute.For<INotificationRepository>();
         var pushSender = Substitute.For<IPushSender>();
+        var broadcast = Substitute.For<INotificationBroadcastService>();
         repository.AddAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
             .Returns(call => (Notification)call[0]!);
         repository.UpdateAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
         pushSender.SendAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException<Result>(new InvalidOperationException("push exploded")));
-        var sut = new NotificationWriter(repository, pushSender);
+        var sut = new NotificationWriter(
+            repository, pushSender, broadcast, NullLogger<NotificationWriter>.Instance);
 
         var result = await sut.WriteAsync(
             Guid.NewGuid(),
@@ -152,5 +162,76 @@ public sealed class NotificationWriterTests
         result.LastAttemptAt.Should().NotBeNull();
         result.FailedReason.Should().Be("push exploded");
         await repository.Received(1).UpdateAsync(result, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task WriteAsync_PersistsThenBroadcastsThenPushesAsync()
+    {
+        var calls = new List<string>();
+        var repository = Substitute.For<INotificationRepository>();
+        var pushSender = Substitute.For<IPushSender>();
+        var broadcast = Substitute.For<INotificationBroadcastService>();
+        repository.AddAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                calls.Add("persist");
+                return (Notification)call[0]!;
+            });
+        broadcast.BroadcastCreatedAsync(
+                Arg.Any<Guid>(), Arg.Any<NotificationDto>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                calls.Add("broadcast");
+                return Task.CompletedTask;
+            });
+        pushSender.SendAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                calls.Add("push");
+                return Task.FromResult(Result.Success());
+            });
+        repository.UpdateAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                calls.Add("update");
+                return Task.CompletedTask;
+            });
+        var sut = new NotificationWriter(
+            repository, pushSender, broadcast, NullLogger<NotificationWriter>.Instance);
+        var userId = Guid.NewGuid();
+
+        var result = await sut.WriteAsync(
+            userId, NotificationType.system, "Title", "Body", null, default);
+
+        calls.Should().Equal("persist", "broadcast", "push", "update");
+        await broadcast.Received(1).BroadcastCreatedAsync(
+            userId,
+            Arg.Is<NotificationDto>(dto => dto.Id == result.Id),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task WriteAsync_BroadcastFailure_DoesNotBlockPushAsync()
+    {
+        var repository = Substitute.For<INotificationRepository>();
+        var pushSender = Substitute.For<IPushSender>();
+        var broadcast = Substitute.For<INotificationBroadcastService>();
+        repository.AddAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
+            .Returns(call => (Notification)call[0]!);
+        repository.UpdateAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        broadcast.BroadcastCreatedAsync(
+                Arg.Any<Guid>(), Arg.Any<NotificationDto>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("signalr unavailable")));
+        pushSender.SendAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(Result.Success()));
+        var sut = new NotificationWriter(
+            repository, pushSender, broadcast, NullLogger<NotificationWriter>.Instance);
+
+        var result = await sut.WriteAsync(
+            Guid.NewGuid(), NotificationType.system, "Title", "Body", null, default);
+
+        result.SendStatus.Should().Be(NotificationSendStatus.sent);
+        await pushSender.Received(1).SendAsync(result, Arg.Any<CancellationToken>());
     }
 }
