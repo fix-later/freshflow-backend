@@ -219,6 +219,33 @@ public sealed class NotificationDeviceRepositoryTests
         row.RevokedAt.Should().BeNull();
     }
 
+    [Fact]
+    public async Task GetActiveMobileAsync_ReturnsOnlyActiveIosAndAndroidDevicesAsync()
+    {
+        using var db = CreateContext();
+        var sut = new NotificationDeviceRepository(db);
+        var userId = Guid.NewGuid();
+        await sut.RegisterAsync(userId, "ios-token", NotificationDevicePlatform.ios, "ios", default);
+        await sut.RegisterAsync(userId, "android-token", NotificationDevicePlatform.android, "android", default);
+        await sut.RegisterAsync(userId, "web-token", NotificationDevicePlatform.web, "web", default);
+        await sut.RevokeTokenAsync("android-token", default);
+
+        var devices = await sut.GetActiveMobileAsync(userId, default);
+
+        devices.Select(device => device.Token).Should().Equal("ios-token");
+    }
+
+    [Fact]
+    public async Task RevokeTokenAsync_MissingToken_IsIdempotentAsync()
+    {
+        using var db = CreateContext();
+        var sut = new NotificationDeviceRepository(db);
+
+        var action = () => sut.RevokeTokenAsync("missing-token", default);
+
+        await action.Should().NotThrowAsync();
+    }
+
     private static AppDbContext CreateContext()
     {
         _ = typeof(FreshFlow.Notifications.Infrastructure.DependencyInjection).Assembly;

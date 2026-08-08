@@ -46,6 +46,30 @@ internal sealed class NotificationDeviceRepository(AppDbContext db) : INotificat
         return device;
     }
 
+    public async Task<IReadOnlyList<NotificationDevice>> GetActiveMobileAsync(
+        Guid userId,
+        CancellationToken ct) =>
+        await db.Set<NotificationDevice>()
+            .AsNoTracking()
+            .Where(d => d.UserId == userId
+                && d.RevokedAt == null
+                && (d.Platform == NotificationDevicePlatform.ios
+                    || d.Platform == NotificationDevicePlatform.android))
+            .ToListAsync(ct);
+
+    public async Task RevokeTokenAsync(string token, CancellationToken ct)
+    {
+        var normalizedToken = token.Trim();
+        var device = await db.Set<NotificationDevice>()
+            .FirstOrDefaultAsync(d => d.Token == normalizedToken && d.RevokedAt == null, ct);
+
+        if (device is null)
+            return;
+
+        device.Revoke();
+        await db.SaveChangesAsync(ct);
+    }
+
     internal static bool IsUniqueViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException pg && pg.SqlState == PostgresErrorCodes.UniqueViolation;
 

@@ -4,6 +4,7 @@ using FreshFlow.Notifications.Application.Abstractions;
 using FreshFlow.Notifications.Domain.Entities;
 using FreshFlow.Notifications.Infrastructure;
 using FreshFlow.Notifications.Infrastructure.CrossModule;
+using FreshFlow.Notifications.Infrastructure.Push;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Configuration;
@@ -156,10 +157,32 @@ public sealed class NotificationPersistenceConfigurationTests
         provider.GetRequiredService<INotificationDeviceRepository>().Should().NotBeNull();
         provider.GetRequiredService<INotificationRepository>().Should().NotBeNull();
         provider.GetRequiredService<INotificationWriter>().Should().NotBeNull();
-        provider.GetRequiredService<IPushSender>().Should().NotBeNull();
+        provider.GetRequiredService<IPushSender>().Should().BeOfType<LogPushSender>();
         provider.GetRequiredService<INotificationRetryService>().Should().NotBeNull();
         provider.GetRequiredService<INotificationRecipientResolver>().Should().NotBeNull();
         provider.GetServices<IHostedService>().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void AddNotificationsModule_PushEnabled_RegistersExpoSender()
+    {
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase($"notifications-{Guid.NewGuid()}"));
+        services.AddLogging();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Notifications:Push:Enabled"] = "true",
+                ["Notifications:Push:BaseUrl"] = "https://exp.host/--/api/v2/push/send",
+                ["Notifications:Push:TimeoutSeconds"] = "10",
+            })
+            .Build();
+
+        services.AddNotificationsModule(config);
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IPushSender>().Should().BeOfType<ExpoPushSender>();
     }
 
     private static AppDbContext CreateContext()
