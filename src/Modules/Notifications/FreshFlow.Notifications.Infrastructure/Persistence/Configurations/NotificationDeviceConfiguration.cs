@@ -50,9 +50,14 @@ internal sealed class NotificationDeviceConfiguration : IEntityTypeConfiguration
         builder.HasIndex(d => d.UserId)
             .HasDatabaseName("idx_notification_devices_user_id");
 
-        builder.HasIndex(d => new { d.UserId, d.Token })
+        builder.HasIndex(d => d.Token)
             .IsUnique()
             .HasFilter("revoked_at IS NULL")
-            .HasDatabaseName("ux_notification_devices_user_token_active");
+            .HasDatabaseName("ux_notification_devices_token_active");
+
+        builder.HasIndex(d => d.DeviceId)
+            .IsUnique()
+            .HasFilter("device_id IS NOT NULL AND revoked_at IS NULL")
+            .HasDatabaseName("ux_notification_devices_device_id_active");
     }
 }

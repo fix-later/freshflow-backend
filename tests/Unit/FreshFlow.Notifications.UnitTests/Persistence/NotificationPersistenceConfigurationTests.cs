@@ -4,6 +4,7 @@ using FreshFlow.Notifications.Application.Abstractions;
 using FreshFlow.Notifications.Domain.Entities;
 using FreshFlow.Notifications.Infrastructure;
 using FreshFlow.Notifications.Infrastructure.CrossModule;
+using FreshFlow.Notifications.Infrastructure.Push;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Configuration;
@@ -38,7 +39,7 @@ public sealed class NotificationPersistenceConfigurationTests
     }
 
     [Fact]
-    public void NotificationDeviceConfiguration_UsesSnakeCaseColumnsAndActiveUniqueIndex()
+    public void NotificationDeviceConfiguration_UsesSnakeCaseColumnsAndGlobalActiveUniqueIndexes()
     {
         using var ctx = CreateContext();
         var entity = ctx.Model.FindEntityType(typeof(NotificationDevice))!;
@@ -59,10 +60,15 @@ public sealed class NotificationPersistenceConfigurationTests
 
         var activeTokenIndex = entity.GetIndexes()
             .Single(i => i.Properties.Select(p => p.Name)
-                .SequenceEqual([nameof(NotificationDevice.UserId), nameof(NotificationDevice.Token)]));
+                .SequenceEqual([nameof(NotificationDevice.Token)]));
 
         activeTokenIndex.IsUnique.Should().BeTrue();
         activeTokenIndex.GetFilter().Should().Be("revoked_at IS NULL");
+        var activeDeviceIdIndex = entity.GetIndexes()
+            .Single(i => i.Properties.Select(p => p.Name)
+                .SequenceEqual([nameof(NotificationDevice.DeviceId)]));
+        activeDeviceIdIndex.IsUnique.Should().BeTrue();
+        activeDeviceIdIndex.GetFilter().Should().Be("device_id IS NOT NULL AND revoked_at IS NULL");
         entity.GetForeignKeys().Should().BeEmpty(
             "notification_devices.user_id is a cross-module plain Guid per DEC-NOT-12");
     }
@@ -144,6 +150,7 @@ public sealed class NotificationPersistenceConfigurationTests
         services.AddDbContext<AppDbContext>(options =>
             options.UseInMemoryDatabase($"notifications-{Guid.NewGuid()}"));
         services.AddLogging();
+        services.AddSignalR();
 
         services.AddNotificationsModule(new ConfigurationBuilder().Build());
         using var provider = services.BuildServiceProvider();
@@ -151,10 +158,33 @@ public sealed class NotificationPersistenceConfigurationTests
         provider.GetRequiredService<INotificationDeviceRepository>().Should().NotBeNull();
         provider.GetRequiredService<INotificationRepository>().Should().NotBeNull();
         provider.GetRequiredService<INotificationWriter>().Should().NotBeNull();
-        provider.GetRequiredService<IPushSender>().Should().NotBeNull();
+        provider.GetRequiredService<INotificationBroadcastService>().Should().NotBeNull();
+        provider.GetRequiredService<IPushSender>().Should().BeOfType<LogPushSender>();
         provider.GetRequiredService<INotificationRetryService>().Should().NotBeNull();
         provider.GetRequiredService<INotificationRecipientResolver>().Should().NotBeNull();
         provider.GetServices<IHostedService>().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void AddNotificationsModule_PushEnabled_RegistersExpoSender()
+    {
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase($"notifications-{Guid.NewGuid()}"));
+        services.AddLogging();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Notifications:Push:Enabled"] = "true",
+                ["Notifications:Push:BaseUrl"] = "https://exp.host/--/api/v2/push/send",
+                ["Notifications:Push:TimeoutSeconds"] = "10",
+            })
+            .Build();
+
+        services.AddNotificationsModule(config);
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IPushSender>().Should().BeOfType<ExpoPushSender>();
     }
 
     private static AppDbContext CreateContext()

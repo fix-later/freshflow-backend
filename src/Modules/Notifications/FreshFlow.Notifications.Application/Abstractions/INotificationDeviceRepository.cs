@@ -13,4 +13,10 @@ public interface INotificationDeviceRepository
         CancellationToken ct);
 
     public Task<NotificationDevice?> UnregisterAsync(Guid userId, string token, CancellationToken ct);
+
+    public Task<IReadOnlyList<NotificationDevice>> GetActiveMobileAsync(
+        Guid userId,
+        CancellationToken ct);
+
+    public Task RevokeTokenAsync(string token, CancellationToken ct);
 }

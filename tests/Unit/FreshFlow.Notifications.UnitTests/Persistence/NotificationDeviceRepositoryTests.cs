@@ -99,6 +99,62 @@ public sealed class NotificationDeviceRepositoryTests
     }
 
     [Fact]
+    public async Task RegisterAsync_SameTokenForAnotherUser_TransfersDeviceAsync()
+    {
+        using var db = CreateContext();
+        var sut = new NotificationDeviceRepository(db);
+        var userA = Guid.NewGuid();
+        var userB = Guid.NewGuid();
+
+        var first = await sut.RegisterAsync(
+            userA, "push-token", NotificationDevicePlatform.ios, "device-1", default);
+        var transferred = await sut.RegisterAsync(
+            userB, "push-token", NotificationDevicePlatform.android, "device-1", default);
+
+        transferred.Id.Should().Be(first.Id);
+        transferred.UserId.Should().Be(userB);
+        transferred.Platform.Should().Be(NotificationDevicePlatform.android);
+        (await db.Set<NotificationDevice>().CountAsync(d => d.RevokedAt == null)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_RotatedTokenForSameDevice_ReplacesTokenAsync()
+    {
+        using var db = CreateContext();
+        var sut = new NotificationDeviceRepository(db);
+        var userId = Guid.NewGuid();
+
+        var first = await sut.RegisterAsync(
+            userId, "old-token", NotificationDevicePlatform.ios, "device-1", default);
+        var rotated = await sut.RegisterAsync(
+            userId, "new-token", NotificationDevicePlatform.ios, "device-1", default);
+
+        rotated.Id.Should().Be(first.Id);
+        rotated.Token.Should().Be("new-token");
+        (await db.Set<NotificationDevice>().CountAsync(d => d.RevokedAt == null)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_TokenAndDeviceBelongToDifferentRows_RevokesConflictAsync()
+    {
+        using var db = CreateContext();
+        var sut = new NotificationDeviceRepository(db);
+        var userId = Guid.NewGuid();
+        var tokenOwner = await sut.RegisterAsync(
+            userId, "token-1", NotificationDevicePlatform.ios, "device-1", default);
+        var deviceOwner = await sut.RegisterAsync(
+            userId, "token-2", NotificationDevicePlatform.ios, "device-2", default);
+
+        var result = await sut.RegisterAsync(
+            userId, "token-1", NotificationDevicePlatform.android, "device-2", default);
+
+        result.Id.Should().Be(tokenOwner.Id);
+        result.DeviceId.Should().Be("device-2");
+        deviceOwner.RevokedAt.Should().NotBeNull();
+        (await db.Set<NotificationDevice>().CountAsync(d => d.RevokedAt == null)).Should().Be(1);
+    }
+
+    [Fact]
     public async Task RegisterAsync_UniqueViolationOnInsert_RequeriesAndReactivatesAsync()
     {
         var databaseName = $"notifications-race-{Guid.NewGuid()}";
@@ -161,6 +217,33 @@ public sealed class NotificationDeviceRepositoryTests
         var row = await db.Set<NotificationDevice>().SingleAsync();
         row.UserId.Should().Be(userB);
         row.RevokedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetActiveMobileAsync_ReturnsOnlyActiveIosAndAndroidDevicesAsync()
+    {
+        using var db = CreateContext();
+        var sut = new NotificationDeviceRepository(db);
+        var userId = Guid.NewGuid();
+        await sut.RegisterAsync(userId, "ios-token", NotificationDevicePlatform.ios, "ios", default);
+        await sut.RegisterAsync(userId, "android-token", NotificationDevicePlatform.android, "android", default);
+        await sut.RegisterAsync(userId, "web-token", NotificationDevicePlatform.web, "web", default);
+        await sut.RevokeTokenAsync("android-token", default);
+
+        var devices = await sut.GetActiveMobileAsync(userId, default);
+
+        devices.Select(device => device.Token).Should().Equal("ios-token");
+    }
+
+    [Fact]
+    public async Task RevokeTokenAsync_MissingToken_IsIdempotentAsync()
+    {
+        using var db = CreateContext();
+        var sut = new NotificationDeviceRepository(db);
+
+        var action = () => sut.RevokeTokenAsync("missing-token", default);
+
+        await action.Should().NotThrowAsync();
     }
 
     private static AppDbContext CreateContext()

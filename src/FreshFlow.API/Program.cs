@@ -13,6 +13,7 @@ using FreshFlow.Invoicing.Infrastructure;
 using FreshFlow.Logistics.Infrastructure;
 using FreshFlow.Logistics.Infrastructure.Realtime;
 using FreshFlow.Notifications.Infrastructure;
+using FreshFlow.Notifications.Infrastructure.Realtime;
 using FreshFlow.Orders.Infrastructure;
 using FreshFlow.Orders.Infrastructure.Realtime;
 using FreshFlow.Pricing.Infrastructure;
@@ -329,6 +330,7 @@ app.MapHealthChecks("/health");
 app.MapHub<PricingHub>("/hubs/pricing");
 app.MapHub<OrderHub>("/hubs/orders");
 app.MapHub<DeliveryHub>("/hubs/delivery");
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();
 
