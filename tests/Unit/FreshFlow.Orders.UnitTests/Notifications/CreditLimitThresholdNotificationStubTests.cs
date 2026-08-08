@@ -17,6 +17,7 @@ public sealed class CreditLimitThresholdNotificationStubTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSignalR();
         services.AddDbContext<AppDbContext>(options =>
             options.UseInMemoryDatabase($"notifications-{Guid.NewGuid()}"));
         services.AddNotificationsModule(new ConfigurationBuilder().Build());
