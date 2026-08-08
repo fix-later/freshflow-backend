@@ -38,7 +38,7 @@ public sealed class NotificationPersistenceConfigurationTests
     }
 
     [Fact]
-    public void NotificationDeviceConfiguration_UsesSnakeCaseColumnsAndActiveUniqueIndex()
+    public void NotificationDeviceConfiguration_UsesSnakeCaseColumnsAndGlobalActiveUniqueIndexes()
     {
         using var ctx = CreateContext();
         var entity = ctx.Model.FindEntityType(typeof(NotificationDevice))!;
@@ -59,10 +59,15 @@ public sealed class NotificationPersistenceConfigurationTests
 
         var activeTokenIndex = entity.GetIndexes()
             .Single(i => i.Properties.Select(p => p.Name)
-                .SequenceEqual([nameof(NotificationDevice.UserId), nameof(NotificationDevice.Token)]));
+                .SequenceEqual([nameof(NotificationDevice.Token)]));
 
         activeTokenIndex.IsUnique.Should().BeTrue();
         activeTokenIndex.GetFilter().Should().Be("revoked_at IS NULL");
+        var activeDeviceIdIndex = entity.GetIndexes()
+            .Single(i => i.Properties.Select(p => p.Name)
+                .SequenceEqual([nameof(NotificationDevice.DeviceId)]));
+        activeDeviceIdIndex.IsUnique.Should().BeTrue();
+        activeDeviceIdIndex.GetFilter().Should().Be("device_id IS NOT NULL AND revoked_at IS NULL");
         entity.GetForeignKeys().Should().BeEmpty(
             "notification_devices.user_id is a cross-module plain Guid per DEC-NOT-12");
     }

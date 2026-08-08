@@ -47,6 +47,23 @@ public sealed class NotificationDevice
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void AssignTo(
+        Guid userId,
+        string token,
+        NotificationDevicePlatform platform,
+        string? deviceId)
+    {
+        if (userId == Guid.Empty)
+            throw new ArgumentException("User id is required.", nameof(userId));
+
+        if (string.IsNullOrWhiteSpace(token))
+            throw new ArgumentException("Token is required.", nameof(token));
+
+        UserId = userId;
+        Token = token.Trim();
+        Reactivate(platform, deviceId);
+    }
+
     public void Revoke()
     {
         if (RevokedAt is not null)
