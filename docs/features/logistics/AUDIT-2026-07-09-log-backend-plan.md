@@ -1,5 +1,7 @@
 # Báo cáo khảo sát & kế hoạch triển khai: LOG — Route Planning & Optimization
 
+> Hồ sơ MVP lịch sử. Từ 2026-08-09, engine hiện hành dùng Goong road matrix và OR-Tools; xem `PLAN-2026-08-09-goong-ortools-route-planning.md`.
+
 | | |
 |---|---|
 | **Ngày khảo sát** | 2026-07-09 |

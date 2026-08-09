@@ -26,7 +26,7 @@ public sealed class ShipmentEstimatorTests
         var result = Estimate([new OrderPackingLine(Guid.NewGuid(), Guid.NewGuid(), "Rau", 25, 15m)]);
 
         result.TotalBoxes.Should().Be(2);
-        result.TotalLoadKg.Should().Be(34m);
+        result.TotalLoadKg.Should().Be(29m);
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public sealed class ShipmentEstimatorTests
         var result = Estimate(TwoPackedLines());
 
         result.TotalBoxes.Should().Be(5);
-        result.TotalLoadKg.Should().Be(85m);
+        result.TotalLoadKg.Should().Be(80m);
     }
 
     [Fact]
@@ -54,16 +54,16 @@ public sealed class ShipmentEstimatorTests
     {
         var result = Estimate(TwoPackedLines(), vehicleCapacityKg: 100m);
 
-        result.TotalLoadKg.Should().Be(85m);
+        result.TotalLoadKg.Should().Be(80m);
         result.FitsVehicle.Should().BeTrue();
     }
 
     [Fact]
     public void Estimate_LoadAboveVehicleCapacity_DoesNotFit()
     {
-        var result = Estimate(TwoPackedLines(), vehicleCapacityKg: 80m);
+        var result = Estimate(TwoPackedLines(), vehicleCapacityKg: 79m);
 
-        result.TotalLoadKg.Should().Be(85m);
+        result.TotalLoadKg.Should().Be(80m);
         result.FitsVehicle.Should().BeFalse();
     }
 
@@ -72,7 +72,7 @@ public sealed class ShipmentEstimatorTests
     {
         var result = Estimate(TwoPackedLines());
 
-        result.TotalLoadKg.Should().Be(85m);
+        result.TotalLoadKg.Should().Be(80m);
         result.FitsVehicle.Should().BeNull();
     }
 

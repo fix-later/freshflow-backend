@@ -8,6 +8,7 @@ namespace FreshFlow.Logistics.Application.Queries.GetLoadingManifest;
 
 internal sealed class GetLoadingManifestQueryHandler(
     IDeliveryRouteRepository routes,
+    IDeliveryRepository deliveries,
     IOrderStatusReader orders,
     IOrderPackingReader packing)
     : IRequestHandler<GetLoadingManifestQuery, Result<LoadingManifestDto>>
@@ -26,11 +27,27 @@ internal sealed class GetLoadingManifestQueryHandler(
 
         var restaurantIds = restaurantStops.Select(stop => stop.EntityId).ToList();
 
-        // Orders the hub must load for this truck: those AtHub whose restaurant is a stop on the
-        // route (the same set ConfirmPickup validates). Deliveries don't exist until the driver
-        // confirms pickup, so they are NOT the source at loading time.
-        var atHubOrders = await orders.ListByRestaurantsAndStatusAsync(
-            restaurantIds, OrderStatusAtHub, ct, route.HubId, route.ServiceDate);
+        var snapshots = await deliveries.GetByRouteIdsAsync([route.Id], ct);
+        IReadOnlyList<OrderStatusLookupDto> atHubOrders;
+        if (snapshots.Count > 0)
+        {
+            var snapshotIds = snapshots.Select(x => x.OrderId).ToHashSet();
+            atHubOrders = restaurantStops.SelectMany(stop => (stop.OrderIds ?? [])
+                .Where(snapshotIds.Contains)
+                .Select(orderId => new OrderStatusLookupDto(orderId, "Snapshotted", stop.EntityId, route.HubId)))
+                .ToList();
+        }
+        else if (route.RoutePlanId is not null)
+        {
+            atHubOrders = restaurantStops.SelectMany(stop => (stop.OrderIds ?? [])
+                .Select(orderId => new OrderStatusLookupDto(orderId, "Proposed", stop.EntityId, route.HubId)))
+                .ToList();
+        }
+        else
+        {
+            atHubOrders = await orders.ListByRestaurantsAndStatusAsync(
+                restaurantIds, OrderStatusAtHub, ct, route.HubId, route.ServiceDate);
+        }
 
         var linesByOrder = (await packing.GetLinesByOrdersAsync(
                 atHubOrders.Select(order => order.OrderId).ToList(), ct))

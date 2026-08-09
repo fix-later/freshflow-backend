@@ -60,15 +60,16 @@ public sealed class DeliveryRoutePersistenceConfigurationTests
             .GetColumnName(table)
             .Should().Be("created_by");
 
-        entity.GetForeignKeys().Should().BeEmpty(
-            "delivery route references cross-module resources by plain Guid only");
+        entity.GetForeignKeys().Should().ContainSingle(fk =>
+            fk.PrincipalEntityType.ClrType == typeof(RoutePlan));
 
         entity.GetIndexes().Should().Contain(i =>
             i.GetDatabaseName() == "idx_delivery_routes_vehicle_service_date");
         var assignedRouteIndex = entity.GetIndexes()
-            .Single(i => i.GetDatabaseName() == "ux_delivery_routes_vehicle_service_date_assigned");
+            .Single(i => i.GetDatabaseName() == "ux_delivery_routes_vehicle_service_date_reserved");
         assignedRouteIndex.IsUnique.Should().BeTrue();
-        assignedRouteIndex.GetFilter().Should().Be("status = 'assigned' AND deleted_at IS NULL");
+        assignedRouteIndex.GetFilter().Should().Be(
+            "vehicle_id IS NOT NULL AND status <> 'cancelled' AND deleted_at IS NULL");
         entity.GetIndexes().Should().Contain(i =>
             i.GetDatabaseName() == "idx_delivery_routes_status");
         entity.GetIndexes().Should().Contain(i =>

@@ -26,7 +26,9 @@ internal sealed class OptimizeRouteCommandHandler(
                 "OptimizationCriteria must be DISTANCE, TIME, or COST."));
         }
 
-        var result = optimizer.Optimize(route.Stops, route.ServiceDate, criteria);
+        var result = await optimizer.OptimizeAsync(
+            route.Stops, route.ServiceDate, criteria, route.RoutingProfile ?? "car", ct)
+            ?? optimizer.Optimize(route.Stops, route.ServiceDate, criteria);
 
         try
         {

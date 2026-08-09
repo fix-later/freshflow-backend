@@ -4,4 +4,10 @@ public interface IVehicleCapacityPolicy
 {
     public int MaxStopsPerVehicle { get; }
     public decimal BoxTareKg { get; }
+    public decimal CapacityUtilizationPercent { get; }
+    public int MatrixBatchSize { get; }
+    public int SolverTimeLimitSeconds { get; }
+    public int StartHour { get; }
+    public int ServiceTimeMinutes { get; }
+    public decimal CostPerKm { get; }
 }

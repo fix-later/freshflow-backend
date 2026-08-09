@@ -10,4 +10,6 @@ public sealed record RouteStop(
     decimal Latitude,
     decimal Longitude,
     DateTime? EstimatedArrivalAt,
-    DateTime? EstimatedDepartureAt);
+    DateTime? EstimatedDepartureAt,
+    IReadOnlyList<Guid>? OrderIds = null,
+    decimal? LoadKg = null);

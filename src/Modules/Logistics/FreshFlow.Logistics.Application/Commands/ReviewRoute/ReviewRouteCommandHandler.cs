@@ -29,7 +29,9 @@ internal sealed class ReviewRouteCommandHandler(
             if (request.StopOrder is { Count: > 0 })
             {
                 route.AdjustStopOrder(request.StopOrder);
-                var recalculated = optimizer.Recalculate(route.Stops, route.ServiceDate);
+                var recalculated = await optimizer.RecalculateAsync(
+                    route.Stops, route.ServiceDate, route.RoutingProfile ?? "car", ct)
+                    ?? optimizer.Recalculate(route.Stops, route.ServiceDate);
                 route.ApplyOptimization(
                     recalculated.Stops,
                     recalculated.TotalDistanceKm,

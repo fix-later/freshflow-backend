@@ -19,8 +19,29 @@ internal sealed class VehicleCapacityPolicy : IVehicleCapacityPolicy
             out var tareKg) && tareKg > 0
             ? tareKg
             : 2m;
+
+        CapacityUtilizationPercent = ReadDecimal(config, "Logistics:CapacityUtilizationPercent", 90m, 1m, 100m);
+        MatrixBatchSize = ReadInt(config, "Logistics:Routing:MatrixBatchSize", 10, 1, 25);
+        SolverTimeLimitSeconds = ReadInt(config, "Logistics:Routing:SolverTimeLimitSeconds", 3, 1, 120);
+        StartHour = ReadInt(config, "Logistics:Routing:StartHour", 6, 0, 23);
+        ServiceTimeMinutes = ReadInt(config, "Logistics:Routing:ServiceTimeMinutes", 10, 0, 240);
+        CostPerKm = ReadDecimal(config, "Logistics:Routing:CostPerKm", 5000m, 0m, decimal.MaxValue);
     }
 
     public int MaxStopsPerVehicle { get; }
     public decimal BoxTareKg { get; }
+    public decimal CapacityUtilizationPercent { get; }
+    public int MatrixBatchSize { get; }
+    public int SolverTimeLimitSeconds { get; }
+    public int StartHour { get; }
+    public int ServiceTimeMinutes { get; }
+    public decimal CostPerKm { get; }
+
+    private static int ReadInt(IConfiguration config, string key, int fallback, int min, int max) =>
+        int.TryParse(config[key], out var value) && value >= min && value <= max ? value : fallback;
+
+    private static decimal ReadDecimal(
+        IConfiguration config, string key, decimal fallback, decimal min, decimal max) =>
+        decimal.TryParse(config[key], NumberStyles.Number, CultureInfo.InvariantCulture, out var value)
+        && value >= min && value <= max ? value : fallback;
 }

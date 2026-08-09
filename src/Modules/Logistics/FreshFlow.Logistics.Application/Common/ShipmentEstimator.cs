@@ -25,7 +25,7 @@ public static class ShipmentEstimator
             }
 
             var boxes = (int)Math.Ceiling(line.Quantity / capacityKg);
-            var loadKg = boxes * (capacityKg + tareKg);
+            var loadKg = line.Quantity + boxes * tareKg;
             totalBoxes += boxes;
             totalLoadKg += loadKg;
             lineDtos.Add(new ShipmentLineDto(

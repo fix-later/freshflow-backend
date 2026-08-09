@@ -37,6 +37,18 @@ internal sealed class ConfirmPickupCommandHandler(
             .Where(stop => stop.EntityType == StopEntityType.restaurant)
             .ToDictionary(stop => stop.EntityId, stop => stop.StopOrder);
 
+        if (route.RoutePlanId is not null)
+        {
+            var snapshots = await deliveries.GetByRouteIdsAsync([route.Id], ct);
+            var expectedIds = snapshots.Select(x => x.OrderId).ToHashSet();
+            if (request.OrderIds.Count != expectedIds.Count || !expectedIds.SetEquals(request.OrderIds))
+                return Result<ConfirmPickupResultDto>.Failure(Error.Validation(
+                    "PICKUP_ORDERS_INCOMPLETE",
+                    "Pickup order ids must exactly match the approved route snapshot."));
+            return Result<ConfirmPickupResultDto>.Success(new ConfirmPickupResultDto(
+                route.Id, snapshots.Select(x => x.Id).ToList().AsReadOnly()));
+        }
+
         var expectedOrders = await orders.ListByRestaurantsAndStatusAsync(
             restaurantStopOrders.Keys,
             OrderStatusAtHub,

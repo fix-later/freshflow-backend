@@ -15,7 +15,7 @@ internal sealed class OrderPackingLineRowConfiguration
                 oi."OrderId"             AS "OrderId",
                 oi."Id"                  AS "OrderItemId",
                 oi."ProductNameSnapshot" AS "ProductName",
-                oi."Quantity"            AS "Quantity",
+                COALESCE(oi."ActualQuantity", oi."Quantity") AS "Quantity",
                 pc."CapacityKg"          AS "CapacityKg"
             FROM order_items oi
             INNER JOIN orders o          ON o."Id" = oi."OrderId" AND o."deleted_at" IS NULL

@@ -40,6 +40,12 @@ public static class ErrorExtensions
                         or "BATCH_RESET_NOT_ALLOWED"
                         or "BATCH_CANCELLED"
                         or "ROUTING_INPUTS_CHANGED"
+                        or "PLAN_STALE"
+                        or "PLAN_HAS_UNASSIGNED_ORDERS"
+                        or "ROUTE_PLAN_NOT_PROPOSED"
+                        or "ROUTE_PLAN_INFEASIBLE"
+                        or "ROUTE_PLAN_CONFLICT"
+                        or "ROUTE_PLAN_APPROVAL_CONFLICT"
                         or "HUB_ALREADY_CONFIGURED_FOR_MARKET")
             return new ConflictObjectResult(body);
 
@@ -81,6 +87,7 @@ public static class ErrorExtensions
                         or "SCHEDULED_ORDER_FIRST_RUN_IN_PAST" or "INVALID_ISSUE_QUANTITY"
                         or "HUB_RELAY_NOT_SUPPORTED" or "STOP_LIMIT_EXCEEDED"
                         or "MISSING_COORDINATES" or "INVALID_STOP_ORDER"
+                        or "ROUTE_WEIGHT_INCOMPLETE"
                         or "VEHICLE_NOT_ELIGIBLE" or "FLEET_CAPACITY_EXCEEDED"
                         or "HUB_CAPACITY_EXCEEDED"
                         or "HUB_CAPACITY_BELOW_OCCUPIED"
