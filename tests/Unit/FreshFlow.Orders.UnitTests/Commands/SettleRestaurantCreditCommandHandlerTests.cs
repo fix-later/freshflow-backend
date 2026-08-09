@@ -15,6 +15,7 @@ public sealed class SettleRestaurantCreditCommandHandlerTests
     private readonly SettleRestaurantCreditCommandHandler _sut;
 
     private static readonly Guid RestaurantId = Guid.NewGuid();
+    private static readonly Guid AdminId = Guid.NewGuid();
 
     public SettleRestaurantCreditCommandHandlerTests()
     {
@@ -24,12 +25,12 @@ public sealed class SettleRestaurantCreditCommandHandlerTests
     [Fact]
     public async Task Handle_ServiceFailure_PropagatesErrorAsync()
     {
-        _creditService.SettleAsync(RestaurantId, 100m, PaymentMethod.BankTransfer, "TXN-1", "payment", default)
+        _creditService.SettleAsync(RestaurantId, AdminId, 100m, PaymentMethod.BankTransfer, "TXN-1", "payment", default)
             .Returns(Result<RestaurantCreditDto>.Failure(
                 Error.Validation("CREDIT_SETTLEMENT_EXCEEDS_BALANCE", "Settlement amount cannot exceed outstanding balance.")));
 
         var result = await _sut.Handle(
-            new SettleRestaurantCreditCommand(RestaurantId, 100m, PaymentMethod.BankTransfer, "TXN-1", "payment"), default);
+            new SettleRestaurantCreditCommand(RestaurantId, AdminId, 100m, PaymentMethod.BankTransfer, "TXN-1", "payment"), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("CREDIT_SETTLEMENT_EXCEEDS_BALANCE");
@@ -39,11 +40,11 @@ public sealed class SettleRestaurantCreditCommandHandlerTests
     public async Task Handle_ServiceSuccess_ReturnsUpdatedCreditAsync()
     {
         var dto = new RestaurantCreditDto(RestaurantId, 1_000m, 200m, 800m, DateTime.UtcNow);
-        _creditService.SettleAsync(RestaurantId, 300m, PaymentMethod.Manual, null, "payment", default)
+        _creditService.SettleAsync(RestaurantId, AdminId, 300m, PaymentMethod.Manual, "MANUAL-1", "payment", default)
             .Returns(Result<RestaurantCreditDto>.Success(dto));
 
         var result = await _sut.Handle(
-            new SettleRestaurantCreditCommand(RestaurantId, 300m, PaymentMethod.Manual, null, "payment"), default);
+            new SettleRestaurantCreditCommand(RestaurantId, AdminId, 300m, PaymentMethod.Manual, "MANUAL-1", "payment"), default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().Be(dto);
@@ -53,9 +54,9 @@ public sealed class SettleRestaurantCreditCommandHandlerTests
     public async Task Handle_PassesPaymentMethodAndReferenceToServiceAsync()
     {
         await _sut.Handle(
-            new SettleRestaurantCreditCommand(RestaurantId, 50m, PaymentMethod.BankTransfer, "TXN-999", null), default);
+            new SettleRestaurantCreditCommand(RestaurantId, AdminId, 50m, PaymentMethod.BankTransfer, "TXN-999", null), default);
 
         await _creditService.Received(1).SettleAsync(
-            RestaurantId, 50m, PaymentMethod.BankTransfer, "TXN-999", null, default);
+            RestaurantId, AdminId, 50m, PaymentMethod.BankTransfer, "TXN-999", null, default);
     }
 }

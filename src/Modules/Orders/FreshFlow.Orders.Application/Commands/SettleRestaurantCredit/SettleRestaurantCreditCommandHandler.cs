@@ -12,6 +12,7 @@ internal sealed class SettleRestaurantCreditCommandHandler(ICreditService credit
         SettleRestaurantCreditCommand request, CancellationToken cancellationToken) =>
         creditService.SettleAsync(
             request.RestaurantId,
+            request.RecordedByUserId,
             request.Amount,
             request.PaymentMethod,
             request.Reference,

@@ -41,7 +41,8 @@ public sealed class CreditStatementLineTests
         var occurredAt = new DateTime(2026, 6, 15, 10, 0, 0, DateTimeKind.Utc);
 
         var line = new CreditStatementLine(
-            transactionId, CreditTransactionType.Settlement, 50m, 25m, occurredAt, "Paid off", "TXN-1");
+            transactionId, CreditTransactionType.Settlement, 50m, 25m, occurredAt, "Paid off", "TXN-1",
+            orderId: null, PaymentMethod.BankTransfer);
 
         line.TransactionId.Should().Be(transactionId);
         line.Type.Should().Be(CreditTransactionType.Settlement);
@@ -50,5 +51,7 @@ public sealed class CreditStatementLineTests
         line.OccurredAt.Should().Be(occurredAt);
         line.Note.Should().Be("Paid off");
         line.Reference.Should().Be("TXN-1");
+        line.OrderId.Should().BeNull();
+        line.PaymentMethod.Should().Be(PaymentMethod.BankTransfer);
     }
 }

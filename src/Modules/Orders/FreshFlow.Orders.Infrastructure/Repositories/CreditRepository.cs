@@ -141,6 +141,10 @@ internal sealed class CreditRepository(AppDbContext db) : ICreditRepository
             throw new CreditConcurrencyException(
                 "The credit account was updated by another request. Please refresh and retry.", ex);
         }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex, "uq_credit_transactions_settlement_reference"))
+        {
+            throw new DuplicateCreditSettlementException(ex);
+        }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
             throw new CreditConcurrencyException(
@@ -150,6 +154,11 @@ internal sealed class CreditRepository(AppDbContext db) : ICreditRepository
 
     internal static bool IsUniqueViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException pg && pg.SqlState == PostgresErrorCodes.UniqueViolation;
+
+    private static bool IsUniqueViolation(DbUpdateException ex, string constraintName) =>
+        ex.InnerException is PostgresException pg &&
+        pg.SqlState == PostgresErrorCodes.UniqueViolation &&
+        pg.ConstraintName == constraintName;
 
     // ── Cursor helpers ────────────────────────────────────────────────────────
 

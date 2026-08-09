@@ -16,7 +16,10 @@ public sealed class CreditTransactionTests
             CreditTransactionType.Settlement,
             amount: 100m,
             balanceAfter: 0m,
-            note: "   ");
+            note: "   ",
+            paymentMethod: PaymentMethod.Manual,
+            reference: "MANUAL-1",
+            recordedByUserId: Guid.NewGuid());
 
         transaction.Note.Should().BeNull();
     }
@@ -60,7 +63,8 @@ public sealed class CreditTransactionTests
             balanceAfter: 0m,
             note: "Paid off",
             paymentMethod: PaymentMethod.BankTransfer,
-            reference: "TXN-123456");
+            reference: " txn-123456 ",
+            recordedByUserId: Guid.NewGuid());
 
         transaction.PaymentMethod.Should().Be(PaymentMethod.BankTransfer);
         transaction.Reference.Should().Be("TXN-123456");
@@ -97,9 +101,9 @@ public sealed class CreditTransactionTests
     }
 
     [Fact]
-    public void Constructor_BlankReference_TrimsToNull()
+    public void Constructor_BlankReference_Throws()
     {
-        var transaction = new CreditTransaction(
+        var act = () => new CreditTransaction(
             Guid.NewGuid(),
             orderId: null,
             CreditTransactionType.Settlement,
@@ -107,8 +111,9 @@ public sealed class CreditTransactionTests
             balanceAfter: 0m,
             note: null,
             paymentMethod: PaymentMethod.Manual,
-            reference: "   ");
+            reference: "   ",
+            recordedByUserId: Guid.NewGuid());
 
-        transaction.Reference.Should().BeNull();
+        act.Should().Throw<ArgumentException>();
     }
 }

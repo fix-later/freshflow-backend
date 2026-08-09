@@ -21,6 +21,8 @@ public sealed record InvoiceDto(
     decimal Total,
     int RetryCount,
     string? ErrorReason,
+    string? ProviderName,
+    bool IsSandbox,
     DateTime CreatedAt,
     IReadOnlyList<InvoiceLineDto> Lines)
 {
@@ -29,7 +31,7 @@ public sealed record InvoiceDto(
         i.BuyerTaxCode, i.BuyerLegalName, i.BuyerAddress, i.BuyerEmail,
         i.Serial, i.Number, i.TaxAuthorityCode, i.LookupUrl,
         i.IssuedAt, i.SubTotal, i.VatAmount, i.Total,
-        i.RetryCount, i.ErrorReason, i.CreatedAt,
+        i.RetryCount, i.ErrorReason, i.ProviderName, i.ProviderName == "stub", i.CreatedAt,
         i.Lines.Select(InvoiceLineDto.From).ToList());
 }
 
@@ -58,9 +60,12 @@ public sealed record InvoiceSummaryDto(
     string? TaxAuthorityCode,
     DateTime? IssuedAt,
     decimal Total,
+    string? ProviderName,
+    bool IsSandbox,
     DateTime CreatedAt)
 {
     public static InvoiceSummaryDto From(Invoice i) => new(
         i.Id, i.OrderId, i.RestaurantId, i.Status.ToString(),
-        i.Number, i.TaxAuthorityCode, i.IssuedAt, i.Total, i.CreatedAt);
+        i.Number, i.TaxAuthorityCode, i.IssuedAt, i.Total,
+        i.ProviderName, i.ProviderName == "stub", i.CreatedAt);
 }

@@ -48,15 +48,19 @@ public sealed class StatementPdfRendererTests
                 1_500_000m,
                 new DateTime(2026, 6, 5, 3, 0, 0, DateTimeKind.Utc),
                 "Order #1",
-                "ORD-1"),
+                "ORD-1",
+                Guid.NewGuid(),
+                null),
             new(
                 Guid.NewGuid(),
                 "settlement",
                 500_000m,
                 1_000_000m,
                 new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc),
+                "Payment received",
+                "TXN-1",
                 null,
-                null),
+                "bank_transfer"),
         };
         var statement = BuildStatement(lines);
         var sut = new StatementPdfRenderer();
@@ -80,6 +84,27 @@ public sealed class StatementPdfRendererTests
         var act = () => sut.Render(statement);
 
         // Assert
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Render_LongDetailsAcrossMultiplePages_DoesNotThrow()
+    {
+        var lines = Enumerable.Range(1, 100)
+            .Select(index => new CreditStatementLineDto(
+                Guid.NewGuid(),
+                index % 2 == 0 ? "settlement" : "charge",
+                100_000m,
+                1_000_000m,
+                new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc).AddHours(index),
+                new string('x', 120),
+                $"TXN-{index}",
+                index % 2 == 0 ? null : Guid.NewGuid(),
+                index % 2 == 0 ? "bank_transfer" : null))
+            .ToList();
+
+        var act = () => new StatementPdfRenderer().Render(BuildStatement(lines));
+
         act.Should().NotThrow();
     }
 }

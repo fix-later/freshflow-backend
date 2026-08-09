@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreshFlow.Invoicing.Application.Dtos;
 using FreshFlow.Invoicing.Domain.Entities;
 using FreshFlow.Invoicing.Domain.Enums;
 
@@ -78,6 +79,20 @@ public sealed class InvoiceTests
         invoice.TaxAuthorityCode.Should().Be("MCQT-ABC");
         invoice.ProviderName.Should().Be("stub");
         invoice.ErrorReason.Should().BeNull();
+    }
+
+    [Fact]
+    public void Dtos_DeriveSandboxFlagFromProviderName()
+    {
+        var sandbox = NewInvoice();
+        sandbox.MarkIssued("K24TFF", "0001", "DEV-MCQT-1", null, null, null, "stub", DateTime.UtcNow);
+        var production = NewInvoice();
+        production.MarkIssued("K24TFF", "0002", "MCQT-2", null, null, null, "misa", DateTime.UtcNow);
+
+        InvoiceDto.From(sandbox).IsSandbox.Should().BeTrue();
+        InvoiceSummaryDto.From(sandbox).ProviderName.Should().Be("stub");
+        InvoiceDto.From(production).IsSandbox.Should().BeFalse();
+        InvoiceSummaryDto.From(production).IsSandbox.Should().BeFalse();
     }
 
     [Fact]

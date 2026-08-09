@@ -132,7 +132,8 @@ public sealed class CreditStatementGenerationService(
 
         var lines = transactions
             .Select(t => new CreditStatementLine(
-                t.Id, t.Type, t.Amount, t.BalanceAfter, t.CreatedAt, t.Note, t.Reference))
+                t.Id, t.Type, t.Amount, t.BalanceAfter, t.CreatedAt, t.Note, t.Reference,
+                t.OrderId, t.PaymentMethod))
             .ToList()
             .AsReadOnly();
 

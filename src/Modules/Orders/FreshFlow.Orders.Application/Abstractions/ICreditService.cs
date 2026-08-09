@@ -24,6 +24,7 @@ public interface ICreditService
 
     public Task<Result<RestaurantCreditDto>> SettleAsync(
         Guid restaurantId,
+        Guid recordedByUserId,
         decimal amount,
         PaymentMethod paymentMethod,
         string? reference,

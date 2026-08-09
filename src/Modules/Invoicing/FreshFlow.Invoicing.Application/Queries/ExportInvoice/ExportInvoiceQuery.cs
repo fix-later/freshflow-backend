@@ -40,10 +40,11 @@ internal sealed class ExportInvoiceQueryHandler(
             return Result<ExportInvoiceResult>.Failure(Error.Validation(
                 "INVOICE_EXPORT_INCOMPLETE", "The persisted invoice is missing required export data."));
 
-        var document = BuildDocument(invoice);
+        var isSandbox = invoice.ProviderName == "stub";
+        var document = BuildDocument(invoice, isSandbox);
         return Result<ExportInvoiceResult>.Success(new ExportInvoiceResult(
             document.ToString(SaveOptions.DisableFormatting),
-            $"invoice-{invoice.Serial}-{invoice.Number}.xml"));
+            $"{(isSandbox ? "invoice-dev-draft" : "invoice")}-{invoice.Serial}-{invoice.Number}.xml"));
     }
 
     private static bool IsComplete(Invoice invoice) =>
@@ -56,9 +57,9 @@ internal sealed class ExportInvoiceQueryHandler(
         invoice.Lines.Count > 0 &&
         invoice.Lines.All(line => !string.IsNullOrWhiteSpace(line.Unit));
 
-    private static XDocument BuildDocument(Invoice invoice) => new(
-        new XDeclaration("1.0", "utf-8", null),
-        new XElement("EInvoice",
+    private static XDocument BuildDocument(Invoice invoice, bool isSandbox)
+    {
+        var root = new XElement("EInvoice",
             new XAttribute("version", "1.0"),
             new XElement("Header",
                 Element("InvoiceId", invoice.Id),
@@ -83,7 +84,17 @@ internal sealed class ExportInvoiceQueryHandler(
             new XElement("Totals",
                 Element("Subtotal", invoice.SubTotal),
                 Element("VatAmount", invoice.VatAmount),
-                Element("Total", invoice.Total))));
+                Element("Total", invoice.Total)));
+
+        if (isSandbox)
+        {
+            root.SetAttributeValue("environment", "development");
+            root.SetAttributeValue("legalValue", "false");
+            root.AddFirst(new XElement("Notice", "BẢN NHÁP - KHÔNG CÓ GIÁ TRỊ THUẾ"));
+        }
+
+        return new XDocument(new XDeclaration("1.0", "utf-8", null), root);
+    }
 
     private static XElement LineElement(InvoiceLine line, int position) =>
         new("Line",

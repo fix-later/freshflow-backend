@@ -7,6 +7,7 @@ using FreshFlow.Orders.Application.Queries.GetCreditStatement;
 using FreshFlow.Orders.Application.Queries.GetCreditTransactions;
 using FreshFlow.Orders.Application.Queries.GetRestaurantCredit;
 using FreshFlow.Orders.Application.Queries.ListCreditStatements;
+using FreshFlow.Orders.Application.Services;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -139,7 +140,10 @@ public sealed class RestaurantCreditController(ISender sender, IStatementPdfRend
             return result.Error.ToActionResult();
 
         var pdfBytes = pdfRenderer.Render(result.Value);
-        return File(pdfBytes, "application/pdf", $"statement-{statementId}.pdf");
+        var period = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(result.Value.PeriodStart, DateTimeKind.Utc),
+            CreditStatementPeriodCalculator.VietnamTimeZone);
+        return File(pdfBytes, "application/pdf", $"statement-{period:yyyy-MM}.pdf");
     }
 
     /// <summary>
