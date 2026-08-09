@@ -21,7 +21,8 @@ public sealed class OrderPricingCalculatorTests
                 marketProductId, "Cà chua", 10_000m, 100, 5, "8", 10m, 106m)
         };
 
-        var result = OrderPricingCalculator.Calculate(order, products, 10.1m, 106m, 5_000m);
+        var result = OrderPricingCalculator.Calculate(
+            order, products, 11.12m, new DeliveryFeePolicy(0m, 5_000m, 0m, 0m));
 
         result.IsSuccess.Should().BeTrue();
         result.Value.SubtotalAmount.Should().Be(50_000m);
@@ -43,14 +44,15 @@ public sealed class OrderPricingCalculatorTests
                 marketProductId, "Cà chua", 10_000m, 100, 5, "5", 10m, 106m)
         };
 
-        var result = OrderPricingCalculator.Calculate(order, products, 10.1m, 106m, 5_000m);
+        var result = OrderPricingCalculator.Calculate(
+            order, products, 0m, new DeliveryFeePolicy(0m, 5_000m, 0m, 0m));
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("MINIMUM_ORDER_QUANTITY_NOT_MET");
     }
 
     [Fact]
-    public void Calculate_MissingCoordinates_ReturnsDeterministicError()
+    public void Calculate_AppliesBaseMinimumAndRoundingUnit()
     {
         var marketProductId = Guid.NewGuid();
         var order = new Order(Guid.NewGuid(), null, null);
@@ -60,9 +62,10 @@ public sealed class OrderPricingCalculatorTests
             [marketProductId] = new(marketProductId, "Cà chua", 10_000m, 100)
         };
 
-        var result = OrderPricingCalculator.Calculate(order, products, 10m, 106m, 5_000m);
+        var result = OrderPricingCalculator.Calculate(
+            order, products, 1.2m, new DeliveryFeePolicy(1_000m, 2_000m, 4_100m, 1_000m));
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("DELIVERY_COORDINATES_REQUIRED");
+        result.IsSuccess.Should().BeTrue();
+        result.Value.DeliveryFee.Should().Be(4_000m);
     }
 }

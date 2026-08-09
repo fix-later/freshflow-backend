@@ -1,5 +1,6 @@
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Dtos;
+using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 
@@ -17,10 +18,37 @@ internal sealed class ConfirmOrderCommandHandler(
     internal async Task<Result<OrderDto>> Handle(
         ConfirmOrderCommand request, CancellationToken cancellationToken, DateTime confirmedAtUtc)
     {
+        var source = await orderRepository.FindConfirmationSourceAsync(request.OrderId, cancellationToken);
+        if (source is null)
+            return Result<OrderDto>.Failure(Error.NotFound("ORDER", request.OrderId));
+
+        var restaurant = await restaurantReader.FindByUserIdAsync(request.UserId, cancellationToken);
+        if (restaurant is null || restaurant.RestaurantId != source.RestaurantId)
+            return Result<OrderDto>.Failure(
+                Error.Unauthorized("FORBIDDEN", "This order does not belong to the authenticated restaurant."));
+        if (!restaurant.IsApproved)
+            return Result<OrderDto>.Failure(
+                Error.Unauthorized("RESTAURANT_NOT_ACTIVE", "A suspended or unapproved restaurant cannot confirm orders."));
+
+        if (source.Status != OrderStatus.Draft)
+            return Result<OrderDto>.Failure(Error.Conflict(
+                "ORDER_NOT_DRAFT", "Only a draft order can be confirmed."));
+        if (source.MarketProductIds.Count == 0)
+            return Result<OrderDto>.Failure(Error.Validation(
+                "ORDER_EMPTY", "Cannot confirm an order with no items."));
+
+        var roadDistance = await confirmationService.GetRoadDistanceAsync(
+            source.MarketProductIds,
+            source.RestaurantId,
+            request.DeliveryAddressId,
+            cancellationToken);
+        if (roadDistance.IsFailure)
+            return Result<OrderDto>.Failure(roadDistance.Error);
+
         OrderDto? confirmedOrder = null;
         var transaction = await orderRepository.ExecuteInSerializableTransactionAsync(async ct =>
         {
-            var result = await ConfirmAsync(request, ct, confirmedAtUtc);
+            var result = await ConfirmAsync(request, roadDistance.Value, confirmedAtUtc, ct);
             if (result.IsFailure)
                 return Result.Failure(result.Error);
 
@@ -34,7 +62,10 @@ internal sealed class ConfirmOrderCommandHandler(
     }
 
     private async Task<Result<OrderDto>> ConfirmAsync(
-        ConfirmOrderCommand request, CancellationToken cancellationToken, DateTime confirmedAtUtc)
+        ConfirmOrderCommand request,
+        RoadDistanceResult roadDistance,
+        DateTime confirmedAtUtc,
+        CancellationToken cancellationToken)
     {
         var order = await orderRepository.FindByIdAsync(request.OrderId, cancellationToken);
         if (order is null)
@@ -44,14 +75,16 @@ internal sealed class ConfirmOrderCommandHandler(
         if (restaurant is null || restaurant.RestaurantId != order.RestaurantId)
             return Result<OrderDto>.Failure(
                 Error.Unauthorized("FORBIDDEN", "This order does not belong to the authenticated restaurant."));
-
-        // A suspended (or not-yet-approved) restaurant must not place orders, even on drafts that
-        // existed before suspension. IsApproved is true only while the restaurant status is active.
         if (!restaurant.IsApproved)
             return Result<OrderDto>.Failure(
                 Error.Unauthorized("RESTAURANT_NOT_ACTIVE", "A suspended or unapproved restaurant cannot confirm orders."));
 
         return await confirmationService.ConfirmAsync(
-            order, order.RestaurantId, request.DeliveryAddressId, confirmedAtUtc, cancellationToken);
+            order,
+            order.RestaurantId,
+            request.DeliveryAddressId,
+            roadDistance,
+            confirmedAtUtc,
+            cancellationToken);
     }
 }

@@ -20,6 +20,7 @@ public sealed class ScheduledOrderGenerationServiceTests
     private readonly ICreditService _creditService = Substitute.For<ICreditService>();
     private readonly IRestaurantReader _restaurantReader = Substitute.For<IRestaurantReader>();
     private readonly IOperationalSettingsRepository _operationalSettings = Substitute.For<IOperationalSettingsRepository>();
+    private readonly IRoadDistanceProvider _roadDistanceProvider = Substitute.For<IRoadDistanceProvider>();
     private readonly IPublisher _publisher = Substitute.For<IPublisher>();
     private readonly List<Order> _addedOrders = [];
     private readonly ScheduledOrderGenerationService _sut;
@@ -53,6 +54,15 @@ public sealed class ScheduledOrderGenerationServiceTests
                 DeliveryAddressId, RestaurantId, Arg.Any<CancellationToken>())
             .Returns(new DeliveryAddressSourceDto(
                 DeliveryAddressId, "Bếp trưởng", "0901234567", "1 Test Street", 10.123456m, 106.123456m));
+        _roadDistanceProvider.GetDistanceAsync(
+                Arg.Any<IReadOnlyList<GeoCoordinate>>(),
+                Arg.Any<GeoCoordinate>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var origin = call.ArgAt<IReadOnlyList<GeoCoordinate>>(0)[0];
+                return new RoadDistanceResult(0, 0, origin, false, "GOONG");
+            });
         _creditService.CanChargeAsync(RestaurantId, Arg.Any<decimal>(), Arg.Any<CancellationToken>())
             .Returns(Result<CreditCheckDto>.Success(
                 new CreditCheckDto(RestaurantId, 1_000m, 0m, 1_000m, 100_000m, CanCharge: true)));
@@ -62,7 +72,8 @@ public sealed class ScheduledOrderGenerationServiceTests
                 new RestaurantCreditDto(RestaurantId, 1_000m, 100_000m, 900m, DateTime.UtcNow)));
 
         var orderConfirmationService = new OrderConfirmationService(
-            _orderRepository, _restaurantReader, _marketProductReader, _creditService, _operationalSettings);
+            _orderRepository, _restaurantReader, _marketProductReader, _creditService,
+            _operationalSettings, _roadDistanceProvider);
         _sut = new ScheduledOrderGenerationService(
             _scheduledOrderRepository, _orderRepository, _restaurantReader, _marketProductReader,
             orderConfirmationService, _publisher);
@@ -169,6 +180,24 @@ public sealed class ScheduledOrderGenerationServiceTests
             RestaurantId, order.Id, Arg.Any<decimal>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
         await _publisher.DidNotReceive().Publish(
             Arg.Any<ScheduledOrderNeedsAttentionIntegrationEvent>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GenerateDueAsync_MissedOccurrences_RequestsRoadDistanceOnceAsync()
+    {
+        var firstRun = new DateTime(2026, 6, 16, 4, 0, 0, DateTimeKind.Utc);
+        var now = firstRun.AddDays(2);
+        var schedule = NewScheduleWithTemplate(firstRun);
+        _scheduledOrderRepository.GetActiveAsync(Arg.Any<CancellationToken>())
+            .Returns([schedule]);
+
+        var result = await _sut.GenerateDueAsync(now, default);
+
+        result.CreatedOrderCount.Should().Be(3);
+        await _roadDistanceProvider.Received(1).GetDistanceAsync(
+            Arg.Any<IReadOnlyList<GeoCoordinate>>(),
+            Arg.Any<GeoCoordinate>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

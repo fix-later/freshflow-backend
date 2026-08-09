@@ -49,7 +49,14 @@ internal static class OrderDtoMapper
         order.SubtotalAmount,
         order.VatAmount,
         order.DeliveryFee,
-        order.DeliveryDistanceKm);
+        order.DeliveryDistanceKm,
+        order.DeliveryDistanceMeters,
+        order.DeliveryDurationSeconds,
+        order.DeliveryFeeCalculatedAt,
+        order.RoutingProvider,
+        order.DeliveryOriginLatitude,
+        order.DeliveryOriginLongitude,
+        order.RoutingProvider is "HAVERSINE_FALLBACK");
 
     public static OrderListItemDto ToListItemDto(Order order) => new(
         order.Id,

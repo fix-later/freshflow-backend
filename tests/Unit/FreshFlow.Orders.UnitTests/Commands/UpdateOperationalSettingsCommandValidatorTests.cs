@@ -52,4 +52,22 @@ public sealed class UpdateOperationalSettingsCommandValidatorTests
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateOperationalSettingsCommand.DeliveryWindowDays));
     }
+
+    [Fact]
+    public async Task Validate_FeeWithMoreThanTwoDecimalPlaces_Fails()
+    {
+        var result = await _sut.ValidateAsync(new UpdateOperationalSettingsCommand(
+            new TimeOnly(22, 0), true, "hub_relay", 7,
+            DeliveryFeePerKm: 1.001m,
+            BaseFee: 2.001m,
+            MinimumFee: 3.001m,
+            RoundingUnit: 4.001m));
+
+        result.Errors.Select(error => error.PropertyName).Should().Contain([
+            nameof(UpdateOperationalSettingsCommand.DeliveryFeePerKm),
+            nameof(UpdateOperationalSettingsCommand.BaseFee),
+            nameof(UpdateOperationalSettingsCommand.MinimumFee),
+            nameof(UpdateOperationalSettingsCommand.RoundingUnit)
+        ]);
+    }
 }

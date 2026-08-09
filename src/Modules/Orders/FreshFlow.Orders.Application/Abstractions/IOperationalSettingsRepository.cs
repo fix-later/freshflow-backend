@@ -14,5 +14,8 @@ public interface IOperationalSettingsRepository
         string defaultRouteType,
         int deliveryWindowDays,
         decimal deliveryFeePerKm,
+        decimal baseFee,
+        decimal minimumFee,
+        decimal roundingUnit,
         CancellationToken ct);
 }

@@ -19,6 +19,7 @@ public sealed class ConfirmOrderCommandHandlerTests
     private readonly IMarketProductReader _marketProductReader = Substitute.For<IMarketProductReader>();
     private readonly ICreditService _creditService = Substitute.For<ICreditService>();
     private readonly IOperationalSettingsRepository _operationalSettings = Substitute.For<IOperationalSettingsRepository>();
+    private readonly IRoadDistanceProvider _roadDistanceProvider = Substitute.For<IRoadDistanceProvider>();
 
     private readonly ConfirmOrderCommandHandler _sut;
 
@@ -31,13 +32,27 @@ public sealed class ConfirmOrderCommandHandlerTests
     public ConfirmOrderCommandHandlerTests()
     {
         var confirmationService = new OrderConfirmationService(
-            _orderRepository, _restaurantReader, _marketProductReader, _creditService, _operationalSettings);
+            _orderRepository, _restaurantReader, _marketProductReader, _creditService,
+            _operationalSettings, _roadDistanceProvider);
         _sut = new ConfirmOrderCommandHandler(_orderRepository, _restaurantReader, confirmationService);
 
         _orderRepository.ExecuteInSerializableTransactionAsync(
                 Arg.Any<Func<CancellationToken, Task<Result>>>(), Arg.Any<CancellationToken>())
             .Returns(call => call.ArgAt<Func<CancellationToken, Task<Result>>>(0)(
                 call.ArgAt<CancellationToken>(1)));
+        _orderRepository.FindConfirmationSourceAsync(
+                Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(async call =>
+            {
+                var order = await _orderRepository.FindByIdAsync(
+                    call.ArgAt<Guid>(0), call.ArgAt<CancellationToken>(1));
+                return order is null
+                    ? null
+                    : new OrderConfirmationSource(
+                        order.RestaurantId,
+                        order.Status,
+                        order.Items.Select(item => item.MarketProductId).Distinct().ToArray());
+            });
         _orderRepository.TryReserveStockAsync(
                 Arg.Any<IReadOnlyList<StockReservation>>(), Arg.Any<CancellationToken>())
             .Returns(true);
@@ -47,6 +62,16 @@ public sealed class ConfirmOrderCommandHandlerTests
             .Returns(new MarketProductSnapshotDto(
                 MarketProductId, "Cà chua", 20_000m, 100,
                 OriginLatitude: 10.123456m, OriginLongitude: 106.123456m));
+        _roadDistanceProvider.GetDistanceAsync(
+                Arg.Any<IReadOnlyList<GeoCoordinate>>(),
+                Arg.Any<GeoCoordinate>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var origin = call.ArgAt<IReadOnlyList<GeoCoordinate>>(0)[0];
+                var meters = origin.Latitude == 10.023456m ? 11_120 : 0;
+                return new RoadDistanceResult(meters, meters == 0 ? 0 : 1_200, origin, false, "GOONG");
+            });
 
         _restaurantReader.FindByUserIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
@@ -261,11 +286,39 @@ public sealed class ConfirmOrderCommandHandlerTests
         result.Value.VatAmount.Should().Be(8_000m);
         result.Value.DeliveryDistanceKm.Should().Be(11.12m);
         result.Value.DeliveryFee.Should().Be(55_600m);
+        result.Value.DeliveryDistanceMeters.Should().Be(11_120);
+        result.Value.DeliveryDurationSeconds.Should().Be(1_200);
+        result.Value.RoutingProvider.Should().Be("GOONG");
         result.Value.TotalAmount.Should().Be(163_600m);
         order.Items.Single().VatRateCode.Should().Be("8");
         order.Items.Single().LockedVatAmount.Should().Be(8_000m);
         await _creditService.Received(1).ChargeAsync(
             RestaurantId, order.Id, 163_600m, Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_AddressChangesDuringRouting_RejectsStaleRouteAsync()
+    {
+        var order = NewDraftOrderWithItem();
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _restaurantReader.FindDeliveryAddressAsync(
+                DeliveryAddressId, RestaurantId, Arg.Any<CancellationToken>())
+            .Returns(
+                new DeliveryAddressSourceDto(
+                    DeliveryAddressId, "Bếp trưởng", "0901234567",
+                    "1 Test Street", 10.123456m, 106.123456m),
+                new DeliveryAddressSourceDto(
+                    DeliveryAddressId, "Bếp trưởng", "0901234567",
+                    "2 Changed Street", 10.223456m, 106.223456m));
+
+        var result = await _sut.Handle(Command(order.Id), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ROUTING_INPUTS_CHANGED");
+        order.Status.Should().Be(OrderStatus.Draft);
+        await _creditService.DidNotReceive().ChargeAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<string?>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

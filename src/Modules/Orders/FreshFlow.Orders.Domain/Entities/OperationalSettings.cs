@@ -18,13 +18,19 @@ public sealed class OperationalSettings : BaseEntity
         bool batchingEnabled,
         string defaultRouteType,
         int deliveryWindowDays,
-        decimal deliveryFeePerKm = 5000m)
+        decimal deliveryFeePerKm = 5000m,
+        decimal baseFee = 0m,
+        decimal minimumFee = 0m,
+        decimal roundingUnit = 0m)
     {
         DailyCutoffTime = dailyCutoffTime;
         BatchingEnabled = batchingEnabled;
         DefaultRouteType = defaultRouteType;
         DeliveryWindowDays = deliveryWindowDays;
         DeliveryFeePerKm = deliveryFeePerKm;
+        BaseFee = baseFee;
+        MinimumFee = minimumFee;
+        RoundingUnit = roundingUnit;
     }
 
     public static OperationalSettings CreateDefault() =>
@@ -36,19 +42,28 @@ public sealed class OperationalSettings : BaseEntity
     public string DefaultRouteType { get; private set; } = "hub_relay";
     public int DeliveryWindowDays { get; private set; }
     public decimal DeliveryFeePerKm { get; private set; }
+    public decimal BaseFee { get; private set; }
+    public decimal MinimumFee { get; private set; }
+    public decimal RoundingUnit { get; private set; }
 
     public void Update(
         TimeOnly dailyCutoffTime,
         bool batchingEnabled,
         string defaultRouteType,
         int deliveryWindowDays,
-        decimal deliveryFeePerKm = 5000m)
+        decimal deliveryFeePerKm = 5000m,
+        decimal baseFee = 0m,
+        decimal minimumFee = 0m,
+        decimal roundingUnit = 0m)
     {
         DailyCutoffTime = dailyCutoffTime;
         BatchingEnabled = batchingEnabled;
         DefaultRouteType = defaultRouteType;
         DeliveryWindowDays = deliveryWindowDays;
         DeliveryFeePerKm = deliveryFeePerKm;
+        BaseFee = baseFee;
+        MinimumFee = minimumFee;
+        RoundingUnit = roundingUnit;
         Touch();
     }
 

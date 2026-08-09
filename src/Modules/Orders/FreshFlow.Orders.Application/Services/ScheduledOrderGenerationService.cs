@@ -43,9 +43,29 @@ public sealed class ScheduledOrderGenerationService(
             if (dueOccurrences.Count > 1)
                 missedExecutionCount += dueOccurrences.Count - 1;
 
+            RoadDistanceResult? roadDistance = null;
+            string? roadDistanceFailure = null;
+            if (schedule.Items.Count > 0 && schedule.DeliveryAddressId is Guid deliveryAddressId)
+            {
+                var restaurant = await restaurantReader.FindByIdAsync(schedule.RestaurantId, ct);
+                if (restaurant?.IsApproved == true)
+                {
+                    var result = await orderConfirmationService.GetRoadDistanceAsync(
+                        schedule.Items.Select(item => item.MarketProductId).Distinct().ToArray(),
+                        schedule.RestaurantId,
+                        deliveryAddressId,
+                        ct);
+                    if (result.IsSuccess)
+                        roadDistance = result.Value;
+                    else
+                        roadDistanceFailure = result.Error.Message;
+                }
+            }
+
             foreach (var occurrence in dueOccurrences)
             {
-                await GenerateOneAsync(schedule, occurrence, utcNow, ct);
+                await GenerateOneAsync(
+                    schedule, occurrence, roadDistance, roadDistanceFailure, utcNow, ct);
                 createdCount++;
             }
         }
@@ -63,7 +83,13 @@ public sealed class ScheduledOrderGenerationService(
     /// confirm gets (order mutation + credit charge commit or roll back together).
     /// </summary>
     private async Task GenerateOneAsync(
-        ScheduledOrder schedule, DateTime occurrence, DateTime utcNow, CancellationToken ct) =>
+        ScheduledOrder schedule,
+        DateTime occurrence,
+        RoadDistanceResult? roadDistance,
+        string? roadDistanceFailure,
+        DateTime utcNow,
+        CancellationToken ct)
+    {
         await orderRepository.ExecuteInSerializableTransactionAsync(async txCt =>
         {
             var order = new Order(
@@ -76,7 +102,8 @@ public sealed class ScheduledOrderGenerationService(
             // order from the model alone when both are new in the same SaveChanges batch.
             await orderRepository.SaveChangesAsync(txCt);
 
-            var failureReason = await TryConfirmFromTemplateAsync(order, schedule, utcNow, txCt);
+            var failureReason = await TryConfirmFromTemplateAsync(
+                order, schedule, roadDistance, roadDistanceFailure, utcNow, txCt);
 
             schedule.RecordExecution(occurrence);
             scheduledOrderRepository.Track(schedule);
@@ -86,6 +113,7 @@ public sealed class ScheduledOrderGenerationService(
 
             return Result.Success();
         }, ct);
+    }
 
     /// <summary>
     /// Returns null on success, or on the "nothing to try yet" legacy degrade (no item template
@@ -93,7 +121,12 @@ public sealed class ScheduledOrderGenerationService(
     /// human-readable reason and leaves <paramref name="order"/> a Draft.
     /// </summary>
     private async Task<string?> TryConfirmFromTemplateAsync(
-        Order order, ScheduledOrder schedule, DateTime utcNow, CancellationToken ct)
+        Order order,
+        ScheduledOrder schedule,
+        RoadDistanceResult? roadDistance,
+        string? roadDistanceFailure,
+        DateTime utcNow,
+        CancellationToken ct)
     {
         if (schedule.Items.Count == 0)
             return null;
@@ -131,8 +164,11 @@ public sealed class ScheduledOrderGenerationService(
             orderRepository.TrackNewItem(order.Items.Last());
         }
 
+        if (roadDistance is null)
+            return roadDistanceFailure ?? "Delivery road distance could not be calculated.";
+
         var confirmResult = await orderConfirmationService.ConfirmAsync(
-            order, schedule.RestaurantId, schedule.DeliveryAddressId.Value, utcNow, ct);
+            order, schedule.RestaurantId, schedule.DeliveryAddressId.Value, roadDistance, utcNow, ct);
 
         return confirmResult.IsFailure ? confirmResult.Error.Message : null;
     }

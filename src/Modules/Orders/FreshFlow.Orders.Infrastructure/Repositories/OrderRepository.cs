@@ -77,6 +77,25 @@ internal sealed class OrderRepository(AppDbContext db) : IOrderRepository
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == id && o.DeletedAt == null, ct);
 
+    public async Task<OrderConfirmationSource?> FindConfirmationSourceAsync(Guid id, CancellationToken ct)
+    {
+        var header = await db.Set<Order>()
+            .AsNoTracking()
+            .Where(order => order.Id == id && order.DeletedAt == null)
+            .Select(order => new { order.RestaurantId, order.Status })
+            .FirstOrDefaultAsync(ct);
+        if (header is null)
+            return null;
+
+        var marketProductIds = await db.Set<OrderItem>()
+            .AsNoTracking()
+            .Where(item => item.OrderId == id)
+            .Select(item => item.MarketProductId)
+            .Distinct()
+            .ToArrayAsync(ct);
+        return new OrderConfirmationSource(header.RestaurantId, header.Status, marketProductIds);
+    }
+
     public async Task<IReadOnlyList<Order>> FindByIdsAsync(
         IReadOnlyCollection<Guid> ids,
         CancellationToken ct)

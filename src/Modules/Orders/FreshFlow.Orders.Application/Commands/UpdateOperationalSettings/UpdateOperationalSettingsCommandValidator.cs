@@ -15,6 +15,16 @@ internal sealed class UpdateOperationalSettingsCommandValidator : AbstractValida
             .InclusiveBetween(1, 30)
             .WithMessage("DeliveryWindowDays must be between 1 and 30.");
         RuleFor(c => c.DeliveryFeePerKm)
-            .InclusiveBetween(0m, 1_000_000m);
+            .InclusiveBetween(0m, 1_000_000m)
+            .PrecisionScale(14, 2, true);
+        RuleFor(c => c.BaseFee)
+            .InclusiveBetween(0m, 10_000_000m)
+            .PrecisionScale(14, 2, true);
+        RuleFor(c => c.MinimumFee)
+            .InclusiveBetween(0m, 10_000_000m)
+            .PrecisionScale(14, 2, true);
+        RuleFor(c => c.RoundingUnit)
+            .InclusiveBetween(0m, 1_000_000m)
+            .PrecisionScale(14, 2, true);
     }
 }

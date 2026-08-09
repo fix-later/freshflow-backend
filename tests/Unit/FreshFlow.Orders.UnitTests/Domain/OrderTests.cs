@@ -74,6 +74,25 @@ public sealed class OrderTests
         order.DeliveryAddressLine.Should().Be("1 First Street");
     }
 
+    [Fact]
+    public void ApplyConfirmationPricing_PartialDeliverySnapshot_ReturnsFailure()
+    {
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", 1, 20_000m);
+
+        var result = order.ApplyConfirmationPricing(
+            new Dictionary<Guid, OrderItemTaxSnapshot>
+            {
+                [MarketProductId] = new("KCT", 0m)
+            },
+            0m,
+            0m,
+            routingProvider: "GOONG");
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INVALID_DELIVERY_SNAPSHOT");
+    }
+
     // ── AddItem ──────────────────────────────────────────────────────────────
 
     [Fact]
