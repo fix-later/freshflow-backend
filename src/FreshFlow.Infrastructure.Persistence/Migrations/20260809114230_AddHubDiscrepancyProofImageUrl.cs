@@ -1,29 +1,28 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace FreshFlow.Infrastructure.Persistence.Migrations
+namespace FreshFlow.Infrastructure.Persistence.Migrations;
+
+/// <inheritdoc />
+public partial class AddHubDiscrepancyProofImageUrl : Migration
 {
     /// <inheritdoc />
-    public partial class AddHubDiscrepancyProofImageUrl : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<string>(
-                name: "proof_image_url",
-                table: "hub_discrepancies",
-                type: "character varying(512)",
-                maxLength: 512,
-                nullable: true);
-        }
+        migrationBuilder.AddColumn<string>(
+            name: "proof_image_url",
+            table: "hub_discrepancies",
+            type: "character varying(512)",
+            maxLength: 512,
+            nullable: true);
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(
-                name: "proof_image_url",
-                table: "hub_discrepancies");
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(
+            name: "proof_image_url",
+            table: "hub_discrepancies");
     }
 }

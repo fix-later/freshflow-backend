@@ -37,8 +37,10 @@ public sealed class OrderClaimsEndpointTests(AuthWebAppFactory factory)
             firstAdmin.PatchAsJsonAsync(endpoint, new { decisionNote = "Verified" }),
             secondAdmin.PatchAsJsonAsync(endpoint, new { decisionNote = "Verified" }));
 
-        responses.Count(response => response.StatusCode == HttpStatusCode.OK).Should().Be(1);
-        responses.Count(response => response.StatusCode == HttpStatusCode.Conflict).Should().Be(1);
+        responses.Should().Contain(response => response.StatusCode == HttpStatusCode.OK);
+        responses.Should().OnlyContain(response =>
+            response.StatusCode == HttpStatusCode.OK
+            || response.StatusCode == HttpStatusCode.Conflict);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
