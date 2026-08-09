@@ -183,6 +183,24 @@ public sealed class ScheduledOrderGenerationServiceTests
     }
 
     [Fact]
+    public async Task GenerateDueAsync_MissedOccurrences_RequestsRoadDistanceOnceAsync()
+    {
+        var firstRun = new DateTime(2026, 6, 16, 4, 0, 0, DateTimeKind.Utc);
+        var now = firstRun.AddDays(2);
+        var schedule = NewScheduleWithTemplate(firstRun);
+        _scheduledOrderRepository.GetActiveAsync(Arg.Any<CancellationToken>())
+            .Returns([schedule]);
+
+        var result = await _sut.GenerateDueAsync(now, default);
+
+        result.CreatedOrderCount.Should().Be(3);
+        await _roadDistanceProvider.Received(1).GetDistanceAsync(
+            Arg.Any<IReadOnlyList<GeoCoordinate>>(),
+            Arg.Any<GeoCoordinate>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task GenerateDueAsync_CreditLimitExceeded_DegradesToDraftAndNotifiesAsync()
     {
         var firstRun = new DateTime(2026, 6, 18, 4, 0, 0, DateTimeKind.Utc);

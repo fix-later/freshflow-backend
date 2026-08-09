@@ -43,9 +43,29 @@ public sealed class ScheduledOrderGenerationService(
             if (dueOccurrences.Count > 1)
                 missedExecutionCount += dueOccurrences.Count - 1;
 
+            RoadDistanceResult? roadDistance = null;
+            string? roadDistanceFailure = null;
+            if (schedule.Items.Count > 0 && schedule.DeliveryAddressId is Guid deliveryAddressId)
+            {
+                var restaurant = await restaurantReader.FindByIdAsync(schedule.RestaurantId, ct);
+                if (restaurant?.IsApproved == true)
+                {
+                    var result = await orderConfirmationService.GetRoadDistanceAsync(
+                        schedule.Items.Select(item => item.MarketProductId).Distinct().ToArray(),
+                        schedule.RestaurantId,
+                        deliveryAddressId,
+                        ct);
+                    if (result.IsSuccess)
+                        roadDistance = result.Value;
+                    else
+                        roadDistanceFailure = result.Error.Message;
+                }
+            }
+
             foreach (var occurrence in dueOccurrences)
             {
-                await GenerateOneAsync(schedule, occurrence, utcNow, ct);
+                await GenerateOneAsync(
+                    schedule, occurrence, roadDistance, roadDistanceFailure, utcNow, ct);
                 createdCount++;
             }
         }
@@ -63,27 +83,13 @@ public sealed class ScheduledOrderGenerationService(
     /// confirm gets (order mutation + credit charge commit or roll back together).
     /// </summary>
     private async Task GenerateOneAsync(
-        ScheduledOrder schedule, DateTime occurrence, DateTime utcNow, CancellationToken ct)
+        ScheduledOrder schedule,
+        DateTime occurrence,
+        RoadDistanceResult? roadDistance,
+        string? roadDistanceFailure,
+        DateTime utcNow,
+        CancellationToken ct)
     {
-        RoadDistanceResult? roadDistance = null;
-        string? roadDistanceFailure = null;
-        if (schedule.Items.Count > 0 && schedule.DeliveryAddressId is Guid deliveryAddressId)
-        {
-            var restaurant = await restaurantReader.FindByIdAsync(schedule.RestaurantId, ct);
-            if (restaurant?.IsApproved == true)
-            {
-                var result = await orderConfirmationService.GetRoadDistanceAsync(
-                    schedule.Items.Select(item => item.MarketProductId).Distinct().ToArray(),
-                    schedule.RestaurantId,
-                    deliveryAddressId,
-                    ct);
-                if (result.IsSuccess)
-                    roadDistance = result.Value;
-                else
-                    roadDistanceFailure = result.Error.Message;
-            }
-        }
-
         await orderRepository.ExecuteInSerializableTransactionAsync(async txCt =>
         {
             var order = new Order(

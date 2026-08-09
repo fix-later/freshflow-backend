@@ -98,6 +98,7 @@ internal sealed class GoongRoadDistanceProvider(
                 || elements.GetArrayLength() == 0
                 || elements[0].ValueKind != JsonValueKind.Object
                 || !elements[0].TryGetProperty("status", out var status)
+                || status.ValueKind != JsonValueKind.String
                 || status.GetString() != "OK"
                 || !TryMetric(elements[0], [], out var distance, out var duration))
                 return null;

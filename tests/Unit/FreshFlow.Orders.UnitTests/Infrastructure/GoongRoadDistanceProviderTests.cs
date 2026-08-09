@@ -94,10 +94,12 @@ public sealed class GoongRoadDistanceProviderTests : IDisposable
         await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
     }
 
-    [Fact]
-    public async Task GetDistanceAsync_MatrixWithNonArrayRows_ReturnsFallback()
+    [Theory]
+    [InlineData("{\"rows\":null}")]
+    [InlineData("{\"rows\":[{\"elements\":[{\"status\":123}]}]}")]
+    public async Task GetDistanceAsync_MalformedMatrix_ReturnsFallback(string response)
     {
-        var provider = CreateProvider((_, _) => Json("{\"rows\":null}"));
+        var provider = CreateProvider((_, _) => Json(response));
 
         var result = await provider.GetDistanceAsync(
             [new GeoCoordinate(10m, 106m), new GeoCoordinate(11m, 107m)],
