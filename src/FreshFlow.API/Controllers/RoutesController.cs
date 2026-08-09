@@ -2,6 +2,7 @@ using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Hub.Application.Abstractions;
 using FreshFlow.Hub.Application.Services;
+using FreshFlow.Logistics.Application.Commands.ApproveRoutePlan;
 using FreshFlow.Logistics.Application.Commands.AssignVehicle;
 using FreshFlow.Logistics.Application.Commands.CalculateRoute;
 using FreshFlow.Logistics.Application.Commands.OptimizeRoute;
@@ -12,6 +13,7 @@ using FreshFlow.Logistics.Application.Queries.CheckEligibility;
 using FreshFlow.Logistics.Application.Queries.GetLoadingManifest;
 using FreshFlow.Logistics.Application.Queries.GetRoute;
 using FreshFlow.Logistics.Application.Queries.GetRouteDeliveries;
+using FreshFlow.Logistics.Application.Queries.GetRoutePlan;
 using FreshFlow.Logistics.Application.Queries.GetRouteSuggestions;
 using FreshFlow.Logistics.Application.Queries.ListRoutes;
 using MediatR;
@@ -53,6 +55,22 @@ public sealed class RoutesController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new PlanRoutesCommand(body.HubId, body.ServiceDate, body.OptimizationCriteria),
             ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPost("plans/{planId:guid}/approve")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> ApproveRoutePlanAsync(Guid planId, CancellationToken ct)
+    {
+        var result = await sender.Send(new ApproveRoutePlanCommand(planId), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("plans/{planId:guid}")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetRoutePlanAsync(Guid planId, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetRoutePlanQuery(planId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 

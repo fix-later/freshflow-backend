@@ -23,6 +23,7 @@ public sealed class GetLoadingManifestQueryHandlerTests
     {
         var sut = new GetLoadingManifestQueryHandler(
             new InMemoryDeliveryRouteRepository(),
+            Substitute.For<IDeliveryRepository>(),
             new InMemoryOrderStatusReader(),
             Substitute.For<IOrderPackingReader>());
 
@@ -55,7 +56,8 @@ public sealed class GetLoadingManifestQueryHandlerTests
                 new(farOrderId, [new OrderPackingLine(farOrderId, Guid.NewGuid(), "Fish", 3, 15m)]),
             });
 
-        var sut = new GetLoadingManifestQueryHandler(routes, orders, packing);
+        var sut = new GetLoadingManifestQueryHandler(
+            routes, Substitute.For<IDeliveryRepository>(), orders, packing);
 
         var result = await sut.Handle(new GetLoadingManifestQuery(route.Id), default);
 

@@ -1,10 +1,8 @@
 using FluentAssertions;
 using FreshFlow.Logistics.Application.Abstractions;
 using FreshFlow.Logistics.Application.Commands.PlanRoutes;
-using FreshFlow.Logistics.Application.Dtos;
-using FreshFlow.Logistics.Domain.Entities;
 using FreshFlow.Logistics.Domain.Enums;
-using FreshFlow.Logistics.UnitTests.TestDoubles;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace FreshFlow.Logistics.UnitTests.Commands;
@@ -13,131 +11,48 @@ namespace FreshFlow.Logistics.UnitTests.Commands;
 public sealed class PlanRoutesCommandHandlerTests
 {
     [Fact]
-    public async Task Handle_FleetCapacityExceeded_DoesNotAddAnyRouteAsync()
+    public async Task Handle_NoAtHubOrders_ReturnsEmptyWithoutMatrixCallAsync()
     {
-        // Arrange
-        var fixture = await CreateFixtureAsync([60m, 60m], [100m]);
+        var hubId = Guid.NewGuid();
+        var date = new DateOnly(2026, 8, 10);
+        var inputs = Substitute.For<IRoutePlanningInputBuilder>();
+        inputs.BuildAsync(hubId, date, Arg.Any<CancellationToken>()).Returns(
+            FreshFlow.SharedKernel.Application.Result<RoutePlanningInput>.Success(new RoutePlanningInput(
+                hubId, "Hub", 10m, 106m, date, [], [], "revision")));
+        var matrices = Substitute.For<IRouteMatrixProvider>();
+        var handler = new PlanRoutesCommandHandler(
+            inputs, matrices, Substitute.For<IRoutePlanningSolver>(),
+            Substitute.For<IRoutePlanRepository>(), Substitute.For<IDeliveryRouteRepository>(),
+            Substitute.For<IVehicleCapacityPolicy>(), NullLogger<PlanRoutesCommandHandler>.Instance);
 
-        // Act
-        var result = await fixture.Handler.Handle(
-            new PlanRoutesCommand(fixture.HubId, fixture.ServiceDate, null),
-            default);
+        var result = await handler.Handle(new PlanRoutesCommand(hubId, date, "TIME"), default);
 
-        // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("FLEET_CAPACITY_EXCEEDED");
-        fixture.Routes.Routes.Should().BeEmpty();
-        fixture.Routes.SaveChangesCount.Should().Be(0);
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Status.Should().Be("empty");
+        result.Value.PlanId.Should().BeNull();
+        result.Value.OptimizationCriteria.Should().Be(nameof(OptimizationCriteria.time).ToUpperInvariant());
+        await matrices.DidNotReceiveWithAnyArgs().GetMatrixAsync(default!, default!, default);
     }
 
     [Fact]
-    public async Task Handle_HappyPath_CreatesOnePlannedRoutePerClusterAsync()
+    public async Task Handle_NumericCriteria_ReturnsValidationErrorAsync()
     {
-        // Arrange
-        var fixture = await CreateFixtureAsync([60m, 60m, 40m], [100m, 100m]);
+        var inputs = Substitute.For<IRoutePlanningInputBuilder>();
+        var handler = new PlanRoutesCommandHandler(
+            inputs,
+            Substitute.For<IRouteMatrixProvider>(),
+            Substitute.For<IRoutePlanningSolver>(),
+            Substitute.For<IRoutePlanRepository>(),
+            Substitute.For<IDeliveryRouteRepository>(),
+            Substitute.For<IVehicleCapacityPolicy>(),
+            NullLogger<PlanRoutesCommandHandler>.Instance);
 
-        // Act
-        var result = await fixture.Handler.Handle(
-            new PlanRoutesCommand(fixture.HubId, fixture.ServiceDate, "DISTANCE"),
+        var result = await handler.Handle(
+            new PlanRoutesCommand(Guid.NewGuid(), new DateOnly(2026, 8, 10), "7"),
             default);
 
-        // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Should().HaveCount(2);
-        fixture.Routes.Routes.Should().HaveCount(2)
-            .And.OnlyContain(route =>
-                route.Status == RouteStatus.planned &&
-                route.VehicleId == null &&
-                route.DriverUserId == null &&
-                route.OptimizationCriteria == OptimizationCriteria.distance);
-        fixture.Routes.SaveChangesCount.Should().Be(1);
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Code.Should().Be("VALIDATION_ERROR");
+        await inputs.DidNotReceiveWithAnyArgs().BuildAsync(default, default, default);
     }
-
-    private static async Task<Fixture> CreateFixtureAsync(
-        IReadOnlyList<decimal> restaurantLoads,
-        IReadOnlyList<decimal> vehicleCapacities)
-    {
-        var hubId = Guid.NewGuid();
-        var serviceDate = new DateOnly(2026, 7, 30);
-        var restaurantIds = restaurantLoads.Select(_ => Guid.NewGuid()).ToList();
-        var orderIds = restaurantLoads.Select(_ => Guid.NewGuid()).ToList();
-        var orders = Substitute.For<IOrderStatusReader>();
-        orders.ListRoutableRestaurantsAsync(
-                serviceDate,
-                Arg.Is<IReadOnlyCollection<string>>(statuses => statuses.SequenceEqual(new[] { "AtHub" })),
-                Arg.Any<CancellationToken>())
-            .Returns(restaurantIds.Select(id => (id, 1)).ToList());
-        orders.ListByRestaurantsAndStatusAsync(
-                Arg.Any<IReadOnlyCollection<Guid>>(),
-                "AtHub",
-                Arg.Any<CancellationToken>(),
-                hubId,
-                serviceDate)
-            .Returns(orderIds.Select((id, index) =>
-                new OrderStatusLookupDto(id, "AtHub", restaurantIds[index], hubId)).ToList());
-
-        var packing = Substitute.For<IOrderPackingReader>();
-        packing.GetLinesByOrdersAsync(
-                Arg.Any<IReadOnlyCollection<Guid>>(),
-                Arg.Any<CancellationToken>())
-            .Returns(orderIds.Select((id, index) => new OrderPackingLines(
-                id,
-                [new OrderPackingLine(id, Guid.NewGuid(), "Product", 1, restaurantLoads[index])]))
-                .ToList());
-
-        var hubs = Substitute.For<IHubCoordinateReader>();
-        hubs.FindByIdAsync(hubId, Arg.Any<CancellationToken>())
-            .Returns(new HubCoordinateDto(hubId, null, "Hub", 0m, 0m));
-        var restaurants = Substitute.For<IRestaurantCoordinateReader>();
-        for (var index = 0; index < restaurantIds.Count; index++)
-        {
-            var restaurantId = restaurantIds[index];
-            restaurants.FindByRestaurantIdAsync(restaurantId, Arg.Any<CancellationToken>())
-                .Returns(new RestaurantCoordinateDto(
-                    restaurantId,
-                    $"Restaurant {index}",
-                    index + 1,
-                    1m));
-        }
-
-        var vehicles = new InMemoryVehicleRepository();
-        for (var index = 0; index < vehicleCapacities.Count; index++)
-        {
-            await vehicles.AddAsync(
-                new Vehicle($"51A-{index:00000}", vehicleCapacities[index], VehicleType.truck, null),
-                default);
-        }
-
-        var optimizer = Substitute.For<IRouteOptimizer>();
-        optimizer.Optimize(
-                Arg.Any<IReadOnlyList<FreshFlow.Logistics.Domain.ValueObjects.RouteStop>>(),
-                serviceDate,
-                OptimizationCriteria.distance)
-            .Returns(call =>
-            {
-                var stops = call.ArgAt<IReadOnlyList<FreshFlow.Logistics.Domain.ValueObjects.RouteStop>>(0);
-                return new RouteOptimizationResult(stops, 10m, 20, 50_000m);
-            });
-
-        var capacityPolicy = Substitute.For<IVehicleCapacityPolicy>();
-        capacityPolicy.MaxStopsPerVehicle.Returns(20);
-        var routes = new InMemoryDeliveryRouteRepository();
-        var handler = new PlanRoutesCommandHandler(
-            hubs,
-            restaurants,
-            orders,
-            packing,
-            vehicles,
-            capacityPolicy,
-            optimizer,
-            routes);
-
-        return new Fixture(handler, routes, hubId, serviceDate);
-    }
-
-    private sealed record Fixture(
-        PlanRoutesCommandHandler Handler,
-        InMemoryDeliveryRouteRepository Routes,
-        Guid HubId,
-        DateOnly ServiceDate);
 }

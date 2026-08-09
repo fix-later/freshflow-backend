@@ -31,13 +31,13 @@ internal sealed class CheckEligibilityQueryHandler(
             : await packing.GetLinesByOrdersAsync(
                 atHubOrders.Select(order => order.OrderId).ToList(), ct);
         var lines = packingByOrder.SelectMany(entry => entry.Lines).ToList();
-        var isWeightComplete = atHubOrders.Count == 0
+        var isWeightComplete = route.PlannedLoadKg is not null || atHubOrders.Count == 0
             || (packingByOrder.Count == atHubOrders.Count
                 && lines.Count > 0
                 && lines.All(line => line.CapacityKg is > 0m));
-        var routeLoadKg = lines.Sum(line =>
+        var routeLoadKg = route.PlannedLoadKg ?? lines.Sum(line =>
             line.CapacityKg is { } capacityKg && capacityKg > 0m
-                ? line.Quantity * capacityKg
+                ? line.Quantity + Math.Ceiling(line.Quantity / capacityKg) * capacityPolicy.BoxTareKg
                 : 0m);
 
 
@@ -61,7 +61,7 @@ internal sealed class CheckEligibilityQueryHandler(
 
             if (route.Stops.Count > capacityPolicy.MaxStopsPerVehicle)
                 reasons.Add("VEHICLE_CAPACITY_EXCEEDED");
-            if (routeLoadKg > vehicle.CapacityKg)
+            if (routeLoadKg > vehicle.CapacityKg * capacityPolicy.CapacityUtilizationPercent / 100m)
                 reasons.Add("VEHICLE_WEIGHT_CAPACITY_EXCEEDED");
 
 

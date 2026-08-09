@@ -8,6 +8,10 @@ public interface IDeliveryRepository
 
     public Task<bool> ExistsForOrderAsync(Guid orderId, CancellationToken ct);
 
+    public Task<IReadOnlySet<Guid>> GetExistingOrderIdsAsync(
+        IReadOnlyCollection<Guid> orderIds,
+        CancellationToken ct);
+
     public Task<Delivery?> FindByIdAsync(Guid deliveryId, CancellationToken ct);
 
     public Task<IReadOnlyList<Delivery>> GetByRouteIdsAsync(

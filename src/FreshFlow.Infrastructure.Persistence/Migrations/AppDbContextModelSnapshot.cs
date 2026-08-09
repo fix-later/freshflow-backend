@@ -2340,6 +2340,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("estimated_duration_minutes");
 
+                    b.Property<DateTime?>("EstimatedReturnAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("estimated_return_at");
+
                     b.Property<Guid?>("HubId")
                         .HasColumnType("uuid")
                         .HasColumnName("hub_id");
@@ -2353,11 +2357,24 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("order_group_id");
 
+                    b.Property<decimal?>("PlannedLoadKg")
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("planned_load_kg");
+
+                    b.Property<Guid?>("RoutePlanId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("route_plan_id");
+
                     b.Property<string>("RouteType")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("route_type");
+
+                    b.Property<string>("RoutingProfile")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("routing_profile");
 
                     b.Property<DateOnly>("ServiceDate")
                         .HasColumnType("date")
@@ -2373,6 +2390,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb")
                         .HasColumnName("route_metadata");
+
+                    b.Property<Guid?>("SuggestedVehicleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("suggested_vehicle_id");
 
                     b.Property<decimal?>("TotalDistanceKm")
                         .HasColumnType("numeric(10,2)")
@@ -2397,6 +2418,9 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.HasIndex("OrderGroupId")
                         .HasDatabaseName("idx_delivery_routes_order_group_id");
 
+                    b.HasIndex("RoutePlanId")
+                        .HasDatabaseName("idx_delivery_routes_route_plan_id");
+
                     b.HasIndex("ServiceDate")
                         .HasDatabaseName("idx_delivery_routes_service_date");
 
@@ -2406,12 +2430,108 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.HasIndex("VehicleId", "ServiceDate")
                         .HasDatabaseName("idx_delivery_routes_vehicle_service_date");
 
-                    b.HasIndex(new[] { "VehicleId", "ServiceDate" }, "ux_delivery_routes_vehicle_service_date_assigned")
+                    b.HasIndex(new[] { "VehicleId", "ServiceDate" }, "ux_delivery_routes_vehicle_service_date_reserved")
                         .IsUnique()
-                        .HasDatabaseName("ux_delivery_routes_vehicle_service_date_assigned")
-                        .HasFilter("status = 'assigned' AND deleted_at IS NULL");
+                        .HasDatabaseName("ux_delivery_routes_vehicle_service_date_reserved")
+                        .HasFilter("vehicle_id IS NOT NULL AND status IN ('reviewed', 'assigned', 'in_progress') AND deleted_at IS NULL");
 
                     b.ToTable("delivery_routes", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Logistics.Domain.Entities.RoutePlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("approved_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<decimal>("EstimatedCost")
+                        .HasColumnType("numeric(16,2)")
+                        .HasColumnName("estimated_cost");
+
+                    b.Property<int>("EstimatedDurationMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("estimated_duration_minutes");
+
+                    b.Property<Guid>("HubId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("hub_id");
+
+                    b.Property<string>("InputRevision")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("input_revision");
+
+                    b.Property<bool>("IsEstimated")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_estimated");
+
+                    b.Property<string>("OptimizationCriteria")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("optimization_criteria");
+
+                    b.Property<string>("RoutingProvider")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("routing_provider");
+
+                    b.Property<DateOnly>("ServiceDate")
+                        .HasColumnType("date")
+                        .HasColumnName("service_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("TotalDistanceKm")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("total_distance_km");
+
+                    b.Property<decimal>("TotalLoadKg")
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("total_load_kg");
+
+                    b.Property<string>("Unassigned")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("unassigned_json");
+
+                    b.Property<int>("VehiclesUsed")
+                        .HasColumnType("integer")
+                        .HasColumnName("vehicles_used");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InputRevision")
+                        .HasDatabaseName("idx_route_plans_input_revision");
+
+                    b.HasIndex(new[] { "HubId", "ServiceDate" }, "ux_route_plans_hub_date_proposed")
+                        .IsUnique()
+                        .HasDatabaseName("ux_route_plans_hub_date_proposed")
+                        .HasFilter("status = 'proposed' AND deleted_at IS NULL");
+
+                    b.ToTable("route_plans", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_route_plans_status", "status IN ('proposed','approved','stale','superseded')");
+                        });
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Domain.Entities.Vehicle", b =>
@@ -2604,12 +2724,12 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("numeric");
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    oi.\"OrderId\"             AS \"OrderId\",\n    oi.\"Id\"                  AS \"OrderItemId\",\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\n    oi.\"Quantity\"            AS \"Quantity\",\n    pc.\"CapacityKg\"          AS \"CapacityKg\"\nFROM order_items oi\nINNER JOIN orders o          ON o.\"Id\" = oi.\"OrderId\" AND o.\"deleted_at\" IS NULL\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\nINNER JOIN products p        ON p.\"Id\" = mp.\"ProductId\"\nLEFT JOIN packing_codes pc   ON pc.\"Id\" = p.\"PackingCodeId\" AND pc.\"DeletedAt\" IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT\n    oi.\"OrderId\"             AS \"OrderId\",\n    oi.\"Id\"                  AS \"OrderItemId\",\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\n    COALESCE(oi.\"ActualQuantity\", oi.\"Quantity\") AS \"Quantity\",\n    pc.\"CapacityKg\"          AS \"CapacityKg\"\nFROM order_items oi\nINNER JOIN orders o          ON o.\"Id\" = oi.\"OrderId\" AND o.\"deleted_at\" IS NULL\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\nINNER JOIN products p        ON p.\"Id\" = mp.\"ProductId\"\nLEFT JOIN packing_codes pc   ON pc.\"Id\" = p.\"PackingCodeId\" AND pc.\"DeletedAt\" IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.OrderStatusRow", b =>
@@ -3898,6 +4018,9 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("text");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -3908,7 +4031,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    p.\"Id\",\n    p.\"Name\",\n    u.\"Name\"  AS \"Unit\",\n    c.\"Name\"  AS \"Category\",\n    pc.\"CapacityKg\"\nFROM products p\nINNER JOIN units_of_measurement u ON p.\"UnitId\" = u.\"Id\"\nLEFT  JOIN product_categories   c ON p.\"CategoryId\" = c.\"Id\"\nLEFT  JOIN packing_codes       pc ON p.\"PackingCodeId\" = pc.\"Id\"\nWHERE p.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT\n    p.\"Id\",\n    p.\"Name\",\n    p.\"ImageUrl\",\n    u.\"Name\"  AS \"Unit\",\n    c.\"Name\"  AS \"Category\",\n    pc.\"CapacityKg\"\nFROM products p\nINNER JOIN units_of_measurement u ON p.\"UnitId\" = u.\"Id\"\nLEFT  JOIN product_categories   c ON p.\"CategoryId\" = c.\"Id\"\nLEFT  JOIN packing_codes       pc ON p.\"PackingCodeId\" = pc.\"Id\" AND pc.\"DeletedAt\" IS NULL\nWHERE p.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Pricing.Infrastructure.CrossModule.ProductRow", b =>
@@ -4570,6 +4693,15 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_delivery_issues_delivery");
+                });
+
+            modelBuilder.Entity("FreshFlow.Logistics.Domain.Entities.DeliveryRoute", b =>
+                {
+                    b.HasOne("FreshFlow.Logistics.Domain.Entities.RoutePlan", null)
+                        .WithMany()
+                        .HasForeignKey("RoutePlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_delivery_routes_route_plan");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.CreditStatementLine", b =>

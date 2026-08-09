@@ -47,7 +47,9 @@ internal sealed class ReorderDriverRouteCommandHandler(
         try
         {
             route.ReorderStopsByDriver(request.StopOrder);
-            var recalculated = optimizer.Recalculate(route.Stops, route.ServiceDate);
+            var recalculated = await optimizer.RecalculateAsync(
+                route.Stops, route.ServiceDate, route.RoutingProfile ?? "car", ct)
+                ?? optimizer.Recalculate(route.Stops, route.ServiceDate);
             route.ApplyDriverRecalculation(
                 recalculated.Stops,
                 recalculated.TotalDistanceKm,

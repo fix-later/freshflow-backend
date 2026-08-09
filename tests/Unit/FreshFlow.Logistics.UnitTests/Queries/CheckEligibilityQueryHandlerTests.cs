@@ -111,7 +111,7 @@ public sealed class CheckEligibilityQueryHandlerTests
             .Returns([
                 new OrderPackingLines(
                     orderId,
-                    [new OrderPackingLine(orderId, Guid.NewGuid(), "Fish", 11, 10m)])
+                    [new OrderPackingLine(orderId, Guid.NewGuid(), "Fish", 91, 10m)])
             ]);
         var routes = new InMemoryDeliveryRouteRepository();
         await routes.AddAsync(route, default);
@@ -124,7 +124,7 @@ public sealed class CheckEligibilityQueryHandlerTests
 
         result.Value.IsEligible.Should().BeFalse();
         result.Value.Reasons.Should().Contain("VEHICLE_WEIGHT_CAPACITY_EXCEEDED");
-        result.Value.RouteLoadKg.Should().Be(110m);
+        result.Value.RouteLoadKg.Should().Be(111m);
         result.Value.VehicleCapacityKg.Should().Be(100m);
         result.Value.IsWeightComplete.Should().BeTrue();
     }
@@ -273,6 +273,8 @@ public sealed class CheckEligibilityQueryHandlerTests
     {
         var capacityPolicy = Substitute.For<IVehicleCapacityPolicy>();
         capacityPolicy.MaxStopsPerVehicle.Returns(maxStopsPerVehicle);
+        capacityPolicy.BoxTareKg.Returns(2m);
+        capacityPolicy.CapacityUtilizationPercent.Returns(90m);
 
         return new CheckEligibilityQueryHandler(
             routes,

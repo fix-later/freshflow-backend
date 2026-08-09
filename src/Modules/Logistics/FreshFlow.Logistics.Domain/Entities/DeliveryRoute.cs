@@ -39,6 +39,11 @@ public sealed class DeliveryRoute
     public decimal? EstimatedCost { get; private set; }
     public OptimizationCriteria? OptimizationCriteria { get; private set; }
     public Guid? VehicleId { get; private set; }
+    public Guid? RoutePlanId { get; private set; }
+    public Guid? SuggestedVehicleId { get; private set; }
+    public decimal? PlannedLoadKg { get; private set; }
+    public string? RoutingProfile { get; private set; }
+    public DateTime? EstimatedReturnAt { get; private set; }
     public Guid? DriverUserId { get; private set; }
     public Guid? OrderGroupId { get; private set; }
     public Guid? CreatedBy { get; private set; }
@@ -114,6 +119,42 @@ public sealed class DeliveryRoute
         EstimatedDurationMinutes = estimatedDurationMinutes;
         EstimatedCost = estimatedCost;
         OptimizationCriteria = criteria;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void AttachToPlan(
+        Guid routePlanId, Guid suggestedVehicleId, decimal plannedLoadKg,
+        string routingProfile, DateTime estimatedReturnAt)
+    {
+        if (Status != RouteStatus.planned)
+            throw new InvalidOperationException("Only planned routes can be attached to a route plan.");
+        if (routePlanId == Guid.Empty || suggestedVehicleId == Guid.Empty)
+            throw new ArgumentException("Route plan and suggested vehicle are required.");
+        if (plannedLoadKg < 0)
+            throw new ArgumentOutOfRangeException(nameof(plannedLoadKg));
+
+        RoutePlanId = routePlanId;
+        SuggestedVehicleId = suggestedVehicleId;
+        PlannedLoadKg = plannedLoadKg;
+        RoutingProfile = routingProfile;
+        EstimatedReturnAt = estimatedReturnAt;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ReserveSuggestedVehicle()
+    {
+        if (Status != RouteStatus.planned || RoutePlanId is null || SuggestedVehicleId is null)
+            throw new InvalidOperationException("Only a proposed plan route can reserve its suggested vehicle.");
+        VehicleId = SuggestedVehicleId;
+        Status = RouteStatus.reviewed;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void CancelPlanProposal()
+    {
+        if (Status != RouteStatus.planned || RoutePlanId is null)
+            throw new InvalidOperationException("Only a planned proposal route can be cancelled.");
+        Status = RouteStatus.cancelled;
         UpdatedAt = DateTime.UtcNow;
     }
 

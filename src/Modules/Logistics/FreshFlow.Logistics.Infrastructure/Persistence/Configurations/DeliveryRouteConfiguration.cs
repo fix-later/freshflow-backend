@@ -58,6 +58,12 @@ internal sealed class DeliveryRouteConfiguration : IEntityTypeConfiguration<Deli
         builder.Property(r => r.VehicleId)
             .HasColumnName("vehicle_id");
 
+        builder.Property(r => r.RoutePlanId).HasColumnName("route_plan_id");
+        builder.Property(r => r.SuggestedVehicleId).HasColumnName("suggested_vehicle_id");
+        builder.Property(r => r.PlannedLoadKg).HasColumnName("planned_load_kg").HasColumnType("numeric(14,3)");
+        builder.Property(r => r.RoutingProfile).HasColumnName("routing_profile").HasMaxLength(20);
+        builder.Property(r => r.EstimatedReturnAt).HasColumnName("estimated_return_at");
+
         builder.Property(r => r.DriverUserId)
             .HasColumnName("driver_user_id");
 
@@ -97,10 +103,18 @@ internal sealed class DeliveryRouteConfiguration : IEntityTypeConfiguration<Deli
 
         builder.HasIndex(
                 r => new { r.VehicleId, r.ServiceDate },
-                "ux_delivery_routes_vehicle_service_date_assigned")
+                "ux_delivery_routes_vehicle_service_date_reserved")
             .IsUnique()
-            .HasFilter("status = 'assigned' AND deleted_at IS NULL")
-            .HasDatabaseName("ux_delivery_routes_vehicle_service_date_assigned");
+            .HasFilter("vehicle_id IS NOT NULL AND status IN ('reviewed', 'assigned', 'in_progress') AND deleted_at IS NULL")
+            .HasDatabaseName("ux_delivery_routes_vehicle_service_date_reserved");
+
+        builder.HasIndex(r => r.RoutePlanId).HasDatabaseName("idx_delivery_routes_route_plan_id");
+
+        builder.HasOne<RoutePlan>()
+            .WithMany()
+            .HasForeignKey(r => r.RoutePlanId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_delivery_routes_route_plan");
 
         builder.HasIndex(r => r.Status)
             .HasDatabaseName("idx_delivery_routes_status");
