@@ -184,12 +184,19 @@ public sealed class Order : AggregateRoot
         if (deliveryDistanceMeters is < 0 || deliveryDurationSeconds is < 0)
             return Result.Failure(Error.Validation(
                 "INVALID_DELIVERY_DISTANCE", "Delivery distance and duration must be non-negative."));
-        if (deliveryDistanceMeters.HasValue
-            && (deliveryDurationSeconds is null
-                || deliveryFeeCalculatedAt is null
-                || string.IsNullOrWhiteSpace(routingProvider)
-                || deliveryOriginLatitude is null or < -90m or > 90m
-                || deliveryOriginLongitude is null or < -180m or > 180m))
+        var hasSnapshot = deliveryDistanceMeters.HasValue
+            || deliveryDurationSeconds.HasValue
+            || deliveryFeeCalculatedAt.HasValue
+            || routingProvider is not null
+            || deliveryOriginLatitude.HasValue
+            || deliveryOriginLongitude.HasValue;
+        var hasCompleteSnapshot = deliveryDistanceMeters.HasValue
+            && deliveryDurationSeconds.HasValue
+            && deliveryFeeCalculatedAt.HasValue
+            && !string.IsNullOrWhiteSpace(routingProvider)
+            && deliveryOriginLatitude is >= -90m and <= 90m
+            && deliveryOriginLongitude is >= -180m and <= 180m;
+        if (hasSnapshot && !hasCompleteSnapshot)
             return Result.Failure(Error.Validation(
                 "INVALID_DELIVERY_SNAPSHOT", "A complete delivery road-distance snapshot is required."));
 

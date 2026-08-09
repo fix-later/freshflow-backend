@@ -39,6 +39,7 @@ public static class ErrorExtensions
                         or "BATCH_NOT_CANCELLABLE"
                         or "BATCH_RESET_NOT_ALLOWED"
                         or "BATCH_CANCELLED"
+                        or "ROUTING_INPUTS_CHANGED"
                         or "HUB_ALREADY_CONFIGURED_FOR_MARKET")
             return new ConflictObjectResult(body);
 
@@ -69,7 +70,8 @@ public static class ErrorExtensions
                         or "INVALID_PRICE" or "INVALID_QUANTITY"
                         or "RESTAURANT_NOT_APPROVED" or "INVALID_PRODUCT" or "INSUFFICIENT_STOCK"
                         or "MINIMUM_ORDER_QUANTITY_NOT_MET" or "DELIVERY_COORDINATES_REQUIRED"
-                        or "INVALID_DELIVERY_FEE" or "VAT_RATE_MISSING"
+                        or "INVALID_DELIVERY_FEE" or "INVALID_DELIVERY_DISTANCE"
+                        or "INVALID_DELIVERY_SNAPSHOT" or "VAT_RATE_MISSING"
                         or "ORDER_EMPTY" or "INVALID_AMOUNT" or "CREDIT_LIMIT_EXCEEDED"
                         or "INVALID_CLAIM_AMOUNT" or "INVALID_CLAIM_DECISION_NOTE"
                         or "CREDIT_REFUND_EXCEEDS_ORDER_CHARGE"

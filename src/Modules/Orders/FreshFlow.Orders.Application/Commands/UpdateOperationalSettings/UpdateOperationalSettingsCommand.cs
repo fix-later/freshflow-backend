@@ -8,7 +8,7 @@ public sealed record UpdateOperationalSettingsCommand(
     bool BatchingEnabled,
     string DefaultRouteType,
     int DeliveryWindowDays,
-    decimal DeliveryFeePerKm = 5000m,
-    decimal BaseFee = 0m,
-    decimal MinimumFee = 0m,
-    decimal RoundingUnit = 0m) : ICommand<OperationalSettingsDto>;
+    decimal? DeliveryFeePerKm = null,
+    decimal? BaseFee = null,
+    decimal? MinimumFee = null,
+    decimal? RoundingUnit = null) : ICommand<OperationalSettingsDto>;

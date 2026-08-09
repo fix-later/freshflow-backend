@@ -297,6 +297,31 @@ public sealed class ConfirmOrderCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_AddressChangesDuringRouting_RejectsStaleRouteAsync()
+    {
+        var order = NewDraftOrderWithItem();
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _restaurantReader.FindDeliveryAddressAsync(
+                DeliveryAddressId, RestaurantId, Arg.Any<CancellationToken>())
+            .Returns(
+                new DeliveryAddressSourceDto(
+                    DeliveryAddressId, "Bếp trưởng", "0901234567",
+                    "1 Test Street", 10.123456m, 106.123456m),
+                new DeliveryAddressSourceDto(
+                    DeliveryAddressId, "Bếp trưởng", "0901234567",
+                    "2 Changed Street", 10.223456m, 106.223456m));
+
+        var result = await _sut.Handle(Command(order.Id), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ROUTING_INPUTS_CHANGED");
+        order.Status.Should().Be(OrderStatus.Draft);
+        await _creditService.DidNotReceive().ChargeAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(), Arg.Any<string?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Handle_Success_ConfirmsOrderChargesCreditAndPersistsAsync()
     {
         var order = NewDraftOrderWithItem();

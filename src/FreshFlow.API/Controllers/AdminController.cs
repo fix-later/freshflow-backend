@@ -410,10 +410,10 @@ public sealed record UpdateOperationalSettingsRequest(
     bool BatchingEnabled,
     string DefaultRouteType,
     int DeliveryWindowDays,
-    decimal DeliveryFeePerKm = 5000m,
-    decimal BaseFee = 0m,
-    decimal MinimumFee = 0m,
-    decimal RoundingUnit = 0m);
+    decimal? DeliveryFeePerKm = null,
+    decimal? BaseFee = null,
+    decimal? MinimumFee = null,
+    decimal? RoundingUnit = null);
 public sealed record UpdatePricingSettingsRequest(decimal PriceAlertThresholdPercent);
 public sealed record RunAutoBatchRequest(DateOnly? TargetDate, bool? DryRun, bool? Force);
 public sealed record ResetOrderGroupsRequest(DateOnly TargetDate, string Confirmation);

@@ -34,12 +34,18 @@ public sealed class OrderConfirmationService(
             products.Add(product);
         }
 
-        return await RoadDistanceCalculator.GetAsync(
+        var result = await RoadDistanceCalculator.GetAsync(
             roadDistanceProvider,
             products,
             deliveryAddress.Latitude,
             deliveryAddress.Longitude,
             cancellationToken);
+        return result.IsFailure
+            ? result
+            : Result<RoadDistanceResult>.Success(result.Value with
+            {
+                InputRevision = CreateInputRevision(products, deliveryAddress)
+            });
     }
 
     public async Task<Result<OrderDto>> ConfirmAsync(
@@ -60,7 +66,6 @@ public sealed class OrderConfirmationService(
             return Result<OrderDto>.Failure(
                 Error.NotFound("DELIVERY_ADDRESS", deliveryAddressId));
 
-        var settings = await operationalSettings.GetAsync(cancellationToken);
         var products = new Dictionary<Guid, MarketProductSnapshotDto>();
         foreach (var marketProductId in order.Items.Select(item => item.MarketProductId).Distinct())
         {
@@ -69,6 +74,13 @@ public sealed class OrderConfirmationService(
                 return Result<OrderDto>.Failure(Error.NotFound("MARKET_PRODUCT", marketProductId));
             products[marketProductId] = product;
         }
+
+        if (roadDistance.InputRevision != CreateInputRevision(products.Values, deliveryAddress))
+            return Result<OrderDto>.Failure(Error.Conflict(
+                "ROUTING_INPUTS_CHANGED",
+                "The order items, product origins, or delivery address changed. Retry confirmation."));
+
+        var settings = await operationalSettings.GetAsync(cancellationToken);
 
         var pricing = OrderPricingCalculator.Calculate(
             order,
@@ -156,5 +168,17 @@ public sealed class OrderConfirmationService(
         // here without touching CreditService or the order-confirmation flow above.
 
         return Result<OrderDto>.Success(OrderDtoMapper.ToDto(order));
+    }
+
+    private static string CreateInputRevision(
+        IEnumerable<MarketProductSnapshotDto> products,
+        DeliveryAddressSourceDto deliveryAddress)
+    {
+        var origins = string.Join('|', products
+            .OrderBy(product => product.MarketProductId)
+            .Select(product => FormattableString.Invariant(
+                $"{product.MarketProductId:N}:{product.OriginLatitude}:{product.OriginLongitude}")));
+        return FormattableString.Invariant(
+            $"{deliveryAddress.AddressId:N}:{deliveryAddress.Latitude}:{deliveryAddress.Longitude}|{origins}");
     }
 }

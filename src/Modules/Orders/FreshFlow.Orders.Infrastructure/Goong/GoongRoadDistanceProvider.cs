@@ -2,13 +2,15 @@ using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FreshFlow.Orders.Application.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace FreshFlow.Orders.Infrastructure.Goong;
 
 internal sealed class GoongRoadDistanceProvider(
     IHttpClientFactory httpClientFactory,
-    IOptions<GoongOptions> options) : IRoadDistanceProvider
+    IOptions<GoongOptions> options,
+    ILogger<GoongRoadDistanceProvider> logger) : IRoadDistanceProvider
 {
     internal const string HttpClientName = "Orders.Goong";
     private const double EarthRadiusMeters = 6_371_008.8;
@@ -35,14 +37,13 @@ internal sealed class GoongRoadDistanceProvider(
             if (result is not null)
                 return result;
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
+            logger.LogWarning(exception, "Goong routing timed out; using Haversine fallback.");
         }
-        catch (HttpRequestException)
+        catch (Exception exception) when (exception is HttpRequestException or JsonException)
         {
-        }
-        catch (JsonException)
-        {
+            logger.LogWarning(exception, "Goong routing failed; using Haversine fallback.");
         }
 
         return Fallback(origins, destination);
@@ -84,14 +85,18 @@ internal sealed class GoongRoadDistanceProvider(
         using var json = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken);
         if (json is null
             || !json.RootElement.TryGetProperty("rows", out var rows)
+            || rows.ValueKind != JsonValueKind.Array
             || rows.GetArrayLength() != origins.Count)
             return null;
 
         RoadDistanceResult? farthest = null;
         for (var i = 0; i < origins.Count; i++)
         {
-            if (!rows[i].TryGetProperty("elements", out var elements)
+            if (rows[i].ValueKind != JsonValueKind.Object
+                || !rows[i].TryGetProperty("elements", out var elements)
+                || elements.ValueKind != JsonValueKind.Array
                 || elements.GetArrayLength() == 0
+                || elements[0].ValueKind != JsonValueKind.Object
                 || !elements[0].TryGetProperty("status", out var status)
                 || status.GetString() != "OK"
                 || !TryMetric(elements[0], [], out var distance, out var duration))
@@ -134,7 +139,8 @@ internal sealed class GoongRoadDistanceProvider(
                 }
                 root = root[index];
             }
-            else if (!root.TryGetProperty(segment, out root))
+            else if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty(segment, out root))
             {
                 distance = duration = 0;
                 return false;
@@ -150,7 +156,9 @@ internal sealed class GoongRoadDistanceProvider(
     private static bool TryValue(JsonElement root, string property, out int value)
     {
         value = 0;
-        return root.TryGetProperty(property, out var metric)
+        return root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty(property, out var metric)
+            && metric.ValueKind == JsonValueKind.Object
             && metric.TryGetProperty("value", out var raw)
             && raw.TryGetInt32(out value);
     }

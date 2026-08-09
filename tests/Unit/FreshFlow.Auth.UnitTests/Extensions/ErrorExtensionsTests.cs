@@ -13,6 +13,7 @@ public sealed class ErrorExtensionsTests
     [InlineData("PHONE_ALREADY_EXISTS")]
     [InlineData("REFRESH_TOKEN_REUSE")]
     [InlineData("ALREADY_APPROVED")]
+    [InlineData("ROUTING_INPUTS_CHANGED")]
     public void ToActionResult_ConflictCodes_Returns409(string code)
     {
         var error = new Error(code, "conflict message");
@@ -76,6 +77,8 @@ public sealed class ErrorExtensionsTests
     [InlineData("INVALID_CREDIT_LIMIT")]
     [InlineData("CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE")]
     [InlineData("DELIVERY_DATE_OUT_OF_WINDOW")]
+    [InlineData("INVALID_DELIVERY_DISTANCE")]
+    [InlineData("INVALID_DELIVERY_SNAPSHOT")]
     [InlineData("INVALID_ACTUAL_QUANTITY")]
     [InlineData("SCHEDULED_ORDER_FIRST_RUN_IN_PAST")]
     [InlineData("INVALID_ISSUE_QUANTITY")]

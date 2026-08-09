@@ -3,14 +3,17 @@ using System.Text;
 using FluentAssertions;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Infrastructure.Goong;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 
 namespace FreshFlow.Orders.UnitTests.Infrastructure;
 
 [Trait("Category", "Unit")]
-public sealed class GoongRoadDistanceProviderTests
+public sealed class GoongRoadDistanceProviderTests : IDisposable
 {
+    private readonly List<HttpClient> _clients = [];
+
     [Fact]
     public async Task GetDistanceAsync_Direction_ParsesMetersAndSeconds()
     {
@@ -91,20 +94,37 @@ public sealed class GoongRoadDistanceProviderTests
         await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
     }
 
-    private static GoongRoadDistanceProvider CreateProvider(
+    [Fact]
+    public async Task GetDistanceAsync_MatrixWithNonArrayRows_ReturnsFallback()
+    {
+        var provider = CreateProvider((_, _) => Json("{\"rows\":null}"));
+
+        var result = await provider.GetDistanceAsync(
+            [new GeoCoordinate(10m, 106m), new GeoCoordinate(11m, 107m)],
+            new GeoCoordinate(12m, 108m),
+            default);
+
+        result.IsEstimated.Should().BeTrue();
+        result.Provider.Should().Be("HAVERSINE_FALLBACK");
+    }
+
+    public void Dispose() => _clients.ForEach(client => client.Dispose());
+
+    private GoongRoadDistanceProvider CreateProvider(
         Func<HttpRequestMessage, CancellationToken, HttpResponseMessage> response)
     {
         var client = new HttpClient(new FakeHandler(response))
         {
             BaseAddress = new Uri("https://rsapi.goong.io/")
         };
+        _clients.Add(client);
         var factory = Substitute.For<IHttpClientFactory>();
         factory.CreateClient(GoongRoadDistanceProvider.HttpClientName).Returns(client);
         return new GoongRoadDistanceProvider(factory, Options.Create(new GoongOptions
         {
             ApiKey = "test-key",
             FallbackRoadFactor = 1.4
-        }));
+        }), NullLogger<GoongRoadDistanceProvider>.Instance);
     }
 
     private static HttpResponseMessage Json(string content) => new(HttpStatusCode.OK)

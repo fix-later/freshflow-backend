@@ -15,4 +15,5 @@ public sealed record RoadDistanceResult(
     int DurationSeconds,
     GeoCoordinate ChosenOrigin,
     bool IsEstimated,
-    string Provider);
+    string Provider,
+    string? InputRevision = null);

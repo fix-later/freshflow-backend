@@ -11,15 +11,16 @@ internal sealed class UpdateOperationalSettingsCommandHandler(IOperationalSettin
     public async Task<Result<OperationalSettingsDto>> Handle(
         UpdateOperationalSettingsCommand request, CancellationToken ct)
     {
+        var current = await settings.GetAsync(ct);
         var updated = await settings.UpsertAsync(
             request.DailyCutoffTime,
             request.BatchingEnabled,
             request.DefaultRouteType,
             request.DeliveryWindowDays,
-            request.DeliveryFeePerKm,
-            request.BaseFee,
-            request.MinimumFee,
-            request.RoundingUnit,
+            request.DeliveryFeePerKm ?? current.DeliveryFeePerKm,
+            request.BaseFee ?? current.BaseFee,
+            request.MinimumFee ?? current.MinimumFee,
+            request.RoundingUnit ?? current.RoundingUnit,
             ct);
 
         return Result<OperationalSettingsDto>.Success(new OperationalSettingsDto(
