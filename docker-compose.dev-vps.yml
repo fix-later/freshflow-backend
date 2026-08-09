@@ -18,6 +18,8 @@ services:
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       ConnectionStrings__Redis: redis:6379,password=${REDIS_PASSWORD},abortConnect=false
       SignalR__UseRedis: "true"
+      Notifications__Push__Enabled: "${Notifications__Push__Enabled:-false}"
+      Notifications__Push__AccessToken: "${Notifications__Push__AccessToken:-}"
       JWT__Key: ${JWT_KEY}
       JWT__Issuer: ${JWT_ISSUER}
       JWT__Audience: ${JWT_AUDIENCE}
