@@ -18,6 +18,8 @@ public interface IOrderRepository
 
     public Task<Order?> FindByIdAsync(Guid id, CancellationToken ct);
 
+    public Task<OrderConfirmationSource?> FindConfirmationSourceAsync(Guid id, CancellationToken ct);
+
     public Task<IReadOnlyList<Order>> FindByIdsAsync(
         IReadOnlyCollection<Guid> ids,
         CancellationToken ct);
@@ -40,6 +42,11 @@ public interface IOrderRepository
 }
 
 public sealed record StockReservation(Guid MarketProductId, int Quantity);
+
+public sealed record OrderConfirmationSource(
+    Guid RestaurantId,
+    OrderStatus Status,
+    IReadOnlyList<Guid> MarketProductIds);
 
 public sealed record OrderSearchCriteria(
     Guid? RestaurantId,

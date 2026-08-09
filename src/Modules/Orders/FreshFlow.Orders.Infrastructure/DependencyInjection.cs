@@ -8,6 +8,7 @@ using FreshFlow.Orders.Application.EventHandlers;
 using FreshFlow.Orders.Application.Services;
 using FreshFlow.Orders.Infrastructure.CrossModule;
 using FreshFlow.Orders.Infrastructure.Documents;
+using FreshFlow.Orders.Infrastructure.Goong;
 using FreshFlow.Orders.Infrastructure.Jobs;
 using FreshFlow.Orders.Infrastructure.Realtime;
 using FreshFlow.Orders.Infrastructure.Repositories;
@@ -15,6 +16,8 @@ using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Http.Resilience;
+using Microsoft.Extensions.Options;
 using QuestPDF.Infrastructure;
 
 namespace FreshFlow.Orders.Infrastructure;
@@ -42,6 +45,20 @@ public static class DependencyInjection
 
         // FluentValidation — auto-register all validators from Application
         services.AddValidatorsFromAssembly(applicationAssembly, includeInternalTypes: true);
+
+        services.AddOptions<GoongOptions>()
+            .Bind(config.GetSection(GoongOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddHttpClient(GoongRoadDistanceProvider.HttpClientName, (sp, client) =>
+            {
+                var options = sp.GetRequiredService<IOptions<GoongOptions>>().Value;
+                client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + '/');
+                client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+            })
+            .AddStandardResilienceHandler(options =>
+                options.Retry.MaxRetryAttempts = config.GetValue<int?>("Delivery:Goong:RetryCount") ?? 2);
+        services.AddScoped<IRoadDistanceProvider, GoongRoadDistanceProvider>();
 
         // Repositories
         services.AddScoped<IOrderRepository, OrderRepository>();

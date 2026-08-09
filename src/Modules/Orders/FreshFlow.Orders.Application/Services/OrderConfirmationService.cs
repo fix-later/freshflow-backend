@@ -11,10 +11,44 @@ public sealed class OrderConfirmationService(
     IRestaurantReader restaurantReader,
     IMarketProductReader marketProductReader,
     ICreditService creditService,
-    IOperationalSettingsRepository operationalSettings) : IOrderConfirmationService
+    IOperationalSettingsRepository operationalSettings,
+    IRoadDistanceProvider roadDistanceProvider) : IOrderConfirmationService
 {
+    public async Task<Result<RoadDistanceResult>> GetRoadDistanceAsync(
+        IReadOnlyCollection<Guid> marketProductIds,
+        Guid restaurantId,
+        Guid deliveryAddressId,
+        CancellationToken cancellationToken)
+    {
+        var deliveryAddress = await restaurantReader.FindDeliveryAddressAsync(
+            deliveryAddressId, restaurantId, cancellationToken);
+        if (deliveryAddress is null)
+            return Result<RoadDistanceResult>.Failure(Error.NotFound("DELIVERY_ADDRESS", deliveryAddressId));
+
+        var products = new List<MarketProductSnapshotDto>();
+        foreach (var marketProductId in marketProductIds.Distinct())
+        {
+            var product = await marketProductReader.FindAsync(marketProductId, cancellationToken);
+            if (product is null)
+                return Result<RoadDistanceResult>.Failure(Error.NotFound("MARKET_PRODUCT", marketProductId));
+            products.Add(product);
+        }
+
+        return await RoadDistanceCalculator.GetAsync(
+            roadDistanceProvider,
+            products,
+            deliveryAddress.Latitude,
+            deliveryAddress.Longitude,
+            cancellationToken);
+    }
+
     public async Task<Result<OrderDto>> ConfirmAsync(
-        Order order, Guid restaurantId, Guid deliveryAddressId, DateTime nowUtc, CancellationToken cancellationToken)
+        Order order,
+        Guid restaurantId,
+        Guid deliveryAddressId,
+        RoadDistanceResult roadDistance,
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
     {
         var canConfirmResult = order.CanConfirm();
         if (canConfirmResult.IsFailure)
@@ -39,9 +73,12 @@ public sealed class OrderConfirmationService(
         var pricing = OrderPricingCalculator.Calculate(
             order,
             products,
-            deliveryAddress.Latitude,
-            deliveryAddress.Longitude,
-            settings.DeliveryFeePerKm);
+            roadDistance.DistanceMeters / 1000m,
+            new DeliveryFeePolicy(
+                settings.BaseFee,
+                settings.DeliveryFeePerKm,
+                settings.MinimumFee,
+                settings.RoundingUnit));
         if (pricing.IsFailure)
             return Result<OrderDto>.Failure(pricing.Error);
 
@@ -63,7 +100,13 @@ public sealed class OrderConfirmationService(
         var pricingResult = order.ApplyConfirmationPricing(
             pricing.Value.TaxesByMarketProduct,
             pricing.Value.DeliveryDistanceKm,
-            pricing.Value.DeliveryFee);
+            pricing.Value.DeliveryFee,
+            roadDistance.DistanceMeters,
+            roadDistance.DurationSeconds,
+            nowUtc,
+            roadDistance.Provider,
+            roadDistance.ChosenOrigin.Latitude,
+            roadDistance.ChosenOrigin.Longitude);
         if (pricingResult.IsFailure)
             return Result<OrderDto>.Failure(pricingResult.Error);
 

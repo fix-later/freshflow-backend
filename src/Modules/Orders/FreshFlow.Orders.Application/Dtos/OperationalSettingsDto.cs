@@ -6,4 +6,7 @@ public sealed record OperationalSettingsDto(
     string DefaultRouteType,
     int DeliveryWindowDays,
     decimal DeliveryFeePerKm,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    decimal BaseFee = 0m,
+    decimal MinimumFee = 0m,
+    decimal RoundingUnit = 0m);

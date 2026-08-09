@@ -49,6 +49,20 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
             .HasColumnName("delivery_distance_km")
             .HasColumnType("numeric(10,2)")
             .IsRequired();
+        builder.Property(o => o.DeliveryDistanceMeters)
+            .HasColumnName("delivery_distance_meters");
+        builder.Property(o => o.DeliveryDurationSeconds)
+            .HasColumnName("delivery_duration_seconds");
+        builder.Property(o => o.DeliveryFeeCalculatedAt)
+            .HasColumnName("delivery_fee_calculated_at");
+        builder.Property(o => o.RoutingProvider)
+            .HasColumnName("routing_provider");
+        builder.Property(o => o.DeliveryOriginLatitude)
+            .HasColumnName("delivery_origin_latitude")
+            .HasPrecision(9, 6);
+        builder.Property(o => o.DeliveryOriginLongitude)
+            .HasColumnName("delivery_origin_longitude")
+            .HasPrecision(9, 6);
         builder.Property(o => o.Notes);
         builder.Property(o => o.DeliveryAddressId)
             .HasColumnName("delivery_address_id");

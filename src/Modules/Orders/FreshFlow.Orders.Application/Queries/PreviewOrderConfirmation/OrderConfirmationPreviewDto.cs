@@ -14,4 +14,7 @@ public sealed record OrderConfirmationPreviewDto(
     decimal SubtotalAmount = 0m,
     decimal VatAmount = 0m,
     decimal DeliveryFee = 0m,
-    decimal DeliveryDistanceKm = 0m);
+    decimal DeliveryDistanceKm = 0m,
+    int? DeliveryDurationSeconds = null,
+    string? RoutingProvider = null,
+    bool DeliveryDistanceEstimated = false);

@@ -51,6 +51,12 @@ public sealed class Order : AggregateRoot
     public decimal VatAmount { get; private set; }
     public decimal DeliveryFee { get; private set; }
     public decimal DeliveryDistanceKm { get; private set; }
+    public int? DeliveryDistanceMeters { get; private set; }
+    public int? DeliveryDurationSeconds { get; private set; }
+    public DateTime? DeliveryFeeCalculatedAt { get; private set; }
+    public string? RoutingProvider { get; private set; }
+    public decimal? DeliveryOriginLatitude { get; private set; }
+    public decimal? DeliveryOriginLongitude { get; private set; }
     public string? Notes { get; private set; }
     public Guid? DeliveryAddressId { get; private set; }
     public string? DeliveryRecipientName { get; private set; }
@@ -161,7 +167,13 @@ public sealed class Order : AggregateRoot
     public Result ApplyConfirmationPricing(
         IReadOnlyDictionary<Guid, OrderItemTaxSnapshot> taxesByMarketProduct,
         decimal deliveryDistanceKm,
-        decimal deliveryFee)
+        decimal deliveryFee,
+        int? deliveryDistanceMeters = null,
+        int? deliveryDurationSeconds = null,
+        DateTime? deliveryFeeCalculatedAt = null,
+        string? routingProvider = null,
+        decimal? deliveryOriginLatitude = null,
+        decimal? deliveryOriginLongitude = null)
     {
         if (Status != OrderStatus.Draft)
             return Result.Failure(Error.Conflict(
@@ -169,6 +181,17 @@ public sealed class Order : AggregateRoot
         if (deliveryDistanceKm < 0m || deliveryFee < 0m)
             return Result.Failure(Error.Validation(
                 "INVALID_DELIVERY_FEE", "Delivery distance and fee must be non-negative."));
+        if (deliveryDistanceMeters is < 0 || deliveryDurationSeconds is < 0)
+            return Result.Failure(Error.Validation(
+                "INVALID_DELIVERY_DISTANCE", "Delivery distance and duration must be non-negative."));
+        if (deliveryDistanceMeters.HasValue
+            && (deliveryDurationSeconds is null
+                || deliveryFeeCalculatedAt is null
+                || string.IsNullOrWhiteSpace(routingProvider)
+                || deliveryOriginLatitude is null or < -90m or > 90m
+                || deliveryOriginLongitude is null or < -180m or > 180m))
+            return Result.Failure(Error.Validation(
+                "INVALID_DELIVERY_SNAPSHOT", "A complete delivery road-distance snapshot is required."));
 
         foreach (var item in _items)
         {
@@ -183,6 +206,12 @@ public sealed class Order : AggregateRoot
         VatAmount = _items.Sum(item => item.LockedVatAmount ?? 0m);
         DeliveryDistanceKm = deliveryDistanceKm;
         DeliveryFee = deliveryFee;
+        DeliveryDistanceMeters = deliveryDistanceMeters;
+        DeliveryDurationSeconds = deliveryDurationSeconds;
+        DeliveryFeeCalculatedAt = deliveryFeeCalculatedAt;
+        RoutingProvider = routingProvider;
+        DeliveryOriginLatitude = deliveryOriginLatitude;
+        DeliveryOriginLongitude = deliveryOriginLongitude;
         TotalAmount = SubtotalAmount + VatAmount + DeliveryFee;
         return Result.Success();
     }
@@ -378,6 +407,12 @@ public sealed class Order : AggregateRoot
         VatAmount = 0m;
         DeliveryFee = 0m;
         DeliveryDistanceKm = 0m;
+        DeliveryDistanceMeters = null;
+        DeliveryDurationSeconds = null;
+        DeliveryFeeCalculatedAt = null;
+        RoutingProvider = null;
+        DeliveryOriginLatitude = null;
+        DeliveryOriginLongitude = null;
         TotalAmount = SubtotalAmount;
     }
 }

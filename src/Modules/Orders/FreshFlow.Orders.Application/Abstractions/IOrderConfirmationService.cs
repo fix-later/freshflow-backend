@@ -11,10 +11,21 @@ namespace FreshFlow.Orders.Application.Abstractions;
 /// </summary>
 public interface IOrderConfirmationService
 {
+    public Task<Result<RoadDistanceResult>> GetRoadDistanceAsync(
+        IReadOnlyCollection<Guid> marketProductIds,
+        Guid restaurantId,
+        Guid deliveryAddressId,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Callers own restaurant resolution/authorization and must wrap this call in
     /// <see cref="IOrderRepository.ExecuteInSerializableTransactionAsync"/>.
     /// </summary>
     public Task<Result<OrderDto>> ConfirmAsync(
-        Order order, Guid restaurantId, Guid deliveryAddressId, DateTime nowUtc, CancellationToken cancellationToken);
+        Order order,
+        Guid restaurantId,
+        Guid deliveryAddressId,
+        RoadDistanceResult roadDistance,
+        DateTime nowUtc,
+        CancellationToken cancellationToken);
 }

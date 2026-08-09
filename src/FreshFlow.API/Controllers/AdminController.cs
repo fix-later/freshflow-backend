@@ -217,7 +217,8 @@ public sealed class AdminController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new UpdateOperationalSettingsCommand(
                 body.DailyCutoffTime, body.BatchingEnabled, body.DefaultRouteType,
-                body.DeliveryWindowDays, body.DeliveryFeePerKm),
+                body.DeliveryWindowDays, body.DeliveryFeePerKm,
+                body.BaseFee, body.MinimumFee, body.RoundingUnit),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -409,7 +410,10 @@ public sealed record UpdateOperationalSettingsRequest(
     bool BatchingEnabled,
     string DefaultRouteType,
     int DeliveryWindowDays,
-    decimal DeliveryFeePerKm = 5000m);
+    decimal DeliveryFeePerKm = 5000m,
+    decimal BaseFee = 0m,
+    decimal MinimumFee = 0m,
+    decimal RoundingUnit = 0m);
 public sealed record UpdatePricingSettingsRequest(decimal PriceAlertThresholdPercent);
 public sealed record RunAutoBatchRequest(DateOnly? TargetDate, bool? DryRun, bool? Force);
 public sealed record ResetOrderGroupsRequest(DateOnly TargetDate, string Confirmation);

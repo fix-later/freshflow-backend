@@ -1,6 +1,7 @@
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Dtos;
 using FreshFlow.Orders.Application.Services;
+using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 
@@ -11,7 +12,8 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
     IRestaurantReader restaurantReader,
     IMarketProductReader marketProductReader,
     ICreditService creditService,
-    IOperationalSettingsRepository operationalSettings)
+    IOperationalSettingsRepository operationalSettings,
+    IRoadDistanceProvider roadDistanceProvider)
     : IRequestHandler<PreviewOrderConfirmationQuery, Result<OrderConfirmationPreviewDto>>
 {
     public Task<Result<OrderConfirmationPreviewDto>> Handle(
@@ -32,6 +34,7 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
 
         var settings = await operationalSettings.GetAsync(cancellationToken);
         OrderPricingQuote? pricing = null;
+        RoadDistanceResult? roadDistance = null;
         if (request.DeliveryAddressId is Guid deliveryAddressId)
         {
             var address = await restaurantReader.FindDeliveryAddressAsync(
@@ -50,22 +53,27 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
                 products[marketProductId] = product;
             }
 
+            var roadDistanceResult = await RoadDistanceCalculator.GetAsync(
+                roadDistanceProvider,
+                products.Values,
+                address.Latitude,
+                address.Longitude,
+                cancellationToken);
+            if (roadDistanceResult.IsFailure)
+                return PricingIssue(order, roadDistanceResult.Error);
+
+            roadDistance = roadDistanceResult.Value;
             var pricingResult = OrderPricingCalculator.Calculate(
                 order,
                 products,
-                address.Latitude,
-                address.Longitude,
-                settings.DeliveryFeePerKm);
+                roadDistance.DistanceMeters / 1000m,
+                new DeliveryFeePolicy(
+                    settings.BaseFee,
+                    settings.DeliveryFeePerKm,
+                    settings.MinimumFee,
+                    settings.RoundingUnit));
             if (pricingResult.IsFailure)
-            {
-                return Result<OrderConfirmationPreviewDto>.Success(new OrderConfirmationPreviewDto(
-                    WouldSucceed: false,
-                    Issues: [new PreviewIssueDto(pricingResult.Error.Code, pricingResult.Error.Message)],
-                    TotalAmount: order.TotalAmount,
-                    ResolvedScheduledFor: null,
-                    RemainingCreditAfter: null,
-                    SubtotalAmount: order.TotalAmount));
-            }
+                return PricingIssue(order, pricingResult.Error);
 
             pricing = pricingResult.Value;
         }
@@ -88,7 +96,10 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
                 SubtotalAmount: pricing?.SubtotalAmount ?? order.TotalAmount,
                 VatAmount: pricing?.VatAmount ?? 0m,
                 DeliveryFee: pricing?.DeliveryFee ?? 0m,
-                DeliveryDistanceKm: pricing?.DeliveryDistanceKm ?? 0m));
+                DeliveryDistanceKm: pricing?.DeliveryDistanceKm ?? 0m,
+                DeliveryDurationSeconds: roadDistance?.DurationSeconds,
+                RoutingProvider: roadDistance?.Provider,
+                DeliveryDistanceEstimated: roadDistance?.IsEstimated ?? false));
         }
 
         var evaluation = OrderConfirmationEvaluator.Evaluate(
@@ -111,6 +122,18 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
             SubtotalAmount: pricing?.SubtotalAmount ?? order.TotalAmount,
             VatAmount: pricing?.VatAmount ?? 0m,
             DeliveryFee: pricing?.DeliveryFee ?? 0m,
-            DeliveryDistanceKm: pricing?.DeliveryDistanceKm ?? 0m));
+            DeliveryDistanceKm: pricing?.DeliveryDistanceKm ?? 0m,
+            DeliveryDurationSeconds: roadDistance?.DurationSeconds,
+            RoutingProvider: roadDistance?.Provider,
+            DeliveryDistanceEstimated: roadDistance?.IsEstimated ?? false));
     }
+
+    private static Result<OrderConfirmationPreviewDto> PricingIssue(Order order, Error error) =>
+        Result<OrderConfirmationPreviewDto>.Success(new OrderConfirmationPreviewDto(
+            WouldSucceed: false,
+            Issues: [new PreviewIssueDto(error.Code, error.Message)],
+            TotalAmount: order.TotalAmount,
+            ResolvedScheduledFor: null,
+            RemainingCreditAfter: null,
+            SubtotalAmount: order.TotalAmount));
 }

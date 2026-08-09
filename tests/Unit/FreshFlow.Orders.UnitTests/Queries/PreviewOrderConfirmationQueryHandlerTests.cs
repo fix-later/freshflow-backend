@@ -18,6 +18,7 @@ public sealed class PreviewOrderConfirmationQueryHandlerTests
     private readonly IMarketProductReader _marketProductReader = Substitute.For<IMarketProductReader>();
     private readonly ICreditService _creditService = Substitute.For<ICreditService>();
     private readonly IOperationalSettingsRepository _operationalSettings = Substitute.For<IOperationalSettingsRepository>();
+    private readonly IRoadDistanceProvider _roadDistanceProvider = Substitute.For<IRoadDistanceProvider>();
 
     private readonly PreviewOrderConfirmationQueryHandler _sut;
 
@@ -30,7 +31,18 @@ public sealed class PreviewOrderConfirmationQueryHandlerTests
     public PreviewOrderConfirmationQueryHandlerTests()
     {
         _sut = new PreviewOrderConfirmationQueryHandler(
-            _orderRepository, _restaurantReader, _marketProductReader, _creditService, _operationalSettings);
+            _orderRepository, _restaurantReader, _marketProductReader, _creditService,
+            _operationalSettings, _roadDistanceProvider);
+
+        _roadDistanceProvider.GetDistanceAsync(
+                Arg.Any<IReadOnlyList<GeoCoordinate>>(),
+                Arg.Any<GeoCoordinate>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var origin = call.ArgAt<IReadOnlyList<GeoCoordinate>>(0)[0];
+                return new RoadDistanceResult(11_120, 1_200, origin, false, "GOONG");
+            });
 
         _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
             .Returns(OperationalSettings.CreateDefault());
@@ -113,6 +125,8 @@ public sealed class PreviewOrderConfirmationQueryHandlerTests
         result.Value.VatAmount.Should().Be(8_000m);
         result.Value.DeliveryDistanceKm.Should().Be(11.12m);
         result.Value.DeliveryFee.Should().Be(55_600m);
+        result.Value.DeliveryDurationSeconds.Should().Be(1_200);
+        result.Value.RoutingProvider.Should().Be("GOONG");
         result.Value.TotalAmount.Should().Be(163_600m);
         order.Status.Should().Be(OrderStatus.Draft);
     }

@@ -20,7 +20,14 @@ public sealed record OrderDto(
     decimal SubtotalAmount = 0m,
     decimal VatAmount = 0m,
     decimal DeliveryFee = 0m,
-    decimal DeliveryDistanceKm = 0m);
+    decimal DeliveryDistanceKm = 0m,
+    int? DeliveryDistanceMeters = null,
+    int? DeliveryDurationSeconds = null,
+    DateTime? DeliveryFeeCalculatedAt = null,
+    string? RoutingProvider = null,
+    decimal? DeliveryOriginLatitude = null,
+    decimal? DeliveryOriginLongitude = null,
+    bool DeliveryDistanceEstimated = false);
 
 public sealed record DeliveryAddressSnapshotDto(
     Guid AddressId,
