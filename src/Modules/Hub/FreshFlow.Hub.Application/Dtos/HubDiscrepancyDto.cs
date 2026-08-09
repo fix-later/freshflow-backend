@@ -9,6 +9,7 @@ public sealed record HubDiscrepancyDto(
     decimal AffectedQuantity,
     string ConditionStatus,
     string? Notes,
+    string? ProofImageUrl,
     string Status,
     Guid? AcknowledgedBy,
     DateTime? AcknowledgedAt,

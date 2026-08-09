@@ -225,7 +225,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
     // ── Procurement Batches (Admin) ─────────────────────────────────────────
 
     [HttpGet("order-groups")]
-    [Authorize(Roles = "admin")]
+    [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> GetOrderGroupsAsync(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,

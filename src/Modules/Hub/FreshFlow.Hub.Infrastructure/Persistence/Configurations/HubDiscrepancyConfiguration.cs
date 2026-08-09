@@ -58,6 +58,10 @@ internal sealed class HubDiscrepancyConfiguration : IEntityTypeConfiguration<Hub
             .HasColumnName("notes")
             .HasMaxLength(1000);
 
+        builder.Property(d => d.ProofImageUrl)
+            .HasColumnName("proof_image_url")
+            .HasMaxLength(512);
+
         builder.Property(d => d.Status)
             .HasColumnName("status")
             .HasMaxLength(20)

@@ -16,5 +16,15 @@ internal sealed class RecordDiscrepancyCommandValidator : AbstractValidator<Reco
                 or HubDiscrepancy.ConditionDamaged
                 or HubDiscrepancy.ConditionPartial);
         RuleFor(x => x.Notes).MaximumLength(1000);
+        RuleFor(x => x.ProofImageUrl)
+            .MaximumLength(512)
+            .Must(BeCloudinaryHttpsUrl)
+            .When(x => !string.IsNullOrWhiteSpace(x.ProofImageUrl))
+            .WithMessage("ProofImageUrl must be an absolute HTTPS Cloudinary resource URL.");
     }
+
+    private static bool BeCloudinaryHttpsUrl(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttps &&
+        uri.Host.Equals("res.cloudinary.com", StringComparison.OrdinalIgnoreCase);
 }

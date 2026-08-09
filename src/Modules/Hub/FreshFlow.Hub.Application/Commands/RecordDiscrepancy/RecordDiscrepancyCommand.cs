@@ -12,5 +12,6 @@ public sealed record RecordDiscrepancyCommand(
     string ConditionStatus,
     string? Notes,
     Guid ActorUserId = default,
-    bool BypassHubAssignment = false)
+    bool BypassHubAssignment = false,
+    string? ProofImageUrl = null)
     : ICommand<HubDiscrepancyDto>, IHubAccessRequest;
