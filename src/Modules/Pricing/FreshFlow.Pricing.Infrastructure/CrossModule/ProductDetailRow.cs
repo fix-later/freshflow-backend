@@ -11,6 +11,7 @@ internal sealed class ProductDetailRow
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string? ImageUrl { get; set; }
     public string Unit { get; set; } = string.Empty;
     public string? Category { get; set; }
     public decimal? CapacityKg { get; set; }

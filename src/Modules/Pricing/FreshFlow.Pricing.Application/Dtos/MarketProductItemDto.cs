@@ -9,6 +9,7 @@ public sealed record MarketProductItemDto(
     Guid ProductId,
     Guid MarketId,
     string ProductName,
+    string? ImageUrl,
     string? Category,
     string Unit,
     decimal CurrentPrice,
