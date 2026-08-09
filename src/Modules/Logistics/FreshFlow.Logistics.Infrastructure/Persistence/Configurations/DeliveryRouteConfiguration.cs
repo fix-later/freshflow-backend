@@ -105,7 +105,7 @@ internal sealed class DeliveryRouteConfiguration : IEntityTypeConfiguration<Deli
                 r => new { r.VehicleId, r.ServiceDate },
                 "ux_delivery_routes_vehicle_service_date_reserved")
             .IsUnique()
-            .HasFilter("vehicle_id IS NOT NULL AND status <> 'cancelled' AND deleted_at IS NULL")
+            .HasFilter("vehicle_id IS NOT NULL AND status IN ('reviewed', 'assigned', 'in_progress') AND deleted_at IS NULL")
             .HasDatabaseName("ux_delivery_routes_vehicle_service_date_reserved");
 
         builder.HasIndex(r => r.RoutePlanId).HasDatabaseName("idx_delivery_routes_route_plan_id");

@@ -45,7 +45,7 @@ public sealed class GoongRouteMatrixProviderTests
               {"elements":[{"status":"OK","distance":{"value":1300},"duration":{"value":130}},{"status":"OK","distance":{"value":0},"duration":{"value":0}}]}
             ]}
             """);
-        var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.test/") };
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://example.test/") };
         var factory = Substitute.For<IHttpClientFactory>();
         factory.CreateClient(GoongRouteMatrixProvider.HttpClientName).Returns(client);
         var provider = Create(factory, new Dictionary<string, string?>

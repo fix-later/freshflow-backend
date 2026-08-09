@@ -36,12 +36,14 @@ public sealed class OrToolsRoutePlanningSolverTests
             {
                 ["car"] = new(matrix, matrix)
             }, "TEST", false, []), OptimizationCriteria.distance);
+        result.IsSuccess.Should().BeTrue();
+        var solution = result.Value;
 
-        result.Unassigned.Should().BeEmpty();
-        result.Routes.Should().HaveCount(2);
-        result.Routes.Should().OnlyContain(route => route.Restaurants.Sum(x => x.LoadKg) <= 100m);
-        result.Routes.SelectMany(x => x.Restaurants).Select(x => x.RestaurantId)
+        solution.Unassigned.Should().BeEmpty();
+        solution.Routes.Should().HaveCount(2);
+        solution.Routes.Should().OnlyContain(route => route.Restaurants.Sum(x => x.LoadKg) <= 100m);
+        solution.Routes.SelectMany(x => x.Restaurants).Select(x => x.RestaurantId)
             .Should().BeEquivalentTo(demands.Select(x => x.RestaurantId));
-        result.Routes.Should().OnlyContain(route => route.DistanceMeters >= 3000);
+        solution.Routes.Should().OnlyContain(route => route.DistanceMeters >= 3000);
     }
 }

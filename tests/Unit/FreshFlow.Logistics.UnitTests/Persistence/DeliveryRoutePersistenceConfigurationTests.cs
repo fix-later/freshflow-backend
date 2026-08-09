@@ -69,7 +69,7 @@ public sealed class DeliveryRoutePersistenceConfigurationTests
             .Single(i => i.GetDatabaseName() == "ux_delivery_routes_vehicle_service_date_reserved");
         assignedRouteIndex.IsUnique.Should().BeTrue();
         assignedRouteIndex.GetFilter().Should().Be(
-            "vehicle_id IS NOT NULL AND status <> 'cancelled' AND deleted_at IS NULL");
+            "vehicle_id IS NOT NULL AND status IN ('reviewed', 'assigned', 'in_progress') AND deleted_at IS NULL");
         entity.GetIndexes().Should().Contain(i =>
             i.GetDatabaseName() == "idx_delivery_routes_status");
         entity.GetIndexes().Should().Contain(i =>

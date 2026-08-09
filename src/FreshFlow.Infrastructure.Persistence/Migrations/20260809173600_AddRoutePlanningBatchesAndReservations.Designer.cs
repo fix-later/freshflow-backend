@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FreshFlow.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260809163047_AddRoutePlanningBatchesAndReservations")]
+    [Migration("20260809173600_AddRoutePlanningBatchesAndReservations")]
     partial class AddRoutePlanningBatchesAndReservations
     {
         /// <inheritdoc />
@@ -2436,7 +2436,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.HasIndex(new[] { "VehicleId", "ServiceDate" }, "ux_delivery_routes_vehicle_service_date_reserved")
                         .IsUnique()
                         .HasDatabaseName("ux_delivery_routes_vehicle_service_date_reserved")
-                        .HasFilter("vehicle_id IS NOT NULL AND status <> 'cancelled' AND deleted_at IS NULL");
+                        .HasFilter("vehicle_id IS NOT NULL AND status IN ('reviewed', 'assigned', 'in_progress') AND deleted_at IS NULL");
 
                     b.ToTable("delivery_routes", (string)null);
                 });
@@ -4034,7 +4034,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    p.\"Id\",\n    p.\"Name\",\n    p.\"ImageUrl\",\n    u.\"Name\"  AS \"Unit\",\n    c.\"Name\"  AS \"Category\",\n    pc.\"CapacityKg\"\nFROM products p\nINNER JOIN units_of_measurement u ON p.\"UnitId\" = u.\"Id\"\nLEFT  JOIN product_categories   c ON p.\"CategoryId\" = c.\"Id\"\nLEFT  JOIN packing_codes       pc ON p.\"PackingCodeId\" = pc.\"Id\"\nWHERE p.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT\n    p.\"Id\",\n    p.\"Name\",\n    p.\"ImageUrl\",\n    u.\"Name\"  AS \"Unit\",\n    c.\"Name\"  AS \"Category\",\n    pc.\"CapacityKg\"\nFROM products p\nINNER JOIN units_of_measurement u ON p.\"UnitId\" = u.\"Id\"\nLEFT  JOIN product_categories   c ON p.\"CategoryId\" = c.\"Id\"\nLEFT  JOIN packing_codes       pc ON p.\"PackingCodeId\" = pc.\"Id\" AND pc.\"DeletedAt\" IS NULL\nWHERE p.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Pricing.Infrastructure.CrossModule.ProductRow", b =>

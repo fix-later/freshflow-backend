@@ -13,6 +13,8 @@ public sealed class RoutePlanningInputBuilder(
     IRestaurantCoordinateReader restaurants,
     IOrderStatusReader orders,
     IOrderPackingReader packing,
+    IDeliveryRepository deliveries,
+    IDeliveryRouteRepository routes,
     IVehicleRepository vehicles,
     IVehicleCapacityPolicy settings) : IRoutePlanningInputBuilder
 {
@@ -28,6 +30,9 @@ public sealed class RoutePlanningInputBuilder(
         var routable = await orders.ListRoutableRestaurantsAsync(serviceDate, ["AtHub"], ct);
         var atHubOrders = await orders.ListByRestaurantsAndStatusAsync(
             routable.Select(x => x.RestaurantId).ToList(), "AtHub", ct, hubId, serviceDate);
+        var reservedOrderIds = await deliveries.GetExistingOrderIdsAsync(
+            atHubOrders.Select(x => x.OrderId).ToList(), ct);
+        atHubOrders = atHubOrders.Where(x => !reservedOrderIds.Contains(x.OrderId)).ToList();
         if (atHubOrders.Count == 0)
         {
             return Result<RoutePlanningInput>.Success(new RoutePlanningInput(
@@ -76,8 +81,9 @@ public sealed class RoutePlanningInputBuilder(
             .AsReadOnly();
 
         var (fleet, _) = await vehicles.GetPageAsync(null, 10_000, true, ct);
+        var reservedVehicleIds = await routes.GetReservedVehicleIdsAsync(serviceDate, ct);
         var planningVehicles = fleet
-            .Where(vehicle => vehicle.IsAvailable)
+            .Where(vehicle => vehicle.IsAvailable && !reservedVehicleIds.Contains(vehicle.Id))
             .OrderBy(vehicle => vehicle.Id)
             .Select(vehicle => new PlanningVehicle(
                 vehicle.Id, vehicle.PlateNumber, vehicle.VehicleType, Profile(vehicle.VehicleType),
@@ -103,7 +109,7 @@ public sealed class RoutePlanningInputBuilder(
         }
         foreach (var vehicle in fleet.OrderBy(x => x.Id))
             snapshot.Append(CultureInfo.InvariantCulture,
-                $"V:{vehicle.Id:N}:{vehicle.CapacityKg}:{vehicle.VehicleType}:{vehicle.IsAvailable}:{vehicle.DeletedAt is null};");
+                $"V:{vehicle.Id:N}:{vehicle.CapacityKg}:{vehicle.VehicleType}:{vehicle.IsAvailable}:{vehicle.DeletedAt is null}:{reservedVehicleIds.Contains(vehicle.Id)};");
 
         return Result<RoutePlanningInput>.Success(new RoutePlanningInput(
             hubId, hub.Name, hub.Latitude.Value, hub.Longitude.Value, serviceDate,

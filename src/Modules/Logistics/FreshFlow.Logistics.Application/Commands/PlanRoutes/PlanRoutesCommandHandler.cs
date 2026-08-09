@@ -24,7 +24,8 @@ internal sealed class PlanRoutesCommandHandler(
     {
         var rawCriteria = string.IsNullOrWhiteSpace(request.OptimizationCriteria)
             ? nameof(OptimizationCriteria.distance) : request.OptimizationCriteria;
-        if (!Enum.TryParse<OptimizationCriteria>(rawCriteria, true, out var criteria))
+        if (!Enum.TryParse<OptimizationCriteria>(rawCriteria, true, out var criteria)
+            || !Enum.IsDefined(criteria))
             return Result<RoutePlanDto>.Failure(Error.Validation(
                 "VALIDATION_ERROR", "OptimizationCriteria must be DISTANCE, TIME, or COST."));
 
@@ -58,18 +59,15 @@ internal sealed class PlanRoutesCommandHandler(
             .Concat(input.Demands.Select(x => new RoutePoint(x.Latitude, x.Longitude))).ToList();
         var matrix = await matrices.GetMatrixAsync(
             points, input.Vehicles.Select(x => x.RoutingProfile).Distinct().ToList(), ct);
-        RoutePlanningSolution solution;
-        try { solution = solver.Solve(input, matrix, criteria); }
-        catch (InvalidOperationException ex) when (ex.Message == "ROUTE_PLAN_INFEASIBLE")
-        {
-            return Result<RoutePlanDto>.Failure(Error.Conflict(
-                "ROUTE_PLAN_INFEASIBLE", "No route plan solution was found within the solver limit."));
-        }
+        var solutionResult = solver.Solve(input, matrix, criteria);
+        if (!solutionResult.IsSuccess)
+            return Result<RoutePlanDto>.Failure(solutionResult.Error);
+        var solution = solutionResult.Value;
 
         var totalLoad = solution.Routes.Sum(route => route.Restaurants.Sum(x => x.LoadKg));
         var totalDistance = Math.Round(solution.Routes.Sum(x => x.DistanceMeters) / 1000m, 2);
         var totalDuration = solution.Routes.Sum(x =>
-            checked((int)Math.Ceiling((x.RoadDurationSeconds + x.Restaurants.Count * settings.ServiceTimeMinutes * 60d) / 60d)));
+            checked((int)Math.Ceiling((x.RoadDurationSeconds + 60d * x.Restaurants.Count * settings.ServiceTimeMinutes) / 60d)));
         var totalCost = Math.Round(totalDistance * settings.CostPerKm, 2);
         var plan = RoutePlan.Create(
             input.HubId, input.ServiceDate, criteria, matrix.Provider, matrix.IsEstimated,
@@ -79,12 +77,12 @@ internal sealed class PlanRoutesCommandHandler(
         var demandPoint = input.Demands.Select((demand, index) => (demand.RestaurantId, Point: index + 1))
             .ToDictionary(x => x.RestaurantId, x => x.Point);
         var createdRoutes = new List<DeliveryRoute>();
+        var start = TimeZoneInfo.ConvertTimeToUtc(
+            input.ServiceDate.ToDateTime(new TimeOnly(settings.StartHour, 0)),
+            TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh"));
         foreach (var solved in solution.Routes)
         {
             var profile = matrix.Profiles[solved.Vehicle.RoutingProfile];
-            var start = TimeZoneInfo.ConvertTimeToUtc(
-                input.ServiceDate.ToDateTime(new TimeOnly(settings.StartHour, 0)),
-                TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh"));
             var current = start;
             var previousPoint = 0;
             var stops = new List<RouteStop>
@@ -107,7 +105,7 @@ internal sealed class PlanRoutesCommandHandler(
 
             var routeDistance = Math.Round(solved.DistanceMeters / 1000m, 2);
             var routeDuration = checked((int)Math.Ceiling(
-                (solved.RoadDurationSeconds + solved.Restaurants.Count * settings.ServiceTimeMinutes * 60d) / 60d));
+                (solved.RoadDurationSeconds + 60d * solved.Restaurants.Count * settings.ServiceTimeMinutes) / 60d));
             var route = DeliveryRoute.CreateHubRoute(input.HubId, input.ServiceDate, stops, null);
             route.ApplyOptimization(stops, routeDistance, routeDuration,
                 Math.Round(routeDistance * settings.CostPerKm, 2), criteria);

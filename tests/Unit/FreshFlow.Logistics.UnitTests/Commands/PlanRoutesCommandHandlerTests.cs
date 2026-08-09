@@ -33,4 +33,26 @@ public sealed class PlanRoutesCommandHandlerTests
         result.Value.OptimizationCriteria.Should().Be(nameof(OptimizationCriteria.time).ToUpperInvariant());
         await matrices.DidNotReceiveWithAnyArgs().GetMatrixAsync(default!, default!, default);
     }
+
+    [Fact]
+    public async Task Handle_NumericCriteria_ReturnsValidationErrorAsync()
+    {
+        var inputs = Substitute.For<IRoutePlanningInputBuilder>();
+        var handler = new PlanRoutesCommandHandler(
+            inputs,
+            Substitute.For<IRouteMatrixProvider>(),
+            Substitute.For<IRoutePlanningSolver>(),
+            Substitute.For<IRoutePlanRepository>(),
+            Substitute.For<IDeliveryRouteRepository>(),
+            Substitute.For<IVehicleCapacityPolicy>(),
+            NullLogger<PlanRoutesCommandHandler>.Instance);
+
+        var result = await handler.Handle(
+            new PlanRoutesCommand(Guid.NewGuid(), new DateOnly(2026, 8, 10), "7"),
+            default);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Code.Should().Be("VALIDATION_ERROR");
+        await inputs.DidNotReceiveWithAnyArgs().BuildAsync(default, default, default);
+    }
 }

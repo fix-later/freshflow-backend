@@ -46,6 +46,18 @@ internal sealed class InMemoryDeliveryRouteRepository : IDeliveryRouteRepository
             route.Status != RouteStatus.cancelled &&
             route.DeletedAt == null));
 
+    public Task<IReadOnlySet<Guid>> GetReservedVehicleIdsAsync(
+        DateOnly serviceDate,
+        CancellationToken ct) =>
+        Task.FromResult<IReadOnlySet<Guid>>(_routes
+            .Where(route =>
+                route.VehicleId is not null &&
+                route.ServiceDate == serviceDate &&
+                route.Status != RouteStatus.cancelled &&
+                route.DeletedAt == null)
+            .Select(route => route.VehicleId!.Value)
+            .ToHashSet());
+
     public Task<(IReadOnlyList<DeliveryRoute> Items, string? NextCursor)> GetPageAsync(
         string? cursor,
         int pageSize,

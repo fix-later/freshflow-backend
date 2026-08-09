@@ -31,4 +31,8 @@ public interface IDeliveryRouteRepository
         DateOnly serviceDate,
         Guid excludeRouteId,
         CancellationToken ct);
+
+    public Task<IReadOnlySet<Guid>> GetReservedVehicleIdsAsync(
+        DateOnly serviceDate,
+        CancellationToken ct);
 }

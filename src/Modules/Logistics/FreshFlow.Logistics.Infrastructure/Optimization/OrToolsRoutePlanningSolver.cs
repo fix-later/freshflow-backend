@@ -1,6 +1,7 @@
 using FreshFlow.Logistics.Application.Abstractions;
 using FreshFlow.Logistics.Domain.Enums;
 using FreshFlow.Logistics.Domain.ValueObjects;
+using FreshFlow.SharedKernel.Application;
 using Google.OrTools.ConstraintSolver;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Logging;
@@ -11,7 +12,7 @@ internal sealed class OrToolsRoutePlanningSolver(
     IVehicleCapacityPolicy settings,
     ILogger<OrToolsRoutePlanningSolver> logger) : IRoutePlanningSolver
 {
-    public RoutePlanningSolution Solve(
+    public Result<RoutePlanningSolution> Solve(
         RoutePlanningInput input,
         RouteMatrixResult matrix,
         OptimizationCriteria criteria)
@@ -25,7 +26,7 @@ internal sealed class OrToolsRoutePlanningSolver(
         if (demands.Count == 0 || input.Vehicles.Count == 0)
         {
             oversized.AddRange(demands.Select(demand => Unassigned(demand, "FLEET_CAPACITY_UNAVAILABLE")));
-            return new RoutePlanningSolution([], oversized);
+            return Result<RoutePlanningSolution>.Success(new RoutePlanningSolution([], oversized));
         }
 
         var originalPoints = input.Demands
@@ -36,8 +37,8 @@ internal sealed class OrToolsRoutePlanningSolver(
             .ToArray();
         var starts = Enumerable.Repeat(0, input.Vehicles.Count).ToArray();
         var ends = Enumerable.Repeat(0, input.Vehicles.Count).ToArray();
-        var manager = new RoutingIndexManager(demands.Count + 1, input.Vehicles.Count, starts, ends);
-        var routing = new RoutingModel(manager);
+        using var manager = new RoutingIndexManager(demands.Count + 1, input.Vehicles.Count, starts, ends);
+        using var routing = new RoutingModel(manager);
 
         var costCallbacks = new int[input.Vehicles.Count];
         long maxArcCost = 1;
@@ -92,8 +93,10 @@ internal sealed class OrToolsRoutePlanningSolver(
         search.LocalSearchMetaheuristic = LocalSearchMetaheuristic.Types.Value.GuidedLocalSearch;
         search.TimeLimit = new Duration { Seconds = settings.SolverTimeLimitSeconds };
         var started = DateTime.UtcNow;
-        var solution = routing.SolveWithParameters(search)
-            ?? throw new InvalidOperationException("ROUTE_PLAN_INFEASIBLE");
+        var solution = routing.SolveWithParameters(search);
+        if (solution is null)
+            return Result<RoutePlanningSolution>.Failure(Error.Conflict(
+                "ROUTE_PLAN_INFEASIBLE", "No route plan solution was found within the solver limit."));
 
         var dropped = oversized;
         for (var node = 1; node <= demands.Count; node++)
@@ -131,7 +134,7 @@ internal sealed class OrToolsRoutePlanningSolver(
         logger.LogInformation(
             "Route solver completed Status={Status} ElapsedMs={ElapsedMs} VehiclesUsed={VehiclesUsed} Unassigned={Unassigned}",
             "SOLUTION", (DateTime.UtcNow - started).TotalMilliseconds, routes.Count, dropped.Count);
-        return new RoutePlanningSolution(routes, dropped);
+        return Result<RoutePlanningSolution>.Success(new RoutePlanningSolution(routes, dropped));
     }
 
     private static long ToGrams(decimal kilograms) => checked((long)Math.Round(

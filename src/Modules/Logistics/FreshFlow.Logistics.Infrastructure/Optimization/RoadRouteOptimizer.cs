@@ -90,8 +90,8 @@ internal sealed class RoadRouteOptimizer(
             roadSeconds += matrix.DurationSeconds[order[^1].index][order[0].index];
         }
         var duration = checked((int)Math.Ceiling(
-            (roadSeconds + order.Count(x => x.stop.EntityType == StopEntityType.restaurant)
-                * settings.ServiceTimeMinutes * 60d) / 60d));
+            (roadSeconds + 60d * order.Count(x => x.stop.EntityType == StopEntityType.restaurant)
+                * settings.ServiceTimeMinutes) / 60d));
         var distanceKm = Math.Round(distance / 1000m, 2);
         return new RouteOptimizationResult(
             result, distanceKm, duration, Math.Round(distanceKm * settings.CostPerKm, 2));

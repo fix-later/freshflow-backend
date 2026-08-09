@@ -23,7 +23,7 @@ internal sealed class ProductDetailRowConfiguration : IEntityTypeConfiguration<P
             FROM products p
             INNER JOIN units_of_measurement u ON p."UnitId" = u."Id"
             LEFT  JOIN product_categories   c ON p."CategoryId" = c."Id"
-            LEFT  JOIN packing_codes       pc ON p."PackingCodeId" = pc."Id"
+            LEFT  JOIN packing_codes       pc ON p."PackingCodeId" = pc."Id" AND pc."DeletedAt" IS NULL
             WHERE p."DeletedAt" IS NULL
             """);
 

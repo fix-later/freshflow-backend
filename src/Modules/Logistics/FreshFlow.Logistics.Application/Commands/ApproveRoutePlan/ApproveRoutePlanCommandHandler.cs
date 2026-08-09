@@ -5,13 +5,15 @@ using FreshFlow.Logistics.Domain.Entities;
 using FreshFlow.Logistics.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace FreshFlow.Logistics.Application.Commands.ApproveRoutePlan;
 
 internal sealed class ApproveRoutePlanCommandHandler(
     IRoutePlanRepository plans,
     IRoutePlanningInputBuilder inputs,
-    IDeliveryRepository deliveries)
+    IDeliveryRepository deliveries,
+    ILogger<ApproveRoutePlanCommandHandler> logger)
     : IRequestHandler<ApproveRoutePlanCommand, Result<RoutePlanDto>>
 {
     public async Task<Result<RoutePlanDto>> Handle(ApproveRoutePlanCommand request, CancellationToken ct)
@@ -27,7 +29,8 @@ internal sealed class ApproveRoutePlanCommandHandler(
         if (!inputResult.IsSuccess)
         {
             plan.MarkStale();
-            await plans.TrySaveChangesAsync(ct);
+            if (!await plans.TrySaveChangesAsync(ct))
+                logger.LogWarning("Failed to persist stale status PlanId={PlanId}", plan.Id);
             return Result<RoutePlanDto>.Failure(Error.Conflict(
                 "PLAN_STALE", "Route inputs are no longer complete or available."));
         }
@@ -35,7 +38,8 @@ internal sealed class ApproveRoutePlanCommandHandler(
         if (input.InputRevision != plan.InputRevision)
         {
             plan.MarkStale();
-            await plans.TrySaveChangesAsync(ct);
+            if (!await plans.TrySaveChangesAsync(ct))
+                logger.LogWarning("Failed to persist stale status PlanId={PlanId}", plan.Id);
             return Result<RoutePlanDto>.Failure(Error.Conflict(
                 "PLAN_STALE", "Orders, coordinates, fleet, or routing settings changed after planning."));
         }
@@ -44,6 +48,10 @@ internal sealed class ApproveRoutePlanCommandHandler(
                 "PLAN_HAS_UNASSIGNED_ORDERS", "Resolve all unassigned orders before approval."));
 
         var routes = await plans.GetRoutesAsync(plan.Id, ct);
+        if (routes.Any(route => route.SuggestedVehicleId is null))
+            return Result<RoutePlanDto>.Failure(Error.Conflict(
+                "ROUTE_PLAN_APPROVAL_CONFLICT", "Every planned route must have a suggested vehicle."));
+
         var snapshots = routes.SelectMany(route => route.Stops
                 .Where(stop => stop.OrderIds is not null)
                 .SelectMany(stop => stop.OrderIds!.Select(orderId =>

@@ -64,7 +64,7 @@ public sealed record RoutePlanningSolution(
 
 public interface IRoutePlanningSolver
 {
-    public RoutePlanningSolution Solve(
+    public Result<RoutePlanningSolution> Solve(
         RoutePlanningInput input,
         RouteMatrixResult matrix,
         OptimizationCriteria criteria);

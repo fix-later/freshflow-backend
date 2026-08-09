@@ -64,6 +64,21 @@ internal sealed class DeliveryRouteRepository(AppDbContext db) : IDeliveryRouteR
                     r.DeletedAt == null,
                 ct);
 
+    public async Task<IReadOnlySet<Guid>> GetReservedVehicleIdsAsync(
+        DateOnly serviceDate,
+        CancellationToken ct) =>
+        (await db.Set<DeliveryRoute>()
+            .AsNoTracking()
+            .Where(r =>
+                r.VehicleId != null &&
+                r.ServiceDate == serviceDate &&
+                r.Status != RouteStatus.cancelled &&
+                r.DeletedAt == null)
+            .Select(r => r.VehicleId!.Value)
+            .Distinct()
+            .ToListAsync(ct))
+        .ToHashSet();
+
     public async Task<(IReadOnlyList<DeliveryRoute> Items, string? NextCursor)> GetPageAsync(
         string? cursor,
         int pageSize,

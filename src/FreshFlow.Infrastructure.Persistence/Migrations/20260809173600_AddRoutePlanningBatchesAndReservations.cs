@@ -84,7 +84,7 @@ public partial class AddRoutePlanningBatchesAndReservations : Migration
             table: "delivery_routes",
             columns: new[] { "vehicle_id", "service_date" },
             unique: true,
-            filter: "vehicle_id IS NOT NULL AND status <> 'cancelled' AND deleted_at IS NULL");
+            filter: "vehicle_id IS NOT NULL AND status IN ('reviewed', 'assigned', 'in_progress') AND deleted_at IS NULL");
 
         migrationBuilder.CreateIndex(
             name: "idx_route_plans_input_revision",
