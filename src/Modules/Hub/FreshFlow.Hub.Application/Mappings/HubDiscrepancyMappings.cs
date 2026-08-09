@@ -15,6 +15,7 @@ internal static class HubDiscrepancyMappings
             discrepancy.AffectedQuantity,
             discrepancy.ConditionStatus,
             discrepancy.Notes,
+            discrepancy.ProofImageUrl,
             discrepancy.Status,
             discrepancy.AcknowledgedBy,
             discrepancy.AcknowledgedAt,

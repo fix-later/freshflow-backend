@@ -11,6 +11,7 @@ using FreshFlow.Logistics.Application.Commands.SelectRoute;
 using FreshFlow.Logistics.Application.Queries.CheckEligibility;
 using FreshFlow.Logistics.Application.Queries.GetLoadingManifest;
 using FreshFlow.Logistics.Application.Queries.GetRoute;
+using FreshFlow.Logistics.Application.Queries.GetRouteDeliveries;
 using FreshFlow.Logistics.Application.Queries.GetRouteSuggestions;
 using FreshFlow.Logistics.Application.Queries.ListRoutes;
 using MediatR;
@@ -170,6 +171,14 @@ public sealed class RoutesController(ISender sender) : ControllerBase
                 return denied.ToActionResult();
         }
 
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("{routeId:guid}/deliveries")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetRouteDeliveriesAsync(Guid routeId, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetRouteDeliveriesQuery(routeId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 

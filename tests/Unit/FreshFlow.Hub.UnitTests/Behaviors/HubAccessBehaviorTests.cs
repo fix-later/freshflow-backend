@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreshFlow.Hub.Application.Abstractions;
 using FreshFlow.Hub.Application.Behaviors;
+using FreshFlow.Hub.Application.Commands.CreateDiscrepancyProofUploadSignature;
 using FreshFlow.Hub.Application.Commands.CreateCrossDock;
 using FreshFlow.Hub.Application.Commands.CreateHandover;
 using FreshFlow.Hub.Application.Commands.RecordDiscrepancy;
@@ -30,6 +31,7 @@ public sealed class HubAccessBehaviorTests
     [InlineData(typeof(GetPendingInboundQuery))]
     [InlineData(typeof(ListInboundQuery))]
     [InlineData(typeof(RecordDiscrepancyCommand))]
+    [InlineData(typeof(CreateDiscrepancyProofUploadSignatureCommand))]
     [InlineData(typeof(ListDiscrepanciesQuery))]
     [InlineData(typeof(CreateCrossDockCommand))]
     [InlineData(typeof(ListCrossDockQuery))]

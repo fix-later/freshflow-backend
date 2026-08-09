@@ -54,7 +54,8 @@ internal sealed class RecordDiscrepancyCommandHandler(
             request.OrderItemId,
             request.AffectedQuantity,
             request.ConditionStatus,
-            request.Notes);
+            request.Notes,
+            request.ProofImageUrl);
 
         await discrepancies.AddAsync(discrepancy, ct);
         try

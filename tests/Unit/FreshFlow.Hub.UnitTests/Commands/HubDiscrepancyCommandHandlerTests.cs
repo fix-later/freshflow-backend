@@ -1,10 +1,13 @@
 using FluentAssertions;
 using FreshFlow.Hub.Application.Commands.AcknowledgeDiscrepancy;
+using FreshFlow.Hub.Application.Commands.CreateDiscrepancyProofUploadSignature;
 using FreshFlow.Hub.Application.Commands.RecordDiscrepancy;
 using FreshFlow.Hub.Application.Queries.ListDiscrepancies;
 using FreshFlow.Hub.Domain.Entities;
 using FreshFlow.Hub.Domain.Events;
 using FreshFlow.Hub.UnitTests.TestDoubles;
+using FreshFlow.SharedKernel.Application;
+using NSubstitute;
 using HubEntity = FreshFlow.Hub.Domain.Entities.Hub;
 
 namespace FreshFlow.Hub.UnitTests.Commands;
@@ -27,6 +30,7 @@ public sealed class HubDiscrepancyCommandHandlerTests
         await hubs.AddAsync(hub, default);
         await inbounds.AddAsync(inbound, default);
         orders.Add(orderItemId, orderId, inbound.Items.Single().MarketProductId);
+        const string proofUrl = "https://res.cloudinary.com/demo/image/upload/hub-proof.jpg";
         var sut = new RecordDiscrepancyCommandHandler(hubs, inbounds, discrepancies, orders);
 
         var result = await sut.Handle(
@@ -36,12 +40,15 @@ public sealed class HubDiscrepancyCommandHandlerTests
                 orderItemId,
                 3m,
                 HubDiscrepancy.ConditionPartial,
-                "Short count"),
+                "Short count",
+                ProofImageUrl: proofUrl),
             default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Status.Should().Be(HubDiscrepancy.StatusOpen);
         result.Value.OrderId.Should().Be(orderId);
+        result.Value.ProofImageUrl.Should().Be(proofUrl);
+        discrepancies.Discrepancies.Single().ProofImageUrl.Should().Be(proofUrl);
         discrepancies.Discrepancies.Should().ContainSingle();
         discrepancies.Discrepancies.Single().DomainEvents.Should().ContainSingle()
             .Which.Should().BeOfType<HubDiscrepancyRecordedDomainEvent>();
@@ -229,6 +236,51 @@ public sealed class HubDiscrepancyCommandHandlerTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("INVALID_ISSUE_QUANTITY");
+    }
+
+    [Fact]
+    public async Task CreateProofSignature_MatchingInbound_ReturnsHubFolderAsync()
+    {
+        var inbounds = new InMemoryHubInboundRepository();
+        var inbound = CreateInbound(Guid.NewGuid());
+        await inbounds.AddAsync(inbound, default);
+        var signer = Substitute.For<ICloudinarySignatureService>();
+        signer.Sign(Arg.Any<CloudinarySignatureRequest>()).Returns(
+            new CloudinarySignatureResult("sig", 123, "key", "cloud", "freshflow/hub-discrepancies"));
+        var sut = new CreateDiscrepancyProofUploadSignatureCommandHandler(inbounds, signer);
+
+        var result = await sut.Handle(
+            new CreateDiscrepancyProofUploadSignatureCommand(
+                inbound.HubId,
+                inbound.Id,
+                Guid.NewGuid()),
+            default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Folder.Should().Be("freshflow/hub-discrepancies");
+        signer.Received(1).Sign(Arg.Is<CloudinarySignatureRequest>(request =>
+            request.Folder == "freshflow/hub-discrepancies"));
+    }
+
+    [Fact]
+    public async Task CreateProofSignature_InboundFromAnotherHub_ReturnsNotFoundAsync()
+    {
+        var inbounds = new InMemoryHubInboundRepository();
+        var inbound = CreateInbound(Guid.NewGuid());
+        await inbounds.AddAsync(inbound, default);
+        var signer = Substitute.For<ICloudinarySignatureService>();
+        var sut = new CreateDiscrepancyProofUploadSignatureCommandHandler(inbounds, signer);
+
+        var result = await sut.Handle(
+            new CreateDiscrepancyProofUploadSignatureCommand(
+                Guid.NewGuid(),
+                inbound.Id,
+                Guid.NewGuid()),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("HUB_INBOUND_EVENT_NOT_FOUND");
+        signer.DidNotReceive().Sign(Arg.Any<CloudinarySignatureRequest>());
     }
 
     [Fact]

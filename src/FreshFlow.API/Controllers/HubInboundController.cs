@@ -2,6 +2,7 @@ using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Hub.Application.Commands.AcknowledgeDiscrepancy;
 using FreshFlow.Hub.Application.Commands.CreateCrossDock;
+using FreshFlow.Hub.Application.Commands.CreateDiscrepancyProofUploadSignature;
 using FreshFlow.Hub.Application.Commands.MarkLineSorted;
 using FreshFlow.Hub.Application.Commands.RecordDiscrepancy;
 using FreshFlow.Hub.Application.Commands.RecordInbound;
@@ -152,7 +153,8 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
                 body.ConditionStatus,
                 body.Notes,
                 ResolveUserId(),
-                BypassHubAssignment()),
+                BypassHubAssignment(),
+                body.ProofImageUrl),
             ct);
 
         return result.IsSuccess
@@ -160,6 +162,23 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
                 $"/api/v1/hubs/{hubId}/discrepancies/{result.Value.DiscrepancyId}",
                 ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
+    }
+
+    [HttpPost("{hubId:guid}/inbound/{inboundId:guid}/discrepancy/upload-signature")]
+    [Authorize(Roles = "hub_staff")]
+    public async Task<IActionResult> CreateDiscrepancyProofUploadSignatureAsync(
+        Guid hubId,
+        Guid inboundId,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new CreateDiscrepancyProofUploadSignatureCommand(
+                hubId,
+                inboundId,
+                ResolveUserId()),
+            ct);
+
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
     [HttpGet("{hubId:guid}/discrepancies")]
@@ -345,7 +364,8 @@ public sealed record RecordDiscrepancyRequest(
     Guid OrderItemId,
     decimal AffectedQuantity,
     string ConditionStatus,
-    string? Notes);
+    string? Notes,
+    string? ProofImageUrl = null);
 
 public sealed record CreateCrossDockRequest(
     Guid InboundEventId,

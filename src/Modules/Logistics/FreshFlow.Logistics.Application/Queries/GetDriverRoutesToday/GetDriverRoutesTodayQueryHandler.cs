@@ -59,7 +59,8 @@ internal sealed class GetDriverRoutesTodayQueryHandler(
                     delivery.SequenceNumber,
                     delivery.Status,
                     delivery.EstimatedArrival,
-                    delivery.ActualArrival))
+                    delivery.ActualArrival,
+                    delivery.ProofUrl))
                 .ToList()
                 .AsReadOnly()
             : [];

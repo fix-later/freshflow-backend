@@ -35,6 +35,8 @@ public sealed class HubDiscrepancyPersistenceConfigurationTests
         entity.FindProperty(nameof(HubDiscrepancy.ConditionStatus))!
             .GetColumnName(table)
             .Should().Be("condition_status");
+        entity.FindProperty(nameof(HubDiscrepancy.ProofImageUrl))!
+            .GetColumnName(table).Should().Be("proof_image_url");
         entity.FindProperty(nameof(HubDiscrepancy.DeletedAt))!.GetColumnName(table).Should().Be("deleted_at");
 
         entity.GetForeignKeys().Should().HaveCount(2);

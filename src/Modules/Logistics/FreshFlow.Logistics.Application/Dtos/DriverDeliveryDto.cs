@@ -6,4 +6,5 @@ public sealed record DriverDeliveryDto(
     int SequenceNumber,
     string Status,
     DateTime? EstimatedArrival,
-    DateTime? ActualArrival);
+    DateTime? ActualArrival,
+    string? ProofUrl);

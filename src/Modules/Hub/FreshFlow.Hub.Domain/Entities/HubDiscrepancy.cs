@@ -27,6 +27,7 @@ public sealed class HubDiscrepancy : AggregateRoot
     public decimal AffectedQuantity { get; private set; }
     public string ConditionStatus { get; private set; } = string.Empty;
     public string? Notes { get; private set; }
+    public string? ProofImageUrl { get; private set; }
     public string Status { get; private set; } = StatusOpen;
     public Guid? AcknowledgedBy { get; private set; }
     public DateTime? AcknowledgedAt { get; private set; }
@@ -38,7 +39,8 @@ public sealed class HubDiscrepancy : AggregateRoot
         Guid orderItemId,
         decimal affectedQuantity,
         string conditionStatus,
-        string? notes)
+        string? notes,
+        string? proofImageUrl = null)
     {
         if (hubId == Guid.Empty)
             throw new ArgumentException("Hub id is required.", nameof(hubId));
@@ -66,6 +68,7 @@ public sealed class HubDiscrepancy : AggregateRoot
             AffectedQuantity = affectedQuantity,
             ConditionStatus = conditionStatus,
             Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+            ProofImageUrl = string.IsNullOrWhiteSpace(proofImageUrl) ? null : proofImageUrl.Trim(),
             Status = StatusOpen,
             CreatedAt = now,
             UpdatedAt = now
