@@ -16,6 +16,7 @@ internal sealed class ProductDetailRowConfiguration : IEntityTypeConfiguration<P
             SELECT
                 p."Id",
                 p."Name",
+                p."ImageUrl",
                 u."Name"  AS "Unit",
                 c."Name"  AS "Category",
                 pc."CapacityKg"
@@ -28,6 +29,7 @@ internal sealed class ProductDetailRowConfiguration : IEntityTypeConfiguration<P
 
         builder.Property(p => p.Id);
         builder.Property(p => p.Name);
+        builder.Property(p => p.ImageUrl);
         builder.Property(p => p.Unit);
         builder.Property(p => p.Category);
         builder.Property(p => p.CapacityKg);

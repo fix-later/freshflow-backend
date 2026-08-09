@@ -350,6 +350,7 @@ public sealed class GetMarketProductsQueryHandlerTests
             ProductId: Guid.NewGuid(),
             MarketId: MarketId,
             ProductName: "Test Product",
+            ImageUrl: "https://images.example.com/product.jpg",
             Category: "thủy hải sản",
             Unit: "kg",
             CurrentPrice: currentPrice,

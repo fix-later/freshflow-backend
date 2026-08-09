@@ -105,7 +105,9 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
 
         // Create a product via Catalog API
         var unitId = await GetOrCreateUnitAsync("kg");
+        const string imageUrl = "https://images.example.com/ca-loc.jpg";
         var productId = await CreateProductAsync($"Cá lóc {Guid.NewGuid():N}", unitId);
+        await SetProductImageUrlAsync(productId, imageUrl);
 
         // Seed a market_product directly (no create-market-product endpoint yet)
         await SeedMarketProductAsync(marketId, productId, 125_000m, 500);
@@ -122,6 +124,7 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
         var item = env.Data![0];
         item.MarketId.Should().Be(marketId);
         item.ProductId.Should().Be(productId);
+        item.ImageUrl.Should().Be(imageUrl);
         item.CurrentPrice.Should().Be(125_000m);
         item.CurrentQuantity.Should().Be(500);
         item.AvailableQuantity.Should().Be(500);
@@ -361,6 +364,15 @@ public sealed class MarketProductsEndpointTests(AuthWebAppFactory factory)
         return env!.Data!.Id;
     }
 
+    private async Task SetProductImageUrlAsync(Guid productId, string imageUrl)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.ExecuteSqlRawAsync(
+            """UPDATE products SET "ImageUrl" = {0} WHERE "Id" = {1}""",
+            imageUrl, productId);
+    }
+
     private async Task<Guid> SeedMarketProductAsync(
         Guid marketId, Guid productId, decimal price, int quantity, IReadOnlyList<Guid>? tagIds = null)
     {
@@ -410,6 +422,7 @@ public sealed record MarketProductItemBody(
     Guid ProductId,
     Guid MarketId,
     string ProductName,
+    string? ImageUrl,
     string? Category,
     string Unit,
     decimal CurrentPrice,
