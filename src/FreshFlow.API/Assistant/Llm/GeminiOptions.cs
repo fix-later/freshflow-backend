@@ -32,8 +32,12 @@ public sealed class GeminiOptions
 
     /// <summary>
     /// Vertex AI OpenAI-compatible base endpoint. The OpenAI SDK appends <c>/chat/completions</c>.
-    /// Shape: <c>https://{Location}-aiplatform.googleapis.com/v1/projects/{ProjectId}/locations/{Location}/endpoints/openapi</c>.
+    /// Regional shape: <c>https://{Location}-aiplatform.googleapis.com/v1/projects/{ProjectId}/locations/{Location}/endpoints/openapi</c>.
+    /// The <c>global</c> location has no region prefix — its host is <c>aiplatform.googleapis.com</c>.
     /// </summary>
-    public Uri BuildEndpoint() => new(
-        $"https://{Location}-aiplatform.googleapis.com/v1/projects/{ProjectId}/locations/{Location}/endpoints/openapi");
+    public Uri BuildEndpoint()
+    {
+        var host = Location == "global" ? "aiplatform.googleapis.com" : $"{Location}-aiplatform.googleapis.com";
+        return new($"https://{host}/v1/projects/{ProjectId}/locations/{Location}/endpoints/openapi");
+    }
 }

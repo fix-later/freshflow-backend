@@ -98,6 +98,25 @@ public class GeminiOptionsTests
             "https://asia-southeast1-aiplatform.googleapis.com/v1/projects/freshflow-xxxxx/locations/asia-southeast1/endpoints/openapi");
     }
 
+    [Fact]
+    public void BuildEndpoint_uses_the_unprefixed_host_for_the_global_location()
+    {
+        // Arrange — the "global" location has no region prefix; its host is aiplatform.googleapis.com.
+        var options = new GeminiOptions
+        {
+            ProjectId = "freshflow-xxxxx",
+            Location = "global",
+            Model = "google/gemini-3.6-flash"
+        };
+
+        // Act
+        var endpoint = options.BuildEndpoint();
+
+        // Assert
+        endpoint.ToString().Should().Be(
+            "https://aiplatform.googleapis.com/v1/projects/freshflow-xxxxx/locations/global/endpoints/openapi");
+    }
+
     private static List<ValidationResult> Validate(GeminiOptions options)
     {
         var context = new ValidationContext(options);
