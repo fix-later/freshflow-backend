@@ -112,6 +112,7 @@ public static class DependencyInjection
 
         // Injects a rotating GCP OAuth2 bearer token on every request to the Vertex endpoint.
         services.AddTransient<GcpAuthHandler>();
+        services.AddTransient<GeminiThoughtSignatureHandler>();
 
         services.AddHttpClient(GeminiHttpClientName, (sp, client) =>
             {
@@ -119,6 +120,7 @@ public static class DependencyInjection
                 client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
             })
             .AddHttpMessageHandler<GcpAuthHandler>()
+            .AddHttpMessageHandler<GeminiThoughtSignatureHandler>()
             .AddStandardResilienceHandler(options => options.Retry.MaxRetryAttempts = 2);
 
         services.AddScoped(sp => new GeminiChatClient(
