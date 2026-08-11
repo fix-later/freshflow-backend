@@ -48,7 +48,11 @@ public sealed class CreditStatementGenerationGapScenarioTests
     private static CreditTransaction NewTransaction(
         Guid restaurantId, CreditTransactionType type, decimal amount, decimal balanceAfter, DateTime createdAt)
     {
-        var transaction = new CreditTransaction(restaurantId, null, type, amount, balanceAfter, null);
+        var transaction = type == CreditTransactionType.Settlement
+            ? new CreditTransaction(
+                restaurantId, null, type, amount, balanceAfter, null,
+                PaymentMethod.Manual, $"LEGACY-{Guid.NewGuid()}", Guid.NewGuid())
+            : new CreditTransaction(restaurantId, null, type, amount, balanceAfter, null);
         SetCreatedAt(transaction, createdAt);
         return transaction;
     }

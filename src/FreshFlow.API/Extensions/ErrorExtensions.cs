@@ -46,7 +46,8 @@ public static class ErrorExtensions
                         or "ROUTE_PLAN_INFEASIBLE"
                         or "ROUTE_PLAN_CONFLICT"
                         or "ROUTE_PLAN_APPROVAL_CONFLICT"
-                        or "HUB_ALREADY_CONFIGURED_FOR_MARKET")
+                        or "HUB_ALREADY_CONFIGURED_FOR_MARKET"
+                        or "CREDIT_SETTLEMENT_DUPLICATE_REFERENCE")
             return new ConflictObjectResult(body);
 
         if (error.Code is "UNAUTHORIZED" or "INVALID_CREDENTIALS" or "INVALID_CURRENT_PASSWORD"
@@ -79,6 +80,7 @@ public static class ErrorExtensions
                         or "INVALID_DELIVERY_FEE" or "INVALID_DELIVERY_DISTANCE"
                         or "INVALID_DELIVERY_SNAPSHOT" or "VAT_RATE_MISSING"
                         or "ORDER_EMPTY" or "INVALID_AMOUNT" or "CREDIT_LIMIT_EXCEEDED"
+                        or "INVALID_SETTLEMENT_DETAILS"
                         or "INVALID_CLAIM_AMOUNT" or "INVALID_CLAIM_DECISION_NOTE"
                         or "CREDIT_REFUND_EXCEEDS_ORDER_CHARGE"
                         or "CREDIT_SETTLEMENT_EXCEEDS_BALANCE" or "CREDIT_REFUND_EXCEEDS_BALANCE"

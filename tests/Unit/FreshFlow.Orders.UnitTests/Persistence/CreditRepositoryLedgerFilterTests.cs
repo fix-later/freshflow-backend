@@ -36,7 +36,8 @@ public sealed class CreditRepositoryLedgerFilterTests
         var adjustment = new CreditTransaction(
             RestaurantId, null, CreditTransactionType.Adjustment, 500m, 100m, "Limit changed");
         var settlement = new CreditTransaction(
-            RestaurantId, null, CreditTransactionType.Settlement, 40m, 60m, "Settled");
+            RestaurantId, null, CreditTransactionType.Settlement, 40m, 60m, "Settled",
+            PaymentMethod.Manual, "MANUAL-1", Guid.NewGuid());
         ctx.Set<CreditTransaction>().AddRange(charge, adjustment, settlement);
         await ctx.SaveChangesAsync();
 

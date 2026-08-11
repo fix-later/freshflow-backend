@@ -22,6 +22,8 @@ internal sealed class VehicleCapacityPolicy : IVehicleCapacityPolicy
 
         CapacityUtilizationPercent = ReadDecimal(config, "Logistics:CapacityUtilizationPercent", 90m, 1m, 100m);
         MatrixBatchSize = ReadInt(config, "Logistics:Routing:MatrixBatchSize", 10, 1, 25);
+        MatrixCacheEnabled = config.GetValue("Logistics:Routing:MatrixCache:Enabled", true);
+        MatrixCacheMaxAgeDays = ReadClampedInt(config, "Logistics:Routing:MatrixCache:MaxAgeDays", 30, 1, 3650);
         SolverTimeLimitSeconds = ReadInt(config, "Logistics:Routing:SolverTimeLimitSeconds", 3, 1, 120);
         StartHour = ReadInt(config, "Logistics:Routing:StartHour", 6, 0, 23);
         ServiceTimeMinutes = ReadInt(config, "Logistics:Routing:ServiceTimeMinutes", 10, 0, 240);
@@ -32,6 +34,8 @@ internal sealed class VehicleCapacityPolicy : IVehicleCapacityPolicy
     public decimal BoxTareKg { get; }
     public decimal CapacityUtilizationPercent { get; }
     public int MatrixBatchSize { get; }
+    public bool MatrixCacheEnabled { get; }
+    public int MatrixCacheMaxAgeDays { get; }
     public int SolverTimeLimitSeconds { get; }
     public int StartHour { get; }
     public int ServiceTimeMinutes { get; }
@@ -39,6 +43,9 @@ internal sealed class VehicleCapacityPolicy : IVehicleCapacityPolicy
 
     private static int ReadInt(IConfiguration config, string key, int fallback, int min, int max) =>
         int.TryParse(config[key], out var value) && value >= min && value <= max ? value : fallback;
+
+    private static int ReadClampedInt(IConfiguration config, string key, int fallback, int min, int max) =>
+        int.TryParse(config[key], out var value) ? Math.Clamp(value, min, max) : fallback;
 
     private static decimal ReadDecimal(
         IConfiguration config, string key, decimal fallback, decimal min, decimal max) =>

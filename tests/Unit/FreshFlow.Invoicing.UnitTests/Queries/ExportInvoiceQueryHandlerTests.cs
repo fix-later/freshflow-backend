@@ -30,9 +30,12 @@ public sealed class ExportInvoiceQueryHandlerTests
         var result = await handler.Handle(new ExportInvoiceQuery(UserId, true, invoice.Id), default);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.FileName.Should().Be("invoice-K24TFF-0001.xml");
+        result.Value.FileName.Should().Be("invoice-dev-draft-K24TFF-0001.xml");
         var document = XDocument.Parse(result.Value.Xml);
         document.Root!.Name.LocalName.Should().Be("EInvoice");
+        document.Root.Attribute("environment")!.Value.Should().Be("development");
+        document.Root.Attribute("legalValue")!.Value.Should().Be("false");
+        document.Root.Element("Notice")!.Value.Should().Be("BẢN NHÁP - KHÔNG CÓ GIÁ TRỊ THUẾ");
         document.Root.Element("Header")!.Element("TaxAuthorityCode")!.Value.Should().Be("MCQT-1");
         document.Root.Element("Header")!.Element("IssueDate")!.Value.Should().Be("2026-08-04T03:02:01Z");
         document.Root.Element("Seller")!.Element("TaxCode")!.Value.Should().Be("SELLER_TAX_CODE_PENDING");
@@ -48,6 +51,24 @@ public sealed class ExportInvoiceQueryHandlerTests
         line.Element("LineVatAmount")!.Value.Should().Be("0");
         line.Element("LineTotal")!.Value.Should().Be("1000");
         document.Root.Element("Totals")!.Element("Total")!.Value.Should().Be("1000");
+    }
+
+    [Fact]
+    public async Task NonStubInvoice_DoesNotAddDevelopmentMarkersAsync()
+    {
+        var invoice = InvoiceFor(RestaurantId);
+        invoice.MarkIssued(
+            "K24TFF", "0002", "MCQT-2", "https://lookup", null, null, "misa", DateTime.UtcNow);
+        _repo.FindByIdAsync(invoice.Id, Arg.Any<CancellationToken>()).Returns(invoice);
+        var handler = new ExportInvoiceQueryHandler(_repo, _restaurantReader);
+
+        var result = await handler.Handle(new ExportInvoiceQuery(UserId, true, invoice.Id), default);
+
+        result.Value.FileName.Should().Be("invoice-K24TFF-0002.xml");
+        var root = XDocument.Parse(result.Value.Xml).Root!;
+        root.Attribute("environment").Should().BeNull();
+        root.Attribute("legalValue").Should().BeNull();
+        root.Element("Notice").Should().BeNull();
     }
 
     [Fact]

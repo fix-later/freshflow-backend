@@ -91,7 +91,8 @@ public sealed class CreditRepositoryPeriodQueriesTests
             new CreditTransaction(RestaurantId, Guid.NewGuid(), CreditTransactionType.Charge, 100m, 100m, null),
             new CreditTransaction(RestaurantId, Guid.NewGuid(), CreditTransactionType.Charge, 50m, 150m, null),
             new CreditTransaction(
-                RestaurantId, null, CreditTransactionType.Settlement, 40m, 110m, null, PaymentMethod.Manual),
+                RestaurantId, null, CreditTransactionType.Settlement, 40m, 110m, null,
+                PaymentMethod.Manual, "MANUAL-1", Guid.NewGuid()),
             new CreditTransaction(RestaurantId, Guid.NewGuid(), CreditTransactionType.Refund, 10m, 100m, null));
         await ctx.SaveChangesAsync();
 

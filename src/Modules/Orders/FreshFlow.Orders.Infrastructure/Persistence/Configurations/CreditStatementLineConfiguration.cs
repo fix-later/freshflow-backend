@@ -54,7 +54,31 @@ internal sealed class CreditStatementLineConfiguration : IEntityTypeConfiguratio
             .HasColumnName("reference")
             .HasMaxLength(200);
 
+        builder.Property(l => l.OrderId)
+            .HasColumnName("order_id");
+
+        builder.Property(l => l.PaymentMethod)
+            .HasColumnName("payment_method")
+            .HasMaxLength(20)
+            .HasConversion(
+                v => v == null ? null : ToSnakeCase(v.Value),
+                v => v == null ? (PaymentMethod?)null : FromSnakeCase(v));
+
         builder.HasIndex(l => l.CreditStatementId)
             .HasDatabaseName("idx_credit_statement_lines_statement_id");
     }
+
+    private static string ToSnakeCase(PaymentMethod value) => value switch
+    {
+        PaymentMethod.BankTransfer => "bank_transfer",
+        PaymentMethod.Manual => "manual",
+        _ => throw new ArgumentOutOfRangeException(nameof(value)),
+    };
+
+    private static PaymentMethod FromSnakeCase(string value) => value switch
+    {
+        "bank_transfer" => PaymentMethod.BankTransfer,
+        "manual" => PaymentMethod.Manual,
+        _ => throw new ArgumentOutOfRangeException(nameof(value)),
+    };
 }

@@ -51,4 +51,25 @@ public sealed class VehicleCapacityPolicyTests
 
         sut.BoxTareKg.Should().Be(expected);
     }
+
+    [Theory]
+    [InlineData(null, 30)]
+    [InlineData("not-a-number", 30)]
+    [InlineData("0", 1)]
+    [InlineData("30", 30)]
+    [InlineData("5000", 3650)]
+    public void Constructor_ClampsMatrixCacheMaxAgeDays(string? configuredValue, int expected)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Logistics:Routing:MatrixCache:MaxAgeDays"] = configuredValue
+            })
+            .Build();
+
+        var sut = new VehicleCapacityPolicy(config);
+
+        sut.MatrixCacheEnabled.Should().BeTrue();
+        sut.MatrixCacheMaxAgeDays.Should().Be(expected);
+    }
 }

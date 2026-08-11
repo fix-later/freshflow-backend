@@ -6,6 +6,7 @@ namespace FreshFlow.Orders.Application.Commands.SettleRestaurantCredit;
 
 public sealed record SettleRestaurantCreditCommand(
     Guid RestaurantId,
+    Guid RecordedByUserId,
     decimal Amount,
     PaymentMethod PaymentMethod,
     string? Reference,

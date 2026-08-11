@@ -41,7 +41,9 @@ internal static class CreditStatementDtoMapper
             line.BalanceAfter,
             line.OccurredAt,
             line.Note,
-            line.Reference);
+            line.Reference,
+            line.OrderId,
+            line.PaymentMethod is null ? null : ToSnakeCase(line.PaymentMethod.Value.ToString()));
 
     private static string ToSnakeCase(string value) =>
         string.Concat(value.Select((ch, index) =>

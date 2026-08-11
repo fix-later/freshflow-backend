@@ -3,6 +3,7 @@ using System;
 using FreshFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FreshFlow.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260809190435_HardenCreditSettlementAndStatementDetails")]
+    partial class HardenCreditSettlementAndStatementDetails
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2786,50 +2789,6 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable((string)null);
 
                     b.ToSqlQuery("SELECT \"Id\" AS \"RestaurantId\", \"UserId\" AS \"UserId\" FROM restaurants");
-                });
-
-            modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.Persistence.Entities.RouteMatrixCacheEntry", b =>
-                {
-                    b.Property<string>("PairKey")
-                        .HasColumnType("text")
-                        .HasColumnName("pair_key");
-
-                    b.Property<DateTime>("CalculatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("calculated_at");
-
-                    b.Property<long>("DistanceMeters")
-                        .HasColumnType("bigint")
-                        .HasColumnName("distance_meters");
-
-                    b.Property<long>("DurationSeconds")
-                        .HasColumnType("bigint")
-                        .HasColumnName("duration_seconds");
-
-                    b.Property<decimal>("FromLatitude")
-                        .HasColumnType("numeric")
-                        .HasColumnName("from_lat");
-
-                    b.Property<decimal>("FromLongitude")
-                        .HasColumnType("numeric")
-                        .HasColumnName("from_lng");
-
-                    b.Property<string>("Profile")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("profile");
-
-                    b.Property<decimal>("ToLatitude")
-                        .HasColumnType("numeric")
-                        .HasColumnName("to_lat");
-
-                    b.Property<decimal>("ToLongitude")
-                        .HasColumnType("numeric")
-                        .HasColumnName("to_lng");
-
-                    b.HasKey("PairKey");
-
-                    b.ToTable("route_matrix_cache", (string)null);
                 });
 
             modelBuilder.Entity("FreshFlow.Notifications.Domain.Entities.Notification", b =>

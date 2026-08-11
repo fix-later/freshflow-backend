@@ -19,7 +19,9 @@ public sealed class CreditStatementLine
         decimal balanceAfter,
         DateTime occurredAt,
         string? note,
-        string? reference)
+        string? reference,
+        Guid? orderId = null,
+        PaymentMethod? paymentMethod = null)
     {
         if (transactionId == Guid.Empty)
             throw new ArgumentException("Transaction id is required.", nameof(transactionId));
@@ -39,6 +41,8 @@ public sealed class CreditStatementLine
         OccurredAt = occurredAt;
         Note = note;
         Reference = reference;
+        OrderId = orderId;
+        PaymentMethod = paymentMethod;
     }
 
     public Guid Id { get; private set; }
@@ -50,4 +54,6 @@ public sealed class CreditStatementLine
     public DateTime OccurredAt { get; private set; }
     public string? Note { get; private set; }
     public string? Reference { get; private set; }
+    public Guid? OrderId { get; private set; }
+    public PaymentMethod? PaymentMethod { get; private set; }
 }

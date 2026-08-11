@@ -112,7 +112,7 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             .Include(value => value.Lines)
             .SingleAsync(value => value.OrderId == seed.OrderId);
         invoice.Status.Should().Be(InvoiceStatus.Issued);
-        invoice.TaxAuthorityCode.Should().NotBeNullOrWhiteSpace();
+        invoice.TaxAuthorityCode.Should().StartWith("DEV-MCQT-");
         invoice.SubTotal.Should().Be(84_500m);
         invoice.VatAmount.Should().Be(1_555m);
         invoice.Total.Should().Be(86_055m);
@@ -188,7 +188,9 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.Should().Be("application/xml");
         var document = XDocument.Parse(await response.Content.ReadAsStringAsync());
-        document.Root!.Element("Header")!.Element("TaxAuthorityCode")!.Value.Should().NotBeNullOrWhiteSpace();
+        document.Root!.Attribute("environment")!.Value.Should().Be("development");
+        document.Root.Attribute("legalValue")!.Value.Should().Be("false");
+        document.Root.Element("Header")!.Element("TaxAuthorityCode")!.Value.Should().StartWith("DEV-MCQT-");
         document.Root.Element("Buyer")!.Element("TaxCode")!.Value.Should().Be("0312345678");
         document.Root.Element("Lines")!.Elements("Line").Should().OnlyContain(line =>
             line.Element("Unit")!.Value.StartsWith("kg-", StringComparison.Ordinal));

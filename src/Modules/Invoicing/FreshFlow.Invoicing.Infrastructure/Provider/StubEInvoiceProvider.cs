@@ -24,7 +24,7 @@ internal sealed class StubEInvoiceProvider(
         var issued = new IssuedInvoice(
             Serial: "K24TFF",
             Number: shortId,
-            TaxAuthorityCode: $"MCQT-{shortId}",
+            TaxAuthorityCode: $"DEV-MCQT-{shortId}",
             LookupUrl: $"https://sandbox.invoice.local/lookup/{shortId}",
             XmlRef: $"stub://xml/{request.InvoiceId}",
             PdfRef: $"stub://pdf/{request.InvoiceId}",

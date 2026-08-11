@@ -7,4 +7,6 @@ public sealed record CreditStatementLineDto(
     decimal BalanceAfter,
     DateTime OccurredAt,
     string? Note,
-    string? Reference);
+    string? Reference,
+    Guid? OrderId,
+    string? PaymentMethod);

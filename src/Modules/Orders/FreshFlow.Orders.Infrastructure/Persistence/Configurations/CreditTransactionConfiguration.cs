@@ -62,6 +62,9 @@ internal sealed class CreditTransactionConfiguration : IEntityTypeConfiguration<
             .HasColumnName("reference")
             .HasMaxLength(200);
 
+        builder.Property(t => t.RecordedByUserId)
+            .HasColumnName("recorded_by_user_id");
+
         builder.Property(t => t.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
@@ -74,6 +77,15 @@ internal sealed class CreditTransactionConfiguration : IEntityTypeConfiguration<
 
         builder.HasIndex(t => t.CreatedAt)
             .HasDatabaseName("idx_credit_transactions_created_at");
+
+        builder.HasIndex(t => new { t.RestaurantId, t.Reference })
+            .IsUnique()
+            .HasFilter("type = 'settlement' AND reference IS NOT NULL")
+            .HasDatabaseName("uq_credit_transactions_settlement_reference");
+
+        builder.ToTable(table => table.HasCheckConstraint(
+            "ck_credit_transactions_settlement_reference",
+            "type <> 'settlement' OR (reference IS NOT NULL AND btrim(reference) <> '')"));
     }
 
     // Plain method calls (not inline switch/throw expressions) so the conversion lambdas

@@ -10,4 +10,5 @@ public sealed record CreditTransactionDto(
     string? Note,
     string? PaymentMethod,
     string? Reference,
+    Guid? RecordedByUserId,
     DateTime CreatedAt);

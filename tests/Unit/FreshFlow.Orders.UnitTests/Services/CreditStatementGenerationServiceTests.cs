@@ -123,7 +123,7 @@ public sealed class CreditStatementGenerationServiceTests
             new CreditTransaction(RestaurantId, Guid.NewGuid(), CreditTransactionType.Charge, 50m, 150m, "Order B"),
             new CreditTransaction(
                 RestaurantId, null, CreditTransactionType.Settlement, 60m, 90m, "Paid",
-                PaymentMethod.BankTransfer, "TXN-1"),
+                PaymentMethod.BankTransfer, "TXN-1", Guid.NewGuid()),
             new CreditTransaction(RestaurantId, Guid.NewGuid(), CreditTransactionType.Refund, 10m, 80m, "Cancelled"),
         };
         _creditRepository.GetTransactionsInPeriodAsync(
@@ -138,7 +138,9 @@ public sealed class CreditStatementGenerationServiceTests
         result.Value.TotalRefunds.Should().Be(10m);
         result.Value.ClosingBalance.Should().Be(80m); // 0 + 150 - 60 - 10
         result.Value.Lines.Should().HaveCount(4);
-        result.Value.Lines.Should().Contain(l => l.Reference == "TXN-1" && l.Type == "settlement");
+        result.Value.Lines.Should().Contain(l =>
+            l.Reference == "TXN-1" && l.PaymentMethod == "bank_transfer" && l.Type == "settlement");
+        result.Value.Lines.Should().Contain(l => l.OrderId.HasValue && l.Type == "charge");
     }
 
     [Fact]

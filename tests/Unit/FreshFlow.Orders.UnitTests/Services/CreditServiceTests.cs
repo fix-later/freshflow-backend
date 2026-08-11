@@ -10,6 +10,7 @@ namespace FreshFlow.Orders.UnitTests.Services;
 [Trait("Category", "Unit")]
 public sealed class CreditServiceTests
 {
+    private static readonly Guid AdminId = Guid.NewGuid();
     private readonly ICreditRepository _creditRepository = Substitute.For<ICreditRepository>();
     private readonly IRestaurantReader _restaurantReader = Substitute.For<IRestaurantReader>();
     private readonly CreditService _sut;
@@ -118,7 +119,7 @@ public sealed class CreditServiceTests
         _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
 
         var result = await _sut.SettleAsync(
-            RestaurantId, 31m, PaymentMethod.BankTransfer, "TXN-1", "Bank transfer", default);
+            RestaurantId, AdminId, 31m, PaymentMethod.BankTransfer, "TXN-1", "Bank transfer", default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("CREDIT_SETTLEMENT_EXCEEDS_BALANCE");
@@ -133,7 +134,7 @@ public sealed class CreditServiceTests
         _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
 
         var result = await _sut.SettleAsync(
-            RestaurantId, 25m, PaymentMethod.BankTransfer, "TXN-42", "Bank transfer", default);
+            RestaurantId, AdminId, 25m, PaymentMethod.BankTransfer, " txn-42 ", "Bank transfer", default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.OutstandingBalance.Should().Be(45m);
@@ -144,24 +145,41 @@ public sealed class CreditServiceTests
             && t.Amount == 25m
             && t.BalanceAfter == 45m
             && t.PaymentMethod == PaymentMethod.BankTransfer
-            && t.Reference == "TXN-42"));
+            && t.Reference == "TXN-42"
+            && t.RecordedByUserId == AdminId));
         await _creditRepository.Received(1).SaveChangesAsync(default);
     }
 
     [Fact]
-    public async Task Settle_WithoutReference_WritesLedgerWithNullReferenceAsync()
+    public async Task Settle_WithoutReference_ReturnsValidationAsync()
     {
         var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
         account.Charge(50m);
         _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
 
         var result = await _sut.SettleAsync(
-            RestaurantId, 20m, PaymentMethod.Manual, reference: null, note: null, default);
+            RestaurantId, AdminId, 20m, PaymentMethod.Manual, reference: null, note: null, ct: default);
 
-        result.IsSuccess.Should().BeTrue();
-        _creditRepository.Received(1).AddTransaction(Arg.Is<CreditTransaction>(t =>
-            t.PaymentMethod == PaymentMethod.Manual
-            && t.Reference == null));
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("INVALID_SETTLEMENT_DETAILS");
+        _creditRepository.DidNotReceive().AddTransaction(Arg.Any<CreditTransaction>());
+    }
+
+    [Fact]
+    public async Task Settle_DuplicateReference_ReturnsConflictAsync()
+    {
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        account.Charge(50m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+        _creditRepository.SaveChangesAsync(default)
+            .Returns(Task.FromException(
+                new DuplicateCreditSettlementException(new InvalidOperationException("duplicate"))));
+
+        var result = await _sut.SettleAsync(
+            RestaurantId, AdminId, 20m, PaymentMethod.BankTransfer, "TXN-1", null, default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("CREDIT_SETTLEMENT_DUPLICATE_REFERENCE");
     }
 
     [Fact]

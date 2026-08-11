@@ -39,6 +39,7 @@ public sealed class CreditStatementPdfEndpointTests(AuthWebAppFactory factory)
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentType?.MediaType.Should().Be("application/pdf");
+        response.Content.Headers.ContentDisposition?.FileNameStar.Should().Be("statement-2024-01.pdf");
         var bytes = await response.Content.ReadAsByteArrayAsync();
         bytes.Take(PdfMagic.Length).Should().Equal(PdfMagic);
     }

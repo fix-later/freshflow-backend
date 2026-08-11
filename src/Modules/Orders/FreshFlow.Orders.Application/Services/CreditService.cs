@@ -109,6 +109,7 @@ public sealed class CreditService(
 
     public async Task<Result<RestaurantCreditDto>> SettleAsync(
         Guid restaurantId,
+        Guid recordedByUserId,
         decimal amount,
         PaymentMethod paymentMethod,
         string? reference,
@@ -117,6 +118,10 @@ public sealed class CreditService(
     {
         if (amount <= 0m)
             return Result<RestaurantCreditDto>.Failure(InvalidAmount());
+
+        if (recordedByUserId == Guid.Empty || string.IsNullOrWhiteSpace(reference))
+            return Result<RestaurantCreditDto>.Failure(Error.Validation(
+                "INVALID_SETTLEMENT_DETAILS", "Recorder and reference are required."));
 
         var accountResult = await GetAccountOrDefaultAsync(restaurantId, ct);
         if (accountResult.IsFailure)
@@ -141,7 +146,8 @@ public sealed class CreditService(
             account.OutstandingBalance,
             note,
             paymentMethod,
-            reference));
+            reference,
+            recordedByUserId));
 
         return await SaveAndReturnAsync(account, ct);
     }
@@ -209,6 +215,12 @@ public sealed class CreditService(
         {
             await creditRepository.SaveChangesAsync(ct);
             return Result<RestaurantCreditDto>.Success(CreditDtoMapper.ToDto(account));
+        }
+        catch (DuplicateCreditSettlementException)
+        {
+            return Result<RestaurantCreditDto>.Failure(Error.Conflict(
+                "CREDIT_SETTLEMENT_DUPLICATE_REFERENCE",
+                "A settlement with this reference already exists for the restaurant."));
         }
         catch (CreditConcurrencyException)
         {

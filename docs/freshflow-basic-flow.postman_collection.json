@@ -4439,7 +4439,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Runnable in the numbered happy-path sequence.\nOpenAPI: POST /api/v1/admin/restaurants/{restaurantId}/credit/settle\nRequest schema: SettleCreditRequest\nDocumented success status: 200",
+            "description": "Runnable in the numbered happy-path sequence. Reference is required and unique per restaurant; duplicates return 409 CREDIT_SETTLEMENT_DUPLICATE_REFERENCE.\nOpenAPI: POST /api/v1/admin/restaurants/{restaurantId}/credit/settle\nRequest schema: SettleCreditRequest\nDocumented success status: 200",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"amount\": {{settlementAmount}},\n  \"paymentMethod\": \"manual\",\n  \"reference\": \"POSTMAN-{{runTs}}\",\n  \"note\": \"Postman settlement\"\n}",
