@@ -7,6 +7,7 @@ using FreshFlow.Logistics.Application.Common;
 using FreshFlow.Logistics.Infrastructure.Configuration;
 using FreshFlow.Logistics.Infrastructure.CrossModule;
 using FreshFlow.Logistics.Infrastructure.Optimization;
+using FreshFlow.Logistics.Infrastructure.Persistence;
 using FreshFlow.Logistics.Infrastructure.Realtime;
 using FreshFlow.Logistics.Infrastructure.Repositories;
 using FreshFlow.Logistics.Infrastructure.Routing;
@@ -57,7 +58,13 @@ public static class DependencyInjection
         services.AddScoped<IRestaurantCoordinateReader, RestaurantCoordinateReader>();
         services.AddScoped<IVehicleCapacityPolicy, VehicleCapacityPolicy>();
         services.AddScoped<IRoutePlanningInputBuilder, RoutePlanningInputBuilder>();
-        services.AddScoped<IRouteMatrixProvider, GoongRouteMatrixProvider>();
+        services.AddScoped<GoongRouteMatrixProvider>();
+        services.AddScoped<IRouteMatrixCacheStore, RouteMatrixCacheStore>();
+        services.AddScoped<IRouteMatrixProvider>(sp => new CachingRouteMatrixProvider(
+            sp.GetRequiredService<GoongRouteMatrixProvider>(),
+            sp.GetRequiredService<IRouteMatrixCacheStore>(),
+            sp.GetRequiredService<IVehicleCapacityPolicy>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<CachingRouteMatrixProvider>>()));
         services.AddScoped<IRoutePlanningSolver, OrToolsRoutePlanningSolver>();
         services.AddScoped<IRouteOptimizer, RoadRouteOptimizer>();
 
