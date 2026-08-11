@@ -41,6 +41,17 @@ internal sealed class RouteMatrixCacheStore(AppDbContext db) : IRouteMatrixCache
                 await db.Set<RouteMatrixCacheEntry>().AddAsync(row, ct);
         }
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Best-effort cache: concurrent misses on the same cold/expired PairKey can both
+            // reach the insert above; the loser hits a primary-key collision. The winner has
+            // already populated the row, so swallow it rather than failing route planning.
+            // Clear the tracker so the rolled-back adds don't poison a later use of this context.
+            db.ChangeTracker.Clear();
+        }
     }
 }

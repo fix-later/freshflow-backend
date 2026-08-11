@@ -40,6 +40,25 @@ public partial class HardenCreditSettlementAndStatementDetails : Migration
             UPDATE credit_transactions
             SET reference = upper(btrim(reference))
             WHERE type = 'settlement';
+
+            -- Duplicate settlement references were previously allowed. Resolve any
+            -- collisions (including ones created by the normalization above) so the
+            -- unique index below cannot fail mid-migration: keep the earliest row per
+            -- (restaurant_id, reference) and suffix later duplicates. left(...,158)
+            -- keeps the result within reference's varchar(200) after the suffix.
+            WITH ranked AS (
+                SELECT id,
+                       row_number() OVER (
+                           PARTITION BY restaurant_id, reference
+                           ORDER BY created_at, id
+                       ) AS rn
+                FROM credit_transactions
+                WHERE type = 'settlement' AND reference IS NOT NULL
+            )
+            UPDATE credit_transactions ct
+            SET reference = left(ct.reference, 158) || '-DUP-' || ct.id::text
+            FROM ranked
+            WHERE ct.id = ranked.id AND ranked.rn > 1;
             """);
 
         migrationBuilder.CreateIndex(
