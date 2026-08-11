@@ -5,6 +5,7 @@ using FreshFlow.API.Assistant.Abstractions;
 using FreshFlow.API.Assistant.Conversation;
 using FreshFlow.API.Assistant.Tools;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using OpenAI;
 using Polly.Timeout;
@@ -25,21 +26,30 @@ public sealed class GeminiChatClient : IAssistantChatClient
     // The OpenAI SDK requires a non-empty credential, but GcpAuthHandler overwrites the
     // Authorization header before every request — this value is never sent.
     private const string PlaceholderCredential = "vertex-auth-via-adc";
+    private const int MaxErrorBodyLogLength = 4096;
 
     private readonly IChatClient _inner;
+    private readonly ILogger<GeminiChatClient> _logger;
     private readonly GeminiOptions _options;
 
     /// <summary>Production constructor — builds the OpenAI-compatible client pointed at Vertex AI.</summary>
-    public GeminiChatClient(IOptions<GeminiOptions> options, HttpClient httpClient)
-        : this(options.Value, BuildInnerClient(options.Value, httpClient))
+    public GeminiChatClient(
+        IOptions<GeminiOptions> options,
+        HttpClient httpClient,
+        ILogger<GeminiChatClient> logger)
+        : this(options.Value, BuildInnerClient(options.Value, httpClient), logger)
     {
     }
 
     /// <summary>Test-only seam — lets unit tests verify request/response mapping against a mocked <see cref="IChatClient"/>.</summary>
-    internal GeminiChatClient(GeminiOptions options, IChatClient inner)
+    internal GeminiChatClient(
+        GeminiOptions options,
+        IChatClient inner,
+        ILogger<GeminiChatClient>? logger = null)
     {
         _options = options;
         _inner = inner;
+        _logger = logger ?? NullLogger<GeminiChatClient>.Instance;
     }
 
     private static IChatClient BuildInnerClient(GeminiOptions options, HttpClient httpClient)
@@ -79,6 +89,12 @@ public sealed class GeminiChatClient : IAssistantChatClient
         }
         catch (ClientResultException ex)
         {
+            var errorBody = ex.GetRawResponse()?.Content.ToString();
+            _logger.LogError(
+                "Gemini request failed with HTTP {Status}. Response body: {ResponseBody}",
+                ex.Status,
+                errorBody?[..Math.Min(errorBody.Length, MaxErrorBodyLogLength)]);
+
             var failure = ex.Status switch
             {
                 401 or 403 => AssistantProviderFailure.AuthenticationFailed,
