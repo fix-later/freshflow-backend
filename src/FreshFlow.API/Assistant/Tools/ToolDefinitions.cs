@@ -1,9 +1,16 @@
 using System.Text.Json;
 using FreshFlow.API.Assistant.Abstractions;
+using FreshFlow.Auth.Application.Queries.GetDeliveryAddresses;
+using FreshFlow.Auth.Application.Queries.GetRestaurantProfile;
 using FreshFlow.Orders.Application.Commands.ConfirmOrder;
 using FreshFlow.Orders.Application.Commands.CreateDraftOrder;
+using FreshFlow.Orders.Application.Commands.Favorites.Add;
+using FreshFlow.Orders.Application.Commands.Favorites.Remove;
 using FreshFlow.Orders.Application.Dtos;
+using FreshFlow.Orders.Application.Queries.GetFavorites;
 using FreshFlow.Orders.Application.Queries.GetOrder;
+using FreshFlow.Orders.Application.Queries.GetRestaurantCredit;
+using FreshFlow.Orders.Application.Queries.ListOrders;
 using FreshFlow.Orders.Application.Queries.PreviewOrderConfirmation;
 using FreshFlow.Pricing.Application.Queries.SearchMarketProducts;
 using MediatR;
@@ -11,17 +18,25 @@ using MediatR;
 namespace FreshFlow.API.Assistant.Tools;
 
 /// <summary>
-/// Declares the 5 MVP tools exposed to the LLM (DESIGN-2026-06-22-ai-assistant-tier2-orchestration.md
-/// §3). Each tool is a thin 1:1 wrapper over an existing MediatR command/query — handlers contain no
-/// business rules, only: parse LLM args → inject server-side identity (UserId/MarketId, never
-/// LLM-supplied) → <see cref="ISender.Send"/> → map <c>Result&lt;T&gt;</c> to the JSON the LLM sees.
+/// Declares the assistant tools exposed to the LLM. Each tool is a thin wrapper over existing
+/// MediatR commands/queries: parse LLM args → inject server-side identity (never LLM-supplied) →
+/// <see cref="ISender.Send"/> → map the result to JSON. Sensitive tool results are stripped by the
+/// orchestrator before conversation history is sent back to the provider.
 /// </summary>
 public static class ToolDefinitions
 {
-    /// <summary>Builds the fixed MVP tool set, bound to the given <see cref="ISender"/>.</summary>
+    private const int MaxFavoriteItems = 20;
+
+    /// <summary>Builds the fixed tool set, bound to the given <see cref="ISender"/>.</summary>
     public static IReadOnlyList<AssistantTool> CreateAll(ISender sender) =>
     [
         SearchProducts(sender),
+        ListFavorites(sender),
+        AddFavorite(sender),
+        RemoveFavorite(sender),
+        GetMyCredit(sender),
+        ListMyOrders(sender),
+        ListDeliveryAddresses(sender),
         CreateDraftOrder(sender),
         GetOrder(sender),
         PreviewConfirmation(sender),
@@ -65,6 +80,146 @@ public static class ToolDefinitions
                 Cursor: args.Cursor);
 
             var result = await sender.Send(query, ct);
+            return ToolResultJson.From(result);
+        });
+
+    private static AssistantTool ListFavorites(ISender sender) => new(
+        Name: "list_favorites",
+        Description: "Xem danh sách sản phẩm yêu thích của nhà hàng.",
+        ParametersSchema: ToolArgsSchema.Object(new { }, []),
+        Handler: async (argsJson, ctx, ct) =>
+        {
+            if (!ToolArgsParser.TryParse<EmptyArgs>(argsJson, out _, out var error))
+            {
+                return error!;
+            }
+
+            var result = await sender.Send(new GetFavoritesQuery(ctx.UserId), ct);
+            if (result.IsFailure)
+            {
+                return ToolResultJson.Error(result.Error.Code, result.Error.Message);
+            }
+
+            var items = result.Value.Take(MaxFavoriteItems).ToList();
+            return ToolResultJson.Success(new
+            {
+                items,
+                totalCount = result.Value.Count,
+                truncated = result.Value.Count > items.Count
+            });
+        });
+
+    private static AssistantTool AddFavorite(ISender sender) => new(
+        Name: "add_favorite",
+        Description: "Thêm một sản phẩm trong chợ vào danh sách yêu thích khi người dùng yêu cầu rõ ràng.",
+        ParametersSchema: FavoriteArgsSchema(),
+        Handler: async (argsJson, ctx, ct) =>
+        {
+            if (!TryParseMarketProductId(argsJson, out var marketProductId, out var error))
+            {
+                return error!;
+            }
+
+            var result = await sender.Send(new AddFavoriteCommand(ctx.UserId, marketProductId), ct);
+            return ToolResultJson.From(result);
+        });
+
+    private static AssistantTool RemoveFavorite(ISender sender) => new(
+        Name: "remove_favorite",
+        Description: "Bỏ một sản phẩm khỏi danh sách yêu thích khi người dùng yêu cầu rõ ràng.",
+        ParametersSchema: FavoriteArgsSchema(),
+        Handler: async (argsJson, ctx, ct) =>
+        {
+            if (!TryParseMarketProductId(argsJson, out var marketProductId, out var error))
+            {
+                return error!;
+            }
+
+            var result = await sender.Send(new RemoveFavoriteCommand(ctx.UserId, marketProductId), ct);
+            return result.IsSuccess
+                ? ToolResultJson.Success(new { marketProductId, removed = true })
+                : ToolResultJson.Error(result.Error.Code, result.Error.Message);
+        });
+
+    private static AssistantTool GetMyCredit(ISender sender) => new(
+        Name: "get_my_credit",
+        Description: "Xem hạn mức, dư nợ và công nợ còn lại của nhà hàng hiện tại.",
+        ParametersSchema: ToolArgsSchema.Object(new { }, []),
+        Handler: async (argsJson, ctx, ct) =>
+        {
+            if (!ToolArgsParser.TryParse<EmptyArgs>(argsJson, out _, out var error))
+            {
+                return error!;
+            }
+
+            var profile = await sender.Send(new GetRestaurantProfileQuery(ctx.UserId), ct);
+            if (profile.IsFailure)
+            {
+                return ToolResultJson.Error(profile.Error.Code, profile.Error.Message);
+            }
+
+            var result = await sender.Send(
+                new GetRestaurantCreditQuery(ctx.UserId, IsAdmin: false, profile.Value.RestaurantId), ct);
+            return ToolResultJson.From(result);
+        });
+
+    private static AssistantTool ListMyOrders(ISender sender) => new(
+        Name: "list_my_orders",
+        Description: "Xem các đơn hàng của nhà hàng hiện tại, có thể lọc theo trạng thái và thời gian.",
+        ParametersSchema: ToolArgsSchema.Object(
+            properties: new
+            {
+                status = new
+                {
+                    type = "string",
+                    description = "draft, confirmed, batched, picked_up, at_hub, delivering, delivered hoặc cancelled."
+                },
+                from = new { type = "string", description = "Thời điểm bắt đầu theo ISO 8601 (tùy chọn)." },
+                to = new { type = "string", description = "Thời điểm kết thúc theo ISO 8601 (tùy chọn)." },
+                page = new { type = "integer", description = "Trang cần xem, mặc định 1." },
+                pageSize = new { type = "integer", description = "Số đơn mỗi trang, mặc định 10 và tối đa 20." }
+            },
+            required: []),
+        Handler: async (argsJson, ctx, ct) =>
+        {
+            if (!ToolArgsParser.TryParse<ListMyOrdersArgs>(argsJson, out var args, out var error))
+            {
+                return error!;
+            }
+
+            if (args!.Page < 1 || args.PageSize is < 1 or > 20)
+            {
+                return ToolResultJson.Error(
+                    "INVALID_TOOL_ARGS", "page must be positive and pageSize must be between 1 and 20.");
+            }
+
+            var query = new ListOrdersQuery(
+                UserId: ctx.UserId,
+                IsAdmin: false,
+                RestaurantId: null,
+                Status: args.Status,
+                From: args.From,
+                To: args.To,
+                Sort: "createdAt:desc",
+                Page: args.Page,
+                PageSize: args.PageSize);
+
+            var result = await sender.Send(query, ct);
+            return ToolResultJson.From(result);
+        });
+
+    private static AssistantTool ListDeliveryAddresses(ISender sender) => new(
+        Name: "list_delivery_addresses",
+        Description: "Xem các địa chỉ giao hàng đang hoạt động của nhà hàng hiện tại.",
+        ParametersSchema: ToolArgsSchema.Object(new { }, []),
+        Handler: async (argsJson, ctx, ct) =>
+        {
+            if (!ToolArgsParser.TryParse<EmptyArgs>(argsJson, out _, out var error))
+            {
+                return error!;
+            }
+
+            var result = await sender.Send(new GetDeliveryAddressesQuery(ctx.UserId), ct);
             return ToolResultJson.From(result);
         });
 
@@ -231,6 +386,41 @@ public static class ToolDefinitions
         return true;
     }
 
+    private static JsonElement FavoriteArgsSchema() =>
+        ToolArgsSchema.Object(
+            properties: new
+            {
+                marketProductId = new
+                {
+                    type = "string",
+                    description = "Id sản phẩm trong chợ (UUID) từ kết quả tìm kiếm hoặc danh sách yêu thích."
+                }
+            },
+            required: ["marketProductId"]);
+
+    private static bool TryParseMarketProductId(
+        JsonElement argsJson,
+        out Guid marketProductId,
+        out string? error)
+    {
+        if (!ToolArgsParser.TryParse<FavoriteArgs>(argsJson, out var args, out error))
+        {
+            marketProductId = Guid.Empty;
+            return false;
+        }
+
+        if (args!.MarketProductId is not { } parsedId || parsedId == Guid.Empty)
+        {
+            marketProductId = Guid.Empty;
+            error = ToolResultJson.Error(
+                "INVALID_TOOL_ARGS", "Tool arguments must include a valid marketProductId.");
+            return false;
+        }
+
+        marketProductId = parsedId;
+        return true;
+    }
+
     private sealed record SearchProductsArgs(
         string? SearchText = null,
         string? Category = null,
@@ -243,6 +433,17 @@ public static class ToolDefinitions
         string? Notes = null);
 
     private sealed record CreateDraftOrderItemArgs(Guid MarketProductId, int Quantity);
+
+    private sealed record EmptyArgs;
+
+    private sealed record FavoriteArgs(Guid? MarketProductId = null);
+
+    private sealed record ListMyOrdersArgs(
+        string? Status = null,
+        DateTime? From = null,
+        DateTime? To = null,
+        int Page = 1,
+        int PageSize = 10);
 
     // Guid? rather than Guid — a missing "orderId" must surface as INVALID_TOOL_ARGS, not silently
     // dispatch with Guid.Empty (System.Text.Json does not enforce required-ness on its own).

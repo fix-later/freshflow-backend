@@ -12,11 +12,15 @@ namespace FreshFlow.API.Assistant.Dtos;
 /// <c>DeliveryAddressId</c>.
 /// </param>
 /// <param name="DraftOrderId">The draft order built/updated during this turn, if any.</param>
+/// <param name="CreditSummary">Current restaurant credit, returned directly to the client and never sent to the LLM.</param>
+/// <param name="DeliveryAddresses">Restaurant delivery addresses, returned directly to the client and never sent to the LLM.</param>
 public sealed record AssistantChatResponse(
     string Reply,
     string SessionId,
     PendingConfirmation? PendingConfirmation = null,
-    Guid? DraftOrderId = null);
+    Guid? DraftOrderId = null,
+    CreditSummary? CreditSummary = null,
+    IReadOnlyList<AssistantDeliveryAddress>? DeliveryAddresses = null);
 
 /// <summary>
 /// Signals that the assistant has an order ready to confirm but is withholding the confirmation until
@@ -29,3 +33,16 @@ public sealed record AssistantChatResponse(
 /// render the confirmation summary. Sensitive fields stripped by the tool-result mapper.
 /// </param>
 public sealed record PendingConfirmation(Guid OrderId, Guid DeliveryAddressId, string PreviewJson);
+
+public sealed record CreditSummary(
+    decimal CreditLimit,
+    decimal OutstandingBalance,
+    decimal AvailableCredit,
+    DateTime UpdatedAt);
+
+public sealed record AssistantDeliveryAddress(
+    Guid Id,
+    string? RecipientName,
+    string? Phone,
+    string AddressLine,
+    bool IsDefault);

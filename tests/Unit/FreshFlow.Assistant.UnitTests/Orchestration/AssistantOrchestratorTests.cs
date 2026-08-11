@@ -3,6 +3,7 @@ using FluentAssertions;
 using FreshFlow.API.Assistant;
 using FreshFlow.API.Assistant.Abstractions;
 using FreshFlow.API.Assistant.Conversation;
+using FreshFlow.API.Assistant.Dtos;
 using FreshFlow.API.Assistant.Safety;
 using FreshFlow.API.Assistant.Tools;
 using Microsoft.Extensions.Options;
@@ -122,6 +123,75 @@ public sealed class AssistantOrchestratorTests
     }
 
     [Fact]
+    public async Task RunAsync_returns_credit_to_the_client_without_sending_it_back_to_the_provider()
+    {
+        var creditJson = JsonSerializer.Serialize(new
+        {
+            restaurantId = Guid.NewGuid(),
+            creditLimit = 1_000_000m,
+            outstandingBalance = 250_000m,
+            availableCredit = 750_000m,
+            updatedAt = DateTime.UtcNow
+        });
+        var chatClient = new ScriptedChatClient(
+            AssistantTurnResult.FromToolCall("c1", "get_my_credit", "{}"),
+            AssistantTurnResult.FromText("Thông tin công nợ đang được hiển thị."));
+        var registry = new SpyToolRegistry().Returning("get_my_credit", creditJson);
+        var orchestrator = BuildOrchestrator(chatClient, registry);
+
+        var outcome = await orchestrator.RunAsync(
+            NewState("Credit của tôi còn bao nhiêu?"), null, null);
+
+        outcome.CreditSummary.Should().NotBeNull();
+        outcome.CreditSummary!.AvailableCredit.Should().Be(750_000m);
+        var storedToolResult = outcome.State.Turns.Single(t => t.Role == ConversationRole.Tool).ToolResultJson!;
+        storedToolResult.Should().Contain("clientDataAvailable")
+            .And.NotContain("750000")
+            .And.NotContain("250000");
+        chatClient.States[1].Turns.Single(t => t.Role == ConversationRole.Tool).ToolResultJson
+            .Should().Be(storedToolResult);
+    }
+
+    [Fact]
+    public async Task RunAsync_returns_addresses_to_the_client_without_persisting_PII()
+    {
+        var addressId = Guid.NewGuid();
+        var addressJson = JsonSerializer.Serialize(new[]
+        {
+            new
+            {
+                id = addressId,
+                restaurantId = Guid.NewGuid(),
+                recipientName = "Bếp trưởng",
+                phone = "0900000000",
+                addressLine = "123 Nguyễn Huệ",
+                latitude = 10.0m,
+                longitude = 106.0m,
+                isDefault = true,
+                createdAt = DateTime.UtcNow,
+                updatedAt = DateTime.UtcNow
+            }
+        });
+        var chatClient = new ScriptedChatClient(
+            AssistantTurnResult.FromToolCall("c1", "list_delivery_addresses", "{}"),
+            AssistantTurnResult.FromText("Địa chỉ giao hàng đang được hiển thị."));
+        var registry = new SpyToolRegistry().Returning("list_delivery_addresses", addressJson);
+        var orchestrator = BuildOrchestrator(chatClient, registry);
+
+        var outcome = await orchestrator.RunAsync(
+            NewState("Tôi có những địa chỉ nào?"), null, null);
+
+        outcome.DeliveryAddresses.Should().ContainSingle();
+        outcome.DeliveryAddresses![0].Id.Should().Be(addressId);
+        var storedToolResult = outcome.State.Turns.Single(t => t.Role == ConversationRole.Tool).ToolResultJson!;
+        storedToolResult.Should().Contain("\"count\":1")
+            .And.NotContain("Nguyễn Huệ")
+            .And.NotContain("0900000000");
+        chatClient.States[1].Turns.Single(t => t.Role == ConversationRole.Tool).ToolResultJson
+            .Should().Be(storedToolResult);
+    }
+
+    [Fact]
     public async Task RunAsync_stops_with_a_safe_message_when_the_tool_hop_budget_is_exhausted()
     {
         // Arrange — the LLM never stops requesting tools.
@@ -148,9 +218,14 @@ public sealed class AssistantOrchestratorTests
     {
         private readonly Queue<AssistantTurnResult> _script = new(script);
 
+        public List<ConversationState> States { get; } = [];
+
         public Task<AssistantTurnResult> CompleteAsync(
-            ConversationState state, IReadOnlyList<AssistantTool> tools, CancellationToken ct = default) =>
-            Task.FromResult(_script.Dequeue());
+            ConversationState state, IReadOnlyList<AssistantTool> tools, CancellationToken ct = default)
+        {
+            States.Add(state);
+            return Task.FromResult(_script.Dequeue());
+        }
     }
 
     private sealed class SpyToolRegistry : IAssistantToolRegistry
