@@ -123,7 +123,8 @@ public static class DependencyInjection
 
         services.AddScoped(sp => new GeminiChatClient(
             sp.GetRequiredService<IOptions<GeminiOptions>>(),
-            sp.GetRequiredService<IHttpClientFactory>().CreateClient(GeminiHttpClientName)));
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient(GeminiHttpClientName),
+            sp.GetRequiredService<ILogger<GeminiChatClient>>()));
     }
 
     private static IAssistantChatClient ResolveProvider(IServiceProvider sp, string name) => name switch
