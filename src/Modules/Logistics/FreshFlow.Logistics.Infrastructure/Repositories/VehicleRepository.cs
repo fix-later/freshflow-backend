@@ -37,6 +37,7 @@ internal sealed class VehicleRepository(AppDbContext db) : IVehicleRepository
         string? cursor,
         int pageSize,
         bool? isActive,
+        Guid? hubId,
         CancellationToken ct)
     {
         if (pageSize <= 0)
@@ -50,6 +51,9 @@ internal sealed class VehicleRepository(AppDbContext db) : IVehicleRepository
                 ? query.Where(v => v.DeletedAt == null)
                 : query.Where(v => v.DeletedAt != null);
         }
+
+        if (hubId.HasValue)
+            query = query.Where(v => v.HubId == hubId.Value);
 
         var decoded = VehicleCursor.TryDecode(cursor);
         if (decoded is not null)

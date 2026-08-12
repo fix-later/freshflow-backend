@@ -61,7 +61,8 @@ public static class ErrorExtensions
                           or "STOCK_RESERVATION_CONFLICT")
             return new ConflictObjectResult(body);
 
-        if (error.Code is "VALIDATION_ERROR" or "INVALID_ROLE" or "WEAK_PASSWORD")
+        if (error.Code is "VALIDATION_ERROR" or "INVALID_ROLE" or "WEAK_PASSWORD"
+                          or "VEHICLE_HUB_UNASSIGNED" or "VEHICLE_HUB_MISMATCH")
             return new BadRequestObjectResult(body);
 
         if (error.Code is "ACCOUNT_LOCKED")

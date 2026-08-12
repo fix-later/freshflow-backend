@@ -57,7 +57,7 @@ public sealed class VehicleRepositoryTests
         var newest = await AddVehicleAsync(sut, db, "NEW-001", baseTime.AddSeconds(2));
         await AddVehicleAsync(sut, db, "OLD-001", baseTime.AddSeconds(1));
 
-        var result = await sut.GetPageAsync(null, 1, null, default);
+        var result = await sut.GetPageAsync(null, 1, null, null, default);
 
         result.Items.Should().ContainSingle(v => v.Id == newest.Id);
         result.NextCursor.Should().NotBeNull();
@@ -71,7 +71,7 @@ public sealed class VehicleRepositoryTests
         var newest = await AddVehicleAsync(sut, db, "NEW-001", DateTime.UtcNow.AddSeconds(2));
         await AddVehicleAsync(sut, db, "OLD-001", DateTime.UtcNow.AddSeconds(1));
 
-        var result = await sut.GetPageAsync("not-valid-base64", 1, null, default);
+        var result = await sut.GetPageAsync("not-valid-base64", 1, null, null, default);
 
         result.Items.Should().ContainSingle(v => v.Id == newest.Id);
     }
@@ -83,7 +83,7 @@ public sealed class VehicleRepositoryTests
     {
         using var db = CreateContext();
         var sut = new VehicleRepository(db);
-        Func<Task> act = () => sut.GetPageAsync(null, pageSize, null, default);
+        Func<Task> act = () => sut.GetPageAsync(null, pageSize, null, null, default);
 
         await act.Should().ThrowAsync<ArgumentException>();
     }

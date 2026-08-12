@@ -7,7 +7,9 @@ using MediatR;
 
 namespace FreshFlow.Logistics.Application.Commands.UpdateVehicle;
 
-internal sealed class UpdateVehicleCommandHandler(IVehicleRepository vehicles)
+internal sealed class UpdateVehicleCommandHandler(
+    IVehicleRepository vehicles,
+    IHubCoordinateReader hubs)
     : IRequestHandler<UpdateVehicleCommand, Result<VehicleDto>>
 {
     public async Task<Result<VehicleDto>> Handle(UpdateVehicleCommand request, CancellationToken ct)
@@ -31,7 +33,16 @@ internal sealed class UpdateVehicleCommandHandler(IVehicleRepository vehicles)
                     $"Vehicle plate number '{request.PlateNumber}' is already registered."));
         }
 
+        if (request.HubId is Guid hubId &&
+            await hubs.FindByIdAsync(hubId, ct) is null)
+        {
+            return Result<VehicleDto>.Failure(Error.NotFound("HUB", hubId));
+        }
+
         vehicle.Update(request.PlateNumber, request.CapacityKg, vehicleType);
+        if (request.HubId is Guid newHubId)
+            vehicle.AssignHub(newHubId);
+
         await vehicles.SaveChangesAsync(ct);
 
         return Result<VehicleDto>.Success(vehicle.ToDto());

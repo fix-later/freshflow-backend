@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
+using FreshFlow.Logistics.Application.Commands.AssignVehicleToHub;
 using FreshFlow.Logistics.Application.Commands.DeactivateVehicle;
 using FreshFlow.Logistics.Application.Commands.RegisterVehicle;
 using FreshFlow.Logistics.Application.Commands.UpdateVehicle;
@@ -30,7 +31,8 @@ public sealed class VehiclesController(ISender sender) : ControllerBase
             : (Guid?)null;
 
         var result = await sender.Send(
-            new RegisterVehicleCommand(body.PlateNumber, body.CapacityKg, body.VehicleType, registeredBy),
+            new RegisterVehicleCommand(
+                body.PlateNumber, body.CapacityKg, body.VehicleType, registeredBy, body.HubId),
             ct);
 
         return result.IsSuccess
@@ -43,9 +45,10 @@ public sealed class VehiclesController(ISender sender) : ControllerBase
         [FromQuery] string? cursor = null,
         [FromQuery(Name = "page_size")] int pageSize = 50,
         [FromQuery(Name = "is_active")] bool? isActive = null,
+        [FromQuery(Name = "hub_id")] Guid? hubId = null,
         CancellationToken ct = default)
     {
-        var result = await sender.Send(new ListVehiclesQuery(cursor, pageSize, isActive), ct);
+        var result = await sender.Send(new ListVehiclesQuery(cursor, pageSize, isActive, hubId), ct);
         return result.IsSuccess
             ? Ok(ApiResponse.OkPaged(result.Value.Items, result.Value.PageSize, result.Value.NextCursor))
             : result.Error.ToActionResult();
@@ -66,9 +69,20 @@ public sealed class VehiclesController(ISender sender) : ControllerBase
         CancellationToken ct)
     {
         var result = await sender.Send(
-            new UpdateVehicleCommand(id, body.PlateNumber, body.CapacityKg, body.VehicleType),
+            new UpdateVehicleCommand(id, body.PlateNumber, body.CapacityKg, body.VehicleType, body.HubId),
             ct);
 
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPut("{id:guid}/hub")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> AssignHubAsync(
+        Guid id,
+        [FromBody] AssignVehicleToHubRequest body,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new AssignVehicleToHubCommand(id, body.HubId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
@@ -84,9 +98,13 @@ public sealed class VehiclesController(ISender sender) : ControllerBase
 public sealed record RegisterVehicleRequest(
     string PlateNumber,
     decimal CapacityKg,
-    string VehicleType);
+    string VehicleType,
+    Guid? HubId = null);
 
 public sealed record UpdateVehicleRequest(
     string PlateNumber,
     decimal CapacityKg,
-    string VehicleType);
+    string VehicleType,
+    Guid? HubId = null);
+
+public sealed record AssignVehicleToHubRequest(Guid HubId);

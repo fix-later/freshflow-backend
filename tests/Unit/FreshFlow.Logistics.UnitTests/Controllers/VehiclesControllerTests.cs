@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Security.Claims;
 using FluentAssertions;
 using FreshFlow.API.Controllers;
+using FreshFlow.API.Extensions;
+using FreshFlow.Logistics.Application.Commands.AssignVehicleToHub;
 using FreshFlow.Logistics.Application.Commands.DeactivateVehicle;
 using FreshFlow.Logistics.Application.Commands.RegisterVehicle;
 using FreshFlow.Logistics.Application.Commands.UpdateVehicle;
@@ -21,6 +23,24 @@ namespace FreshFlow.Logistics.UnitTests.Controllers;
 [Trait("Category", "Unit")]
 public sealed class VehiclesControllerTests
 {
+    [Theory]
+    [InlineData("VEHICLE_HUB_UNASSIGNED")]
+    [InlineData("VEHICLE_HUB_MISMATCH")]
+    public void VehicleHubValidationErrors_Return400(string code)
+    {
+        var result = Error.Validation(code, "bad request").ToActionResult();
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public void HubNotFoundError_Returns404()
+    {
+        var result = Error.NotFound("HUB", Guid.NewGuid()).ToActionResult();
+
+        result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
     [Fact]
     public void VehiclesController_EveryWriteExcludesHubStaff()
     {
@@ -109,7 +129,7 @@ public sealed class VehiclesControllerTests
             ControllerContext = CreateControllerContext(Guid.NewGuid())
         };
 
-        var result = await controller.ListVehiclesAsync("cursor", 25, true, default);
+        var result = await controller.ListVehiclesAsync("cursor", 25, true, null, default);
 
         result.Should().BeOfType<OkObjectResult>();
         await sender.Received(1).Send(
@@ -172,6 +192,26 @@ public sealed class VehiclesControllerTests
         result.Should().BeOfType<OkObjectResult>();
         await sender.Received(1).Send(
             Arg.Is<DeactivateVehicleCommand>(command => command.Id == vehicleId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AssignHubAsync_Success_SendsCommandThroughSenderAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var vehicleId = Guid.NewGuid();
+        var hubId = Guid.NewGuid();
+        sender.Send(Arg.Any<AssignVehicleToHubCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<VehicleDto>.Success(CreateDto(vehicleId)));
+        var controller = new VehiclesController(sender);
+
+        var result = await controller.AssignHubAsync(
+            vehicleId, new AssignVehicleToHubRequest(hubId), default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<AssignVehicleToHubCommand>(command =>
+                command.VehicleId == vehicleId && command.HubId == hubId),
             Arg.Any<CancellationToken>());
     }
 
