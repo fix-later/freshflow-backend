@@ -22,6 +22,11 @@ public interface IProcurementBatchRepository
 
     public Task<bool> CycleExistsAsync(DateOnly batchDate, CancellationToken ct);
 
+    public Task<int> CountByMarketAndDateAsync(
+        Guid marketId,
+        DateOnly batchDate,
+        CancellationToken ct);
+
     public Task<(IReadOnlyList<ProcurementBatch> Batches, int Total)> ListAsync(
         int page,
         int pageSize,

@@ -22,7 +22,8 @@ internal sealed class UpdateMarketCommandHandler(IMarketRepository markets)
             request.Latitude,
             request.Longitude,
             request.ImageUrl,
-            request.Description);
+            request.Description,
+            request.Code);
         markets.Track(market);
         await markets.SaveChangesAsync(ct);
 

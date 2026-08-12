@@ -10,6 +10,7 @@ public sealed record BatchingResult(
 
 public sealed record BatchingPreviewDto(
     DateOnly BatchDate,
+    string? Code,
     Guid MarketId,
     string Status,
     IReadOnlyList<Guid> CoveredOrderIds,

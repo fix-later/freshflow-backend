@@ -14,6 +14,7 @@ public sealed class BatchConfirmedOrdersServiceTests
 {
     private readonly IConfirmedOrderReader _orders = Substitute.For<IConfirmedOrderReader>();
     private readonly IMarketProductMarketReader _markets = Substitute.For<IMarketProductMarketReader>();
+    private readonly IMarketCodeReader _marketCodes = Substitute.For<IMarketCodeReader>();
     private readonly IHubByMarketReader _hubs = Substitute.For<IHubByMarketReader>();
     private readonly IOperationalSettingsReader _settings = Substitute.For<IOperationalSettingsReader>();
     private readonly IProcurementBatchRepository _batches = Substitute.For<IProcurementBatchRepository>();
@@ -23,6 +24,9 @@ public sealed class BatchConfirmedOrdersServiceTests
         _hubs.ReadActiveHubsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
             .Returns(call => ((IReadOnlyCollection<Guid>)call[0])
                 .ToDictionary(marketId => marketId, _ => Guid.NewGuid()));
+        _marketCodes.ReadMarketCodesAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
+            .Returns(call => ((IReadOnlyCollection<Guid>)call[0])
+                .ToDictionary(marketId => marketId, _ => ((string?)"MK", "Market")));
         _batches.ListMergeableByDateAsync(Date, default)
             .Returns(Array.Empty<ProcurementBatch>());
         _batches.SaveChangesAsync(default).Returns(true);
@@ -176,7 +180,8 @@ public sealed class BatchConfirmedOrdersServiceTests
             Date,
             marketId,
             [(productId, "Tomato", 2, existingOrderId)],
-            Guid.NewGuid()).Value;
+            Guid.NewGuid(),
+            "OLD-260715-1").Value;
         batch.ClearDomainEvents();
         ArrangeOrder(newOrderId, marketId, (productId, "Tomato", 3));
         _batches.ListMergeableByDateAsync(Date, default).Returns([batch]);
@@ -193,8 +198,35 @@ public sealed class BatchConfirmedOrdersServiceTests
         batch.DomainEvents.Should().ContainSingle()
             .Which.Should().BeOfType<ProcurementBatchBuiltDomainEvent>()
             .Which.CoveredOrderIds.Should().Equal(newOrderId);
+        batch.Code.Should().Be("OLD-260715-1");
+        await _batches.DidNotReceiveWithAnyArgs()
+            .CountByMarketAndDateAsync(default, default, default);
         await _batches.DidNotReceiveWithAnyArgs()
             .AddRangeAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task BuildBatches_NewBatch_UsesMarketCodeDateAndNextSequenceAsync()
+    {
+        var marketId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        ArrangeOrder(Guid.NewGuid(), marketId, (productId, "Tomato", 3));
+        _marketCodes.ReadMarketCodesAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
+            .Returns(new Dictionary<Guid, (string? Code, string Name)>
+            {
+                [marketId] = ("TD", "Chợ Thủ Đức")
+            });
+        _batches.CountByMarketAndDateAsync(marketId, Date, default).Returns(2);
+        IReadOnlyCollection<ProcurementBatch>? added = null;
+        _batches.AddRangeAsync(
+                Arg.Do<IReadOnlyCollection<ProcurementBatch>>(value => added = value),
+                default)
+            .Returns(Task.CompletedTask);
+
+        var result = await CreateSut().BuildBatchesAsync(Date, false, false, default);
+
+        result.IsSuccess.Should().BeTrue();
+        added.Should().ContainSingle().Which.Code.Should().Be("TD-260715-3");
     }
 
     [Fact]
@@ -278,7 +310,7 @@ public sealed class BatchConfirmedOrdersServiceTests
     private static readonly DateTimeOffset Now = new(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
 
     private BatchConfirmedOrdersService CreateSut() =>
-        new(_orders, _markets, _hubs, _settings, _batches, new FixedTimeProvider(Now));
+        new(_orders, _markets, _hubs, _marketCodes, _settings, _batches, new FixedTimeProvider(Now));
 
     private void ArrangeEnabled() =>
         _settings.ReadAsync(default)

@@ -59,7 +59,8 @@ public sealed class MarketsController(ISender sender) : ControllerBase
                 body.Latitude,
                 body.Longitude,
                 body.ImageUrl,
-                body.Description),
+                body.Description,
+                body.Code),
             ct);
 
         return result.IsSuccess
@@ -91,7 +92,8 @@ public sealed class MarketsController(ISender sender) : ControllerBase
                 body.Latitude,
                 body.Longitude,
                 body.ImageUrl,
-                body.Description),
+                body.Description,
+                body.Code),
             ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
@@ -353,7 +355,8 @@ public sealed record CreateMarketRequest(
     decimal? Latitude,
     decimal? Longitude,
     string? ImageUrl,
-    string? Description);
+    string? Description,
+    string? Code);
 
 public sealed record UpdateMarketRequest(
     string Name,
@@ -362,7 +365,8 @@ public sealed record UpdateMarketRequest(
     decimal? Latitude,
     decimal? Longitude,
     string? ImageUrl,
-    string? Description);
+    string? Description,
+    string? Code);
 
 public sealed record UpdateProductPriceRequest(
     decimal? Price,

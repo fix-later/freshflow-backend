@@ -39,5 +39,9 @@ public sealed class UpdateMarketCommandValidator : AbstractValidator<UpdateMarke
         RuleFor(x => x.Description)
             .MaximumLength(2000)
             .When(x => x.Description is not null);
+
+        RuleFor(x => x.Code)
+            .MaximumLength(8)
+            .Matches("^[A-Z]+$");
     }
 }

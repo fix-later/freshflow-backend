@@ -72,4 +72,16 @@ public sealed class CreateMarketCommandValidatorTests
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == "ImageUrl");
     }
+
+    [Theory]
+    [InlineData("thu-duc")]
+    [InlineData("TOO-LONG-CODE")]
+    public async Task Validate_InvalidCode_Fails(string code)
+    {
+        var result = await _sut.ValidateAsync(
+            new CreateMarketCommand("Name", null, null, null, null, Code: code));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "Code");
+    }
 }

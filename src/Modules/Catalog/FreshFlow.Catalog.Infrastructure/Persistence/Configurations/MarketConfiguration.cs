@@ -12,6 +12,7 @@ internal sealed class MarketConfiguration : IEntityTypeConfiguration<Market>
         builder.HasKey(m => m.Id);
 
         builder.Property(m => m.Name).IsRequired().HasMaxLength(200);
+        builder.Property(m => m.Code).HasMaxLength(8);
         builder.Property(m => m.Location).HasMaxLength(200);
         builder.Property(m => m.Address).HasMaxLength(500);
         builder.Property(m => m.Latitude).HasColumnType("numeric(9,6)");

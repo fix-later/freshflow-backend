@@ -33,7 +33,8 @@ public sealed class UpdateMarketCommandHandlerTests
             10.5m,
             106.5m,
             "https://example.com/market.jpg",
-            "Updated description");
+            "Updated description",
+            "NEW");
 
         // Act
         var result = await _sut.Handle(cmd, default);
@@ -44,6 +45,7 @@ public sealed class UpdateMarketCommandHandlerTests
         result.Value.Location.Should().Be("New Location");
         result.Value.ImageUrl.Should().Be("https://example.com/market.jpg");
         result.Value.Description.Should().Be("Updated description");
+        result.Value.Code.Should().Be("NEW");
         await _markets.Received(1).SaveChangesAsync(default);
     }
 
