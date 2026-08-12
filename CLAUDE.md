@@ -220,6 +220,21 @@ declared in `{Module}.Application/Abstractions/` (e.g. `IPricingBroadcastService
 
 ---
 
+## Domain Vocabulary
+
+**Phiên chợ** (*market session*) — a single gather-and-buy run at **one market** on **one day**:
+the system bundles every confirmed order for that day into one shopping list, a market agent buys
+it, then hands it off to the hub. In code this is the `ProcurementBatch` aggregate (table
+`procurement_batches`), lifecycle `Built → Manifested → Purchasing → HandedOff → Completed` (or
+`Cancelled`). There is **no separate `Session` entity** — "session" in comments and "phiên chợ" in
+Vietnamese UI/docs both mean `ProcurementBatch`.
+
+- User-facing Vietnamese = **"phiên chợ"** everywhere. "Lô chợ" is the old name — **do not use it**.
+- Code/English = **`ProcurementBatch`** / `batch`. Do **not** rename the code to match the Vietnamese
+  term — the two-register convention is deliberate.
+
+---
+
 ## Key Coding Patterns
 
 ### Result pattern (no business-rule exceptions from services)
