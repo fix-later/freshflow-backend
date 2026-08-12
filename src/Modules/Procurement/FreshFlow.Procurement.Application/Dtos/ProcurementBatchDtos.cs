@@ -9,6 +9,7 @@ public sealed record ProcurementBatchListDto(
 
 public sealed record ProcurementBatchDto(
     Guid Id,
+    string? Code,
     DateOnly BatchDate,
     Guid MarketId,
     string Status,
@@ -84,6 +85,7 @@ internal static class ProcurementBatchDtoMapper
         IReadOnlyDictionary<Guid, string>? imagesByMarketProduct = null) =>
         new(
             batch.Id,
+            batch.Code,
             batch.BatchDate,
             batch.MarketId,
             batch.Status.ToString(),

@@ -9,6 +9,37 @@ namespace FreshFlow.Procurement.UnitTests.Domain;
 public sealed class ProcurementBatchTests
 {
     [Fact]
+    public void Build_WithCode_AssignsCodeOnceAndMergeKeepsIt()
+    {
+        var productId = Guid.NewGuid();
+        var batch = ProcurementBatch.Build(
+            new DateOnly(2026, 8, 12),
+            Guid.NewGuid(),
+            [(productId, "Cabbage", 4, Guid.NewGuid())],
+            Guid.NewGuid(),
+            "TD-260812-1").Value;
+
+        batch.MergeIn(
+            [(productId, "Cabbage", 2, Guid.NewGuid())],
+            new Dictionary<Guid, decimal>(),
+            DateTime.UtcNow);
+
+        batch.Code.Should().Be("TD-260812-1");
+    }
+
+    [Fact]
+    public void Build_LegacyOverload_LeavesCodeNull()
+    {
+        var batch = ProcurementBatch.Build(
+            new DateOnly(2026, 8, 12),
+            Guid.NewGuid(),
+            [(Guid.NewGuid(), "Cabbage", 4, Guid.NewGuid())],
+            Guid.NewGuid()).Value;
+
+        batch.Code.Should().BeNull();
+    }
+
+    [Fact]
     public void Build_RepeatedProductAcrossOrders_AggregatesQuantityAndCoverage()
     {
         var marketId = Guid.NewGuid();

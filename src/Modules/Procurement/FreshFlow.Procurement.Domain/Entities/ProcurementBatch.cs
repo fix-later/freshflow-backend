@@ -14,6 +14,7 @@ public sealed class ProcurementBatch : AggregateRoot
     private ProcurementBatch() { }
 
     public DateOnly BatchDate { get; private set; }
+    public string? Code { get; private set; }
     public Guid MarketId { get; private set; }
     public ProcurementBatchStatus Status { get; private set; }
     public DateTime? ManifestedAt { get; private set; }
@@ -34,7 +35,25 @@ public sealed class ProcurementBatch : AggregateRoot
         DateOnly batchDate,
         Guid marketId,
         IEnumerable<(Guid MarketProductId, string ProductName, int Quantity, Guid OrderId)> lines,
-        Guid hubId)
+        Guid hubId,
+        string code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return Result<ProcurementBatch>.Failure(Error.Validation(
+                "INVALID_PROCUREMENT_BATCH",
+                "A procurement batch code is required."));
+        }
+
+        return BuildCore(batchDate, marketId, lines, hubId, code);
+    }
+
+    private static Result<ProcurementBatch> BuildCore(
+        DateOnly batchDate,
+        Guid marketId,
+        IEnumerable<(Guid MarketProductId, string ProductName, int Quantity, Guid OrderId)> lines,
+        Guid hubId,
+        string? code)
     {
         var input = lines?.ToList() ?? [];
 
@@ -72,6 +91,7 @@ public sealed class ProcurementBatch : AggregateRoot
         var batch = new ProcurementBatch
         {
             BatchDate = batchDate,
+            Code = code,
             MarketId = marketId,
             HubId = hubId,
             Status = ProcurementBatchStatus.Built
@@ -101,7 +121,14 @@ public sealed class ProcurementBatch : AggregateRoot
         return Result<ProcurementBatch>.Success(batch);
     }
 
-    // ponytail: internal overload is only for legacy test fixtures during the nullable-column rollout.
+    // ponytail: nullable Code keeps pre-migration fixtures and old rows compatible.
+    internal static Result<ProcurementBatch> Build(
+        DateOnly batchDate,
+        Guid marketId,
+        IEnumerable<(Guid MarketProductId, string ProductName, int Quantity, Guid OrderId)> lines,
+        Guid hubId) =>
+        BuildCore(batchDate, marketId, lines, hubId, null);
+
     internal static Result<ProcurementBatch> Build(
         DateOnly batchDate,
         Guid marketId,

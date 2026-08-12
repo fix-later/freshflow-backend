@@ -11,4 +11,5 @@ public sealed record UpdateMarketCommand(
     decimal? Latitude,
     decimal? Longitude,
     string? ImageUrl = null,
-    string? Description = null) : ICommand<MarketDto>;
+    string? Description = null,
+    string? Code = null) : ICommand<MarketDto>;

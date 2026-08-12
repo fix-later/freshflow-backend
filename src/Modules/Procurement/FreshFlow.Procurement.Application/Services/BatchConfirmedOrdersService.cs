@@ -1,4 +1,5 @@
 using FreshFlow.Procurement.Application.Abstractions;
+using FreshFlow.Procurement.Application.Common;
 using FreshFlow.Procurement.Application.Dtos;
 using FreshFlow.Procurement.Domain.Entities;
 using FreshFlow.Procurement.Domain.Enums;
@@ -10,6 +11,7 @@ public sealed class BatchConfirmedOrdersService(
     IConfirmedOrderReader orders,
     IMarketProductMarketReader marketProducts,
     IHubByMarketReader hubsByMarket,
+    IMarketCodeReader marketCodes,
     IOperationalSettingsReader settings,
     IProcurementBatchRepository batches,
     TimeProvider timeProvider) : IProcurementBatchingService
@@ -70,6 +72,14 @@ public sealed class BatchConfirmedOrdersService(
                 $"Market '{marketWithoutHub}' has no active hub."));
         }
 
+        var marketDetails = await marketCodes.ReadMarketCodesAsync(marketIds, ct);
+        var missingMarketId = marketIds.FirstOrDefault(marketId => !marketDetails.ContainsKey(marketId));
+        if (missingMarketId != Guid.Empty)
+        {
+            return Result<BatchingResult>.Failure(
+                Error.NotFound("Market", missingMarketId));
+        }
+
         var marketGroups = lines.GroupBy(line => line.MarketId).ToList();
         var previewItemCount = marketGroups.Sum(group =>
             group.Select(line => line.MarketProductId).Distinct().Count());
@@ -85,7 +95,8 @@ public sealed class BatchConfirmedOrdersService(
                         line.MarketProductId,
                         line.ProductNameSnapshot,
                         line.Quantity,
-                        line.OrderId)));
+                        line.OrderId)),
+                    "(preview)");
                 if (build.IsFailure)
                     return Result<BatchingResult>.Failure(build.Error);
                 previewBatches.Add(build.Value);
@@ -114,13 +125,18 @@ public sealed class BatchConfirmedOrdersService(
         {
             if (!mergeByMarket.TryGetValue(marketGroup.Key, out var existing))
             {
+                var market = marketDetails[marketGroup.Key];
+                var marketCode = market.Code ?? MarketCode.DeriveMarketCode(market.Name);
+                var sequence = await batches.CountByMarketAndDateAsync(marketGroup.Key, batchDate, ct) + 1;
+                var code = $"{marketCode}-{batchDate:yyMMdd}-{sequence}";
                 var build = Build(
                     marketGroup.Key,
                     marketGroup.Select(line => (
                         line.MarketProductId,
                         line.ProductNameSnapshot,
                         line.Quantity,
-                        line.OrderId)));
+                        line.OrderId)),
+                    code);
                 if (build.IsFailure)
                     return Result<BatchingResult>.Failure(build.Error);
                 newBatches.Add(build.Value);
@@ -198,12 +214,14 @@ public sealed class BatchConfirmedOrdersService(
 
         Result<ProcurementBatch> Build(
             Guid marketId,
-            IEnumerable<(Guid MarketProductId, string ProductName, int Quantity, Guid OrderId)> groupLines) =>
+            IEnumerable<(Guid MarketProductId, string ProductName, int Quantity, Guid OrderId)> groupLines,
+            string code) =>
             ProcurementBatch.Build(
                 batchDate,
                 marketId,
                 groupLines,
-                hubs[marketId]);
+                hubs[marketId],
+                code);
     }
 
     private static Result<BatchingResult> Skipped(string reason) =>
@@ -218,6 +236,7 @@ public sealed class BatchConfirmedOrdersService(
     private static BatchingPreviewDto ToPreview(ProcurementBatch batch) =>
         new(
             batch.BatchDate,
+            batch.Code,
             batch.MarketId,
             batch.Status.ToString(),
             batch.Orders.Select(link => link.OrderId).ToList().AsReadOnly(),

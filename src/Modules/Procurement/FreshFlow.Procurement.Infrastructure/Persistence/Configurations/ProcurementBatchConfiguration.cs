@@ -15,6 +15,8 @@ internal sealed class ProcurementBatchConfiguration : IEntityTypeConfiguration<P
         builder.Property(batch => batch.Id)
             .HasColumnName("id")
             .HasDefaultValueSql("gen_random_uuid()");
+        builder.Property(batch => batch.Code)
+            .HasColumnName("code");
         builder.Property(batch => batch.BatchDate)
             .HasColumnName("batch_date")
             .IsRequired();
@@ -84,6 +86,10 @@ internal sealed class ProcurementBatchConfiguration : IEntityTypeConfiguration<P
         builder.HasIndex(batch => batch.AssignedAgentUserId)
             .HasFilter("\"assigned_agent_user_id\" IS NOT NULL")
             .HasDatabaseName("ix_procurement_batches_assigned_agent");
+
+        builder.HasIndex(batch => batch.Code)
+            .IsUnique()
+            .HasFilter("code IS NOT NULL");
 
         builder.HasIndex(batch => new { batch.BatchDate, batch.MarketId })
             .HasDatabaseName("idx_procurement_batches_batch_date_market_id");

@@ -16,7 +16,9 @@ public sealed class GetProcurementBatchesQueryHandlerTests
         var build = ProcurementBatch.Build(
             new DateOnly(2026, 7, 15),
             Guid.NewGuid(),
-            [(Guid.NewGuid(), "Tomato", 4, orderId)]);
+            [(Guid.NewGuid(), "Tomato", 4, orderId)],
+            Guid.NewGuid(),
+            "TD-260715-1");
         var repository = Substitute.For<IProcurementBatchRepository>();
         repository.ListAsync(2, 10, default, default, default)
             .Returns((
@@ -32,6 +34,7 @@ public sealed class GetProcurementBatchesQueryHandlerTests
             default);
 
         result.Value.Batches.Should().ContainSingle();
+        result.Value.Batches[0].Code.Should().Be("TD-260715-1");
         result.Value.Batches[0].Members.Should().ContainSingle()
             .Which.Status.Should().Be("Batched");
         result.Value.Batches[0].Items.Should().ContainSingle()
