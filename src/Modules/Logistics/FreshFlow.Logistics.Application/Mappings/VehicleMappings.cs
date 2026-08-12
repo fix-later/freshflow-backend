@@ -14,5 +14,6 @@ internal static class VehicleMappings
             vehicle.IsAvailable,
             vehicle.DeletedAt is null,
             vehicle.CreatedAt,
-            vehicle.UpdatedAt);
+            vehicle.UpdatedAt,
+            vehicle.HubId);
 }

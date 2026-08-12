@@ -7,6 +7,29 @@ namespace FreshFlow.Logistics.UnitTests.Domain;
 [Trait("Category", "Unit")]
 public sealed class VehicleTests
 {
+    [Fact]
+    public void AssignHub_EmptyHubId_ThrowsArgumentException()
+    {
+        var vehicle = new Vehicle("ABC-123", 1200, VehicleType.van, null);
+
+        var act = () => vehicle.AssignHub(Guid.Empty);
+
+        act.Should().Throw<ArgumentException>().WithParameterName("hubId");
+    }
+
+    [Fact]
+    public void AssignHub_ValidHubId_AssignsHubAndUpdatesTimestamp()
+    {
+        var vehicle = new Vehicle("ABC-123", 1200, VehicleType.van, null);
+        var hubId = Guid.NewGuid();
+        var previousUpdatedAt = vehicle.UpdatedAt;
+
+        vehicle.AssignHub(hubId);
+
+        vehicle.HubId.Should().Be(hubId);
+        vehicle.UpdatedAt.Should().BeOnOrAfter(previousUpdatedAt);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
@@ -50,7 +73,8 @@ public sealed class VehicleTests
     [Fact]
     public void Update_ValidInput_UpdatesFieldsAndTimestamp()
     {
-        var vehicle = new Vehicle("ABC-123", 1200, VehicleType.van, null);
+        var hubId = Guid.NewGuid();
+        var vehicle = new Vehicle("ABC-123", 1200, VehicleType.van, null, hubId);
         var originalUpdatedAt = vehicle.UpdatedAt;
 
         vehicle.Update(" XYZ-789 ", 2400, VehicleType.truck);
@@ -58,6 +82,7 @@ public sealed class VehicleTests
         vehicle.PlateNumber.Should().Be("XYZ-789");
         vehicle.CapacityKg.Should().Be(2400);
         vehicle.VehicleType.Should().Be(VehicleType.truck);
+        vehicle.HubId.Should().Be(hubId);
         vehicle.UpdatedAt.Should().BeOnOrAfter(originalUpdatedAt);
     }
 

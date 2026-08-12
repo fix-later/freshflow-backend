@@ -8,4 +8,5 @@ public sealed record UpdateVehicleCommand(
     Guid Id,
     string PlateNumber,
     decimal CapacityKg,
-    string VehicleType) : IRequest<Result<VehicleDto>>;
+    string VehicleType,
+    Guid? HubId = null) : IRequest<Result<VehicleDto>>;

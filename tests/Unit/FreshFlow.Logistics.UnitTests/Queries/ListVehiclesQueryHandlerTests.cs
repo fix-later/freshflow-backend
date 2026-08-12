@@ -96,6 +96,22 @@ public sealed class ListVehiclesQueryHandlerTests
         result.Value.Items.Should().Contain(v => !v.IsActive);
     }
 
+    [Fact]
+    public async Task Handle_HubId_ReturnsOnlyVehiclesInHubAsync()
+    {
+        using var db = CreateContext();
+        var repository = new VehicleRepository(db);
+        var sut = new ListVehiclesQueryHandler(repository);
+        var hubId = Guid.NewGuid();
+        await AddVehicleAsync(repository, db, "HUB-001", DateTime.UtcNow, hubId);
+        await AddVehicleAsync(repository, db, "OTHER-001", DateTime.UtcNow, Guid.NewGuid());
+        await AddVehicleAsync(repository, db, "NONE-001", DateTime.UtcNow);
+
+        var result = await sut.Handle(new ListVehiclesQuery(HubId: hubId), default);
+
+        result.Value.Items.Should().ContainSingle(vehicle => vehicle.HubId == hubId);
+    }
+
     private static AppDbContext CreateContext()
     {
         _ = typeof(FreshFlow.Logistics.Infrastructure.DependencyInjection).Assembly;
@@ -111,9 +127,10 @@ public sealed class ListVehiclesQueryHandlerTests
         VehicleRepository repository,
         AppDbContext db,
         string plateNumber,
-        DateTime createdAt)
+        DateTime createdAt,
+        Guid? hubId = null)
     {
-        var vehicle = new Vehicle(plateNumber, 1200, VehicleType.van, null);
+        var vehicle = new Vehicle(plateNumber, 1200, VehicleType.van, null, hubId);
         await repository.AddAsync(vehicle, default);
         await repository.SaveChangesAsync(default);
 

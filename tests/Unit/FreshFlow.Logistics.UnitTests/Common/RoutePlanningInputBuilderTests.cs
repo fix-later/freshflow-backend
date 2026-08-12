@@ -50,7 +50,7 @@ public sealed class RoutePlanningInputBuilderTests
         routes.GetReservedVehicleIdsAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
             .Returns(new HashSet<Guid> { reservedVehicle.Id });
         var vehicles = Substitute.For<IVehicleRepository>();
-        vehicles.GetPageAsync(null, 10_000, true, Arg.Any<CancellationToken>())
+        vehicles.GetPageAsync(null, 10_000, true, null, Arg.Any<CancellationToken>())
             .Returns((new[] { reservedVehicle, freeVehicle }, null));
         var settings = Substitute.For<IVehicleCapacityPolicy>();
         settings.CapacityUtilizationPercent.Returns(90m);

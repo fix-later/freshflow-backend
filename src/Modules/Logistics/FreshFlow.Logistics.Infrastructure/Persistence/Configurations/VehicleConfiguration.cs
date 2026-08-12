@@ -39,6 +39,9 @@ internal sealed class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
         builder.Property(v => v.RegisteredBy)
             .HasColumnName("registered_by");
 
+        builder.Property(v => v.HubId)
+            .HasColumnName("hub_id");
+
         builder.Property(v => v.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
@@ -57,5 +60,9 @@ internal sealed class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
 
         builder.HasIndex(v => v.DeletedAt)
             .HasDatabaseName("idx_vehicles_deleted_at");
+
+        builder.HasIndex(v => v.HubId)
+            .HasFilter("deleted_at IS NULL")
+            .HasDatabaseName("idx_vehicles_hub_id");
     }
 }

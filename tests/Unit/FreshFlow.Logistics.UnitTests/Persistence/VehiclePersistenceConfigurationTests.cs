@@ -46,6 +46,9 @@ public sealed class VehiclePersistenceConfigurationTests
         entity.FindProperty(nameof(Vehicle.RegisteredBy))!
             .GetColumnName(table)
             .Should().Be("registered_by");
+        entity.FindProperty(nameof(Vehicle.HubId))!
+            .GetColumnName(table)
+            .Should().Be("hub_id");
         entity.FindProperty(nameof(Vehicle.DeletedAt))!
             .GetColumnName(table)
             .Should().Be("deleted_at");
@@ -60,6 +63,10 @@ public sealed class VehiclePersistenceConfigurationTests
 
         entity.GetIndexes().Should().Contain(i =>
             i.GetDatabaseName() == "idx_vehicles_deleted_at");
+        var hubIndex = entity.GetIndexes()
+            .Single(i => i.GetDatabaseName() == "idx_vehicles_hub_id");
+        hubIndex.GetFilter().Should().Be("deleted_at IS NULL");
+        entity.GetForeignKeys().Should().BeEmpty("hub_id is a cross-module plain Guid");
     }
 
     [Fact]

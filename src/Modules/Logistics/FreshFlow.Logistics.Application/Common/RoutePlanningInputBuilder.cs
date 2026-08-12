@@ -80,7 +80,7 @@ public sealed class RoutePlanningInputBuilder(
             .ToList()
             .AsReadOnly();
 
-        var (fleet, _) = await vehicles.GetPageAsync(null, 10_000, true, ct);
+        var (fleet, _) = await vehicles.GetPageAsync(null, 10_000, true, null, ct);
         var reservedVehicleIds = await routes.GetReservedVehicleIdsAsync(serviceDate, ct);
         var planningVehicles = fleet
             .Where(vehicle => vehicle.IsAvailable && !reservedVehicleIds.Contains(vehicle.Id))
