@@ -27,6 +27,8 @@ public sealed class AssistantOrchestrator(
     IOptions<AssistantOptions> options)
 {
     private const string CreateDraftOrderToolName = "create_draft_order";
+    private const string GetMyCreditToolName = "get_my_credit";
+    private const string ListDeliveryAddressesToolName = "list_delivery_addresses";
     private const string PreviewConfirmationToolName = "preview_confirmation";
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -51,6 +53,8 @@ public sealed class AssistantOrchestrator(
         var ctx = new AssistantToolInvocationContext(state.UserId, state.MarketId, deliveryAddressIdFlag);
         var tools = toolRegistry.Tools;
         var draftOrderId = state.CurrentDraftOrderId;
+        CreditSummary? creditSummary = null;
+        IReadOnlyList<AssistantDeliveryAddress>? deliveryAddresses = null;
 
         for (var hop = 0; hop < _maxToolHops; hop++)
         {
@@ -60,7 +64,13 @@ public sealed class AssistantOrchestrator(
             if (!turn.IsToolCall)
             {
                 state = AppendAssistantText(state, turn.Text ?? string.Empty);
-                return new AssistantTurnOutcome(turn.Text ?? string.Empty, state, PendingConfirmation: null, draftOrderId);
+                return new AssistantTurnOutcome(
+                    turn.Text ?? string.Empty,
+                    state,
+                    PendingConfirmation: null,
+                    draftOrderId,
+                    creditSummary,
+                    deliveryAddresses);
             }
 
             var gate = confirmationGate.Evaluate(
@@ -68,11 +78,20 @@ public sealed class AssistantOrchestrator(
             if (gate.IsBlocked)
             {
                 return await BuildPendingConfirmationAsync(
-                    state, gate.OrderId, gate.DeliveryAddressId, ctx, draftOrderId, ct);
+                    state,
+                    gate.OrderId,
+                    gate.DeliveryAddressId,
+                    ctx,
+                    draftOrderId,
+                    creditSummary,
+                    deliveryAddresses,
+                    ct);
             }
 
             var resultJson = await toolRegistry.InvokeAsync(turn.ToolName!, ParseArgs(turn.ToolArgsJson), ctx, ct);
-            state = AppendToolExchange(state, turn, resultJson);
+            var historyResultJson = PrepareToolResult(
+                turn.ToolName!, resultJson, ref creditSummary, ref deliveryAddresses);
+            state = AppendToolExchange(state, turn, historyResultJson);
 
             if (turn.ToolName == CreateDraftOrderToolName && TryExtractOrderId(resultJson) is { } newDraftId)
             {
@@ -85,7 +104,13 @@ public sealed class AssistantOrchestrator(
         const string safeMessage =
             "Xin lỗi, yêu cầu này cần nhiều bước hơn dự kiến nên tôi tạm dừng. Bạn vui lòng thử lại với yêu cầu cụ thể hơn nhé.";
         state = AppendAssistantText(state, safeMessage);
-        return new AssistantTurnOutcome(safeMessage, state, PendingConfirmation: null, draftOrderId);
+        return new AssistantTurnOutcome(
+            safeMessage,
+            state,
+            PendingConfirmation: null,
+            draftOrderId,
+            creditSummary,
+            deliveryAddresses);
     }
 
     /// <summary>
@@ -99,13 +124,21 @@ public sealed class AssistantOrchestrator(
         Guid? deliveryAddressId,
         AssistantToolInvocationContext ctx,
         Guid? draftOrderId,
+        CreditSummary? creditSummary,
+        IReadOnlyList<AssistantDeliveryAddress>? deliveryAddresses,
         CancellationToken ct)
     {
         if (pendingOrderId is null)
         {
             const string clarify =
                 "Tôi chưa rõ bạn muốn xác nhận đơn hàng nào. Bạn vui lòng cho tôi biết đơn hàng cụ thể nhé.";
-            return new AssistantTurnOutcome(clarify, AppendAssistantText(state, clarify), PendingConfirmation: null, draftOrderId);
+            return new AssistantTurnOutcome(
+                clarify,
+                AppendAssistantText(state, clarify),
+                PendingConfirmation: null,
+                draftOrderId,
+                creditSummary,
+                deliveryAddresses);
         }
 
         if (deliveryAddressId is null)
@@ -116,7 +149,9 @@ public sealed class AssistantOrchestrator(
                 selectAddress,
                 AppendAssistantText(state, selectAddress),
                 PendingConfirmation: null,
-                draftOrderId);
+                draftOrderId,
+                creditSummary,
+                deliveryAddresses);
         }
 
         var previewArgs = ToJsonElement(new { orderId = pendingOrderId.Value });
@@ -126,7 +161,55 @@ public sealed class AssistantOrchestrator(
             "Đơn hàng của bạn đã sẵn sàng. Vui lòng kiểm tra tóm tắt và bấm xác nhận để tôi đặt đơn giúp bạn.";
         var updatedState = AppendAssistantText(state, reply);
         var pending = new PendingConfirmation(pendingOrderId.Value, deliveryAddressId.Value, previewJson);
-        return new AssistantTurnOutcome(reply, updatedState, pending, draftOrderId);
+        return new AssistantTurnOutcome(
+            reply, updatedState, pending, draftOrderId, creditSummary, deliveryAddresses);
+    }
+
+    private static string PrepareToolResult(
+        string toolName,
+        string resultJson,
+        ref CreditSummary? creditSummary,
+        ref IReadOnlyList<AssistantDeliveryAddress>? deliveryAddresses)
+    {
+        if (toolName is not GetMyCreditToolName and not ListDeliveryAddressesToolName)
+        {
+            return resultJson;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(resultJson);
+            var root = document.RootElement;
+
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("error", out _))
+            {
+                return resultJson;
+            }
+
+            if (toolName == GetMyCreditToolName
+                && root.ValueKind == JsonValueKind.Object
+                && root.Deserialize<CreditSummary>(SerializerOptions) is { } credit)
+            {
+                creditSummary = credit;
+                return JsonSerializer.Serialize(new { clientDataAvailable = true }, SerializerOptions);
+            }
+
+            if (toolName == ListDeliveryAddressesToolName
+                && root.ValueKind == JsonValueKind.Array
+                && root.Deserialize<List<AssistantDeliveryAddress>>(SerializerOptions) is { } addresses)
+            {
+                deliveryAddresses = addresses;
+                return JsonSerializer.Serialize(
+                    new { clientDataAvailable = true, count = addresses.Count }, SerializerOptions);
+            }
+        }
+        catch (JsonException)
+        {
+            // Sensitive raw data must never fall through into conversation history.
+        }
+
+        return ToolResultJson.Error(
+            "INVALID_TOOL_RESULT", "The requested account data could not be prepared safely.");
     }
 
     private static ConversationState AppendAssistantText(ConversationState state, string text) =>
@@ -208,4 +291,6 @@ public sealed record AssistantTurnOutcome(
     string Reply,
     ConversationState State,
     PendingConfirmation? PendingConfirmation,
-    Guid? DraftOrderId);
+    Guid? DraftOrderId,
+    CreditSummary? CreditSummary = null,
+    IReadOnlyList<AssistantDeliveryAddress>? DeliveryAddresses = null);

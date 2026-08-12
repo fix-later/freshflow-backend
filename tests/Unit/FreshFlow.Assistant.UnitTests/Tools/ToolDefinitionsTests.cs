@@ -1,10 +1,18 @@
 using System.Text.Json;
 using FluentAssertions;
 using FreshFlow.API.Assistant.Tools;
+using FreshFlow.Auth.Application.Abstractions;
+using FreshFlow.Auth.Application.Queries.GetDeliveryAddresses;
+using FreshFlow.Auth.Application.Queries.GetRestaurantProfile;
 using FreshFlow.Orders.Application.Commands.ConfirmOrder;
 using FreshFlow.Orders.Application.Commands.CreateDraftOrder;
+using FreshFlow.Orders.Application.Commands.Favorites.Add;
+using FreshFlow.Orders.Application.Commands.Favorites.Remove;
 using FreshFlow.Orders.Application.Dtos;
+using FreshFlow.Orders.Application.Queries.GetFavorites;
 using FreshFlow.Orders.Application.Queries.GetOrder;
+using FreshFlow.Orders.Application.Queries.GetRestaurantCredit;
+using FreshFlow.Orders.Application.Queries.ListOrders;
 using FreshFlow.Orders.Application.Queries.PreviewOrderConfirmation;
 using FreshFlow.Pricing.Application.Queries.SearchMarketProducts;
 using FreshFlow.SharedKernel.Application;
@@ -31,6 +39,171 @@ public sealed class ToolDefinitionsTests
 
     private IReadOnlyDictionary<string, AssistantTool> Tools =>
         ToolDefinitions.CreateAll(_sender).ToDictionary(t => t.Name);
+
+    [Fact]
+    public void CreateAll_registers_the_original_and_six_P0_tools_once()
+    {
+        Tools.Keys.Should().BeEquivalentTo(
+            "search_products",
+            "list_favorites",
+            "add_favorite",
+            "remove_favorite",
+            "get_my_credit",
+            "list_my_orders",
+            "list_delivery_addresses",
+            "create_draft_order",
+            "get_order",
+            "preview_confirmation",
+            "confirm_order");
+        Tools.Should().HaveCount(11);
+    }
+
+    [Fact]
+    public async Task list_favorites_injects_UserId_and_caps_the_LLM_payload()
+    {
+        var favorites = Enumerable.Range(1, 21)
+            .Select(i => new FavoriteItemDto(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                $"Sản phẩm {i}",
+                null,
+                _marketId,
+                "Chợ",
+                "Rau",
+                "kg",
+                10_000m,
+                5,
+                DateTime.UtcNow))
+            .ToList();
+        _sender.Send(Arg.Any<GetFavoritesQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<FavoriteItemDto>>.Success(favorites));
+
+        var result = await Tools["list_favorites"].Handler!(
+            JsonSerializer.SerializeToElement(new { userId = Guid.NewGuid() }), Ctx, CancellationToken.None);
+
+        await _sender.Received(1).Send(
+            Arg.Is<GetFavoritesQuery>(q => q.UserId == _userId),
+            Arg.Any<CancellationToken>());
+        var payload = JsonDocument.Parse(result).RootElement;
+        payload.GetProperty("items").GetArrayLength().Should().Be(20);
+        payload.GetProperty("totalCount").GetInt32().Should().Be(21);
+        payload.GetProperty("truncated").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task add_and_remove_favorite_inject_UserId_and_ignore_spoofed_identity()
+    {
+        var marketProductId = Guid.NewGuid();
+        var args = JsonSerializer.SerializeToElement(new
+        {
+            marketProductId,
+            userId = Guid.NewGuid(),
+            restaurantId = Guid.NewGuid()
+        });
+        _sender.Send(Arg.Any<AddFavoriteCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<AddFavoriteResponse>.Success(new AddFavoriteResponse(marketProductId)));
+        _sender.Send(Arg.Any<RemoveFavoriteCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
+
+        await Tools["add_favorite"].Handler!(args, Ctx, CancellationToken.None);
+        var removeResult = await Tools["remove_favorite"].Handler!(args, Ctx, CancellationToken.None);
+
+        await _sender.Received(1).Send(
+            Arg.Is<AddFavoriteCommand>(c => c.UserId == _userId && c.MarketProductId == marketProductId),
+            Arg.Any<CancellationToken>());
+        await _sender.Received(1).Send(
+            Arg.Is<RemoveFavoriteCommand>(c => c.UserId == _userId && c.MarketProductId == marketProductId),
+            Arg.Any<CancellationToken>());
+        JsonDocument.Parse(removeResult).RootElement.GetProperty("removed").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task get_my_credit_resolves_the_authenticated_restaurant_and_never_accepts_an_admin_flag()
+    {
+        var restaurantId = Guid.NewGuid();
+        _sender.Send(Arg.Any<GetRestaurantProfileQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<GetRestaurantProfileResponse>.Success(SampleProfile(restaurantId)));
+        _sender.Send(Arg.Any<GetRestaurantCreditQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<RestaurantCreditDto>.Success(
+                new RestaurantCreditDto(restaurantId, 1_000_000m, 250_000m, 750_000m, DateTime.UtcNow)));
+
+        await Tools["get_my_credit"].Handler!(
+            JsonSerializer.SerializeToElement(new
+            {
+                restaurantId = Guid.NewGuid(),
+                userId = Guid.NewGuid(),
+                isAdmin = true
+            }),
+            Ctx,
+            CancellationToken.None);
+
+        await _sender.Received(1).Send(
+            Arg.Is<GetRestaurantProfileQuery>(q => q.UserId == _userId),
+            Arg.Any<CancellationToken>());
+        await _sender.Received(1).Send(
+            Arg.Is<GetRestaurantCreditQuery>(q =>
+                q.UserId == _userId && q.RestaurantId == restaurantId && !q.IsAdmin),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task list_my_orders_forces_owner_scope_and_validates_page_size()
+    {
+        _sender.Send(Arg.Any<ListOrdersQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<OrderListResponseDto>.Success(
+                new OrderListResponseDto([], new OrderPaginationMeta(0, 2, 5))));
+        var args = JsonSerializer.SerializeToElement(new
+        {
+            status = "delivered",
+            page = 2,
+            pageSize = 5,
+            userId = Guid.NewGuid(),
+            restaurantId = Guid.NewGuid(),
+            isAdmin = true
+        });
+
+        await Tools["list_my_orders"].Handler!(args, Ctx, CancellationToken.None);
+
+        await _sender.Received(1).Send(
+            Arg.Is<ListOrdersQuery>(q =>
+                q.UserId == _userId
+                && !q.IsAdmin
+                && q.RestaurantId == null
+                && q.Status == "delivered"
+                && q.Page == 2
+                && q.PageSize == 5),
+            Arg.Any<CancellationToken>());
+
+        var invalid = await Tools["list_my_orders"].Handler!(
+            JsonSerializer.SerializeToElement(new { pageSize = 21 }), Ctx, CancellationToken.None);
+        JsonDocument.Parse(invalid).RootElement.GetProperty("error").GetString().Should().Be("INVALID_TOOL_ARGS");
+        await _sender.Received(1).Send(Arg.Any<ListOrdersQuery>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task list_delivery_addresses_injects_UserId()
+    {
+        var address = new DeliveryAddressDto(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Bếp trưởng",
+            "0900000000",
+            "123 Nguyễn Huệ",
+            null,
+            null,
+            true,
+            DateTime.UtcNow,
+            DateTime.UtcNow);
+        _sender.Send(Arg.Any<GetDeliveryAddressesQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<DeliveryAddressDto>>.Success([address]));
+
+        await Tools["list_delivery_addresses"].Handler!(
+            JsonSerializer.SerializeToElement(new { userId = Guid.NewGuid() }), Ctx, CancellationToken.None);
+
+        await _sender.Received(1).Send(
+            Arg.Is<GetDeliveryAddressesQuery>(q => q.UserId == _userId),
+            Arg.Any<CancellationToken>());
+    }
 
     // ── search_products ─────────────────────────────────────────────────────
 
@@ -325,6 +498,16 @@ public sealed class ToolDefinitionsTests
         await _sender.DidNotReceive().Send(
             Arg.Any<ConfirmOrderCommand>(), Arg.Any<CancellationToken>());
     }
+
+    private static GetRestaurantProfileResponse SampleProfile(Guid restaurantId) => new(
+        restaurantId,
+        "Nhà hàng",
+        "approved",
+        null,
+        null,
+        null,
+        null,
+        DateTime.UtcNow);
 
     private static OrderDto SampleOrder() => new(
         OrderId: Guid.NewGuid(),

@@ -718,6 +718,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("Code")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2553,6 +2557,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<Guid?>("HubId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("hub_id");
+
                     b.Property<bool>("IsAvailable")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -2583,6 +2591,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DeletedAt")
                         .HasDatabaseName("idx_vehicles_deleted_at");
+
+                    b.HasIndex("HubId")
+                        .HasDatabaseName("idx_vehicles_hub_id")
+                        .HasFilter("deleted_at IS NULL");
 
                     b.HasIndex("PlateNumber")
                         .IsUnique()
@@ -4173,6 +4185,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("cancelled_at");
 
+                    b.Property<string>("Code")
+                        .HasColumnType("text")
+                        .HasColumnName("code");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("completed_at");
@@ -4223,6 +4239,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.HasIndex("AssignedAgentUserId")
                         .HasDatabaseName("ix_procurement_batches_assigned_agent")
                         .HasFilter("\"assigned_agent_user_id\" IS NOT NULL");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasFilter("code IS NOT NULL");
 
                     b.HasIndex("BatchDate", "MarketId")
                         .HasDatabaseName("idx_procurement_batches_batch_date_market_id");
@@ -4482,6 +4502,23 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable((string)null);
 
                     b.ToSqlQuery("SELECT u.\"Id\", u.\"RoleId\", r.\"Name\" AS \"RoleName\", u.\"IsActive\", u.\"DeletedAt\"\nFROM users AS u\nINNER JOIN roles AS r ON u.\"RoleId\" = r.\"Id\"");
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.MarketCodeRow", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT \"Id\", \"Code\", \"Name\"\nFROM markets\nWHERE \"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.MarketProductImageRow", b =>

@@ -1,8 +1,10 @@
 using FluentAssertions;
+using FreshFlow.Logistics.Application.Abstractions;
 using FreshFlow.Logistics.Application.Commands.RegisterVehicle;
 using FreshFlow.Logistics.Domain.Entities;
 using FreshFlow.Logistics.Domain.Enums;
 using FreshFlow.Logistics.UnitTests.TestDoubles;
+using NSubstitute;
 
 namespace FreshFlow.Logistics.UnitTests.Commands;
 
@@ -13,7 +15,8 @@ public sealed class RegisterVehicleCommandHandlerTests
     public async Task Handle_NewVehicle_CreatesAvailableActiveVehicleAsync()
     {
         var repository = new InMemoryVehicleRepository();
-        var sut = new RegisterVehicleCommandHandler(repository);
+        var hubReader = Substitute.For<IHubCoordinateReader>();
+        var sut = new RegisterVehicleCommandHandler(repository, hubReader);
         var registeredBy = Guid.NewGuid();
 
         var result = await sut.Handle(
@@ -29,6 +32,7 @@ public sealed class RegisterVehicleCommandHandlerTests
         repository.Vehicles.Single().RegisteredBy.Should().Be(registeredBy);
         repository.Vehicles.Single().DeletedAt.Should().BeNull();
         repository.SaveChangesCount.Should().Be(1);
+        await hubReader.DidNotReceiveWithAnyArgs().FindByIdAsync(default, default);
     }
 
     [Fact]
@@ -37,7 +41,7 @@ public sealed class RegisterVehicleCommandHandlerTests
         var repository = new InMemoryVehicleRepository();
         var existing = new Vehicle("ABC-123", 1200, VehicleType.van, null);
         await repository.AddAsync(existing, default);
-        var sut = new RegisterVehicleCommandHandler(repository);
+        var sut = new RegisterVehicleCommandHandler(repository, Substitute.For<IHubCoordinateReader>());
 
         var result = await sut.Handle(
             new RegisterVehicleCommand("ABC-123", 900, "truck", null),
@@ -53,7 +57,7 @@ public sealed class RegisterVehicleCommandHandlerTests
     public async Task Handle_InvalidVehicleType_ReturnsValidationFailureAsync()
     {
         var repository = new InMemoryVehicleRepository();
-        var sut = new RegisterVehicleCommandHandler(repository);
+        var sut = new RegisterVehicleCommandHandler(repository, Substitute.For<IHubCoordinateReader>());
 
         var result = await sut.Handle(
             new RegisterVehicleCommand("ABC-123", 1200, "boat", null),
@@ -70,7 +74,7 @@ public sealed class RegisterVehicleCommandHandlerTests
     public async Task Handle_NumericStringVehicleType_ReturnsValidationFailureAsync(string vehicleType)
     {
         var repository = new InMemoryVehicleRepository();
-        var sut = new RegisterVehicleCommandHandler(repository);
+        var sut = new RegisterVehicleCommandHandler(repository, Substitute.For<IHubCoordinateReader>());
 
         var result = await sut.Handle(
             new RegisterVehicleCommand("ABC-123", 1200, vehicleType, null),
@@ -78,6 +82,40 @@ public sealed class RegisterVehicleCommandHandlerTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("VALIDATION_ERROR");
+        repository.Vehicles.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_WithHub_AssignsExistingHubAsync()
+    {
+        var repository = new InMemoryVehicleRepository();
+        var hubReader = Substitute.For<IHubCoordinateReader>();
+        var hubId = Guid.NewGuid();
+        hubReader.FindByIdAsync(hubId, Arg.Any<CancellationToken>())
+            .Returns(new HubCoordinateDto(hubId, Guid.NewGuid(), "Hub", 10m, 106m));
+        var sut = new RegisterVehicleCommandHandler(repository, hubReader);
+
+        var result = await sut.Handle(
+            new RegisterVehicleCommand("ABC-123", 1200, "van", null, hubId), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.HubId.Should().Be(hubId);
+        repository.Vehicles.Single().HubId.Should().Be(hubId);
+    }
+
+    [Fact]
+    public async Task Handle_HubMissing_ReturnsHubNotFoundAsync()
+    {
+        var repository = new InMemoryVehicleRepository();
+        var hubReader = Substitute.For<IHubCoordinateReader>();
+        var hubId = Guid.NewGuid();
+        var sut = new RegisterVehicleCommandHandler(repository, hubReader);
+
+        var result = await sut.Handle(
+            new RegisterVehicleCommand("ABC-123", 1200, "van", null, hubId), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("HUB_NOT_FOUND");
         repository.Vehicles.Should().BeEmpty();
     }
 }

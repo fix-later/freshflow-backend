@@ -140,6 +140,15 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
                 batch => batch.BatchDate == batchDate && batch.DeletedAt == null,
                 ct);
 
+    // ponytail: COUNT + 1 assumes the batching job remains single-threaded; the unique index catches collisions.
+    public Task<int> CountByMarketAndDateAsync(
+        Guid marketId,
+        DateOnly batchDate,
+        CancellationToken ct) =>
+        db.Set<ProcurementBatch>()
+            .AsNoTracking()
+            .CountAsync(batch => batch.MarketId == marketId && batch.BatchDate == batchDate, ct);
+
     public async Task<(IReadOnlyList<ProcurementBatch> Batches, int Total)> ListAsync(
         int page,
         int pageSize,

@@ -10,7 +10,8 @@ public sealed class Vehicle
         string plateNumber,
         decimal capacityKg,
         VehicleType vehicleType,
-        Guid? registeredBy)
+        Guid? registeredBy,
+        Guid? hubId = null)
     {
         Validate(plateNumber, capacityKg);
 
@@ -19,6 +20,7 @@ public sealed class Vehicle
         CapacityKg = capacityKg;
         VehicleType = vehicleType;
         RegisteredBy = registeredBy;
+        HubId = hubId;
         IsAvailable = true;
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = CreatedAt;
@@ -30,6 +32,8 @@ public sealed class Vehicle
     public VehicleType VehicleType { get; private set; }
     public bool IsAvailable { get; private set; }
     public Guid? RegisteredBy { get; private set; }
+    // ponytail: nullable only while existing vehicles are backfilled; make required in a follow-up migration.
+    public Guid? HubId { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
     public DateTime? DeletedAt { get; private set; }
@@ -51,6 +55,15 @@ public sealed class Vehicle
 
         DeletedAt = DateTime.UtcNow;
         UpdatedAt = DeletedAt.Value;
+    }
+
+    public void AssignHub(Guid hubId)
+    {
+        if (hubId == Guid.Empty)
+            throw new ArgumentException("Hub ID cannot be empty.", nameof(hubId));
+
+        HubId = hubId;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public void MarkAvailable()

@@ -2,6 +2,7 @@ namespace FreshFlow.Catalog.Application.Dtos;
 
 public sealed record MarketDto(
     Guid Id,
+    string? Code,
     string Name,
     string? Location,
     string? Address,

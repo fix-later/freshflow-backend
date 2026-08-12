@@ -8,4 +8,5 @@ public sealed record RegisterVehicleCommand(
     string PlateNumber,
     decimal CapacityKg,
     string VehicleType,
-    Guid? RegisteredBy) : IRequest<Result<VehicleDto>>;
+    Guid? RegisteredBy,
+    Guid? HubId = null) : IRequest<Result<VehicleDto>>;

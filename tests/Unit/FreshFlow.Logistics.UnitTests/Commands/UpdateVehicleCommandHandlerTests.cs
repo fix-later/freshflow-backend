@@ -1,8 +1,10 @@
 using FluentAssertions;
+using FreshFlow.Logistics.Application.Abstractions;
 using FreshFlow.Logistics.Application.Commands.UpdateVehicle;
 using FreshFlow.Logistics.Domain.Entities;
 using FreshFlow.Logistics.Domain.Enums;
 using FreshFlow.Logistics.UnitTests.TestDoubles;
+using NSubstitute;
 
 namespace FreshFlow.Logistics.UnitTests.Commands;
 
@@ -15,7 +17,7 @@ public sealed class UpdateVehicleCommandHandlerTests
         var repository = new InMemoryVehicleRepository();
         var vehicle = new Vehicle("ABC-123", 1200, VehicleType.van, null);
         await repository.AddAsync(vehicle, default);
-        var sut = new UpdateVehicleCommandHandler(repository);
+        var sut = CreateSut(repository);
 
         var result = await sut.Handle(
             new UpdateVehicleCommand(vehicle.Id, "XYZ-789", 2400, "truck"),
@@ -33,7 +35,7 @@ public sealed class UpdateVehicleCommandHandlerTests
     public async Task Handle_MissingVehicle_ReturnsNotFoundAsync()
     {
         var repository = new InMemoryVehicleRepository();
-        var sut = new UpdateVehicleCommandHandler(repository);
+        var sut = CreateSut(repository);
         var id = Guid.NewGuid();
 
         var result = await sut.Handle(new UpdateVehicleCommand(id, "ABC-123", 1200, "van"), default);
@@ -51,7 +53,7 @@ public sealed class UpdateVehicleCommandHandlerTests
         var second = new Vehicle("XYZ-789", 1200, VehicleType.truck, null);
         await repository.AddAsync(first, default);
         await repository.AddAsync(second, default);
-        var sut = new UpdateVehicleCommandHandler(repository);
+        var sut = CreateSut(repository);
 
         var result = await sut.Handle(
             new UpdateVehicleCommand(second.Id, "ABC-123", 1500, "truck"),
@@ -69,7 +71,7 @@ public sealed class UpdateVehicleCommandHandlerTests
         var repository = new InMemoryVehicleRepository();
         var vehicle = new Vehicle("ABC-123", 1200, VehicleType.van, null);
         await repository.AddAsync(vehicle, default);
-        var sut = new UpdateVehicleCommandHandler(repository);
+        var sut = CreateSut(repository);
 
         var result = await sut.Handle(
             new UpdateVehicleCommand(vehicle.Id, "ABC-123", 1500, "boat"),
@@ -89,7 +91,7 @@ public sealed class UpdateVehicleCommandHandlerTests
         var repository = new InMemoryVehicleRepository();
         var vehicle = new Vehicle("ABC-123", 1200, VehicleType.van, null);
         await repository.AddAsync(vehicle, default);
-        var sut = new UpdateVehicleCommandHandler(repository);
+        var sut = CreateSut(repository);
 
         var result = await sut.Handle(
             new UpdateVehicleCommand(vehicle.Id, "ABC-123", 1500, vehicleType),
@@ -107,7 +109,7 @@ public sealed class UpdateVehicleCommandHandlerTests
         var repository = new InMemoryVehicleRepository();
         var vehicle = new Vehicle("ABC-123", 1200, VehicleType.van, null);
         await repository.AddAsync(vehicle, default);
-        var sut = new UpdateVehicleCommandHandler(repository);
+        var sut = CreateSut(repository);
 
         var result = await sut.Handle(
             new UpdateVehicleCommand(vehicle.Id, "ABC-123", 1500, "truck"),
@@ -117,4 +119,45 @@ public sealed class UpdateVehicleCommandHandlerTests
         result.Value.PlateNumber.Should().Be("ABC-123");
         repository.SaveChangesCount.Should().Be(1);
     }
+
+    [Fact]
+    public async Task Handle_WithHub_AssignsExistingHubAsync()
+    {
+        var repository = new InMemoryVehicleRepository();
+        var vehicle = new Vehicle("ABC-123", 1200, VehicleType.van, null);
+        await repository.AddAsync(vehicle, default);
+        var hubs = Substitute.For<IHubCoordinateReader>();
+        var hubId = Guid.NewGuid();
+        hubs.FindByIdAsync(hubId, Arg.Any<CancellationToken>())
+            .Returns(new HubCoordinateDto(hubId, Guid.NewGuid(), "Hub", 10m, 106m));
+        var sut = new UpdateVehicleCommandHandler(repository, hubs);
+
+        var result = await sut.Handle(
+            new UpdateVehicleCommand(vehicle.Id, "ABC-123", 1200, "van", hubId), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.HubId.Should().Be(hubId);
+        vehicle.HubId.Should().Be(hubId);
+    }
+
+    [Fact]
+    public async Task Handle_HubMissing_ReturnsHubNotFoundWithoutMutatingVehicleAsync()
+    {
+        var repository = new InMemoryVehicleRepository();
+        var vehicle = new Vehicle("ABC-123", 1200, VehicleType.van, null);
+        await repository.AddAsync(vehicle, default);
+        var sut = new UpdateVehicleCommandHandler(repository, Substitute.For<IHubCoordinateReader>());
+
+        var result = await sut.Handle(
+            new UpdateVehicleCommand(vehicle.Id, "XYZ-789", 2400, "truck", Guid.NewGuid()), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("HUB_NOT_FOUND");
+        vehicle.PlateNumber.Should().Be("ABC-123");
+        vehicle.HubId.Should().BeNull();
+        repository.SaveChangesCount.Should().Be(0);
+    }
+
+    private static UpdateVehicleCommandHandler CreateSut(InMemoryVehicleRepository repository) =>
+        new(repository, Substitute.For<IHubCoordinateReader>());
 }

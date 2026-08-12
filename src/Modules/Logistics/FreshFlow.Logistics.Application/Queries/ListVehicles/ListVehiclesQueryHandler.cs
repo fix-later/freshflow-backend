@@ -15,6 +15,7 @@ internal sealed class ListVehiclesQueryHandler(IVehicleRepository vehicles)
             request.Cursor,
             request.PageSize,
             request.IsActive,
+            request.HubId,
             ct);
 
         var dtos = items.Select(vehicle => vehicle.ToDto()).ToList().AsReadOnly();

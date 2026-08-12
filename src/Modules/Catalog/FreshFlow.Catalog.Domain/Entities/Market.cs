@@ -13,7 +13,8 @@ public sealed class Market : AggregateRoot
         decimal? latitude,
         decimal? longitude,
         string? imageUrl = null,
-        string? description = null)
+        string? description = null,
+        string? code = null)
     {
         ValidateName(name);
         ValidateCoordinates(latitude, longitude);
@@ -25,10 +26,12 @@ public sealed class Market : AggregateRoot
         Longitude = longitude;
         ImageUrl = imageUrl;
         Description = description;
+        Code = code;
         IsActive = true;
     }
 
     public string Name { get; private set; } = string.Empty;
+    public string? Code { get; private set; }
     public string? Location { get; private set; }
     public string? Address { get; private set; }
     public decimal? Latitude { get; private set; }
@@ -44,7 +47,8 @@ public sealed class Market : AggregateRoot
         decimal? latitude,
         decimal? longitude,
         string? imageUrl = null,
-        string? description = null)
+        string? description = null,
+        string? code = null)
     {
         ValidateName(name);
         ValidateCoordinates(latitude, longitude);
@@ -56,6 +60,7 @@ public sealed class Market : AggregateRoot
         Longitude = longitude;
         ImageUrl = imageUrl;
         Description = description;
+        Code = code;
         UpdatedAt = DateTime.UtcNow;
     }
 

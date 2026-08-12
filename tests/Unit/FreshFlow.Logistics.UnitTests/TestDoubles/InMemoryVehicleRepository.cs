@@ -40,11 +40,14 @@ internal sealed class InMemoryVehicleRepository : IVehicleRepository
         string? cursor,
         int pageSize,
         bool? isActive,
+        Guid? hubId,
         CancellationToken ct)
     {
         var query = _vehicles.AsEnumerable();
         if (isActive.HasValue)
             query = query.Where(v => isActive.Value ? v.DeletedAt is null : v.DeletedAt is not null);
+        if (hubId.HasValue)
+            query = query.Where(v => v.HubId == hubId.Value);
 
         return Task.FromResult<(IReadOnlyList<Vehicle>, string?)>(
             (query.Take(pageSize).ToList().AsReadOnly(), null));

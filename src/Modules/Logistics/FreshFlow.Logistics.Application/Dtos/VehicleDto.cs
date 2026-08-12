@@ -8,4 +8,5 @@ public sealed record VehicleDto(
     bool IsAvailable,
     bool IsActive,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    Guid? HubId = null);

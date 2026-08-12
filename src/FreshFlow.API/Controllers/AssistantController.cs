@@ -82,7 +82,9 @@ public sealed class AssistantController(
             outcome.Reply,
             request.SessionId,
             outcome.PendingConfirmation,
-            outcome.DraftOrderId)));
+            outcome.DraftOrderId,
+            outcome.CreditSummary,
+            outcome.DeliveryAddresses)));
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreshFlow.Logistics.Application.Abstractions;
 using FreshFlow.Logistics.Application.Commands.AssignVehicle;
 using FreshFlow.Logistics.Application.Dtos;
 using FreshFlow.Logistics.Application.Queries.CheckEligibility;
@@ -24,7 +25,7 @@ public sealed class AssignVehicleCommandHandlerTests
         var sender = EligibleSender();
         var vehicleId = Guid.NewGuid();
         var driverUserId = Guid.NewGuid();
-        var sut = new AssignVehicleCommandHandler(repository, sender);
+        var sut = CreateSut(repository, sender);
 
         var result = await sut.Handle(new AssignVehicleCommand(route.Id, vehicleId, driverUserId), default);
 
@@ -49,7 +50,7 @@ public sealed class AssignVehicleCommandHandlerTests
         var repository = new InMemoryDeliveryRouteRepository();
         var sender = Substitute.For<ISender>();
         var routeId = Guid.NewGuid();
-        var sut = new AssignVehicleCommandHandler(repository, sender);
+        var sut = CreateSut(repository, sender);
 
         var result = await sut.Handle(new AssignVehicleCommand(routeId, Guid.NewGuid(), null), default);
 
@@ -68,7 +69,7 @@ public sealed class AssignVehicleCommandHandlerTests
         var sender = Substitute.For<ISender>();
         sender.Send(Arg.Any<CheckEligibilityQuery>(), Arg.Any<CancellationToken>())
             .Returns(Result<EligibilityResultDto>.Failure(Error.NotFound("DELIVERY_ROUTE", route.Id)));
-        var sut = new AssignVehicleCommandHandler(repository, sender);
+        var sut = CreateSut(repository, sender);
 
         var result = await sut.Handle(
             new AssignVehicleCommand(route.Id, Guid.NewGuid(), Guid.NewGuid()), default);
@@ -87,7 +88,7 @@ public sealed class AssignVehicleCommandHandlerTests
         var route = ReviewedRoute();
         await repository.AddAsync(route, default);
         var sender = EligibilitySender(false, [reason]);
-        var sut = new AssignVehicleCommandHandler(repository, sender);
+        var sut = CreateSut(repository, sender);
 
         var result = await sut.Handle(
             new AssignVehicleCommand(route.Id, Guid.NewGuid(), Guid.NewGuid()), default);
@@ -104,7 +105,7 @@ public sealed class AssignVehicleCommandHandlerTests
         var route = ReviewedRoute();
         await repository.AddAsync(route, default);
         var sender = EligibilitySender(false, ["VEHICLE_WEIGHT_CAPACITY_EXCEEDED"]);
-        var sut = new AssignVehicleCommandHandler(repository, sender);
+        var sut = CreateSut(repository, sender);
 
         var result = await sut.Handle(
             new AssignVehicleCommand(route.Id, Guid.NewGuid(), null), default);
@@ -124,7 +125,7 @@ public sealed class AssignVehicleCommandHandlerTests
         var route = ReviewedRoute();
         await repository.AddAsync(route, default);
         var sender = EligibilitySender(false, [reason]);
-        var sut = new AssignVehicleCommandHandler(repository, sender);
+        var sut = CreateSut(repository, sender);
 
         var result = await sut.Handle(new AssignVehicleCommand(route.Id, Guid.NewGuid(), null), default);
 
@@ -140,7 +141,7 @@ public sealed class AssignVehicleCommandHandlerTests
         var route = SelectedRoute();
         await repository.AddAsync(route, default);
         var sender = EligibleSender();
-        var sut = new AssignVehicleCommandHandler(repository, sender);
+        var sut = CreateSut(repository, sender);
 
         var result = await sut.Handle(
             new AssignVehicleCommand(route.Id, Guid.NewGuid(), Guid.NewGuid()), default);
@@ -158,7 +159,7 @@ public sealed class AssignVehicleCommandHandlerTests
         route.Assign(Guid.NewGuid(), Guid.NewGuid());
         await repository.AddAsync(route, default);
         var sender = EligibleSender();
-        var sut = new AssignVehicleCommandHandler(repository, sender);
+        var sut = CreateSut(repository, sender);
 
         var result = await sut.Handle(new AssignVehicleCommand(route.Id, Guid.NewGuid(), route.DriverUserId), default);
 
@@ -178,7 +179,7 @@ public sealed class AssignVehicleCommandHandlerTests
         var updatedAt = route.UpdatedAt;
         await repository.AddAsync(route, default);
         var sender = EligibleSender();
-        var sut = new AssignVehicleCommandHandler(repository, sender);
+        var sut = CreateSut(repository, sender);
 
         var result = await sut.Handle(new AssignVehicleCommand(route.Id, vehicleId, driverUserId), default);
 
@@ -197,7 +198,7 @@ public sealed class AssignVehicleCommandHandlerTests
         var route = ReviewedRoute();
         await repository.AddAsync(route, default);
         var sender = EligibleSender();
-        var sut = new AssignVehicleCommandHandler(repository, sender);
+        var sut = CreateSut(repository, sender);
 
         var result = await sut.Handle(
             new AssignVehicleCommand(route.Id, Guid.NewGuid(), Guid.NewGuid()), default);
@@ -205,6 +206,57 @@ public sealed class AssignVehicleCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("VEHICLE_NOT_AVAILABLE");
         repository.SaveAssignmentCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Handle_VehicleWithoutHub_ReturnsVehicleHubUnassignedBeforeEligibilityAsync()
+    {
+        var repository = new InMemoryDeliveryRouteRepository();
+        var route = ReviewedRoute();
+        await repository.AddAsync(route, default);
+        var sender = Substitute.For<ISender>();
+        var sut = CreateSut(repository, sender, null);
+
+        var result = await sut.Handle(
+            new AssignVehicleCommand(route.Id, Guid.NewGuid(), Guid.NewGuid()), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("VEHICLE_HUB_UNASSIGNED");
+        await sender.DidNotReceiveWithAnyArgs().Send(Arg.Any<CheckEligibilityQuery>(), default);
+    }
+
+    [Fact]
+    public async Task Handle_VehicleFromDifferentHub_ReturnsVehicleHubMismatchBeforeEligibilityAsync()
+    {
+        var repository = new InMemoryDeliveryRouteRepository();
+        var route = ReviewedHubRoute(Guid.NewGuid());
+        await repository.AddAsync(route, default);
+        var sender = Substitute.For<ISender>();
+        var sut = CreateSut(repository, sender, Guid.NewGuid());
+
+        var result = await sut.Handle(
+            new AssignVehicleCommand(route.Id, Guid.NewGuid(), Guid.NewGuid()), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("VEHICLE_HUB_MISMATCH");
+        await sender.DidNotReceiveWithAnyArgs().Send(Arg.Any<CheckEligibilityQuery>(), default);
+    }
+
+    [Fact]
+    public async Task Handle_VehicleFromSameHub_ReachesEligibilityAsync()
+    {
+        var repository = new InMemoryDeliveryRouteRepository();
+        var hubId = Guid.NewGuid();
+        var route = ReviewedHubRoute(hubId);
+        await repository.AddAsync(route, default);
+        var sender = EligibleSender();
+        var sut = CreateSut(repository, sender, hubId);
+
+        var result = await sut.Handle(
+            new AssignVehicleCommand(route.Id, Guid.NewGuid(), Guid.NewGuid()), default);
+
+        result.IsSuccess.Should().BeTrue();
+        await sender.Received(1).Send(Arg.Any<CheckEligibilityQuery>(), Arg.Any<CancellationToken>());
     }
 
     private static ISender EligibleSender() => EligibilitySender(true, []);
@@ -217,9 +269,41 @@ public sealed class AssignVehicleCommandHandlerTests
         return sender;
     }
 
+    private static AssignVehicleCommandHandler CreateSut(
+        InMemoryDeliveryRouteRepository routes,
+        ISender sender) =>
+        CreateSut(routes, sender, Guid.NewGuid());
+
+    private static AssignVehicleCommandHandler CreateSut(
+        InMemoryDeliveryRouteRepository routes,
+        ISender sender,
+        Guid? hubId)
+    {
+        var vehicles = Substitute.For<IVehicleRepository>();
+        var vehicle = new Vehicle("TEST-001", 1200, VehicleType.van, null, hubId);
+        vehicles.FindByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(vehicle);
+        return new AssignVehicleCommandHandler(routes, vehicles, sender);
+    }
+
     private static DeliveryRoute ReviewedRoute()
     {
         var route = SelectedRoute();
+        route.ApplyOptimization(route.Stops, 12.34m, 25, 61700m, OptimizationCriteria.cost);
+        route.MarkReviewed();
+        return route;
+    }
+
+    private static DeliveryRoute ReviewedHubRoute(Guid hubId)
+    {
+        var route = DeliveryRoute.CreateHubRoute(
+            hubId,
+            new DateOnly(2026, 7, 9),
+            [
+                new RouteStop(0, StopEntityType.hub, hubId, "Hub", 10.1m, 106.1m, null, null),
+                new RouteStop(1, StopEntityType.restaurant, Guid.NewGuid(), "Restaurant", 10.2m, 106.2m, null, null)
+            ],
+            null);
+        route.Select();
         route.ApplyOptimization(route.Stops, 12.34m, 25, 61700m, OptimizationCriteria.cost);
         route.MarkReviewed();
         return route;

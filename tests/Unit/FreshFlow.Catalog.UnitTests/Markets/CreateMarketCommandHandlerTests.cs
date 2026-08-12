@@ -28,7 +28,8 @@ public sealed class CreateMarketCommandHandlerTests
             10.8m,
             106.6m,
             "https://example.com/market.jpg",
-            "Wholesale market");
+            "Wholesale market",
+            "HM");
 
         // Act
         var result = await _sut.Handle(cmd, default);
@@ -39,12 +40,14 @@ public sealed class CreateMarketCommandHandlerTests
         result.Value.Location.Should().Be("Hóc Môn");
         result.Value.ImageUrl.Should().Be("https://example.com/market.jpg");
         result.Value.Description.Should().Be("Wholesale market");
+        result.Value.Code.Should().Be("HM");
         result.Value.IsActive.Should().BeTrue();
 
         await _markets.Received(1).AddAsync(
             Arg.Is<Market>(m =>
                 m.Name == "Hóc Môn Market"
                 && m.ImageUrl == "https://example.com/market.jpg"
+                && m.Code == "HM"
                 && m.Description == "Wholesale market"),
             default);
         await _markets.Received(1).SaveChangesAsync(default);
