@@ -72,6 +72,7 @@ public sealed class AuthWebAppFactory : WebApplicationFactory<Program>, IAsyncLi
                 // accidentally exhaust the 10-request production cap across their tests.
                 ["RateLimiting:Auth:PermitLimit"] = "1000",
                 ["Procurement:Batching:Enabled"] = "false",
+                ["Orders:MarketSessions:Enforce"] = "false",
                 // Provide a dummy Redis connection string so startup validation passes
                 // (the real multiplexer is replaced above, so this string is never used).
                 ["ConnectionStrings:Redis"] = "localhost:6379,abortConnect=false"

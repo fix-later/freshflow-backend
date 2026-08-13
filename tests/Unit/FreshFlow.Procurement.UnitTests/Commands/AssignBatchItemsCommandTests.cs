@@ -1,13 +1,14 @@
 using FluentAssertions;
 using FreshFlow.Procurement.Application.Abstractions;
-using FreshFlow.Procurement.Application.Commands.AssignAgent;
+using FreshFlow.Procurement.Application.Commands.AssignBatchItems;
+using FreshFlow.Procurement.Application.Dtos;
 using FreshFlow.Procurement.Domain.Entities;
 using NSubstitute;
 
 namespace FreshFlow.Procurement.UnitTests.Commands;
 
 [Trait("Category", "Unit")]
-public sealed class AssignAgentCommandTests
+public sealed class AssignBatchItemsCommandTests
 {
     private static readonly DateTimeOffset Now =
         new(2026, 7, 15, 2, 0, 0, TimeSpan.Zero);
@@ -15,8 +16,10 @@ public sealed class AssignAgentCommandTests
     [Fact]
     public void Validator_EmptyIds_IsInvalid()
     {
-        var result = new AssignAgentCommandValidator()
-            .Validate(new AssignAgentCommand(Guid.Empty, Guid.Empty));
+        var result = new AssignBatchItemsCommandValidator()
+            .Validate(new AssignBatchItemsCommand(
+                Guid.Empty,
+                [new ItemAssignmentDto(Guid.Empty, Guid.Empty)]));
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().HaveCount(2);
@@ -28,6 +31,7 @@ public sealed class AssignAgentCommandTests
         var agentUserId = Guid.NewGuid();
         var orderId = Guid.NewGuid();
         var batch = BuildManifestedBatch(orderId);
+        var productId = batch.Items.Single().MarketProductId;
         batch.ClearDomainEvents();
         var repository = Substitute.For<IProcurementBatchRepository>();
         repository.FindByIdAsync(batch.Id, default).Returns(batch);
@@ -44,20 +48,22 @@ public sealed class AssignAgentCommandTests
                     ids.SequenceEqual(new[] { orderId })),
                 default)
             .Returns(new Dictionary<Guid, string> { [orderId] = "Batched" });
-        var handler = new AssignAgentCommandHandler(
+        var handler = new AssignBatchItemsCommandHandler(
             repository,
             marketAgents,
             orders,
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
-            new AssignAgentCommand(batch.Id, agentUserId),
+            new AssignBatchItemsCommand(
+                batch.Id,
+                [new ItemAssignmentDto(productId, agentUserId)]),
             default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Status.Should().Be("Manifested");
-        result.Value.AssignedAgentUserId.Should().Be(agentUserId);
-        result.Value.AssignedAt.Should().Be(Now.UtcDateTime);
+        result.Value.Items.Should().ContainSingle(item =>
+            item.AssignedAgentUserId == agentUserId);
         await marketAgents.Received(1).IsEligibleMarketAgentAsync(
             agentUserId,
             batch.MarketId,
@@ -73,14 +79,16 @@ public sealed class AssignAgentCommandTests
         repository.FindByIdAsync(batchId, default)
             .Returns((ProcurementBatch?)null);
         var marketAgents = Substitute.For<IMarketAgentReader>();
-        var handler = new AssignAgentCommandHandler(
+        var handler = new AssignBatchItemsCommandHandler(
             repository,
             marketAgents,
             Substitute.For<IConfirmedOrderReader>(),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
-            new AssignAgentCommand(batchId, Guid.NewGuid()),
+            new AssignBatchItemsCommand(
+                batchId,
+                [new ItemAssignmentDto(Guid.NewGuid(), Guid.NewGuid())]),
             default);
 
         result.IsFailure.Should().BeTrue();
@@ -95,6 +103,7 @@ public sealed class AssignAgentCommandTests
     {
         var agentUserId = Guid.NewGuid();
         var batch = BuildManifestedBatch(Guid.NewGuid());
+        var productId = batch.Items.Single().MarketProductId;
         batch.ClearDomainEvents();
         var repository = Substitute.For<IProcurementBatchRepository>();
         repository.FindByIdAsync(batch.Id, default).Returns(batch);
@@ -104,20 +113,49 @@ public sealed class AssignAgentCommandTests
                 batch.MarketId,
                 default)
             .Returns(false);
-        var handler = new AssignAgentCommandHandler(
+        var handler = new AssignBatchItemsCommandHandler(
             repository,
             marketAgents,
             Substitute.For<IConfirmedOrderReader>(),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
-            new AssignAgentCommand(batch.Id, agentUserId),
+            new AssignBatchItemsCommand(
+                batch.Id,
+                [new ItemAssignmentDto(productId, agentUserId)]),
             default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("AGENT_NOT_ELIGIBLE");
-        batch.AssignedAgentUserId.Should().BeNull();
+        batch.Items.Should().OnlyContain(item => item.AssignedAgentUserId == null);
         await repository.DidNotReceive().SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Handler_ConcurrentUpdate_ReturnsConflictWithoutReadingOrdersAsync()
+    {
+        var agentUserId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(Guid.NewGuid());
+        var repository = Substitute.For<IProcurementBatchRepository>();
+        repository.FindByIdAsync(batch.Id, default).Returns(batch);
+        repository.SaveChangesAsync(default).Returns(false);
+        var marketAgents = Substitute.For<IMarketAgentReader>();
+        marketAgents.IsEligibleMarketAgentAsync(agentUserId, batch.MarketId, default).Returns(true);
+        var orders = Substitute.For<IConfirmedOrderReader>();
+        var handler = new AssignBatchItemsCommandHandler(
+            repository,
+            marketAgents,
+            orders,
+            new FixedTimeProvider(Now));
+
+        var result = await handler.Handle(
+            new AssignBatchItemsCommand(batch.Id,
+                [new ItemAssignmentDto(batch.Items.Single().MarketProductId, agentUserId)]),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("OPTIMISTIC_CONCURRENCY_CONFLICT");
+        await orders.DidNotReceiveWithAnyArgs().ReadStatusesAsync(default!, default);
     }
 
     private static ProcurementBatch BuildManifestedBatch(Guid orderId)

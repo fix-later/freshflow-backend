@@ -6,6 +6,12 @@ namespace FreshFlow.Procurement.Infrastructure.CrossModule;
 
 internal sealed class MarketCodeReader(AppDbContext db) : IMarketCodeReader
 {
+    public async Task<IReadOnlyList<Guid>> ListActiveMarketIdsAsync(CancellationToken ct) =>
+        await db.Set<MarketCodeRow>()
+            .AsNoTracking()
+            .Select(row => row.Id)
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyDictionary<Guid, (string? Code, string Name)>> ReadMarketCodesAsync(
         IReadOnlyCollection<Guid> marketIds,
         CancellationToken ct)

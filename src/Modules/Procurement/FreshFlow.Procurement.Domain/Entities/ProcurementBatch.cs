@@ -16,10 +16,11 @@ public sealed class ProcurementBatch : AggregateRoot
     public DateOnly BatchDate { get; private set; }
     public string? Code { get; private set; }
     public Guid MarketId { get; private set; }
+    public Guid? MarketSessionId { get; private set; }
     public ProcurementBatchStatus Status { get; private set; }
     public DateTime? ManifestedAt { get; private set; }
-    public Guid? AssignedAgentUserId { get; private set; }
-    public DateTime? AssignedAt { get; private set; }
+    public Guid? AssignedAgentUserId { get; private set; } // deprecated: use item assignments
+    public DateTime? AssignedAt { get; private set; } // deprecated: use item assignments
     public DateTime? HandedOffAt { get; private set; }
     public Guid? HubId { get; private set; }
     public int TotalItemCount { get; private set; }
@@ -36,7 +37,8 @@ public sealed class ProcurementBatch : AggregateRoot
         Guid marketId,
         IEnumerable<(Guid MarketProductId, string ProductName, int Quantity, Guid OrderId)> lines,
         Guid hubId,
-        string code)
+        string code,
+        Guid? marketSessionId = null)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
@@ -45,7 +47,7 @@ public sealed class ProcurementBatch : AggregateRoot
                 "A procurement batch code is required."));
         }
 
-        return BuildCore(batchDate, marketId, lines, hubId, code);
+        return BuildCore(batchDate, marketId, lines, hubId, code, marketSessionId);
     }
 
     private static Result<ProcurementBatch> BuildCore(
@@ -53,7 +55,8 @@ public sealed class ProcurementBatch : AggregateRoot
         Guid marketId,
         IEnumerable<(Guid MarketProductId, string ProductName, int Quantity, Guid OrderId)> lines,
         Guid hubId,
-        string? code)
+        string? code,
+        Guid? marketSessionId = null)
     {
         var input = lines?.ToList() ?? [];
 
@@ -93,6 +96,7 @@ public sealed class ProcurementBatch : AggregateRoot
             BatchDate = batchDate,
             Code = code,
             MarketId = marketId,
+            MarketSessionId = marketSessionId,
             HubId = hubId,
             Status = ProcurementBatchStatus.Built
         };
@@ -277,27 +281,15 @@ public sealed class ProcurementBatch : AggregateRoot
         return Result.Success();
     }
 
-    public Result AssignAgent(Guid agentUserId, DateTime assignedAtUtc)
+    public Result AssignItems(
+        IReadOnlyDictionary<Guid, Guid> assignments,
+        DateTime assignedAtUtc)
     {
-        if (agentUserId == Guid.Empty)
-        {
-            return Result.Failure(Error.Validation(
-                "INVALID_AGENT",
-                "A market agent user ID is required."));
-        }
-
         if (Status == ProcurementBatchStatus.Built)
         {
             return Result.Failure(Error.Conflict(
                 "BATCH_NOT_MANIFESTED",
                 $"Procurement batch '{Id}' must be manifested before agent assignment."));
-        }
-
-        if (Status is ProcurementBatchStatus.Purchasing or ProcurementBatchStatus.HandedOff)
-        {
-            return Result.Failure(Error.Conflict(
-                "BATCH_ALREADY_IN_PROGRESS",
-                $"Procurement batch '{Id}' is already in progress."));
         }
 
         if (Status == ProcurementBatchStatus.Cancelled)
@@ -307,19 +299,63 @@ public sealed class ProcurementBatch : AggregateRoot
                 $"Procurement batch '{Id}' has been cancelled."));
         }
 
-        AssignedAgentUserId = agentUserId;
-        AssignedAt = assignedAtUtc;
+        if (Status is not ProcurementBatchStatus.Manifested and not ProcurementBatchStatus.Purchasing)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_ALREADY_IN_PROGRESS",
+                $"Procurement batch '{Id}' is already in progress."));
+        }
+
+        assignments ??= new Dictionary<Guid, Guid>();
+        var itemsByProduct = _items.ToDictionary(item => item.MarketProductId);
+        foreach (var marketProductId in assignments.Keys)
+        {
+            if (!itemsByProduct.TryGetValue(marketProductId, out var item))
+            {
+                return Result.Failure(Error.Validation(
+                    "PRODUCT_NOT_IN_BATCH",
+                    $"Market product '{marketProductId}' is not part of procurement batch '{Id}'."));
+            }
+
+            if (item.PurchasedAt is not null)
+            {
+                return Result.Failure(Error.Conflict(
+                    "ITEM_ALREADY_PURCHASED",
+                    $"Market product '{marketProductId}' has already been purchased."));
+            }
+        }
+
+        var existingAgentIds = _items
+            .Where(item => item.AssignedAgentUserId is not null)
+            .Select(item => item.AssignedAgentUserId!.Value)
+            .ToHashSet();
+        foreach (var (marketProductId, agentUserId) in assignments)
+        {
+            if (agentUserId == Guid.Empty)
+                itemsByProduct[marketProductId].Unassign();
+            else
+                itemsByProduct[marketProductId].AssignTo(agentUserId, assignedAtUtc);
+        }
+
         UpdatedAt = assignedAtUtc;
-        RaiseDomainEvent(new ProcurementAgentAssignedDomainEvent(
-            Id,
-            MarketId,
-            agentUserId,
-            assignedAtUtc));
+        foreach (var agentUserId in _items
+                     .Where(item => item.AssignedAgentUserId is not null)
+                     .Select(item => item.AssignedAgentUserId!.Value)
+                     .Distinct()
+                     .Where(agentUserId => !existingAgentIds.Contains(agentUserId)))
+        {
+            RaiseDomainEvent(new ProcurementAgentAssignedDomainEvent(
+                Id,
+                MarketId,
+                agentUserId,
+                assignedAtUtc));
+        }
 
         return Result.Success();
     }
 
     public Result ConfirmPurchase(
+        Guid agentUserId,
         IReadOnlyDictionary<Guid, (int ActualQuantity, decimal ActualUnitPrice)> lines,
         DateTime capturedAtUtc)
     {
@@ -351,7 +387,9 @@ public sealed class ProcurementBatch : AggregateRoot
             .Select(exception => exception.MarketProductId)
             .ToHashSet();
         var requiredItems = _items
-            .Where(item => !exemptProductIds.Contains(item.MarketProductId))
+            .Where(item =>
+                item.AssignedAgentUserId == agentUserId &&
+                !exemptProductIds.Contains(item.MarketProductId))
             .ToList();
 
         if (lines is null ||
@@ -360,7 +398,7 @@ public sealed class ProcurementBatch : AggregateRoot
         {
             return Result.Failure(Error.Validation(
                 "PURCHASE_LINES_MISMATCH",
-                "Purchase confirmation must contain exactly one line for every non-exempt batch item."));
+                "Purchase confirmation must contain exactly one line for every non-exempt item assigned to the agent."));
         }
 
         if (lines.Values.Any(line => line.ActualQuantity <= 0 || line.ActualUnitPrice <= 0))
@@ -370,11 +408,11 @@ public sealed class ProcurementBatch : AggregateRoot
                 "Actual quantity and unit price must be greater than zero."));
         }
 
-        foreach (var item in _items)
+        foreach (var item in _items.Where(item => item.AssignedAgentUserId == agentUserId))
         {
             if (exemptProductIds.Contains(item.MarketProductId))
             {
-                item.ClearPurchase();
+                item.ClearPurchase(capturedAtUtc);
                 continue;
             }
 
@@ -382,8 +420,11 @@ public sealed class ProcurementBatch : AggregateRoot
             item.ConfirmPurchase(line.ActualQuantity, line.ActualUnitPrice, capturedAtUtc);
         }
 
-        Status = ProcurementBatchStatus.Purchasing;
-        UpdatedAt = capturedAtUtc;
+        if (Status == ProcurementBatchStatus.Manifested)
+        {
+            Status = ProcurementBatchStatus.Purchasing;
+            UpdatedAt = capturedAtUtc;
+        }
         RaiseDomainEvent(new ProcurementPurchaseConfirmedDomainEvent(
             Id,
             MarketId,
@@ -408,11 +449,19 @@ public sealed class ProcurementBatch : AggregateRoot
                 $"Procurement batch '{Id}' cannot accept exceptions from status '{Status}'."));
         }
 
-        if (_items.All(item => item.MarketProductId != marketProductId))
+        var item = _items.FirstOrDefault(item => item.MarketProductId == marketProductId);
+        if (item is null)
         {
             return Result.Failure(Error.Validation(
                 "PRODUCT_NOT_IN_BATCH",
                 $"Market product '{marketProductId}' is not part of procurement batch '{Id}'."));
+        }
+
+        if (item.AssignedAgentUserId != reportedByUserId)
+        {
+            return Result.Failure(Error.Unauthorized(
+                "ITEM_NOT_ASSIGNED_TO_AGENT",
+                "The procurement item is not assigned to this market agent."));
         }
 
         if (reportedQuantity < 0)
@@ -474,7 +523,7 @@ public sealed class ProcurementBatch : AggregateRoot
         return Result.Success();
     }
 
-    public Result HandoverToHub(DateTime capturedAtUtc)
+    public Result HandoverToHub(Guid agentUserId, DateTime capturedAtUtc)
     {
         if (Status == ProcurementBatchStatus.HandedOff)
         {
@@ -488,6 +537,28 @@ public sealed class ProcurementBatch : AggregateRoot
             return Result.Failure(Error.Conflict(
                 "BATCH_NOT_PURCHASED",
                 $"Procurement batch '{Id}' must be purchased before handover."));
+        }
+
+        if (_items.All(item => item.AssignedAgentUserId != agentUserId))
+        {
+            return Result.Failure(Error.Unauthorized(
+                "ITEM_NOT_ASSIGNED_TO_AGENT",
+                "The procurement batch has no item assigned to this market agent."));
+        }
+
+        var unavailableProductIds = _exceptions
+            .Where(exception =>
+                !exception.IsDeleted &&
+                exception.Type == ProcurementExceptionType.Unavailable)
+            .Select(exception => exception.MarketProductId)
+            .ToHashSet();
+        if (_items.Any(item =>
+                item.PurchasedAt is null &&
+                !unavailableProductIds.Contains(item.MarketProductId)))
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_INCOMPLETE",
+                "Every non-exempt procurement item must be settled before handover."));
         }
 
         if (HubId is null)
@@ -511,7 +582,7 @@ public sealed class ProcurementBatch : AggregateRoot
             HubId,
             capturedAtUtc,
             coveredOrderIds,
-            AssignedAgentUserId,
+            agentUserId,
             _items
                 .Select(item => new ProcurementPurchasedLine(
                     item.MarketProductId,

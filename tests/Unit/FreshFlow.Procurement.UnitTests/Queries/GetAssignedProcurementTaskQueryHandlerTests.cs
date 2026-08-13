@@ -48,8 +48,8 @@ public sealed class GetAssignedProcurementTaskQueryHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Id.Should().Be(batch.Id);
         result.Value.Status.Should().Be("Manifested");
-        result.Value.AssignedAgentUserId.Should().Be(agentUserId);
-        result.Value.AssignedAt.Should().NotBeNull();
+        result.Value.Items.Should().ContainSingle()
+            .Which.AssignedAgentUserId.Should().Be(agentUserId);
         result.Value.Items.Should().ContainSingle(item =>
             item.MarketProductId == productId &&
             item.ReferenceUnitPrice == 10_000m);
@@ -118,8 +118,8 @@ public sealed class GetAssignedProcurementTaskQueryHandlerTests
         batch.Manifest(
             new Dictionary<Guid, decimal> { [productId] = 10_000m },
             new DateTime(2026, 7, 15, 1, 0, 0, DateTimeKind.Utc));
-        batch.AssignAgent(
-            agentUserId,
+        batch.AssignItems(
+            new Dictionary<Guid, Guid> { [productId] = agentUserId },
             new DateTime(2026, 7, 15, 2, 0, 0, DateTimeKind.Utc));
         return batch;
     }

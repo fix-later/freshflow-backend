@@ -50,7 +50,7 @@ public sealed class RoutePlanningInputBuilderTests
         routes.GetReservedVehicleIdsAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
             .Returns(new HashSet<Guid> { reservedVehicle.Id });
         var vehicles = Substitute.For<IVehicleRepository>();
-        vehicles.GetPageAsync(null, 10_000, true, null, Arg.Any<CancellationToken>())
+        vehicles.GetPageAsync(null, 10_000, true, hubId, Arg.Any<CancellationToken>())
             .Returns((new[] { reservedVehicle, freeVehicle }, null));
         var settings = Substitute.For<IVehicleCapacityPolicy>();
         settings.CapacityUtilizationPercent.Returns(90m);
@@ -69,5 +69,7 @@ public sealed class RoutePlanningInputBuilderTests
         await packing.Received(1).GetLinesByOrdersAsync(
             Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { newOrderId })),
             Arg.Any<CancellationToken>());
+        await vehicles.Received(1).GetPageAsync(
+            null, 10_000, true, hubId, Arg.Any<CancellationToken>());
     }
 }

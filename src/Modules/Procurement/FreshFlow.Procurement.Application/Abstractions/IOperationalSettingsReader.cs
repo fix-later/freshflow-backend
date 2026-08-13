@@ -7,4 +7,5 @@ public interface IOperationalSettingsReader
 
 public sealed record ProcurementOperationalSettingsDto(
     bool BatchingEnabled,
-    TimeOnly DailyCutoffTime);
+    TimeOnly DailyCutoffTime,
+    int DeliveryWindowDays = 7);

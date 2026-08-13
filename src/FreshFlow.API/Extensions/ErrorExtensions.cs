@@ -37,6 +37,8 @@ public static class ErrorExtensions
                         or "BATCH_NOT_PURCHASED"
                         or "BATCH_ALREADY_IN_PROGRESS"
                         or "BATCH_NOT_CANCELLABLE"
+                        or "BATCH_INCOMPLETE"
+                        or "ITEM_ALREADY_PURCHASED"
                         or "BATCH_RESET_NOT_ALLOWED"
                         or "BATCH_CANCELLED"
                         or "ROUTING_INPUTS_CHANGED"
@@ -47,14 +49,20 @@ public static class ErrorExtensions
                         or "ROUTE_PLAN_CONFLICT"
                         or "ROUTE_PLAN_APPROVAL_CONFLICT"
                         or "HUB_ALREADY_CONFIGURED_FOR_MARKET"
-                        or "CREDIT_SETTLEMENT_DUPLICATE_REFERENCE")
+                        or "CREDIT_SETTLEMENT_DUPLICATE_REFERENCE"
+                        or "MARKET_SESSION_NOT_OPEN"
+                        or "MARKET_SESSION_NOT_CLOSED"
+                        or "MARKET_SESSION_CLOSED"
+                        or "MARKET_SESSION_CUTOFF_PASSED"
+                        or "MARKET_SESSION_CONFLICT")
             return new ConflictObjectResult(body);
 
         if (error.Code is "UNAUTHORIZED" or "INVALID_CREDENTIALS" or "INVALID_CURRENT_PASSWORD"
             or "TOKEN_INVALID" or "REFRESH_TOKEN_EXPIRED" or "REFRESH_TOKEN_REVOKED")
             return new UnauthorizedObjectResult(body);
 
-        if (error.Code is "FORBIDDEN" or "MARKET_ACCESS_DENIED" or "HUB_ACCESS_DENIED")
+        if (error.Code is "FORBIDDEN" or "MARKET_ACCESS_DENIED" or "HUB_ACCESS_DENIED"
+            or "ITEM_NOT_ASSIGNED_TO_AGENT")
             return new ObjectResult(body) { StatusCode = 403 };
 
         if (error.Code is "OPTIMISTIC_CONCURRENCY_CONFLICT" or "SERIALIZATION_CONFLICT"
@@ -105,6 +113,7 @@ public static class ErrorExtensions
                         or "REFERENCE_PRICE_MISSING"
                         or "INVALID_AGENT"
                         or "AGENT_NOT_ELIGIBLE"
+                        or "PRODUCT_NOT_IN_BATCH"
                         or "PURCHASE_LINES_MISMATCH"
                         or "INVALID_PURCHASE_LINE"
                         or "MARKET_INACTIVE"
@@ -113,6 +122,9 @@ public static class ErrorExtensions
                         or "BUYER_TAX_CODE_REQUIRED" or "BUYER_TAX_CODE_INVALID"
                         or "BUYER_LEGAL_NAME_REQUIRED" or "BUYER_ADDRESS_REQUIRED"
                         or "INVOICE_LINE_UNIT_REQUIRED" or "INVOICE_NOT_ISSUED" or "INVOICE_EXPORT_INCOMPLETE"
+                        or "MARKET_SESSION_NOT_AVAILABLE" or "MARKET_SESSION_NOT_READY"
+                        or "INVALID_MARKET_SESSION" or "INVALID_MARKET_SESSION_CLOSE_TIME"
+                        or "ORDER_MARKET_MISMATCH"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 

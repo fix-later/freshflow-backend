@@ -66,18 +66,53 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
             return true;
         }
         catch (DbUpdateException ex) when (
-            ex.InnerException is PostgresException
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } postgres &&
+            postgres.ConstraintName is "ux_procurement_batch_orders_order_active"
+                or "ux_procurement_batches_market_session_active"
+                or "IX_procurement_batches_code")
+        {
+            return false;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            if (!await TryResolveConcurrentPurchaseStartAsync(ex, ct))
+                return false;
+
+            try
             {
-                SqlState: PostgresErrorCodes.UniqueViolation,
-                ConstraintName: "ux_procurement_batch_orders_order_active"
-            })
+                await db.SaveChangesAsync(ct);
+                return true;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return false;
+            }
+        }
+    }
+
+    private static async Task<bool> TryResolveConcurrentPurchaseStartAsync(
+        DbUpdateConcurrencyException exception,
+        CancellationToken ct)
+    {
+        if (exception.Entries is not [var entry] ||
+            entry.Entity is not ProcurementBatch batch ||
+            batch.Status != ProcurementBatchStatus.Purchasing ||
+            !entry.Property(nameof(ProcurementBatch.Status)).IsModified)
         {
             return false;
         }
-        catch (DbUpdateConcurrencyException)
+
+        var databaseValues = await entry.GetDatabaseValuesAsync(ct);
+        if (databaseValues?.GetValue<ProcurementBatchStatus>(nameof(ProcurementBatch.Status)) !=
+            ProcurementBatchStatus.Purchasing)
         {
             return false;
         }
+
+        entry.CurrentValues.SetValues(databaseValues);
+        entry.OriginalValues.SetValues(databaseValues);
+        entry.State = EntityState.Unchanged;
+        return true;
     }
 
     // ponytail: EF mis-classifies children appended to a tracked batch (MergeIn) as Modified
@@ -197,7 +232,9 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
             .Include(batch => batch.Exceptions)
             .Where(batch =>
                 batch.DeletedAt == null &&
-                batch.AssignedAgentUserId == agentUserId);
+                batch.Items.Any(item =>
+                    item.DeletedAt == null &&
+                    item.AssignedAgentUserId == agentUserId));
 
         var total = await query.CountAsync(ct);
         var result = await query
@@ -278,7 +315,7 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
             var batches = await db.Set<ProcurementBatch>()
                 .AsNoTracking()
                 .Where(batch => batch.BatchDate == batchDate && batch.DeletedAt == null)
-                .Select(batch => new { batch.Id, batch.Status })
+                .Select(batch => new { batch.Id, batch.Status, batch.MarketSessionId })
                 .ToListAsync(ct);
 
             if (batches.Count == 0)
@@ -338,6 +375,19 @@ internal sealed class ProcurementBatchRepository(AppDbContext db) : IProcurement
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(batch => batch.DeletedAt, resetAtUtc)
                     .SetProperty(batch => batch.UpdatedAt, resetAtUtc), ct);
+
+            var sessionIds = batches
+                .Where(batch => batch.MarketSessionId.HasValue)
+                .Select(batch => batch.MarketSessionId!.Value)
+                .ToArray();
+            if (sessionIds.Length > 0)
+            {
+                await db.Set<MarketSession>()
+                    .Where(session => sessionIds.Contains(session.Id) && session.DeletedAt == null)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(session => session.BatchingCompletedAt, (DateTime?)null)
+                        .SetProperty(session => session.UpdatedAt, resetAtUtc), ct);
+            }
 
             await transaction.CommitAsync(ct);
             return Result<BatchingResetCounts>.Success(

@@ -71,7 +71,7 @@ public sealed class CreateExceptionProofUploadSignatureCommandTests
         batch.Manifest(
             new Dictionary<Guid, decimal> { [productId] = 10_000m },
             DateTime.UtcNow.AddHours(-2));
-        batch.AssignAgent(agentUserId, DateTime.UtcNow.AddHours(-1));
+        batch.AssignItems(new Dictionary<Guid, Guid> { [productId] = agentUserId }, DateTime.UtcNow.AddHours(-1));
         batch.ClearDomainEvents();
         return batch;
     }

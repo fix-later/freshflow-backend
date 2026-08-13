@@ -160,7 +160,14 @@ public sealed class ScheduledOrderGenerationService(
         foreach (var item in schedule.Items)
         {
             var snapshot = snapshots[item.MarketProductId];
-            order.AddItem(snapshot.MarketProductId, snapshot.ProductName, item.Quantity, snapshot.CurrentPrice);
+            var add = order.AddItem(
+                snapshot.MarketProductId,
+                snapshot.ProductName,
+                item.Quantity,
+                snapshot.CurrentPrice,
+                snapshot.MarketId);
+            if (add.IsFailure)
+                return add.Error.Message;
             orderRepository.TrackNewItem(order.Items.Last());
         }
 

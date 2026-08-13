@@ -49,7 +49,12 @@ internal sealed class AddOrderItemCommandHandler(
                 $"{snapshot.AvailableQuantity} for product '{request.MarketProductId}'."));
 
         var existingItemIds = order.Items.Select(i => i.Id).ToHashSet();
-        var addResult = order.AddItem(snapshot.MarketProductId, snapshot.ProductName, request.Quantity, snapshot.CurrentPrice);
+        var addResult = order.AddItem(
+            snapshot.MarketProductId,
+            snapshot.ProductName,
+            request.Quantity,
+            snapshot.CurrentPrice,
+            snapshot.MarketId);
         if (addResult.IsFailure)
             return Result<OrderDto>.Failure(addResult.Error);
 

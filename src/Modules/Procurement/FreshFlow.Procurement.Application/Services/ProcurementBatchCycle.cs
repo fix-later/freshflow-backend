@@ -19,6 +19,12 @@ public static class ProcurementBatchCycle
         DateOnly.FromDateTime(
             TimeZoneInfo.ConvertTime(nowUtc, VietnamTimeZone).DateTime);
 
+    public static DateTime GetCloseAtUtc(DateOnly serviceDate, TimeOnly cutoffLocalTime)
+    {
+        var local = serviceDate.AddDays(-1).ToDateTime(cutoffLocalTime, DateTimeKind.Unspecified);
+        return TimeZoneInfo.ConvertTimeToUtc(local, VietnamTimeZone);
+    }
+
     private static TimeZoneInfo ResolveVietnamTimeZone()
     {
         try

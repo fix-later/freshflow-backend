@@ -10,12 +10,13 @@ public sealed class ProcurementBatchExceptionTests
 {
     private static readonly DateTime ReportedAt =
         new(2026, 7, 15, 3, 30, 0, DateTimeKind.Utc);
+    private static readonly Guid AgentUserId = Guid.NewGuid();
 
     [Fact]
     public void ReportException_ManifestedBatch_AddsExceptionAndRaisesEvent()
     {
         var productId = Guid.NewGuid();
-        var agentUserId = Guid.NewGuid();
+        var agentUserId = AgentUserId;
         var batch = BuildManifestedBatch(productId);
         batch.ClearDomainEvents();
 
@@ -53,6 +54,7 @@ public sealed class ProcurementBatchExceptionTests
         var productId = Guid.NewGuid();
         var batch = BuildManifestedBatch(productId);
         batch.ConfirmPurchase(
+            AgentUserId,
             new Dictionary<Guid, (int, decimal)> { [productId] = (2, 10_000m) },
             ReportedAt.AddMinutes(-10));
         batch.ClearDomainEvents();
@@ -63,7 +65,7 @@ public sealed class ProcurementBatchExceptionTests
             1,
             null,
             null,
-            Guid.NewGuid(),
+            AgentUserId,
             ReportedAt);
 
         result.IsSuccess.Should().BeTrue();
@@ -92,7 +94,7 @@ public sealed class ProcurementBatchExceptionTests
             1,
             null,
             null,
-            Guid.NewGuid(),
+            AgentUserId,
             ReportedAt);
 
         result.IsFailure.Should().BeTrue();
@@ -113,7 +115,7 @@ public sealed class ProcurementBatchExceptionTests
             1,
             null,
             null,
-            Guid.NewGuid(),
+            AgentUserId,
             ReportedAt);
 
         result.IsFailure.Should().BeTrue();
@@ -134,7 +136,7 @@ public sealed class ProcurementBatchExceptionTests
             -1,
             null,
             null,
-            Guid.NewGuid(),
+            AgentUserId,
             ReportedAt);
 
         result.IsFailure.Should().BeTrue();
@@ -154,11 +156,12 @@ public sealed class ProcurementBatchExceptionTests
             2,
             null,
             null,
-            Guid.NewGuid(),
+            AgentUserId,
             ReportedAt);
         batch.ClearDomainEvents();
 
         var result = batch.ConfirmPurchase(
+            AgentUserId,
             new Dictionary<Guid, (int, decimal)>
             {
                 [purchasedProductId] = (2, 11_000m)
@@ -185,10 +188,11 @@ public sealed class ProcurementBatchExceptionTests
             1,
             null,
             null,
-            Guid.NewGuid(),
+            AgentUserId,
             ReportedAt);
 
         var result = batch.ConfirmPurchase(
+            AgentUserId,
             new Dictionary<Guid, (int, decimal)>
             {
                 [purchasedProductId] = (2, 11_000m)
@@ -205,6 +209,9 @@ public sealed class ProcurementBatchExceptionTests
         batch.Manifest(
             marketProductIds.ToDictionary(id => id, _ => 10_000m),
             ReportedAt.AddHours(-1));
+        batch.AssignItems(
+            marketProductIds.ToDictionary(id => id, _ => AgentUserId),
+            ReportedAt.AddMinutes(-30));
         return batch;
     }
 

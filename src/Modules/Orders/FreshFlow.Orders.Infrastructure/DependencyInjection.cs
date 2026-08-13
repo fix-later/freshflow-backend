@@ -84,6 +84,7 @@ public static class DependencyInjection
 
         // Cross-module read projections used by Orders without project references to Auth/Catalog/Pricing.
         services.AddScoped<IMarketProductReader, MarketProductReader>();
+        services.AddScoped<IMarketSessionGate, MarketSessionGate>();
         services.AddScoped<IMarketProductImageReader, MarketProductImageReader>();
         services.AddScoped<IRestaurantReader, RestaurantReader>();
         services.AddScoped<IFavoriteReader, FavoriteReader>();

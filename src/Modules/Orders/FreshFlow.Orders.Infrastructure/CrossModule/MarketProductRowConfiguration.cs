@@ -15,6 +15,7 @@ internal sealed class MarketProductRowConfiguration : IEntityTypeConfiguration<M
             """
             SELECT
                 mp."Id",
+                mp."MarketId",
                 p."Name" AS "ProductName",
                 mp."CurrentPrice",
                 mp."CurrentQuantity",
@@ -34,6 +35,7 @@ internal sealed class MarketProductRowConfiguration : IEntityTypeConfiguration<M
             """);
 
         builder.Property(m => m.Id);
+        builder.Property(m => m.MarketId);
         builder.Property(m => m.ProductName);
         builder.Property(m => m.CurrentPrice);
         builder.Property(m => m.CurrentQuantity);

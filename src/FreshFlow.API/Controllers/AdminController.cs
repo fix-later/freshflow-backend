@@ -20,11 +20,17 @@ using FreshFlow.Orders.Application.Queries.GetOperationalSettings;
 using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Pricing.Application.Commands.UpdatePricingSettings;
 using FreshFlow.Pricing.Application.Queries.GetPricingSettings;
-using FreshFlow.Procurement.Application.Commands.AssignAgent;
+using FreshFlow.Procurement.Application.Commands.AssignBatchItems;
 using FreshFlow.Procurement.Application.Commands.CancelBatch;
+using FreshFlow.Procurement.Application.Commands.CloseMarketSession;
 using FreshFlow.Procurement.Application.Commands.GenerateManifest;
+using FreshFlow.Procurement.Application.Commands.OpenMarketSession;
 using FreshFlow.Procurement.Application.Commands.ResetBatchingDay;
 using FreshFlow.Procurement.Application.Commands.RunAutoBatch;
+using FreshFlow.Procurement.Application.Commands.UpdateMarketSession;
+using FreshFlow.Procurement.Application.Dtos;
+using FreshFlow.Procurement.Application.Queries.GetMarketSession;
+using FreshFlow.Procurement.Application.Queries.GetMarketSessions;
 using FreshFlow.Procurement.Application.Queries.GetProcurementBatches;
 using FreshFlow.Procurement.Application.Queries.GetProcurementProgress;
 using MediatR;
@@ -230,6 +236,65 @@ public sealed class AdminController(ISender sender) : ControllerBase
     }
     // ── Procurement Batches (Admin) ─────────────────────────────────────────
 
+    [HttpGet("market-sessions")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetMarketSessionsAsync(
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] Guid? marketId,
+        [FromQuery] string? status,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new GetMarketSessionsQuery(from, to, marketId, status), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("market-sessions/{id:guid}")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetMarketSessionAsync(Guid id, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetMarketSessionQuery(id), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPut("market-sessions/{id:guid}")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> UpdateMarketSessionAsync(
+        Guid id, [FromBody] UpdateMarketSessionRequest body, CancellationToken ct)
+    {
+        if (!TryGetActorId(out var actorId))
+            return Unauthorized();
+        var result = await sender.Send(new UpdateMarketSessionCommand(id, body.ClosesAt, actorId), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPost("market-sessions/{id:guid}/open")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> OpenMarketSessionAsync(Guid id, CancellationToken ct)
+    {
+        if (!TryGetActorId(out var actorId))
+            return Unauthorized();
+        var result = await sender.Send(new OpenMarketSessionCommand(id, actorId), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPost("market-sessions/{id:guid}/close")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> CloseMarketSessionAsync(
+        Guid id, [FromBody] CloseMarketSessionRequest body, CancellationToken ct)
+    {
+        if (!TryGetActorId(out var actorId))
+            return Unauthorized();
+        var result = await sender.Send(new CloseMarketSessionCommand(id, actorId, body.Reason), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    private bool TryGetActorId(out Guid actorId)
+    {
+        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        return Guid.TryParse(raw, out actorId);
+    }
+
     [HttpGet("order-groups")]
     [Authorize(Roles = "admin,operations_manager")]
     public async Task<IActionResult> GetOrderGroupsAsync(
@@ -297,15 +362,15 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
-    [HttpPost("order-groups/{batchId:guid}/agent")]
+    [HttpPut("batches/{batchId:guid}/item-assignments")]
     [Authorize(Roles = "admin")]
-    public async Task<IActionResult> AssignMarketAgentAsync(
+    public async Task<IActionResult> AssignBatchItemsAsync(
         Guid batchId,
-        [FromBody] AssignAgentRequest body,
+        [FromBody] AssignBatchItemsRequest body,
         CancellationToken ct)
     {
         var result = await sender.Send(
-            new AssignAgentCommand(batchId, body.AgentUserId),
+            new AssignBatchItemsCommand(batchId, body.Assignments),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -407,7 +472,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
 
 public sealed record ActivateRequest(bool IsActive);
 public sealed record AssignRoleRequest(string RoleName);
-public sealed record AssignAgentRequest(Guid AgentUserId);
+public sealed record AssignBatchItemsRequest(IReadOnlyList<ItemAssignmentDto> Assignments);
 public sealed record ReplaceMarketAssignmentsRequest(IReadOnlyList<Guid> MarketIds);
 public sealed record SettleCreditRequest(decimal Amount, string? PaymentMethod, string? Reference, string? Note);
 public sealed record SetCreditLimitRequest(decimal CreditLimit, string? Note);
@@ -424,3 +489,5 @@ public sealed record UpdatePricingSettingsRequest(decimal PriceAlertThresholdPer
 public sealed record RunAutoBatchRequest(DateOnly? TargetDate, bool? DryRun, bool? Force);
 public sealed record ResetOrderGroupsRequest(DateOnly TargetDate, string Confirmation);
 public sealed record CancelOrderGroupRequest(string? Reason);
+public sealed record UpdateMarketSessionRequest(DateTimeOffset ClosesAt);
+public sealed record CloseMarketSessionRequest(string? Reason);

@@ -206,6 +206,11 @@ public sealed class OperationalProofEndpointTests(AuthWebAppFactory factory)
         var now = DateTime.UtcNow;
         batch.Manifest(new Dictionary<Guid, decimal> { [marketProductId] = 10_000m }, now)
             .IsSuccess.Should().BeTrue();
+        var reportedByUserId = Guid.NewGuid();
+        batch.AssignItems(
+                new Dictionary<Guid, Guid> { [marketProductId] = reportedByUserId },
+                now)
+            .IsSuccess.Should().BeTrue();
         const string proofUrl =
             "https://res.cloudinary.com/demo/image/upload/procurement-integration.jpg";
         batch.ReportException(
@@ -214,7 +219,7 @@ public sealed class OperationalProofEndpointTests(AuthWebAppFactory factory)
                 1,
                 "Damaged",
                 proofUrl,
-                Guid.NewGuid(),
+                reportedByUserId,
                 now)
             .IsSuccess.Should().BeTrue();
         batch.ClearDomainEvents();

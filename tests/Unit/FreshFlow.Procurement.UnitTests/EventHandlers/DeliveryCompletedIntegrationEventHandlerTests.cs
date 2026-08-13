@@ -129,15 +129,20 @@ public sealed class DeliveryCompletedIntegrationEventHandlerTests
             marketId,
             orderIds.Select(orderId => (Guid.NewGuid(), "Product", 2, orderId)),
             hubId).Value;
+        var agentUserId = Guid.NewGuid();
         batch.Manifest(
             batch.Items.ToDictionary(item => item.MarketProductId, _ => 10_000m),
             new DateTime(2026, 8, 5, 1, 0, 0, DateTimeKind.Utc));
+        batch.AssignItems(
+            batch.Items.ToDictionary(item => item.MarketProductId, _ => agentUserId),
+            new DateTime(2026, 8, 5, 1, 30, 0, DateTimeKind.Utc));
         batch.ConfirmPurchase(
+            agentUserId,
             batch.Items.ToDictionary(
                 item => item.MarketProductId,
                 _ => (ActualQuantity: 2, ActualUnitPrice: 10_000m)),
             new DateTime(2026, 8, 5, 2, 0, 0, DateTimeKind.Utc));
-        batch.HandoverToHub(new DateTime(2026, 8, 5, 3, 0, 0, DateTimeKind.Utc));
+        batch.HandoverToHub(agentUserId, new DateTime(2026, 8, 5, 3, 0, 0, DateTimeKind.Utc));
         batch.ClearDomainEvents();
         return batch;
     }

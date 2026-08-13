@@ -73,7 +73,14 @@ internal sealed class CreateDraftOrderCommandHandler(
         foreach (var requestedItem in request.Items)
         {
             var snapshot = snapshots[requestedItem.MarketProductId];
-            order.AddItem(snapshot.MarketProductId, snapshot.ProductName, requestedItem.Quantity, snapshot.CurrentPrice);
+            var add = order.AddItem(
+                snapshot.MarketProductId,
+                snapshot.ProductName,
+                requestedItem.Quantity,
+                snapshot.CurrentPrice,
+                snapshot.MarketId);
+            if (add.IsFailure)
+                return Result<OrderDto>.Failure(add.Error);
         }
 
         // ── 4. Persist ───────────────────────────────────────────────────────

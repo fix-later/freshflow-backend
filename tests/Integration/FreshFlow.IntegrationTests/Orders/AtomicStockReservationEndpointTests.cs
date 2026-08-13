@@ -515,7 +515,7 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var first = await AddMarketProductAsync(db, 5);
-        var second = await AddMarketProductAsync(db, 5);
+        var second = await AddMarketProductAsync(db, 5, first.MarketId);
         var sufficient = first.Id.CompareTo(second.Id) < 0 ? first : second;
         var insufficient = sufficient == first ? second : first;
         await db.Database.ExecuteSqlInterpolatedAsync(
@@ -577,21 +577,28 @@ public sealed class AtomicStockReservationEndpointTests(AuthWebAppFactory factor
             orders.Select(order => order.Id).ToArray());
     }
 
-    private static async Task<MarketProduct> AddMarketProductAsync(AppDbContext db, int stock)
+    private static async Task<MarketProduct> AddMarketProductAsync(
+        AppDbContext db,
+        int stock,
+        Guid? marketId = null)
     {
         var unit = new UnitOfMeasurement($"kg-{Guid.NewGuid():N}", "kg");
-        var market = new Market(
-            $"Stock Market {Guid.NewGuid():N}", "HCMC", "1 Test Street",
-            10.123456m, 106.123456m);
         db.Set<UnitOfMeasurement>().Add(unit);
-        db.Set<Market>().Add(market);
+        if (!marketId.HasValue)
+        {
+            var market = new Market(
+                $"Stock Market {Guid.NewGuid():N}", "HCMC", "1 Test Street",
+                10.123456m, 106.123456m);
+            db.Set<Market>().Add(market);
+            marketId = market.Id;
+        }
         await db.SaveChangesAsync();
 
         var product = new Product($"Stock Product {Guid.NewGuid():N}", unit.Id, null, null, null);
         db.Set<Product>().Add(product);
         await db.SaveChangesAsync();
 
-        var marketProduct = new MarketProduct(market.Id, product.Id, 10_000m, stock, null);
+        var marketProduct = new MarketProduct(marketId.Value, product.Id, 10_000m, stock, null);
         db.Set<MarketProduct>().Add(marketProduct);
         await db.SaveChangesAsync();
         return marketProduct;

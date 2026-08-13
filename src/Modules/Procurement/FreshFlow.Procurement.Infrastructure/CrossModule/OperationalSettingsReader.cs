@@ -13,7 +13,8 @@ internal sealed class OperationalSettingsReader(AppDbContext db) : IOperationalS
             .SingleOrDefaultAsync(ct);
 
         return row is null
-            ? new ProcurementOperationalSettingsDto(true, new TimeOnly(22, 0))
-            : new ProcurementOperationalSettingsDto(row.BatchingEnabled, row.DailyCutoffTime);
+            ? new ProcurementOperationalSettingsDto(true, new TimeOnly(22, 0), 7)
+            : new ProcurementOperationalSettingsDto(
+                row.BatchingEnabled, row.DailyCutoffTime, row.DeliveryWindowDays);
     }
 }

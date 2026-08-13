@@ -23,6 +23,8 @@ internal sealed class ProcurementBatchConfiguration : IEntityTypeConfiguration<P
         builder.Property(batch => batch.MarketId)
             .HasColumnName("market_id")
             .IsRequired();
+        builder.Property(batch => batch.MarketSessionId)
+            .HasColumnName("market_session_id");
         builder.Property(batch => batch.Status)
             .HasColumnName("status")
             .HasConversion<string>()
@@ -93,6 +95,17 @@ internal sealed class ProcurementBatchConfiguration : IEntityTypeConfiguration<P
 
         builder.HasIndex(batch => new { batch.BatchDate, batch.MarketId })
             .HasDatabaseName("idx_procurement_batches_batch_date_market_id");
+
+        builder.HasIndex(batch => batch.MarketSessionId)
+            .IsUnique()
+            .HasFilter("market_session_id IS NOT NULL AND status <> 'Cancelled' AND deleted_at IS NULL")
+            .HasDatabaseName("ux_procurement_batches_market_session_active");
+
+        builder.HasOne<MarketSession>()
+            .WithMany()
+            .HasForeignKey(batch => batch.MarketSessionId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_procurement_batches_market_session");
 
         builder.HasIndex(batch => new { batch.HubId, batch.BatchDate })
             .HasFilter("\"deleted_at\" IS NULL")

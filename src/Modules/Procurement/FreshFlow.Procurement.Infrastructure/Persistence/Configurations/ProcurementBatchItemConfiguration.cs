@@ -37,6 +37,10 @@ internal sealed class ProcurementBatchItemConfiguration : IEntityTypeConfigurati
             .HasColumnType("numeric(12,2)");
         builder.Property(item => item.PurchasedAt)
             .HasColumnName("purchased_at");
+        builder.Property(item => item.AssignedAgentUserId)
+            .HasColumnName("assigned_agent_user_id");
+        builder.Property(item => item.AssignedAt)
+            .HasColumnName("assigned_at");
         builder.Property(item => item.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
@@ -48,5 +52,9 @@ internal sealed class ProcurementBatchItemConfiguration : IEntityTypeConfigurati
 
         builder.HasIndex(item => item.ProcurementBatchId)
             .HasDatabaseName("idx_procurement_batch_items_batch_id");
+
+        builder.HasIndex(item => item.AssignedAgentUserId)
+            .HasFilter("\"assigned_agent_user_id\" IS NOT NULL")
+            .HasDatabaseName("idx_procurement_batch_items_assigned_agent");
     }
 }

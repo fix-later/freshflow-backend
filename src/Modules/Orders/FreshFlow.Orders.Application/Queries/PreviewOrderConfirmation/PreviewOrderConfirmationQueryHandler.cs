@@ -13,7 +13,8 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
     IMarketProductReader marketProductReader,
     ICreditService creditService,
     IOperationalSettingsRepository operationalSettings,
-    IRoadDistanceProvider roadDistanceProvider)
+    IRoadDistanceProvider roadDistanceProvider,
+    IMarketSessionGate? marketSessions = null)
     : IRequestHandler<PreviewOrderConfirmationQuery, Result<OrderConfirmationPreviewDto>>
 {
     public Task<Result<OrderConfirmationPreviewDto>> Handle(
@@ -112,6 +113,20 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
         var issues = evaluation.Issues
             .Select(error => new PreviewIssueDto(error.Code, error.Message))
             .ToList();
+        if (marketSessions is not null && evaluation.ResolvedScheduledFor.HasValue)
+        {
+            var gate = await marketSessions.CheckAsync(
+                order.MarketId,
+                OrderCutoffScheduler.GetServiceDate(evaluation.ResolvedScheduledFor.Value),
+                false,
+                cancellationToken);
+            if (!gate.Exists)
+                issues.Add(new PreviewIssueDto(
+                    "MARKET_SESSION_NOT_AVAILABLE", "No market session is available for the delivery date."));
+            else if (!gate.IsOpen)
+                issues.Add(new PreviewIssueDto(
+                    "MARKET_SESSION_NOT_OPEN", "The market session is no longer accepting orders."));
+        }
 
         return Result<OrderConfirmationPreviewDto>.Success(new OrderConfirmationPreviewDto(
             WouldSucceed: issues.Count == 0,

@@ -82,7 +82,7 @@ public sealed class HubInboundAutoCreateEndpointTests(AuthWebAppFactory factory)
         // Force straight to HandedOff via EF (bypassing the domain method) so no domain event
         // fires — simulates a batch that was handed off before Task 1's handler existed.
         var handedOffAt = DateTime.UtcNow;
-        await ForceHandedOffAsync(batchId, handedOffAt);
+        await ForceHandedOffAsync(batchId, agentUserId, handedOffAt);
         (await ReadInboundRowsAsync(hubId, batchId)).Should().BeEmpty();
 
         await RunBackfillAsync();
@@ -154,12 +154,25 @@ public sealed class HubInboundAutoCreateEndpointTests(AuthWebAppFactory factory)
         await db.SaveChangesAsync();
 
         db.Entry(batch).Property(b => b.Status).CurrentValue = ProcurementBatchStatus.Purchasing;
-        db.Entry(batch).Property(b => b.AssignedAgentUserId).CurrentValue = agentUserId;
+        var item = batch.Items.Single();
+        db.Entry(item).Property(i => i.AssignedAgentUserId).CurrentValue = agentUserId;
+        db.Entry(item).Property(i => i.AssignedAt).CurrentValue = DateTime.UtcNow;
+        if (!actualQuantity.HasValue)
+        {
+            batch.ReportException(
+                marketProductId,
+                ProcurementExceptionType.Unavailable,
+                0,
+                null,
+                null,
+                agentUserId,
+                DateTime.UtcNow);
+            batch.ClearDomainEvents();
+        }
         await db.SaveChangesAsync();
 
         if (actualQuantity.HasValue)
         {
-            var item = batch.Items.Single();
             db.Entry(item).Property(i => i.ActualQuantity).CurrentValue = actualQuantity.Value;
             db.Entry(item).Property(i => i.ActualUnitPrice).CurrentValue = 10_000m;
             db.Entry(item).Property(i => i.PurchasedAt).CurrentValue = DateTime.UtcNow;
@@ -175,10 +188,12 @@ public sealed class HubInboundAutoCreateEndpointTests(AuthWebAppFactory factory)
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var batch = await db.Set<ProcurementBatch>()
             .Include(candidate => candidate.Items)
+            .Include(candidate => candidate.Exceptions)
             .SingleAsync(candidate => candidate.Id == batchId);
 
         var handedOffAt = DateTime.UtcNow;
-        var result = batch.HandoverToHub(handedOffAt);
+        var agentUserId = batch.Items.Single().AssignedAgentUserId!.Value;
+        var result = batch.HandoverToHub(agentUserId, handedOffAt);
         result.IsSuccess.Should().BeTrue();
         // Domain event dispatch happens post-commit inside this SaveChangesAsync call
         // (DomainEventDispatchInterceptor), which is what actually runs Task 1's handler.
@@ -187,13 +202,14 @@ public sealed class HubInboundAutoCreateEndpointTests(AuthWebAppFactory factory)
         return handedOffAt;
     }
 
-    private async Task ForceHandedOffAsync(Guid batchId, DateTime handedOffAt)
+    private async Task ForceHandedOffAsync(Guid batchId, Guid agentUserId, DateTime handedOffAt)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var batch = await db.Set<ProcurementBatch>().SingleAsync(candidate => candidate.Id == batchId);
         db.Entry(batch).Property(b => b.Status).CurrentValue = ProcurementBatchStatus.HandedOff;
         db.Entry(batch).Property(b => b.HandedOffAt).CurrentValue = handedOffAt;
+        db.Entry(batch).Property(b => b.AssignedAgentUserId).CurrentValue = agentUserId;
         await db.SaveChangesAsync();
     }
 

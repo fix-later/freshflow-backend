@@ -217,7 +217,9 @@ public sealed class ProcurementExceptionEndpointTests(AuthWebAppFactory factory)
                 [purchasedProductId] = 10_000m
             },
             DateTime.UtcNow.AddHours(-2));
-        batch.AssignAgent(agentUserId, DateTime.UtcNow.AddHours(-1));
+        batch.AssignItems(
+            batch.Items.ToDictionary(item => item.MarketProductId, _ => agentUserId),
+            DateTime.UtcNow.AddHours(-1));
         batch.ClearDomainEvents();
 
         using var scope = factory.Services.CreateScope();

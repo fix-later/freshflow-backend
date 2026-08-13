@@ -41,6 +41,7 @@ public sealed class Order : AggregateRoot
     }
 
     public Guid RestaurantId { get; private set; }
+    public Guid? MarketId { get; private set; }
     public Guid? OrderGroupId { get; private set; }
     public Guid? ScheduledOrderId { get; private set; }
     public OrderStatus Status { get; private set; }
@@ -96,12 +97,23 @@ public sealed class Order : AggregateRoot
     /// <summary>
     /// Adds a line item while the order is still a draft (cart). Recalculates <see cref="TotalAmount"/>.
     /// </summary>
-    public Result AddItem(Guid marketProductId, string productNameSnapshot, int quantity, decimal unitPrice)
+    public Result AddItem(
+        Guid marketProductId,
+        string productNameSnapshot,
+        int quantity,
+        decimal unitPrice,
+        Guid? marketId = null)
     {
         if (Status != OrderStatus.Draft)
             return Result.Failure(Error.Conflict(
                 "ORDER_NOT_DRAFT", "Items can only be added while the order is in draft status."));
 
+        if (marketId.HasValue && MarketId.HasValue && marketId != MarketId)
+            return Result.Failure(Error.Validation(
+                "ORDER_MARKET_MISMATCH", "An order can only contain products from one market."));
+
+        if (marketId.HasValue)
+            MarketId = marketId;
         var item = new OrderItem(marketProductId, productNameSnapshot, quantity, unitPrice);
         _items.Add(item);
         RecalculateTotal();
@@ -142,8 +154,21 @@ public sealed class Order : AggregateRoot
             return Result.Failure(Error.NotFound("ORDER_ITEM", itemId));
 
         _items.Remove(item);
+        if (_items.Count == 0)
+            MarketId = null;
         RecalculateTotal();
 
+        return Result.Success();
+    }
+
+    public Result AssignMarket(Guid marketId)
+    {
+        if (marketId == Guid.Empty)
+            return Result.Failure(Error.Validation("INVALID_MARKET", "A market is required."));
+        if (MarketId.HasValue && MarketId != marketId)
+            return Result.Failure(Error.Validation(
+                "ORDER_MARKET_MISMATCH", "An order can only contain products from one market."));
+        MarketId = marketId;
         return Result.Success();
     }
 
