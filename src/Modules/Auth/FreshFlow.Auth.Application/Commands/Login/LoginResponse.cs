@@ -9,4 +9,4 @@ public sealed record LoginResponse(
     LoginUserDto User,
     RestaurantStatus? ApprovalStatus = null);
 
-public sealed record LoginUserDto(Guid Id, string Email, string Role);
+public sealed record LoginUserDto(Guid Id, string Email, string? FullName, string Role);

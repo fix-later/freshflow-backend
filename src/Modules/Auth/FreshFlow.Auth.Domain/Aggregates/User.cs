@@ -11,18 +11,19 @@ public sealed class User : AggregateRoot
 
     private User() { }  // EF Core materialisation
 
-    private User(string email, string passwordHash, Guid roleId, string? phone)
+    private User(string email, string passwordHash, Guid roleId, string? phone, string? fullName)
     {
         Email = email.ToLowerInvariant();
         PasswordHash = passwordHash;
         RoleId = roleId;
         Phone = phone?.Trim().ToLowerInvariant();
+        FullName = string.IsNullOrWhiteSpace(fullName) ? null : fullName.Trim();
         IsActive = true;
     }
 
     public string Email { get; private set; } = string.Empty;
 
-    /// <summary>Display name — set by the user via UpdateProfile.</summary>
+    /// <summary>Optional display name.</summary>
     public string? FullName { get; private set; }
 
     /// <summary>URL of the user's profile picture — set by the user via UpdateProfile.</summary>
@@ -58,9 +59,14 @@ public sealed class User : AggregateRoot
     /// Factory — sets both <see cref="RoleId"/> (FK) and the <see cref="Role"/> navigation so that
     /// the entity is fully usable in memory (e.g. in unit tests) without an EF context.
     /// </summary>
-    public static User Create(string email, string passwordHash, Role role, string? phone = null)
+    public static User Create(
+        string email,
+        string passwordHash,
+        Role role,
+        string? phone = null,
+        string? fullName = null)
     {
-        var user = new User(email, passwordHash, role.Id, phone) { Role = role };
+        var user = new User(email, passwordHash, role.Id, phone, fullName) { Role = role };
         user.RaiseDomainEvent(new UserCreatedDomainEvent(user.Id, user.Email, role.Name));
         return user;
     }

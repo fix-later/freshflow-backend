@@ -32,7 +32,7 @@ internal sealed class GetUsersQueryHandler(
             }
 
             dtos.Add(new UserSummaryDto(
-                user.Id, user.Email, user.Role.Name,
+                user.Id, user.Email, user.FullName, user.Role.Name,
                 user.IsActive, isApproved, restaurantId, restaurantStatus,
                 restaurantName, user.Phone, user.CreatedAt));
         }

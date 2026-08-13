@@ -8,4 +8,5 @@ public sealed record CreateUserCommand(
     string Role,
     Guid? MarketId,
     string? RestaurantName,
-    string? Phone = null) : ICommand<CreateUserResponse>;
+    string? Phone = null,
+    string? FullName = null) : ICommand<CreateUserResponse>;

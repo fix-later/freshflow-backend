@@ -79,7 +79,7 @@ internal sealed class LoginCommandHandler(
             accessToken,
             rawRefresh,
             tokenService.AccessTokenTtlSeconds,
-            new LoginUserDto(user.Id, user.Email, user.Role.Name),
+            new LoginUserDto(user.Id, user.Email, user.FullName, user.Role.Name),
             approvalStatus));
     }
 }

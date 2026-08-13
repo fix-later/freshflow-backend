@@ -21,13 +21,14 @@ public sealed class ActivateUserCommandHandlerTests
     {
         var adminId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"));
+        var user = User.Create("u@test.com", "hashed", new Role("driver", "Driver"), fullName: "A Driver");
         _users.FindByIdAsync(userId, default).Returns(user);
 
         var result = await _sut.Handle(new ActivateUserCommand(userId, false, adminId), default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.IsActive.Should().BeFalse();
+        result.Value.FullName.Should().Be("A Driver");
     }
 
     [Fact]
@@ -66,5 +67,6 @@ public sealed class ActivateUserCommandHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.IsActive.Should().BeTrue();
+        result.Value.FullName.Should().BeNull();
     }
 }

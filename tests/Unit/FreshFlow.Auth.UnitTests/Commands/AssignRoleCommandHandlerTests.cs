@@ -25,7 +25,7 @@ public sealed class AssignRoleCommandHandlerTests
         var userId = Guid.NewGuid();
         var driverRole = new Role("driver", "Delivery driver");
         var hubRole = new Role("hub_staff", "Hub staff");
-        var user = User.Create("u@test.com", "hash", driverRole);
+        var user = User.Create("u@test.com", "hash", driverRole, fullName: "A Driver");
 
         _users.FindByIdAsync(userId, default).Returns(user);
         _roles.FindByNameAsync("hub_staff", default).Returns(hubRole);
@@ -37,6 +37,7 @@ public sealed class AssignRoleCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Role.Should().Be("hub_staff");
         result.Value.Email.Should().Be("u@test.com");
+        result.Value.FullName.Should().Be("A Driver");
         user.RoleId.Should().Be(hubRole.Id);
         await _tokens.Received(1).RevokeByUserAsync(userId, "ROLE_CHANGED", default);
         await _users.Received(1).SaveChangesAsync(default);

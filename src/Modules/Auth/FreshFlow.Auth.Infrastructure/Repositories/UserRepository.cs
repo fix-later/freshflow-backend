@@ -64,7 +64,10 @@ internal sealed class UserRepository(AppDbContext db) : IUserRepository
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLowerInvariant();
-            query = query.Where(u => u.Email.Contains(s) || (u.Phone != null && u.Phone.Contains(s)));
+            query = query.Where(u =>
+                u.Email.Contains(s) ||
+                (u.Phone != null && u.Phone.Contains(s)) ||
+                (u.FullName != null && u.FullName.ToLower().Contains(s)));
         }
 
         if (Enum.TryParse<RestaurantStatus>(restaurantStatus, ignoreCase: true, out var status))

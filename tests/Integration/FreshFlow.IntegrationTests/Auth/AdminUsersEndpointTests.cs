@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using FluentAssertions;
 using FreshFlow.IntegrationTests.Infrastructure;
 
@@ -116,5 +117,50 @@ public sealed class AdminUsersEndpointTests(AuthWebAppFactory factory)
         login.StatusCode.Should().Be(HttpStatusCode.OK);
         var env = await login.Content.ReadFromJsonAsync<Envelope<TokenBody>>();
         env!.Data!.AccessToken.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task CreateSearchAndLogin_WithFullName_ReturnsNormalizedFullName()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var unique = Guid.NewGuid().ToString("N")[..8];
+        var email = string.Concat("full-name-", unique, "@test.freshflow");
+        var fullName = string.Concat("Fresh Flow Driver ", unique);
+
+        var create = await _client.PostAsJsonAsync("/api/v1/admin/users", new
+        {
+            email,
+            password = "DriverP@ss1",
+            role = "driver",
+            fullName = string.Concat("  ", fullName, "  ")
+        });
+
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await create.Content.ReadFromJsonAsync<JsonElement>();
+        var userId = created.GetProperty("data").GetProperty("id").GetGuid();
+        created.GetProperty("data").GetProperty("fullName").GetString().Should().Be(fullName);
+
+        var search = await _client.GetAsync(string.Concat(
+            "/api/v1/admin/users?search=", Uri.EscapeDataString(fullName.ToUpperInvariant()),
+            "&page=1&pageSize=10"));
+
+        search.StatusCode.Should().Be(HttpStatusCode.OK);
+        var searchBody = await search.Content.ReadFromJsonAsync<JsonElement>();
+        var listedUser = searchBody.GetProperty("data").GetProperty("data")
+            .EnumerateArray().Single(user => user.GetProperty("id").GetGuid() == userId);
+        listedUser.GetProperty("fullName").GetString().Should().Be(fullName);
+
+        _client.DefaultRequestHeaders.Authorization = null;
+        var login = await _client.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            identifier = email,
+            password = "DriverP@ss1"
+        });
+
+        login.StatusCode.Should().Be(HttpStatusCode.OK);
+        var loginBody = await login.Content.ReadFromJsonAsync<JsonElement>();
+        loginBody.GetProperty("data").GetProperty("user")
+            .GetProperty("fullName").GetString().Should().Be(fullName);
     }
 }
