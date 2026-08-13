@@ -18,8 +18,6 @@ using FreshFlow.Orders.Application.Commands.SettleRestaurantCredit;
 using FreshFlow.Orders.Application.Commands.UpdateOperationalSettings;
 using FreshFlow.Orders.Application.Queries.GetOperationalSettings;
 using FreshFlow.Orders.Domain.Enums;
-using FreshFlow.Pricing.Application.Commands.UpdatePricingSettings;
-using FreshFlow.Pricing.Application.Queries.GetPricingSettings;
 using FreshFlow.Procurement.Application.Commands.AssignBatchItems;
 using FreshFlow.Procurement.Application.Commands.CancelBatch;
 using FreshFlow.Procurement.Application.Commands.CloseMarketSession;
@@ -390,27 +388,6 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
-    // ── Pricing Settings (Admin) ──────────────────────────────────────────────
-
-    /// <summary>GET /api/v1/admin/pricing-settings</summary>
-    [HttpGet("pricing-settings")]
-    [Authorize(Roles = "admin")]
-    public async Task<IActionResult> GetPricingSettingsAsync(CancellationToken ct)
-    {
-        var result = await sender.Send(new GetPricingSettingsQuery(), ct);
-        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
-    }
-
-    /// <summary>PUT /api/v1/admin/pricing-settings</summary>
-    [HttpPut("pricing-settings")]
-    [Authorize(Roles = "admin")]
-    public async Task<IActionResult> UpdatePricingSettingsAsync(
-        [FromBody] UpdatePricingSettingsRequest body, CancellationToken ct)
-    {
-        var result = await sender.Send(new UpdatePricingSettingsCommand(body.PriceAlertThresholdPercent), ct);
-        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
-    }
-
     // ── Audit Log (Admin) ──────────────────────────────────────────────────────
 
     /// <summary>GET /api/v1/admin/audit-logs — filter by actor/action/entity/time.</summary>
@@ -485,7 +462,6 @@ public sealed record UpdateOperationalSettingsRequest(
     decimal? BaseFee = null,
     decimal? MinimumFee = null,
     decimal? RoundingUnit = null);
-public sealed record UpdatePricingSettingsRequest(decimal PriceAlertThresholdPercent);
 public sealed record RunAutoBatchRequest(DateOnly? TargetDate, bool? DryRun, bool? Force);
 public sealed record ResetOrderGroupsRequest(DateOnly TargetDate, string Confirmation);
 public sealed record CancelOrderGroupRequest(string? Reason);
