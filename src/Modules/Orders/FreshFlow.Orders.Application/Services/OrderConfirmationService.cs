@@ -12,7 +12,8 @@ public sealed class OrderConfirmationService(
     IMarketProductReader marketProductReader,
     ICreditService creditService,
     IOperationalSettingsRepository operationalSettings,
-    IRoadDistanceProvider roadDistanceProvider) : IOrderConfirmationService
+    IRoadDistanceProvider roadDistanceProvider,
+    IMarketSessionGate? marketSessions = null) : IOrderConfirmationService
 {
     public async Task<Result<RoadDistanceResult>> GetRoadDistanceAsync(
         IReadOnlyCollection<Guid> marketProductIds,
@@ -75,6 +76,21 @@ public sealed class OrderConfirmationService(
             products[marketProductId] = product;
         }
 
+        var marketIds = products.Values
+            .Where(product => product.MarketId.HasValue)
+            .Select(product => product.MarketId!.Value)
+            .Distinct()
+            .ToArray();
+        if (marketIds.Length > 1)
+            return Result<OrderDto>.Failure(Error.Validation(
+                "ORDER_MARKET_MISMATCH", "An order can only contain products from one market."));
+        if (marketIds.Length == 1)
+        {
+            var assignMarket = order.AssignMarket(marketIds[0]);
+            if (assignMarket.IsFailure)
+                return Result<OrderDto>.Failure(assignMarket.Error);
+        }
+
         if (roadDistance.InputRevision != CreateInputRevision(products.Values, deliveryAddress))
             return Result<OrderDto>.Failure(Error.Conflict(
                 "ROUTING_INPUTS_CHANGED",
@@ -108,6 +124,21 @@ public sealed class OrderConfirmationService(
             pricing.Value.TotalAmount);
         if (evaluation.Issues.Count > 0)
             return Result<OrderDto>.Failure(evaluation.Issues[0]);
+
+        if (marketSessions is not null && evaluation.ResolvedScheduledFor.HasValue)
+        {
+            var gate = await marketSessions.CheckAsync(
+                order.MarketId,
+                OrderCutoffScheduler.GetServiceDate(evaluation.ResolvedScheduledFor.Value),
+                true,
+                cancellationToken);
+            if (!gate.Exists)
+                return Result<OrderDto>.Failure(Error.Validation(
+                    "MARKET_SESSION_NOT_AVAILABLE", "No market session is available for the delivery date."));
+            if (!gate.IsOpen)
+                return Result<OrderDto>.Failure(Error.Conflict(
+                    "MARKET_SESSION_NOT_OPEN", "The market session is no longer accepting orders."));
+        }
 
         var pricingResult = order.ApplyConfirmationPricing(
             pricing.Value.TaxesByMarketProduct,

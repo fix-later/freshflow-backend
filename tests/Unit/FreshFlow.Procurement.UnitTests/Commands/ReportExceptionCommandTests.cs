@@ -139,8 +139,8 @@ public sealed class ReportExceptionCommandTests
             Guid.NewGuid(),
             [(productId, "Tomato", 2, Guid.NewGuid())])
             .Value;
-        typeof(ProcurementBatch).GetProperty(nameof(ProcurementBatch.AssignedAgentUserId))!
-            .SetValue(batch, agentUserId);
+        typeof(ProcurementBatchItem).GetProperty(nameof(ProcurementBatchItem.AssignedAgentUserId))!
+            .SetValue(batch.Items.Single(), agentUserId);
         batch.ClearDomainEvents();
         var repository = Substitute.For<IProcurementBatchRepository>();
         repository.FindByIdAsync(batch.Id, default).Returns(batch);
@@ -199,7 +199,7 @@ public sealed class ReportExceptionCommandTests
         batch.Manifest(
             new Dictionary<Guid, decimal> { [productId] = 10_000m },
             Now.UtcDateTime.AddHours(-2));
-        batch.AssignAgent(agentUserId, Now.UtcDateTime.AddHours(-1));
+        batch.AssignItems(new Dictionary<Guid, Guid> { [productId] = agentUserId }, Now.UtcDateTime.AddHours(-1));
         batch.ClearDomainEvents();
         return batch;
     }

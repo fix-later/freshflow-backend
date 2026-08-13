@@ -49,6 +49,13 @@ public sealed class ProcurementPersistenceConfigurationTests
             .Should().Be("numeric(12,2)");
         item.FindProperty(nameof(ProcurementBatchItem.PurchasedAt))!
             .GetColumnName().Should().Be("purchased_at");
+        item.FindProperty(nameof(ProcurementBatchItem.AssignedAgentUserId))!
+            .GetColumnName().Should().Be("assigned_agent_user_id");
+        item.FindProperty(nameof(ProcurementBatchItem.AssignedAt))!
+            .GetColumnName().Should().Be("assigned_at");
+        item.GetIndexes().Should().Contain(index =>
+            index.GetDatabaseName() == "idx_procurement_batch_items_assigned_agent" &&
+            index.GetFilter() == "\"assigned_agent_user_id\" IS NOT NULL");
         var order = db.Model.FindEntityType(typeof(ProcurementBatchOrder))!;
         order.GetTableName().Should().Be("procurement_batch_orders");
         order.GetIndexes().Should().ContainSingle(index =>

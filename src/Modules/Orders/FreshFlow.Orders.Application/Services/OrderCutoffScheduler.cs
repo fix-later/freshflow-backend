@@ -47,6 +47,17 @@ public static class OrderCutoffScheduler
         return scheduledFor <= upperBoundUtc;
     }
 
+    public static DateOnly GetServiceDate(DateTime scheduledForUtc)
+    {
+        var utc = scheduledForUtc.Kind switch
+        {
+            DateTimeKind.Utc => scheduledForUtc,
+            DateTimeKind.Local => scheduledForUtc.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(scheduledForUtc, DateTimeKind.Utc)
+        };
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utc, VietnamTimeZone));
+    }
+
     private static DateTime ResolveEarliestValidDelivery(DateTime confirmedAtUtc, TimeSpan cutoffLocalTime)
     {
         var confirmedAtLocal = TimeZoneInfo.ConvertTimeFromUtc(confirmedAtUtc, VietnamTimeZone);

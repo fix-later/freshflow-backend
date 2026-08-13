@@ -27,7 +27,8 @@ public sealed record OrderDto(
     string? RoutingProvider = null,
     decimal? DeliveryOriginLatitude = null,
     decimal? DeliveryOriginLongitude = null,
-    bool DeliveryDistanceEstimated = false);
+    bool DeliveryDistanceEstimated = false,
+    Guid? MarketId = null);
 
 public sealed record DeliveryAddressSnapshotDto(
     Guid AddressId,

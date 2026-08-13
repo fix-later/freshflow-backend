@@ -208,6 +208,7 @@ public sealed class GetProcurementProgressQueryHandlerTests
             }
             : [(firstProductId, "Tomato", 2, Guid.NewGuid())];
         var batch = ProcurementBatch.Build(CycleDate, Guid.NewGuid(), lines, Guid.NewGuid()).Value;
+        var agentUserId = Guid.NewGuid();
 
         if (targetStatus == ProcurementBatchStatus.Built)
             return batch;
@@ -217,6 +218,9 @@ public sealed class GetProcurementProgressQueryHandlerTests
             CapturedAt);
         if (targetStatus == ProcurementBatchStatus.Manifested)
             return batch;
+        batch.AssignItems(
+            batch.Items.ToDictionary(item => item.MarketProductId, _ => agentUserId),
+            CapturedAt.AddMinutes(1));
 
         if (partialPurchase)
         {
@@ -226,11 +230,12 @@ public sealed class GetProcurementProgressQueryHandlerTests
                 3,
                 null,
                 null,
-                Guid.NewGuid(),
+                agentUserId,
                 CapturedAt.AddMinutes(1));
         }
 
         batch.ConfirmPurchase(
+            agentUserId,
             new Dictionary<Guid, (int, decimal)>
             {
                 [firstProductId] = (2, 9_000m)
@@ -239,7 +244,7 @@ public sealed class GetProcurementProgressQueryHandlerTests
         if (targetStatus == ProcurementBatchStatus.Purchasing)
             return batch;
 
-        batch.HandoverToHub(CapturedAt.AddMinutes(3));
+        batch.HandoverToHub(agentUserId, CapturedAt.AddMinutes(3));
         return batch;
     }
 }

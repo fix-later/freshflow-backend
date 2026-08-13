@@ -10,7 +10,6 @@ namespace FreshFlow.Procurement.Infrastructure.Jobs;
 internal sealed class ProcurementBatchingHostedService(
     IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
-    TimeProvider timeProvider,
     ILogger<ProcurementBatchingHostedService> logger) : BackgroundService
 {
     private const int DefaultIntervalSeconds = 60;
@@ -40,52 +39,28 @@ internal sealed class ProcurementBatchingHostedService(
         try
         {
             using var scope = scopeFactory.CreateScope();
+            var lifecycle = scope.ServiceProvider.GetRequiredService<MarketSessionLifecycleService>();
+            await lifecycle.EnsureRollingWindowAsync(stoppingToken);
+            await lifecycle.CloseDueAsync(stoppingToken);
+
             var settings = await scope.ServiceProvider
                 .GetRequiredService<IOperationalSettingsReader>()
                 .ReadAsync(stoppingToken);
             if (!settings.BatchingEnabled)
                 return;
 
-            var dueDate = ProcurementBatchCycle.ResolveDueBatchDate(
-                timeProvider.GetUtcNow(),
-                settings.DailyCutoffTime);
-            var cycleDate = await scope.ServiceProvider
-                .GetRequiredService<IConfirmedOrderReader>()
-                .FindOldestEligibleCycleAsync(dueDate, stoppingToken);
-            if (!cycleDate.HasValue)
-                return;
-
-            var repository = scope.ServiceProvider
-                .GetRequiredService<IProcurementBatchRepository>();
-            if (await repository.CycleExistsAsync(cycleDate.Value, stoppingToken))
-                return;
-
-            var result = await scope.ServiceProvider
-                .GetRequiredService<IProcurementBatchingService>()
-                .BuildBatchesAsync(cycleDate.Value, false, false, stoppingToken);
-            if (result.IsFailure)
+            var pending = await scope.ServiceProvider
+                .GetRequiredService<IMarketSessionRepository>()
+                .ListClosedPendingAsync(stoppingToken);
+            var batching = scope.ServiceProvider.GetRequiredService<IProcurementBatchingService>();
+            foreach (var session in pending)
             {
-                logger.LogWarning(
-                    "Procurement batching failed for cycle {BatchDate}: {ErrorCode}.",
-                    cycleDate,
-                    result.Error.Code);
-                return;
-            }
-
-            if (cycleDate.Value < dueDate)
-            {
-                logger.LogWarning(
-                    "MISSED_EXECUTION: recovered procurement batching cycle {BatchDate}.",
-                    cycleDate);
-            }
-
-            if (result.Value.BatchesCreated > 0)
-            {
-                logger.LogInformation(
-                    "Built {BatchCount} procurement batches for {OrderCount} orders in cycle {BatchDate}.",
-                    result.Value.BatchesCreated,
-                    result.Value.OrdersBatched,
-                    cycleDate);
+                var result = await batching.BuildSessionBatchAsync(session.Id, false, stoppingToken);
+                if (result.IsFailure)
+                    logger.LogWarning(
+                        "Procurement batching failed for session {SessionId}: {ErrorCode}.",
+                        session.Id,
+                        result.Error.Code);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

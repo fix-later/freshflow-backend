@@ -212,10 +212,11 @@ public sealed class HandoverBatchCommandTests
         batch.Manifest(
             new Dictionary<Guid, decimal> { [productId] = 10_000m },
             Now.UtcDateTime.AddHours(-3));
-        batch.AssignAgent(agentUserId, Now.UtcDateTime.AddHours(-2));
+        batch.AssignItems(new Dictionary<Guid, Guid> { [productId] = agentUserId }, Now.UtcDateTime.AddHours(-2));
         if (purchased)
         {
             batch.ConfirmPurchase(
+                agentUserId,
                 new Dictionary<Guid, (int, decimal)> { [productId] = (5, 11_000m) },
                 Now.UtcDateTime.AddHours(-1));
         }

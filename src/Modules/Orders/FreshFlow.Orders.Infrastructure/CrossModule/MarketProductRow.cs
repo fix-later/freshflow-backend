@@ -8,6 +8,7 @@ namespace FreshFlow.Orders.Infrastructure.CrossModule;
 internal sealed class MarketProductRow
 {
     public Guid Id { get; set; }
+    public Guid MarketId { get; set; }
     public string ProductName { get; set; } = string.Empty;
     public decimal CurrentPrice { get; set; }
     public int CurrentQuantity { get; set; }

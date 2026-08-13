@@ -3,17 +3,17 @@ using FreshFlow.Procurement.Application.Dtos;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 
-namespace FreshFlow.Procurement.Application.Commands.AssignAgent;
+namespace FreshFlow.Procurement.Application.Commands.AssignBatchItems;
 
-internal sealed class AssignAgentCommandHandler(
+internal sealed class AssignBatchItemsCommandHandler(
     IProcurementBatchRepository batches,
     IMarketAgentReader marketAgents,
     IConfirmedOrderReader orders,
     TimeProvider timeProvider)
-    : IRequestHandler<AssignAgentCommand, Result<ProcurementBatchDto>>
+    : IRequestHandler<AssignBatchItemsCommand, Result<ProcurementBatchDto>>
 {
     public async Task<Result<ProcurementBatchDto>> Handle(
-        AssignAgentCommand request,
+        AssignBatchItemsCommand request,
         CancellationToken cancellationToken)
     {
         var batch = await batches.FindByIdAsync(request.BatchId, cancellationToken);
@@ -23,19 +23,33 @@ internal sealed class AssignAgentCommandHandler(
                 Error.NotFound("PROCUREMENT_BATCH", request.BatchId));
         }
 
-        var isEligible = await marketAgents.IsEligibleMarketAgentAsync(
-            request.AgentUserId,
-            batch.MarketId,
-            cancellationToken);
-        if (!isEligible)
+        foreach (var agentUserId in request.Assignments
+                     .Where(assignment => assignment.AgentUserId != Guid.Empty)
+                     .Select(assignment => assignment.AgentUserId)
+                     .Distinct())
         {
-            return Result<ProcurementBatchDto>.Failure(Error.Validation(
-                "AGENT_NOT_ELIGIBLE",
-                "User is not an active market agent assigned to this market."));
+            if (!await marketAgents.IsEligibleMarketAgentAsync(
+                    agentUserId,
+                    batch.MarketId,
+                    cancellationToken))
+            {
+                return Result<ProcurementBatchDto>.Failure(Error.Validation(
+                    "AGENT_NOT_ELIGIBLE",
+                    "User is not an active market agent assigned to this market."));
+            }
         }
 
-        var assignment = batch.AssignAgent(
-            request.AgentUserId,
+        var assignments = new Dictionary<Guid, Guid>();
+        if (request.Assignments.Any(assignment =>
+                !assignments.TryAdd(assignment.MarketProductId, assignment.AgentUserId)))
+        {
+            return Result<ProcurementBatchDto>.Failure(Error.Validation(
+                "VALIDATION_ERROR",
+                "Item assignments must contain unique market product IDs."));
+        }
+
+        var assignment = batch.AssignItems(
+            assignments,
             timeProvider.GetUtcNow().UtcDateTime);
         if (assignment.IsFailure)
             return Result<ProcurementBatchDto>.Failure(assignment.Error);

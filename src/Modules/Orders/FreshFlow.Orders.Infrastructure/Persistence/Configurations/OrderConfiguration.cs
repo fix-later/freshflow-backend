@@ -16,6 +16,7 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         // ToTable("restaurants") mapping (cross-module FKs are DB-constraint-only, see
         // docs/03-database-schema.md fk_orders_restaurant).
         builder.Property(o => o.RestaurantId).IsRequired();
+        builder.Property(o => o.MarketId).HasColumnName("market_id");
         builder.Property(o => o.OrderGroupId);
         builder.Property(o => o.ScheduledOrderId);
 
@@ -106,6 +107,10 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
 
         builder.HasIndex(o => o.ScheduledFor)
             .HasDatabaseName("idx_orders_scheduled_for");
+
+        builder.HasIndex(o => new { o.MarketId, o.ScheduledFor })
+            .HasFilter("market_id IS NOT NULL AND deleted_at IS NULL")
+            .HasDatabaseName("idx_orders_market_scheduled_for");
 
         builder.HasIndex(o => o.ScheduledOrderId)
             .HasDatabaseName("idx_orders_scheduled_order_id");

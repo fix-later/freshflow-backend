@@ -24,7 +24,8 @@ internal sealed class HandoverBatchCommandHandler(
         CancellationToken cancellationToken)
     {
         var batch = await batches.FindByIdAsync(request.BatchId, cancellationToken);
-        if (batch is null || batch.AssignedAgentUserId != request.AgentUserId)
+        if (batch is null ||
+            !batch.Items.Any(item => item.AssignedAgentUserId == request.AgentUserId))
         {
             return Result<ProcurementBatchDto>.Failure(
                 Error.NotFound("PROCUREMENT_BATCH", request.BatchId));
@@ -44,7 +45,9 @@ internal sealed class HandoverBatchCommandHandler(
                 $"Hub '{batch.HubId}' is inactive."));
         }
 
-        var handover = batch.HandoverToHub(timeProvider.GetUtcNow().UtcDateTime);
+        var handover = batch.HandoverToHub(
+            request.AgentUserId,
+            timeProvider.GetUtcNow().UtcDateTime);
         if (handover.IsFailure)
             return Result<ProcurementBatchDto>.Failure(handover.Error);
 

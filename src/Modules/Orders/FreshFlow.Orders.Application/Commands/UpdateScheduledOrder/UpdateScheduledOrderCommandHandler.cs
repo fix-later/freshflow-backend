@@ -8,7 +8,8 @@ namespace FreshFlow.Orders.Application.Commands.UpdateScheduledOrder;
 
 internal sealed class UpdateScheduledOrderCommandHandler(
     IScheduledOrderRepository scheduledOrderRepository,
-    IRestaurantReader restaurantReader)
+    IRestaurantReader restaurantReader,
+    IMarketProductReader? marketProductReader = null)
     : IRequestHandler<UpdateScheduledOrderCommand, Result<ScheduledOrderDto>>
 {
     public async Task<Result<ScheduledOrderDto>> Handle(
@@ -58,7 +59,25 @@ internal sealed class UpdateScheduledOrderCommandHandler(
             return Result<ScheduledOrderDto>.Failure(updateResult.Error);
 
         if (request.Items is not null)
-            scheduledOrder.ReplaceItems(request.Items.Select(i => (i.MarketProductId, i.Quantity)));
+        {
+            Guid? marketId = null;
+            if (marketProductReader is not null)
+            {
+                foreach (var marketProductId in request.Items.Select(item => item.MarketProductId).Distinct())
+                {
+                    var snapshot = await marketProductReader.FindAsync(marketProductId, cancellationToken);
+                    if (snapshot is null)
+                        return Result<ScheduledOrderDto>.Failure(Error.Validation(
+                            "INVALID_PRODUCT", $"Product '{marketProductId}' is not available."));
+                    if (snapshot.MarketId.HasValue && marketId.HasValue && snapshot.MarketId != marketId)
+                        return Result<ScheduledOrderDto>.Failure(Error.Validation(
+                            "ORDER_MARKET_MISMATCH", "A recurring order can only contain products from one market."));
+                    marketId ??= snapshot.MarketId;
+                }
+            }
+            scheduledOrder.ReplaceItems(
+                request.Items.Select(i => (i.MarketProductId, i.Quantity)), marketId);
+        }
 
         scheduledOrderRepository.Track(scheduledOrder);
         await scheduledOrderRepository.SaveChangesAsync(cancellationToken);

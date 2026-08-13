@@ -27,6 +27,10 @@ public sealed record ProcurementBatchDto(
     string? CancellationReason,
     DateTime? CompletedAt);
 
+public sealed record ItemAssignmentDto(
+    Guid MarketProductId,
+    Guid AgentUserId);
+
 public sealed record ProcurementBatchItemDto(
     Guid MarketProductId,
     string ProductNameSnapshot,
@@ -35,6 +39,7 @@ public sealed record ProcurementBatchItemDto(
     int? ActualQuantity,
     decimal? ActualUnitPrice,
     DateTime? PurchasedAt,
+    Guid? AssignedAgentUserId,
     string? ProductImageUrl);
 
 public sealed record ProcurementBatchMemberDto(
@@ -103,6 +108,7 @@ internal static class ProcurementBatchDtoMapper
                     item.ActualQuantity,
                     item.ActualUnitPrice,
                     item.PurchasedAt,
+                    item.AssignedAgentUserId,
                     imagesByMarketProduct?.GetValueOrDefault(item.MarketProductId)))
                 .ToList()
                 .AsReadOnly(),

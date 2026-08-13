@@ -16,7 +16,8 @@ internal sealed class ConfirmPurchaseCommandHandler(
         CancellationToken cancellationToken)
     {
         var batch = await batches.FindByIdAsync(request.BatchId, cancellationToken);
-        if (batch is null || batch.AssignedAgentUserId != request.AgentUserId)
+        if (batch is null ||
+            !batch.Items.Any(item => item.AssignedAgentUserId == request.AgentUserId))
         {
             return Result<ProcurementBatchDto>.Failure(
                 Error.NotFound("PROCUREMENT_BATCH", request.BatchId));
@@ -36,12 +37,18 @@ internal sealed class ConfirmPurchaseCommandHandler(
         }
 
         var confirmation = batch.ConfirmPurchase(
+            request.AgentUserId,
             lines,
             timeProvider.GetUtcNow().UtcDateTime);
         if (confirmation.IsFailure)
             return Result<ProcurementBatchDto>.Failure(confirmation.Error);
 
-        await batches.SaveChangesAsync(cancellationToken);
+        if (!await batches.SaveChangesAsync(cancellationToken))
+        {
+            return Result<ProcurementBatchDto>.Failure(Error.Conflict(
+                "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                "The procurement batch changed concurrently. Retry the request."));
+        }
 
         var orderIds = batch.Orders
             .Select(link => link.OrderId)

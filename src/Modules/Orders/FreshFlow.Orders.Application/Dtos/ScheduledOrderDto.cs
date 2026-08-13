@@ -14,7 +14,8 @@ public sealed record ScheduledOrderDto(
     Guid? DeliveryAddressId,
     IReadOnlyList<ScheduledOrderItemDto> Items,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    Guid? MarketId = null);
 
 public sealed record ScheduledOrderItemDto(Guid MarketProductId, int Quantity);
 
@@ -43,7 +44,8 @@ internal static class ScheduledOrderDtoMapper
             .Select(item => new ScheduledOrderItemDto(item.MarketProductId, item.Quantity))
             .ToList(),
         scheduledOrder.CreatedAt,
-        scheduledOrder.UpdatedAt);
+        scheduledOrder.UpdatedAt,
+        scheduledOrder.MarketId);
 
     public static string ToApiRecurrenceType(RecurrenceType recurrenceType) => recurrenceType switch
     {

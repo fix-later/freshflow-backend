@@ -26,22 +26,39 @@ public sealed class ProcurementBatchItem : BaseEntity
     public int? ActualQuantity { get; private set; }
     public decimal? ActualUnitPrice { get; private set; }
     public DateTime? PurchasedAt { get; private set; }
+    public Guid? AssignedAgentUserId { get; private set; }
+    public DateTime? AssignedAt { get; private set; }
 
     internal void AddQuantity(int extraQuantity) => TotalQuantity += extraQuantity;
 
     internal void SetReferencePrice(decimal price) => ReferenceUnitPrice = price;
+
+    internal void AssignTo(Guid agentUserId, DateTime assignedAt)
+    {
+        AssignedAgentUserId = agentUserId;
+        AssignedAt = assignedAt;
+        UpdatedAt = assignedAt;
+    }
+
+    internal void Unassign()
+    {
+        AssignedAgentUserId = null;
+        AssignedAt = null;
+    }
 
     internal void ConfirmPurchase(int actualQuantity, decimal actualUnitPrice, DateTime purchasedAt)
     {
         ActualQuantity = actualQuantity;
         ActualUnitPrice = actualUnitPrice;
         PurchasedAt = purchasedAt;
+        UpdatedAt = purchasedAt;
     }
 
-    internal void ClearPurchase()
+    internal void ClearPurchase(DateTime capturedAt)
     {
         ActualQuantity = null;
         ActualUnitPrice = null;
         PurchasedAt = null;
+        UpdatedAt = capturedAt;
     }
 }

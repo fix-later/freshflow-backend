@@ -25,6 +25,7 @@ public sealed class ScheduledOrder : BaseEntity
     }
 
     public Guid RestaurantId { get; private set; }
+    public Guid? MarketId { get; private set; }
     public RecurrenceType RecurrenceType { get; private set; }
     public DateTime FirstRunAt { get; private set; }
     public DateTime? LastExecutedAt { get; private set; }
@@ -57,11 +58,25 @@ public sealed class ScheduledOrder : BaseEntity
         _items.Add(new ScheduledOrderItem(marketProductId, quantity));
 
     /// <summary>Replaces the entire item template, e.g. from <c>UpdateScheduledOrder</c>.</summary>
-    public void ReplaceItems(IEnumerable<(Guid MarketProductId, int Quantity)> items)
+    public void ReplaceItems(
+        IEnumerable<(Guid MarketProductId, int Quantity)> items,
+        Guid? marketId = null)
     {
         _items.Clear();
         foreach (var (marketProductId, quantity) in items)
             AddItem(marketProductId, quantity);
+        MarketId = _items.Count == 0 ? null : marketId ?? MarketId;
+    }
+
+    public Result AssignMarket(Guid marketId)
+    {
+        if (marketId == Guid.Empty)
+            return Result.Failure(Error.Validation("INVALID_MARKET", "A market is required."));
+        if (MarketId.HasValue && MarketId != marketId)
+            return Result.Failure(Error.Validation(
+                "ORDER_MARKET_MISMATCH", "A recurring order can only contain products from one market."));
+        MarketId = marketId;
+        return Result.Success();
     }
 
     public Result UpdateSchedule(

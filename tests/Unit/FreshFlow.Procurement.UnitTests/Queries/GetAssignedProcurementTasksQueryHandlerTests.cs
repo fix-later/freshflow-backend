@@ -50,7 +50,8 @@ public sealed class GetAssignedProcurementTasksQueryHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Batches.Should().ContainSingle();
-        result.Value.Batches[0].AssignedAgentUserId.Should().Be(agentUserId);
+        result.Value.Batches[0].Items.Should().ContainSingle()
+            .Which.AssignedAgentUserId.Should().Be(agentUserId);
         result.Value.Batches[0].Items.Should().ContainSingle()
             .Which.ReferenceUnitPrice.Should().Be(10_000m);
         result.Value.Batches[0].Items[0].ProductImageUrl.Should().Be("https://img/tomato.jpg");
@@ -115,8 +116,8 @@ public sealed class GetAssignedProcurementTasksQueryHandlerTests
         batch.Manifest(
             new Dictionary<Guid, decimal> { [productId] = 10_000m },
             new DateTime(2026, 7, 15, 1, 0, 0, DateTimeKind.Utc));
-        batch.AssignAgent(
-            agentUserId,
+        batch.AssignItems(
+            new Dictionary<Guid, Guid> { [productId] = agentUserId },
             new DateTime(2026, 7, 15, 2, 0, 0, DateTimeKind.Utc));
         return batch;
     }

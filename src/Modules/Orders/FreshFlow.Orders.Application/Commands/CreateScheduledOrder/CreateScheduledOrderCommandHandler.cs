@@ -9,7 +9,8 @@ namespace FreshFlow.Orders.Application.Commands.CreateScheduledOrder;
 
 internal sealed class CreateScheduledOrderCommandHandler(
     IScheduledOrderRepository scheduledOrderRepository,
-    IRestaurantReader restaurantReader)
+    IRestaurantReader restaurantReader,
+    IMarketProductReader? marketProductReader = null)
     : IRequestHandler<CreateScheduledOrderCommand, Result<ScheduledOrderDto>>
 {
     public async Task<Result<ScheduledOrderDto>> Handle(
@@ -45,6 +46,24 @@ internal sealed class CreateScheduledOrderCommandHandler(
             request.FirstRunAt,
             request.Notes,
             request.DeliveryAddressId);
+
+        Guid? marketId = null;
+        if (marketProductReader is not null)
+        {
+            foreach (var marketProductId in request.Items.Select(item => item.MarketProductId).Distinct())
+            {
+                var snapshot = await marketProductReader.FindAsync(marketProductId, cancellationToken);
+                if (snapshot is null)
+                    return Result<ScheduledOrderDto>.Failure(Error.Validation(
+                        "INVALID_PRODUCT", $"Product '{marketProductId}' is not available."));
+                if (snapshot.MarketId.HasValue && marketId.HasValue && snapshot.MarketId != marketId)
+                    return Result<ScheduledOrderDto>.Failure(Error.Validation(
+                        "ORDER_MARKET_MISMATCH", "A recurring order can only contain products from one market."));
+                marketId ??= snapshot.MarketId;
+            }
+        }
+        if (marketId.HasValue)
+            scheduledOrder.AssignMarket(marketId.Value);
         foreach (var item in request.Items)
             scheduledOrder.AddItem(item.MarketProductId, item.Quantity);
 

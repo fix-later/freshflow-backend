@@ -3348,6 +3348,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("delivery_recipient_name");
 
+                    b.Property<Guid?>("MarketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("market_id");
+
                     b.Property<string>("Notes")
                         .HasColumnType("text");
 
@@ -3408,6 +3412,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status")
                         .HasDatabaseName("idx_orders_status");
+
+                    b.HasIndex("MarketId", "ScheduledFor")
+                        .HasDatabaseName("idx_orders_market_scheduled_for")
+                        .HasFilter("market_id IS NOT NULL AND deleted_at IS NULL");
 
                     b.HasIndex("RestaurantId", "Status")
                         .HasDatabaseName("idx_orders_restaurant_id_status");
@@ -3715,6 +3723,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("LastExecutedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("MarketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("market_id");
+
                     b.Property<string>("Notes")
                         .HasColumnType("text");
 
@@ -3870,6 +3882,9 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("MarketId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("MinimumOrderQuantity")
                         .HasColumnType("integer");
 
@@ -3891,7 +3906,24 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    mp.\"Id\",\n    p.\"Name\" AS \"ProductName\",\n    mp.\"CurrentPrice\",\n    mp.\"CurrentQuantity\",\n    mp.\"ReservedQuantity\",\n    p.\"MinimumOrderQuantity\",\n    p.\"VatRate\",\n    CASE WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL\n        THEN h.latitude ELSE m.\"Latitude\" END AS \"OriginLatitude\",\n    CASE WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL\n        THEN h.longitude ELSE m.\"Longitude\" END AS \"OriginLongitude\"\nFROM market_products mp\nINNER JOIN products p ON mp.\"ProductId\" = p.\"Id\"\nINNER JOIN markets m ON mp.\"MarketId\" = m.\"Id\" AND m.\"DeletedAt\" IS NULL\nLEFT JOIN hubs h ON h.market_id = mp.\"MarketId\"\n    AND h.is_active = TRUE AND h.deleted_at IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT\n    mp.\"Id\",\n    mp.\"MarketId\",\n    p.\"Name\" AS \"ProductName\",\n    mp.\"CurrentPrice\",\n    mp.\"CurrentQuantity\",\n    mp.\"ReservedQuantity\",\n    p.\"MinimumOrderQuantity\",\n    p.\"VatRate\",\n    CASE WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL\n        THEN h.latitude ELSE m.\"Latitude\" END AS \"OriginLatitude\",\n    CASE WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL\n        THEN h.longitude ELSE m.\"Longitude\" END AS \"OriginLongitude\"\nFROM market_products mp\nINNER JOIN products p ON mp.\"ProductId\" = p.\"Id\"\nINNER JOIN markets m ON mp.\"MarketId\" = m.\"Id\" AND m.\"DeletedAt\" IS NULL\nLEFT JOIN hubs h ON h.market_id = mp.\"MarketId\"\n    AND h.is_active = TRUE AND h.deleted_at IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
+                });
+
+            modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.MarketSessionGateRow", b =>
+                {
+                    b.Property<Guid>("MarketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("ServiceDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT market_id AS \"MarketId\", service_date AS \"ServiceDate\", status AS \"Status\"\nFROM market_sessions\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.RestaurantRow", b =>
@@ -4156,6 +4188,85 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("market_product_tags", (string)null);
                 });
 
+            modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.MarketSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("BatchingCompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("batching_completed_at");
+
+                    b.Property<string>("CloseReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("close_reason");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closed_at");
+
+                    b.Property<Guid?>("ClosedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("closed_by");
+
+                    b.Property<DateTime>("ClosesAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closes_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedSource")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("created_source");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("HubId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("hub_id");
+
+                    b.Property<Guid>("MarketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("market_id");
+
+                    b.Property<DateOnly>("ServiceDate")
+                        .HasColumnType("date")
+                        .HasColumnName("service_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MarketId", "ServiceDate")
+                        .IsUnique()
+                        .HasDatabaseName("ux_market_sessions_market_date_active")
+                        .HasFilter("deleted_at IS NULL");
+
+                    b.HasIndex("Status", "ClosesAt")
+                        .HasDatabaseName("idx_market_sessions_status_closes_at")
+                        .HasFilter("deleted_at IS NULL");
+
+                    b.ToTable("market_sessions", (string)null);
+                });
+
             modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementBatch", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4217,6 +4328,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("market_id");
 
+                    b.Property<Guid?>("MarketSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("market_session_id");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -4244,6 +4359,11 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("code IS NOT NULL");
 
+                    b.HasIndex("MarketSessionId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_procurement_batches_market_session_active")
+                        .HasFilter("market_session_id IS NOT NULL AND status <> 'Cancelled' AND deleted_at IS NULL");
+
                     b.HasIndex("BatchDate", "MarketId")
                         .HasDatabaseName("idx_procurement_batches_batch_date_market_id");
 
@@ -4269,6 +4389,14 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.Property<decimal?>("ActualUnitPrice")
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("actual_unit_price");
+
+                    b.Property<Guid?>("AssignedAgentUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_agent_user_id");
+
+                    b.Property<DateTime?>("AssignedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("assigned_at");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -4309,6 +4437,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AssignedAgentUserId")
+                        .HasDatabaseName("idx_procurement_batch_items_assigned_agent")
+                        .HasFilter("\"assigned_agent_user_id\" IS NOT NULL");
 
                     b.HasIndex("ProcurementBatchId")
                         .HasDatabaseName("idx_procurement_batch_items_batch_id");
@@ -4454,6 +4586,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("Id");
 
+                    b.Property<Guid?>("MarketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("market_id");
+
                     b.Property<DateTime?>("ScheduledFor")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("ScheduledFor");
@@ -4557,6 +4693,28 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.ToView("market_products", (string)null);
                 });
 
+            modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.MarketSessionVehicleRow", b =>
+                {
+                    b.Property<decimal>("CapacityKg")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("HubId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsAvailable")
+                        .HasColumnType("boolean");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT id AS \"Id\", hub_id AS \"HubId\", capacity_kg AS \"CapacityKg\",\n       is_available AS \"IsAvailable\", deleted_at AS \"DeletedAt\"\nFROM vehicles");
+                });
+
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.OperationalSettingsRow", b =>
                 {
                     b.Property<bool>("BatchingEnabled")
@@ -4567,9 +4725,26 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("time without time zone")
                         .HasColumnName("daily_cutoff_time");
 
+                    b.Property<int>("DeliveryWindowDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("delivery_window_days");
+
                     b.ToTable((string)null);
 
                     b.ToView("operational_settings", (string)null);
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.ReservedRouteVehicleRow", b =>
+                {
+                    b.Property<DateOnly>("ServiceDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("VehicleId")
+                        .HasColumnType("uuid");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT vehicle_id AS \"VehicleId\", service_date AS \"ServiceDate\"\nFROM delivery_routes\nWHERE vehicle_id IS NOT NULL AND status <> 'cancelled' AND deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.UserMarketAssignmentRow", b =>
@@ -4893,6 +5068,15 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_market_product_tags_tag");
+                });
+
+            modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementBatch", b =>
+                {
+                    b.HasOne("FreshFlow.Procurement.Domain.Entities.MarketSession", null)
+                        .WithMany()
+                        .HasForeignKey("MarketSessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_procurement_batches_market_session");
                 });
 
             modelBuilder.Entity("FreshFlow.Procurement.Domain.Entities.ProcurementBatchItem", b =>

@@ -8,6 +8,8 @@ namespace FreshFlow.Procurement.UnitTests.Domain;
 [Trait("Category", "Unit")]
 public sealed class ProcurementBatchTests
 {
+    private static readonly Guid AgentUserId = Guid.NewGuid();
+
     [Fact]
     public void Build_WithCode_AssignsCodeOnceAndMergeKeepsIt()
     {
@@ -335,96 +337,57 @@ public sealed class ProcurementBatchTests
         batch.DomainEvents.Should().BeEmpty();
     }
 
-
     [Fact]
-    public void AssignAgent_ManifestedBatch_SetsAssignmentRaisesEventAndKeepsStatus()
+    public void AssignItems_BuiltBatch_ReturnsNotManifestedConflict()
     {
-        var batch = BuildManifestedBatch();
-        var agentUserId = Guid.NewGuid();
-        var assignedAt = new DateTime(2026, 7, 15, 2, 0, 0, DateTimeKind.Utc);
+        var productId = Guid.NewGuid();
+        var batch = BuildBatch(productId);
         batch.ClearDomainEvents();
 
-        var result = batch.AssignAgent(agentUserId, assignedAt);
-
-        result.IsSuccess.Should().BeTrue();
-        batch.Status.Should().Be(ProcurementBatchStatus.Manifested);
-        batch.AssignedAgentUserId.Should().Be(agentUserId);
-        batch.AssignedAt.Should().Be(assignedAt);
-        var domainEvent = batch.DomainEvents.Should().ContainSingle()
-            .Which.Should().BeOfType<ProcurementAgentAssignedDomainEvent>().Subject;
-        domainEvent.BatchId.Should().Be(batch.Id);
-        domainEvent.MarketId.Should().Be(batch.MarketId);
-        domainEvent.AgentUserId.Should().Be(agentUserId);
-        domainEvent.AssignedAt.Should().Be(assignedAt);
-    }
-
-    [Fact]
-    public void AssignAgent_ManifestedBatch_ReassignsAndRefreshesTimestamp()
-    {
-        var batch = BuildManifestedBatch();
-        var firstAgentId = Guid.NewGuid();
-        var secondAgentId = Guid.NewGuid();
-        var firstAssignment = new DateTime(2026, 7, 15, 2, 0, 0, DateTimeKind.Utc);
-        var secondAssignment = firstAssignment.AddMinutes(15);
-        batch.AssignAgent(firstAgentId, firstAssignment);
-        batch.ClearDomainEvents();
-
-        var result = batch.AssignAgent(secondAgentId, secondAssignment);
-
-        result.IsSuccess.Should().BeTrue();
-        batch.Status.Should().Be(ProcurementBatchStatus.Manifested);
-        batch.AssignedAgentUserId.Should().Be(secondAgentId);
-        batch.AssignedAt.Should().Be(secondAssignment);
-        batch.DomainEvents.Should().ContainSingle()
-            .Which.Should().BeOfType<ProcurementAgentAssignedDomainEvent>();
-    }
-
-    [Fact]
-    public void AssignAgent_BuiltBatch_ReturnsNotManifestedConflict()
-    {
-        var batch = BuildBatch(Guid.NewGuid());
-        batch.ClearDomainEvents();
-
-        var result = batch.AssignAgent(Guid.NewGuid(), DateTime.UtcNow);
+        var result = batch.AssignItems(
+            new Dictionary<Guid, Guid> { [productId] = AgentUserId },
+            DateTime.UtcNow);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("BATCH_NOT_MANIFESTED");
-        batch.AssignedAgentUserId.Should().BeNull();
-        batch.AssignedAt.Should().BeNull();
-        batch.DomainEvents.Should().BeEmpty();
-    }
-
-    [Theory]
-    [InlineData(ProcurementBatchStatus.Purchasing)]
-    [InlineData(ProcurementBatchStatus.HandedOff)]
-    public void AssignAgent_InProgressBatch_ReturnsConflict(ProcurementBatchStatus status)
-    {
-        var batch = BuildManifestedBatch();
-        typeof(ProcurementBatch).GetProperty(nameof(ProcurementBatch.Status))!
-            .SetValue(batch, status);
-        batch.ClearDomainEvents();
-
-        var result = batch.AssignAgent(Guid.NewGuid(), DateTime.UtcNow);
-
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("BATCH_ALREADY_IN_PROGRESS");
-        batch.Status.Should().Be(status);
-        batch.AssignedAgentUserId.Should().BeNull();
-        batch.AssignedAt.Should().BeNull();
+        batch.Items.Should().OnlyContain(item => item.AssignedAgentUserId == null);
         batch.DomainEvents.Should().BeEmpty();
     }
 
     [Fact]
-    public void AssignAgent_EmptyAgentId_ReturnsValidation()
+    public void AssignItems_PurchasingBatch_AllowsUnpurchasedItem()
     {
-        var batch = BuildManifestedBatch();
+        var productId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(productId);
+        typeof(ProcurementBatch).GetProperty(nameof(ProcurementBatch.Status))!
+            .SetValue(batch, ProcurementBatchStatus.Purchasing);
         batch.ClearDomainEvents();
 
-        var result = batch.AssignAgent(Guid.Empty, DateTime.UtcNow);
+        var newAgentId = Guid.NewGuid();
+        var result = batch.AssignItems(
+            new Dictionary<Guid, Guid> { [productId] = newAgentId },
+            DateTime.UtcNow);
+
+        result.IsSuccess.Should().BeTrue();
+        batch.Items.Should().ContainSingle()
+            .Which.AssignedAgentUserId.Should().Be(newAgentId);
+    }
+
+    [Fact]
+    public void AssignItems_HandedOffBatch_ReturnsConflict()
+    {
+        var productId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(productId);
+        typeof(ProcurementBatch).GetProperty(nameof(ProcurementBatch.Status))!
+            .SetValue(batch, ProcurementBatchStatus.HandedOff);
+        batch.ClearDomainEvents();
+
+        var result = batch.AssignItems(
+            new Dictionary<Guid, Guid> { [productId] = Guid.NewGuid() },
+            DateTime.UtcNow);
 
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("INVALID_AGENT");
-        batch.AssignedAgentUserId.Should().BeNull();
+        result.Error.Code.Should().Be("BATCH_ALREADY_IN_PROGRESS");
         batch.DomainEvents.Should().BeEmpty();
     }
 
@@ -438,6 +401,7 @@ public sealed class ProcurementBatchTests
         batch.ClearDomainEvents();
 
         var result = batch.ConfirmPurchase(
+            AgentUserId,
             new Dictionary<Guid, (int, decimal)>
             {
                 [firstProductId] = (4, 12_000m),
@@ -473,11 +437,13 @@ public sealed class ProcurementBatchTests
         var firstCapture = new DateTime(2026, 7, 15, 3, 0, 0, DateTimeKind.Utc);
         var secondCapture = firstCapture.AddMinutes(10);
         batch.ConfirmPurchase(
+            AgentUserId,
             new Dictionary<Guid, (int, decimal)> { [productId] = (2, 10_000m) },
             firstCapture);
         batch.ClearDomainEvents();
 
         var result = batch.ConfirmPurchase(
+            AgentUserId,
             new Dictionary<Guid, (int, decimal)> { [productId] = (3, 11_000m) },
             secondCapture);
 
@@ -499,6 +465,7 @@ public sealed class ProcurementBatchTests
         batch.ClearDomainEvents();
 
         var result = batch.ConfirmPurchase(
+            AgentUserId,
             new Dictionary<Guid, (int, decimal)> { [productId] = (2, 10_000m) },
             DateTime.UtcNow);
 
@@ -519,6 +486,7 @@ public sealed class ProcurementBatchTests
         batch.ClearDomainEvents();
 
         var result = batch.ConfirmPurchase(
+            AgentUserId,
             new Dictionary<Guid, (int, decimal)> { [productId] = (2, 10_000m) },
             DateTime.UtcNow);
 
@@ -536,6 +504,7 @@ public sealed class ProcurementBatchTests
         batch.ClearDomainEvents();
 
         var result = batch.ConfirmPurchase(
+            AgentUserId,
             new Dictionary<Guid, (int, decimal)> { [firstProductId] = (2, 10_000m) },
             DateTime.UtcNow);
 
@@ -552,6 +521,7 @@ public sealed class ProcurementBatchTests
         batch.ClearDomainEvents();
 
         var result = batch.ConfirmPurchase(
+            AgentUserId,
             new Dictionary<Guid, (int, decimal)>
             {
                 [productId] = (2, 10_000m),
@@ -578,6 +548,7 @@ public sealed class ProcurementBatchTests
         batch.ClearDomainEvents();
 
         var result = batch.ConfirmPurchase(
+            AgentUserId,
             new Dictionary<Guid, (int, decimal)>
             {
                 [productId] = (actualQuantity, actualUnitPrice)
@@ -598,7 +569,7 @@ public sealed class ProcurementBatchTests
         var coveredOrderIds = batch.Orders.Select(order => order.OrderId).ToArray();
         batch.ClearDomainEvents();
 
-        var result = batch.HandoverToHub(handedOffAt);
+        var result = batch.HandoverToHub(AgentUserId, handedOffAt);
 
         result.IsSuccess.Should().BeTrue();
         batch.Status.Should().Be(ProcurementBatchStatus.HandedOff);
@@ -630,7 +601,7 @@ public sealed class ProcurementBatchTests
             : BuildManifestedBatch(productId);
         batch.ClearDomainEvents();
 
-        var result = batch.HandoverToHub(DateTime.UtcNow);
+        var result = batch.HandoverToHub(AgentUserId, DateTime.UtcNow);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("BATCH_NOT_PURCHASED");
@@ -646,10 +617,10 @@ public sealed class ProcurementBatchTests
         var batch = BuildPurchasingBatch(Guid.NewGuid());
         var firstHubId = batch.HubId;
         var firstHandover = new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc);
-        batch.HandoverToHub(firstHandover);
+        batch.HandoverToHub(AgentUserId, firstHandover);
         batch.ClearDomainEvents();
 
-        var result = batch.HandoverToHub(firstHandover.AddMinutes(5));
+        var result = batch.HandoverToHub(AgentUserId, firstHandover.AddMinutes(5));
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("BATCH_ALREADY_HANDED_OFF");
@@ -708,7 +679,7 @@ public sealed class ProcurementBatchTests
     public void Cancel_HandedOffBatch_ReturnsConflict()
     {
         var batch = BuildPurchasingBatch(Guid.NewGuid());
-        batch.HandoverToHub(new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc));
+        batch.HandoverToHub(AgentUserId, new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc));
         batch.ClearDomainEvents();
 
         var result = batch.Cancel("Too late", DateTime.UtcNow);
@@ -720,16 +691,18 @@ public sealed class ProcurementBatchTests
     }
 
     [Fact]
-    public void AssignAgent_CancelledBatch_ReturnsConflict()
+    public void AssignItems_CancelledBatch_ReturnsConflict()
     {
-        var batch = BuildManifestedBatch(Guid.NewGuid());
+        var productId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(productId);
         batch.Cancel("Market closed", new DateTime(2026, 7, 15, 2, 0, 0, DateTimeKind.Utc));
 
-        var result = batch.AssignAgent(Guid.NewGuid(), DateTime.UtcNow);
+        var result = batch.AssignItems(
+            new Dictionary<Guid, Guid> { [productId] = Guid.NewGuid() },
+            DateTime.UtcNow);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("BATCH_CANCELLED");
-        batch.AssignedAgentUserId.Should().BeNull();
     }
 
     [Fact]
@@ -740,6 +713,7 @@ public sealed class ProcurementBatchTests
         batch.Cancel("Market closed", new DateTime(2026, 7, 15, 2, 0, 0, DateTimeKind.Utc));
 
         var result = batch.ConfirmPurchase(
+            AgentUserId,
             new Dictionary<Guid, (int ActualQuantity, decimal ActualUnitPrice)>
             {
                 [productId] = (2, 10_000m)
@@ -755,7 +729,7 @@ public sealed class ProcurementBatchTests
     public void MarkCompleted_HandedOffBatch_SetsCompletedAtAndRaisesEvent()
     {
         var batch = BuildPurchasingBatch(Guid.NewGuid());
-        batch.HandoverToHub(new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc));
+        batch.HandoverToHub(AgentUserId, new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc));
         batch.ClearDomainEvents();
         var completedAt = new DateTime(2026, 7, 16, 9, 0, 0, DateTimeKind.Utc);
 
@@ -797,7 +771,7 @@ public sealed class ProcurementBatchTests
     public void MarkCompleted_AlreadyCompleted_IsIdempotentWithNoSecondEvent()
     {
         var batch = BuildPurchasingBatch(Guid.NewGuid());
-        batch.HandoverToHub(new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc));
+        batch.HandoverToHub(AgentUserId, new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc));
         var firstCompletion = new DateTime(2026, 7, 16, 9, 0, 0, DateTimeKind.Utc);
         batch.MarkCompleted(firstCompletion);
         batch.ClearDomainEvents();
@@ -810,22 +784,15 @@ public sealed class ProcurementBatchTests
         batch.DomainEvents.Should().BeEmpty();
     }
 
-    private static ProcurementBatch BuildManifestedBatch()
-    {
-        var productId = Guid.NewGuid();
-        var batch = BuildBatch(productId);
-        batch.Manifest(
-            new Dictionary<Guid, decimal> { [productId] = 10_000m },
-            new DateTime(2026, 7, 15, 1, 0, 0, DateTimeKind.Utc));
-        return batch;
-    }
-
     private static ProcurementBatch BuildManifestedBatch(params Guid[] marketProductIds)
     {
         var batch = BuildBatch(marketProductIds);
         batch.Manifest(
             marketProductIds.ToDictionary(id => id, _ => 10_000m),
             new DateTime(2026, 7, 15, 1, 0, 0, DateTimeKind.Utc));
+        batch.AssignItems(
+            marketProductIds.ToDictionary(id => id, _ => AgentUserId),
+            new DateTime(2026, 7, 15, 2, 0, 0, DateTimeKind.Utc));
         return batch;
     }
 
@@ -833,6 +800,7 @@ public sealed class ProcurementBatchTests
     {
         var batch = BuildManifestedBatch(marketProductIds);
         batch.ConfirmPurchase(
+            AgentUserId,
             marketProductIds.ToDictionary(
                 id => id,
                 _ => (ActualQuantity: 2, ActualUnitPrice: 10_000m)),

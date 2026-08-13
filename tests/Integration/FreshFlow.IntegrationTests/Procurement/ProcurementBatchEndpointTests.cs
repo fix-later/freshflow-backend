@@ -36,7 +36,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
         var restaurantId = await CreateRestaurantAsync();
-        var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1);
+        var targetDate = new DateOnly(2042, 4, 10);
         var seed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
 
         var dryRun = await _client.PostAsJsonAsync(
@@ -47,7 +47,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         var dryRunBody = await dryRun.Content.ReadFromJsonAsync<Envelope<BatchingResult>>();
         dryRunBody!.Data!.Preview.Should().ContainSingle();
         dryRunBody.Data.BatchesCreated.Should().Be(0);
-        await AssertOrderAndBatchStateAsync(seed.OrderId, OrderStatus.Confirmed, 0);
+        await AssertOrderAndBatchStateForOrderAsync(seed.OrderId, OrderStatus.Confirmed, 0);
 
         var run = await _client.PostAsJsonAsync(
             "/api/v1/admin/order-groups/auto-batch",
@@ -57,7 +57,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         var runBody = await run.Content.ReadFromJsonAsync<Envelope<BatchingResult>>();
         runBody!.Data!.BatchesCreated.Should().Be(1);
         runBody.Data.OrdersBatched.Should().Be(1);
-        await AssertOrderAndBatchStateAsync(seed.OrderId, OrderStatus.Batched, 1);
+        await AssertOrderAndBatchStateForOrderAsync(seed.OrderId, OrderStatus.Batched, 1);
 
         var list = await _client.GetAsync(
             "/api/v1/admin/order-groups?page=1&pageSize=20");
@@ -104,7 +104,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             }
         };
 
-        await SetBatchAssignedAgentAsync(batchId, agentUserId);
+        await SetBatchItemAssignedAgentAsync(batchId, agentUserId);
         var builtAgentToken = await LoginAsync(agentA.Email, agentA.Password);
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", builtAgentToken);
@@ -122,9 +122,15 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
 
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
-        var notManifested = await _client.PostAsJsonAsync(
-            $"/api/v1/admin/order-groups/{batchId}/agent",
-            new { agentUserId });
+        var notManifested = await _client.PutAsJsonAsync(
+            $"/api/v1/admin/batches/{batchId}/item-assignments",
+            new
+            {
+                assignments = new[]
+                {
+                    new { marketProductId = seed.MarketProductId, agentUserId }
+                }
+            });
         notManifested.StatusCode.Should().Be(HttpStatusCode.Conflict);
         var notManifestedError = await notManifested.Content
             .ReadFromJsonAsync<ErrorEnvelope>();
@@ -144,16 +150,22 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             item.ReferenceUnitPrice == 10_000m);
         await AssertManifestStateAsync(batchId, 10_000m);
 
-        var assignment = await _client.PostAsJsonAsync(
-            $"/api/v1/admin/order-groups/{batchId}/agent",
-            new { agentUserId });
+        var assignment = await _client.PutAsJsonAsync(
+            $"/api/v1/admin/batches/{batchId}/item-assignments",
+            new
+            {
+                assignments = new[]
+                {
+                    new { marketProductId = seed.MarketProductId, agentUserId }
+                }
+            });
 
         assignment.StatusCode.Should().Be(HttpStatusCode.OK);
         var assignmentBody = await assignment.Content
             .ReadFromJsonAsync<Envelope<ProcurementBatchDto>>();
         assignmentBody!.Data!.Status.Should().Be("Manifested");
-        assignmentBody.Data.AssignedAgentUserId.Should().Be(agentUserId);
-        assignmentBody.Data.AssignedAt.Should().NotBeNull();
+        assignmentBody.Data.Items.Should().ContainSingle(item =>
+            item.AssignedAgentUserId == agentUserId);
         await AssertAgentAssignmentStateAsync(batchId, agentUserId);
 
         var assignedList = await _client.GetAsync(
@@ -162,24 +174,36 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             .ReadFromJsonAsync<Envelope<ProcurementBatchListDto>>();
         assignedListBody!.Data!.Batches.Should().Contain(batch =>
             batch.Id == batchId &&
-            batch.AssignedAgentUserId == agentUserId &&
-            batch.AssignedAt != null);
+            batch.Items.Any(item =>
+                item.AssignedAgentUserId == agentUserId));
 
         var agentB = await CreateUserAccountAsync("market_agent", seed.MarketId);
         var wrongRoleUser = await CreateUserAccountAsync("hub_staff");
         var driver = await CreateUserAccountAsync("driver");
         var ineligibleUserId = wrongRoleUser.Id;
-        var ineligible = await _client.PostAsJsonAsync(
-            $"/api/v1/admin/order-groups/{batchId}/agent",
-            new { agentUserId = ineligibleUserId });
+        var ineligible = await _client.PutAsJsonAsync(
+            $"/api/v1/admin/batches/{batchId}/item-assignments",
+            new
+            {
+                assignments = new[]
+                {
+                    new { marketProductId = seed.MarketProductId, agentUserId = ineligibleUserId }
+                }
+            });
         ineligible.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
         var ineligibleError = await ineligible.Content
             .ReadFromJsonAsync<ErrorEnvelope>();
         ineligibleError!.Error!.Code.Should().Be("AGENT_NOT_ELIGIBLE");
 
-        var missingBatch = await _client.PostAsJsonAsync(
-            $"/api/v1/admin/order-groups/{Guid.NewGuid()}/agent",
-            new { agentUserId });
+        var missingBatch = await _client.PutAsJsonAsync(
+            $"/api/v1/admin/batches/{Guid.NewGuid()}/item-assignments",
+            new
+            {
+                assignments = new[]
+                {
+                    new { marketProductId = seed.MarketProductId, agentUserId }
+                }
+            });
         missingBatch.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
         _client.DefaultRequestHeaders.Authorization = null;
@@ -239,7 +263,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             .ReadFromJsonAsync<Envelope<ProcurementBatchListDto>>();
         agentAListBody!.Data!.Batches.Should().ContainSingle(batch =>
             batch.Id == batchId &&
-            batch.AssignedAgentUserId == agentUserId &&
+            batch.Items.Any(item => item.AssignedAgentUserId == agentUserId) &&
             batch.Items.Any(item => item.ReferenceUnitPrice == 10_000m));
 
         var ownerDetail = await _client.GetAsync(
@@ -372,7 +396,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task AutoBatch_SecondRunSameMarketDate_MergesIntoBuiltBatchAsync()
+    public async Task AutoBatch_SecondRunSameMarketDate_DoesNotMergeLateOrderAsync()
     {
         var token = await LoginAsAdminAsync();
         _client.DefaultRequestHeaders.Authorization =
@@ -404,7 +428,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             secondRun.StatusCode.Should().Be(HttpStatusCode.OK, responseBody);
             var result = await secondRun.Content.ReadFromJsonAsync<Envelope<BatchingResult>>();
             result!.Data!.BatchesCreated.Should().Be(0);
-            result.Data.OrdersBatched.Should().Be(1);
+            result.Data.OrdersBatched.Should().Be(0);
 
             using var scope = factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -421,13 +445,13 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             batch.Id.Should().Be(batchId);
             batch.Items.Should().ContainSingle(item =>
                 item.MarketProductId == firstOrder.MarketProductId &&
-                item.TotalQuantity == 10);
+                item.TotalQuantity == 5);
             batch.Orders.Select(order => order.OrderId)
-                .Should().BeEquivalentTo([firstOrder.OrderId, secondOrder.OrderId]);
+                .Should().Equal(firstOrder.OrderId);
             var persistedSecondOrder = await db.Set<Order>()
                 .AsNoTracking()
                 .SingleAsync(order => order.Id == secondOrder.OrderId);
-            persistedSecondOrder.Status.Should().Be(OrderStatus.Batched);
+            persistedSecondOrder.Status.Should().Be(OrderStatus.Confirmed);
         }
         finally
         {
@@ -489,6 +513,147 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
                     DateTime.UtcNow)
                 .IsSuccess.Should().BeTrue();
             (await secondRepository.SaveChangesAsync(default)).Should().BeFalse();
+        }
+        finally
+        {
+            await RemoveBatchAsync(batchId);
+        }
+    }
+
+    [Fact]
+    public async Task MultiAgent_AssignsEligibleItemsConfirmsConcurrentlyAndHandsOverAsync()
+    {
+        var adminToken = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", adminToken);
+        var restaurantId = await CreateRestaurantAsync();
+        var targetDate = new DateOnly(2043, 5, 21);
+        var first = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+        var second = await SeedSecondProductOrderAsync(
+            restaurantId,
+            targetDate,
+            first.MarketId);
+        await _client.PostAsJsonAsync(
+            "/api/v1/admin/order-groups/auto-batch",
+            new { targetDate, dryRun = false, force = false });
+        var batchId = await BatchIdCoveringAsync(first.OrderId);
+        try
+        {
+            (await _client.PostAsync(
+                $"/api/v1/admin/order-groups/{batchId}/manifest",
+                null)).EnsureSuccessStatusCode();
+            var firstAgent = await CreateUserAccountAsync("market_agent", first.MarketId);
+            var secondAgent = await CreateUserAccountAsync("market_agent", first.MarketId);
+            var ineligible = await CreateUserAccountAsync("hub_staff");
+
+            var rejected = await _client.PutAsJsonAsync(
+                $"/api/v1/admin/batches/{batchId}/item-assignments",
+                new
+                {
+                    assignments = new[]
+                    {
+                    new
+                    {
+                        marketProductId = first.MarketProductId,
+                        agentUserId = firstAgent.Id
+                    },
+                    new
+                    {
+                        marketProductId = second.MarketProductId,
+                        agentUserId = ineligible.Id
+                    }
+                    }
+                });
+
+            rejected.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+            var rejectedError = await rejected.Content.ReadFromJsonAsync<ErrorEnvelope>();
+            rejectedError!.Error!.Code.Should().Be("AGENT_NOT_ELIGIBLE");
+
+            var assigned = await _client.PutAsJsonAsync(
+                $"/api/v1/admin/batches/{batchId}/item-assignments",
+                new
+                {
+                    assignments = new[]
+                    {
+                    new
+                    {
+                        marketProductId = first.MarketProductId,
+                        agentUserId = firstAgent.Id
+                    },
+                    new
+                    {
+                        marketProductId = second.MarketProductId,
+                        agentUserId = secondAgent.Id
+                    }
+                    }
+                });
+
+            assigned.EnsureSuccessStatusCode();
+            var assignedBody = await assigned.Content
+                .ReadFromJsonAsync<Envelope<ProcurementBatchDto>>();
+            assignedBody!.Data!.Items.Should().Contain(item =>
+                item.MarketProductId == first.MarketProductId &&
+                item.AssignedAgentUserId == firstAgent.Id);
+            assignedBody.Data.Items.Should().Contain(item =>
+                item.MarketProductId == second.MarketProductId &&
+                item.AssignedAgentUserId == secondAgent.Id);
+
+            using (var scope = factory.Services.CreateScope())
+            {
+                var repository = scope.ServiceProvider
+                    .GetRequiredService<IProcurementBatchRepository>();
+                var firstAgentBatches = await repository.ListByAgentAsync(
+                    firstAgent.Id,
+                    1,
+                    20,
+                    default);
+                firstAgentBatches.Batches.Should().ContainSingle(batch => batch.Id == batchId);
+            }
+
+            var firstAgentToken = await LoginAsync(firstAgent.Email, firstAgent.Password);
+            var secondAgentToken = await LoginAsync(secondAgent.Email, secondAgent.Password);
+            using var firstClient = factory.CreateClient();
+            using var secondClient = factory.CreateClient();
+            firstClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", firstAgentToken);
+            secondClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", secondAgentToken);
+
+            var confirmations = await Task.WhenAll(
+                firstClient.PatchAsJsonAsync(
+                    $"/api/v1/procurement/tasks/{batchId}/purchase",
+                    new
+                    {
+                        lines = new[]
+                        {
+                        new
+                        {
+                            marketProductId = first.MarketProductId,
+                            actualQuantity = 5,
+                            actualUnitPrice = 11_000m
+                        }
+                        }
+                    }),
+                secondClient.PatchAsJsonAsync(
+                    $"/api/v1/procurement/tasks/{batchId}/purchase",
+                    new
+                    {
+                        lines = new[]
+                        {
+                        new
+                        {
+                            marketProductId = second.MarketProductId,
+                            actualQuantity = 5,
+                            actualUnitPrice = 12_000m
+                        }
+                        }
+                    }));
+            confirmations.Should().OnlyContain(response => response.StatusCode == HttpStatusCode.OK);
+
+            var handover = await firstClient.PatchAsync(
+                $"/api/v1/procurement/tasks/{batchId}/handover",
+                null);
+            handover.StatusCode.Should().Be(HttpStatusCode.OK);
         }
         finally
         {
@@ -631,12 +796,25 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             targetDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified),
             TimeSpan.FromHours(7)).UtcDateTime;
         var order = new Order(restaurantId, scheduledForUtc, null);
-        order.AddItem(marketProductId, productName, 5, 10_000m)
+        order.AddItem(marketProductId, productName, 5, 10_000m, marketId)
             .IsSuccess.Should().BeTrue();
         order.Confirm().IsSuccess.Should().BeTrue();
         order.ClearDomainEvents();
 
         db.Set<Order>().Add(order);
+        if (!await db.Set<MarketSession>().AnyAsync(session =>
+                session.MarketId == marketId && session.ServiceDate == targetDate && session.DeletedAt == null))
+        {
+            var marketSession = MarketSession.Create(
+                marketId,
+                hubId,
+                targetDate,
+                DateTime.UtcNow.AddDays(1),
+                MarketSessionCreatedSource.Manual,
+                true).Value;
+            marketSession.Close(null, "integration_fixture", DateTime.UtcNow);
+            db.Set<MarketSession>().Add(marketSession);
+        }
         await db.SaveChangesAsync();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE market_products
@@ -650,6 +828,51 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             hubId,
             marketProductId,
             productName);
+    }
+
+    private async Task<SeededOrder> SeedSecondProductOrderAsync(
+        Guid restaurantId,
+        DateOnly targetDate,
+        Guid marketId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var hubId = await db.Set<HubEntity>()
+            .Where(hub => hub.MarketId == marketId && hub.IsActive)
+            .Select(hub => hub.Id)
+            .SingleAsync();
+        var unit = new UnitOfMeasurement($"kg-{Guid.NewGuid():N}", "kg");
+        var productName = $"Procurement Potato {Guid.NewGuid():N}";
+        var product = new Product(productName, unit.Id, null, null, null);
+        db.Set<UnitOfMeasurement>().Add(unit);
+        db.Set<Product>().Add(product);
+        await db.SaveChangesAsync();
+        var marketProduct = new MarketProduct(
+            marketId,
+            product.Id,
+            10_000m,
+            100,
+            null);
+        db.Set<MarketProduct>().Add(marketProduct);
+        await db.SaveChangesAsync();
+
+        var scheduledForUtc = new DateTimeOffset(
+            targetDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified),
+            TimeSpan.FromHours(7)).UtcDateTime;
+        var order = new Order(restaurantId, scheduledForUtc, null);
+        order.AddItem(marketProduct.Id, productName, 5, 10_000m, marketId)
+            .IsSuccess.Should().BeTrue();
+        order.Confirm().IsSuccess.Should().BeTrue();
+        order.ClearDomainEvents();
+        db.Set<Order>().Add(order);
+        await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE market_products
+            SET "ReservedQuantity" = "ReservedQuantity" + 5
+            WHERE "Id" = {marketProduct.Id}
+            """);
+
+        return new SeededOrder(order.Id, marketId, hubId, marketProduct.Id, productName);
     }
 
     private async Task SeedCreditChargeAsync(Guid restaurantId, Guid orderId)
@@ -730,22 +953,26 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
 
         var batch = await db.Set<ProcurementBatch>()
             .AsNoTracking()
+            .Include(candidate => candidate.Items)
             .SingleAsync(candidate => candidate.Id == batchId);
         batch.Status.Should().Be(ProcurementBatchStatus.Manifested);
-        batch.AssignedAgentUserId.Should().Be(expectedAgentUserId);
-        batch.AssignedAt.Should().NotBeNull();
+        batch.Items.Should().ContainSingle(item =>
+            item.AssignedAgentUserId == expectedAgentUserId &&
+            item.AssignedAt != null);
     }
 
-    private async Task SetBatchAssignedAgentAsync(Guid batchId, Guid agentUserId)
+    private async Task SetBatchItemAssignedAgentAsync(Guid batchId, Guid agentUserId)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var batch = await db.Set<ProcurementBatch>()
+            .Include(candidate => candidate.Items)
             .SingleAsync(candidate => candidate.Id == batchId);
 
-        db.Entry(batch).Property(candidate => candidate.AssignedAgentUserId)
+        var item = batch.Items.Single();
+        db.Entry(item).Property(candidate => candidate.AssignedAgentUserId)
             .CurrentValue = agentUserId;
-        db.Entry(batch).Property(candidate => candidate.AssignedAt)
+        db.Entry(item).Property(candidate => candidate.AssignedAt)
             .CurrentValue = DateTime.UtcNow;
         await db.SaveChangesAsync();
     }
@@ -845,7 +1072,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
         var restaurantId = await CreateRestaurantAsync();
-        var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1);
+        var targetDate = new DateOnly(2042, 4, 11);
         var seed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
         await SeedCreditChargeAsync(restaurantId, seed.OrderId);
         await _client.PostAsJsonAsync(
@@ -886,7 +1113,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
         var restaurantId = await CreateRestaurantAsync();
-        var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1);
+        var targetDate = new DateOnly(2042, 4, 12);
         var seed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
         await _client.PostAsJsonAsync(
             "/api/v1/admin/order-groups/auto-batch",
@@ -914,7 +1141,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
         var restaurantId = await CreateRestaurantAsync();
-        var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1);
+        var targetDate = new DateOnly(2042, 4, 13);
         var seed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
         await _client.PostAsJsonAsync(
             "/api/v1/admin/order-groups/auto-batch",
@@ -1177,22 +1404,6 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             .SingleAsync(candidate => candidate.Id == batchId);
         db.Entry(batch).Property(nameof(ProcurementBatch.Status)).CurrentValue = status;
         await db.SaveChangesAsync();
-    }
-
-    private async Task AssertOrderAndBatchStateAsync(
-        Guid orderId,
-        OrderStatus expectedStatus,
-        int expectedBatchCount)
-    {
-        using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-        var order = await db.Set<Order>()
-            .AsNoTracking()
-            .SingleAsync(candidate => candidate.Id == orderId);
-        order.Status.Should().Be(expectedStatus);
-        var batchCount = await db.Set<ProcurementBatch>().CountAsync();
-        batchCount.Should().Be(expectedBatchCount);
     }
 
     private async Task AssertOrderAndBatchStateForOrderAsync(

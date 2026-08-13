@@ -16,7 +16,8 @@ internal sealed class CreateExceptionProofUploadSignatureCommandHandler(
         CancellationToken cancellationToken)
     {
         var batch = await batches.FindByIdAsync(request.BatchId, cancellationToken);
-        if (batch is null || batch.AssignedAgentUserId != request.AgentUserId)
+        if (batch is null ||
+            !batch.Items.Any(item => item.AssignedAgentUserId == request.AgentUserId))
         {
             return Result<UploadSignatureResponse>.Failure(
                 Error.NotFound("PROCUREMENT_BATCH", request.BatchId));

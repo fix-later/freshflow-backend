@@ -59,6 +59,43 @@ internal sealed class ConfirmedOrderReader(AppDbContext db) : IConfirmedOrderRea
             .AsReadOnly();
     }
 
+    public async Task<IReadOnlyList<ConfirmedOrderDto>> ReadEligibleForMarketAsync(
+        DateOnly batchDate,
+        Guid marketId,
+        CancellationToken ct)
+    {
+        var (startUtc, endUtc) = GetUtcBounds(batchDate);
+        var coveredOrderIds = db.Set<ProcurementBatchOrder>()
+            .AsNoTracking()
+            .Where(link => link.DeletedAt == null)
+            .Select(link => link.OrderId);
+        var rows = await db.Set<ConfirmedOrderRow>()
+            .AsNoTracking()
+            .Where(row =>
+                row.Status == ConfirmedStatus &&
+                row.MarketId == marketId &&
+                row.DeletedAt == null &&
+                row.ScheduledFor >= startUtc &&
+                row.ScheduledFor < endUtc &&
+                !coveredOrderIds.Contains(row.Id))
+            .ToListAsync(ct);
+        if (rows.Count == 0)
+            return [];
+
+        var orderIds = rows.Select(row => row.Id).ToArray();
+        var items = await db.Set<ConfirmedOrderItemRow>()
+            .AsNoTracking()
+            .Where(item => orderIds.Contains(item.OrderId))
+            .ToListAsync(ct);
+        var byOrder = items.ToLookup(item => item.OrderId);
+        return rows.Select(row => new ConfirmedOrderDto(
+                row.Id,
+                row.ScheduledFor!.Value,
+                byOrder[row.Id].Select(item => new ConfirmedOrderItemDto(
+                    item.MarketProductId, item.ProductNameSnapshot, item.Quantity)).ToList()))
+            .ToList();
+    }
+
     public async Task<DateOnly?> FindOldestEligibleCycleAsync(
         DateOnly throughDate,
         CancellationToken ct)

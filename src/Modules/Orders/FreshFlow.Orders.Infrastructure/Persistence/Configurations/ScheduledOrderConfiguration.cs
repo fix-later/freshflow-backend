@@ -14,6 +14,7 @@ internal sealed class ScheduledOrderConfiguration : IEntityTypeConfiguration<Sch
         // RestaurantId references the Auth module's restaurants table by ID only — see
         // OrderConfiguration for the cross-module FK rationale.
         builder.Property(s => s.RestaurantId).IsRequired();
+        builder.Property(s => s.MarketId).HasColumnName("market_id");
 
         builder.Property(s => s.RecurrenceType)
             .IsRequired()

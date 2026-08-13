@@ -26,4 +26,5 @@ public sealed record MarketProductSnapshotDto(
     int MinimumOrderQuantity = 1,
     string? VatRate = null,
     decimal? OriginLatitude = null,
-    decimal? OriginLongitude = null);
+    decimal? OriginLongitude = null,
+    Guid? MarketId = null);
