@@ -54,7 +54,12 @@ internal sealed class AssignBatchItemsCommandHandler(
         if (assignment.IsFailure)
             return Result<ProcurementBatchDto>.Failure(assignment.Error);
 
-        await batches.SaveChangesAsync(cancellationToken);
+        if (!await batches.SaveChangesAsync(cancellationToken))
+        {
+            return Result<ProcurementBatchDto>.Failure(Error.Conflict(
+                "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                "The procurement batch changed concurrently. Retry the request."));
+        }
 
         var orderIds = batch.Orders
             .Select(link => link.OrderId)

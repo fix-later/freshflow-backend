@@ -34,10 +34,6 @@ public sealed class BatchConfirmedOrdersService(
                 "MARKET_SESSION_NOT_CLOSED", "Only a closed market session can be batched."));
         if (session.BatchingCompletedAt.HasValue)
             return Skipped("already_completed");
-        if (session.HubId is null)
-            return Result<BatchingResult>.Failure(Error.Validation(
-                "HUB_NOT_CONFIGURED_FOR_MARKET", "The market session has no hub."));
-
         var operational = await settings.ReadAsync(ct);
         if (!operational.BatchingEnabled)
             return Skipped("batching_disabled");
@@ -53,6 +49,9 @@ public sealed class BatchConfirmedOrdersService(
             }
             return Skipped("no_eligible_orders");
         }
+        if (session.HubId is null)
+            return Result<BatchingResult>.Failure(Error.Validation(
+                "HUB_NOT_CONFIGURED_FOR_MARKET", "The market session has no hub."));
 
         var lines = eligibleOrders.SelectMany(order => order.Items.Select(item => (
             item.MarketProductId, item.ProductNameSnapshot, item.Quantity, OrderId: order.Id))).ToList();

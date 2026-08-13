@@ -138,8 +138,8 @@ public sealed class ProcurementBatchOverviewEndpointTests(AuthWebAppFactory fact
                     ItemsPurchased = 0,
                     ItemsPending = 1,
                     ReferenceCostTotal = (decimal?)60m,
-                    ActualCostTotal = (decimal?)0m,
-                    VarianceTotal = (decimal?)(-60m)
+                    ActualCostTotal = (decimal?)null,
+                    VarianceTotal = (decimal?)null
                 }
             ]);
             body.Data.Orders.Should().BeEquivalentTo([

@@ -131,6 +131,33 @@ public sealed class AssignBatchItemsCommandTests
         await repository.DidNotReceive().SaveChangesAsync(default);
     }
 
+    [Fact]
+    public async Task Handler_ConcurrentUpdate_ReturnsConflictWithoutReadingOrdersAsync()
+    {
+        var agentUserId = Guid.NewGuid();
+        var batch = BuildManifestedBatch(Guid.NewGuid());
+        var repository = Substitute.For<IProcurementBatchRepository>();
+        repository.FindByIdAsync(batch.Id, default).Returns(batch);
+        repository.SaveChangesAsync(default).Returns(false);
+        var marketAgents = Substitute.For<IMarketAgentReader>();
+        marketAgents.IsEligibleMarketAgentAsync(agentUserId, batch.MarketId, default).Returns(true);
+        var orders = Substitute.For<IConfirmedOrderReader>();
+        var handler = new AssignBatchItemsCommandHandler(
+            repository,
+            marketAgents,
+            orders,
+            new FixedTimeProvider(Now));
+
+        var result = await handler.Handle(
+            new AssignBatchItemsCommand(batch.Id,
+                [new ItemAssignmentDto(batch.Items.Single().MarketProductId, agentUserId)]),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("OPTIMISTIC_CONCURRENCY_CONFLICT");
+        await orders.DidNotReceiveWithAnyArgs().ReadStatusesAsync(default!, default);
+    }
+
     private static ProcurementBatch BuildManifestedBatch(Guid orderId)
     {
         var productId = Guid.NewGuid();

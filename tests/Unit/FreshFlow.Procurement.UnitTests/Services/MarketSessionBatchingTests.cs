@@ -11,16 +11,16 @@ namespace FreshFlow.Procurement.UnitTests.Services;
 public sealed class MarketSessionBatchingTests
 {
     [Fact]
-    public async Task ClosedEmptySession_IsCompletedWithoutCreatingBatchAsync()
+    public async Task ClosedEmptySession_WithoutHub_IsCompletedWithoutCreatingBatchAsync()
     {
         var marketId = Guid.NewGuid();
         var session = MarketSession.Create(
             marketId,
-            Guid.NewGuid(),
+            null,
             new DateOnly(2026, 8, 20),
             new DateTime(2026, 8, 19, 15, 0, 0, DateTimeKind.Utc),
             MarketSessionCreatedSource.Auto,
-            true).Value;
+            false).Value;
         session.Close(null, null, DateTime.UtcNow);
         var orders = Substitute.For<IConfirmedOrderReader>();
         orders.ReadEligibleForMarketAsync(session.ServiceDate, marketId, default).Returns([]);

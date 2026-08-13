@@ -65,11 +65,16 @@ internal sealed class GetBatchOverviewQueryHandler(
     {
         var items = group.ToList();
         var purchased = items.Where(item => item.ActualQuantity is not null).ToList();
+        var allSettled = items.All(item =>
+            item.ActualQuantity is not null || batch.Exceptions.Any(exception =>
+                !exception.IsDeleted &&
+                exception.Type == ProcurementExceptionType.Unavailable &&
+                exception.MarketProductId == item.MarketProductId));
         decimal? referenceCost = items.All(item => item.ReferenceUnitPrice is not null)
             ? items.Sum(item => item.ReferenceUnitPrice!.Value *
                 (item.ActualQuantity ?? item.TotalQuantity))
             : null;
-        decimal? actualCost = purchased.All(item => item.ActualUnitPrice is not null)
+        decimal? actualCost = allSettled && purchased.All(item => item.ActualUnitPrice is not null)
             ? purchased.Sum(item => item.ActualUnitPrice!.Value * item.ActualQuantity!.Value)
             : null;
 

@@ -100,8 +100,8 @@ public sealed class GetBatchOverviewQueryHandlerTests
                 ItemsPending = 1,
                 ExceptionsReported = 0,
                 ReferenceCostTotal = (decimal?)120m,
-                ActualCostTotal = (decimal?)0m,
-                VarianceTotal = (decimal?)(-120m)
+                ActualCostTotal = (decimal?)null,
+                VarianceTotal = (decimal?)null
             }
         ]);
         result.Value.Orders.Should().BeEquivalentTo([
