@@ -28,7 +28,7 @@ public sealed class LoginCommandHandlerTests
     [Fact]
     public async Task Handle_ValidEmailCredentials_ReturnsTokens()
     {
-        var user = User.Create("admin@test.com", "hashed", new Role("admin", "Admin"));
+        var user = User.Create("admin@test.com", "hashed", new Role("admin", "Admin"), fullName: "Admin User");
         _users.FindByIdentifierAsync("admin@test.com", default).Returns(user);
         _hasher.Verify("P@ss1", "hashed").Returns(true);
         _tokenService.GenerateAccessToken(user.Id, user.Email, Arg.Any<string>()).Returns("access-token");
@@ -41,6 +41,7 @@ public sealed class LoginCommandHandlerTests
         result.Value.AccessToken.Should().Be("access-token");
         result.Value.RefreshToken.Should().Be("raw-refresh");
         result.Value.ExpiresIn.Should().Be(900);
+        result.Value.User.FullName.Should().Be("Admin User");
     }
 
     [Fact]
@@ -60,6 +61,7 @@ public sealed class LoginCommandHandlerTests
         result.Value.AccessToken.Should().Be("access-token");
         // LoginUserDto.Email comes from the resolved user's email, not the phone identifier
         result.Value.User.Email.Should().Be("driver@test.com");
+        result.Value.User.FullName.Should().BeNull();
     }
 
     [Fact]

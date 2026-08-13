@@ -37,6 +37,10 @@ public sealed class CreateUserCommandValidator : AbstractValidator<CreateUserCom
             .When(x => x.Role?.ToLowerInvariant() is "restaurant")
             .WithMessage("RestaurantName is required for restaurant role.");
 
+        RuleFor(x => x.FullName)
+            .MaximumLength(255)
+            .When(x => x.FullName is not null);
+
         // Phone is optional but must be a valid format when provided
         RuleFor(x => x.Phone)
             .Must(p => p is null || PhoneRegex.IsMatch(p.Trim()))

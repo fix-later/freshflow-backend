@@ -24,7 +24,7 @@ internal sealed class ActivateUserCommandHandler(IUserRepository users)
         await users.SaveChangesAsync(ct);
 
         return Result<ActivateUserResponse>.Success(
-            new ActivateUserResponse(user.Id, user.Email,
+            new ActivateUserResponse(user.Id, user.Email, user.FullName,
                 user.Role.Name, user.IsActive, user.UpdatedAt));
     }
 }

@@ -57,7 +57,9 @@ internal static class OrderDtoMapper
         order.DeliveryOriginLatitude,
         order.DeliveryOriginLongitude,
         order.RoutingProvider is "HAVERSINE_FALLBACK",
-        order.MarketId);
+        order.MarketId,
+        order.MarketSessionId,
+        order.ConfirmedAt);
 
     public static OrderListItemDto ToListItemDto(Order order) => new(
         order.Id,

@@ -23,7 +23,7 @@ public sealed class MarketSessionBatchingTests
             false).Value;
         session.Close(null, null, DateTime.UtcNow);
         var orders = Substitute.For<IConfirmedOrderReader>();
-        orders.ReadEligibleForMarketAsync(session.ServiceDate, marketId, default).Returns([]);
+        orders.ReadEligibleForSessionAsync(session.Id, default).Returns([]);
         var sessions = Substitute.For<IMarketSessionRepository>();
         sessions.FindByIdAsync(session.Id, default).Returns(session);
         sessions.SaveChangesAsync(default).Returns(true);

@@ -125,6 +125,7 @@ public sealed class OrderConfirmationService(
         if (evaluation.Issues.Count > 0)
             return Result<OrderDto>.Failure(evaluation.Issues[0]);
 
+        Guid? marketSessionId = null;
         if (marketSessions is not null && evaluation.ResolvedScheduledFor.HasValue)
         {
             var gate = await marketSessions.CheckAsync(
@@ -138,6 +139,7 @@ public sealed class OrderConfirmationService(
             if (!gate.IsOpen)
                 return Result<OrderDto>.Failure(Error.Conflict(
                     "MARKET_SESSION_NOT_OPEN", "The market session is no longer accepting orders."));
+            marketSessionId = gate.SessionId;
         }
 
         var pricingResult = order.ApplyConfirmationPricing(
@@ -182,7 +184,7 @@ public sealed class OrderConfirmationService(
                 return Result<OrderDto>.Failure(rescheduleResult.Error);
         }
 
-        var confirmResult = order.Confirm();
+        var confirmResult = order.Confirm(marketSessionId, nowUtc);
         if (confirmResult.IsFailure)
             return Result<OrderDto>.Failure(confirmResult.Error);
 

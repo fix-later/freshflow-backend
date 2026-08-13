@@ -5,6 +5,7 @@ public sealed record GetUsersResponse(IReadOnlyList<UserSummaryDto> Data, Pagina
 public sealed record UserSummaryDto(
     Guid Id,
     string Email,
+    string? FullName,
     string Role,
     bool IsActive,
     bool? IsApproved,

@@ -18,8 +18,6 @@ using FreshFlow.Orders.Application.Commands.SettleRestaurantCredit;
 using FreshFlow.Orders.Application.Commands.UpdateOperationalSettings;
 using FreshFlow.Orders.Application.Queries.GetOperationalSettings;
 using FreshFlow.Orders.Domain.Enums;
-using FreshFlow.Pricing.Application.Commands.UpdatePricingSettings;
-using FreshFlow.Pricing.Application.Queries.GetPricingSettings;
 using FreshFlow.Procurement.Application.Commands.AssignBatchItems;
 using FreshFlow.Procurement.Application.Commands.CancelBatch;
 using FreshFlow.Procurement.Application.Commands.CloseMarketSession;
@@ -31,6 +29,7 @@ using FreshFlow.Procurement.Application.Commands.UpdateMarketSession;
 using FreshFlow.Procurement.Application.Dtos;
 using FreshFlow.Procurement.Application.Queries.GetMarketSession;
 using FreshFlow.Procurement.Application.Queries.GetMarketSessions;
+using FreshFlow.Procurement.Application.Queries.GetMarketSessionTracking;
 using FreshFlow.Procurement.Application.Queries.GetProcurementBatches;
 using FreshFlow.Procurement.Application.Queries.GetProcurementProgress;
 using MediatR;
@@ -257,6 +256,19 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    [HttpGet("market-sessions/{id:guid}/tracking")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetMarketSessionTrackingAsync(
+        Guid id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken ct = default)
+    {
+        var result = await sender.Send(
+            new GetMarketSessionTrackingQuery(id, page, pageSize), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     [HttpPut("market-sessions/{id:guid}")]
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> UpdateMarketSessionAsync(
@@ -390,27 +402,6 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
-    // ── Pricing Settings (Admin) ──────────────────────────────────────────────
-
-    /// <summary>GET /api/v1/admin/pricing-settings</summary>
-    [HttpGet("pricing-settings")]
-    [Authorize(Roles = "admin")]
-    public async Task<IActionResult> GetPricingSettingsAsync(CancellationToken ct)
-    {
-        var result = await sender.Send(new GetPricingSettingsQuery(), ct);
-        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
-    }
-
-    /// <summary>PUT /api/v1/admin/pricing-settings</summary>
-    [HttpPut("pricing-settings")]
-    [Authorize(Roles = "admin")]
-    public async Task<IActionResult> UpdatePricingSettingsAsync(
-        [FromBody] UpdatePricingSettingsRequest body, CancellationToken ct)
-    {
-        var result = await sender.Send(new UpdatePricingSettingsCommand(body.PriceAlertThresholdPercent), ct);
-        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
-    }
-
     // ── Audit Log (Admin) ──────────────────────────────────────────────────────
 
     /// <summary>GET /api/v1/admin/audit-logs — filter by actor/action/entity/time.</summary>
@@ -485,7 +476,6 @@ public sealed record UpdateOperationalSettingsRequest(
     decimal? BaseFee = null,
     decimal? MinimumFee = null,
     decimal? RoundingUnit = null);
-public sealed record UpdatePricingSettingsRequest(decimal PriceAlertThresholdPercent);
 public sealed record RunAutoBatchRequest(DateOnly? TargetDate, bool? DryRun, bool? Force);
 public sealed record ResetOrderGroupsRequest(DateOnly TargetDate, string Confirmation);
 public sealed record CancelOrderGroupRequest(string? Reason);

@@ -63,4 +63,22 @@ public sealed class CreateUserCommandValidatorTests
             new CreateUserCommand("u@test.com", "ValidP@ss1!", "kiosk_staff", Guid.NewGuid(), null));
         result.IsValid.Should().BeTrue();
     }
+    [Fact]
+    public async Task Validate_NullFullName_Passes()
+    {
+        var result = await _sut.ValidateAsync(
+            new CreateUserCommand("u@test.com", "ValidP@ss1!", "driver", null, null, FullName: null));
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_FullNameOver255Characters_Fails()
+    {
+        var result = await _sut.ValidateAsync(
+            new CreateUserCommand("u@test.com", "ValidP@ss1!", "driver", null, null,
+                FullName: new string('a', 256)));
+
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateUserCommand.FullName));
+    }
 }

@@ -21,13 +21,14 @@ public sealed class GetUsersQueryHandlerTests
     [Fact]
     public async Task Handle_NoFilters_ReturnsPaginatedUsers()
     {
-        var users = new List<User> { User.Create("a@test.com", "h", new Role("driver", "Driver")) };
+        var users = new List<User> { User.Create("a@test.com", "h", new Role("driver", "Driver"), fullName: "A Driver") };
         _users.GetPagedAsync(null, null, null, 1, 20, null, default).Returns((users, 1));
 
         var result = await _sut.Handle(new GetUsersQuery(null, null, null), default);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Data.Should().HaveCount(1);
+        result.Value.Data[0].FullName.Should().Be("A Driver");
         result.Value.Meta.Total.Should().Be(1);
     }
 
@@ -48,6 +49,7 @@ public sealed class GetUsersQueryHandlerTests
         result.Value.Data[0].RestaurantId.Should().Be(restaurantId);
         result.Value.Data[0].RestaurantStatus.Should().Be("active");
         result.Value.Data[0].RestaurantName.Should().Be("Test");
+        result.Value.Data[0].FullName.Should().BeNull();
     }
 
     [Fact]

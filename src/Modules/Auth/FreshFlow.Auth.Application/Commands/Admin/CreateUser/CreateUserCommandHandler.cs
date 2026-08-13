@@ -46,7 +46,7 @@ internal sealed class CreateUserCommandHandler(
         }
 
         var passwordHash = hasher.Hash(request.Password);
-        var user = User.Create(request.Email, passwordHash, role, request.Phone);
+        var user = User.Create(request.Email, passwordHash, role, request.Phone, request.FullName);
         await users.AddAsync(user, ct);
 
         if (roleName == RoleNames.MarketAgent && request.MarketId.HasValue)
@@ -61,6 +61,6 @@ internal sealed class CreateUserCommandHandler(
             await driverProfileCreator.CreateAsync(user.Id, ct);
 
         return Result<CreateUserResponse>.Success(new CreateUserResponse(
-            user.Id, user.Email, user.Role.Name, user.IsActive, user.CreatedAt));
+            user.Id, user.Email, user.FullName, user.Role.Name, user.IsActive, user.CreatedAt));
     }
 }

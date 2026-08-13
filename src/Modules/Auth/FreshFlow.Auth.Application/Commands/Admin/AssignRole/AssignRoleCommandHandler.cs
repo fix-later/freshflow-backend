@@ -29,6 +29,6 @@ internal sealed class AssignRoleCommandHandler(
         await users.SaveChangesAsync(ct);
 
         return Result<AssignRoleResponse>.Success(
-            new AssignRoleResponse(user.Id, user.Email, role.Name));
+            new AssignRoleResponse(user.Id, user.Email, user.FullName, role.Name));
     }
 }

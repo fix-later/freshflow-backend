@@ -138,6 +138,23 @@ public sealed class CreateUserCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData("  Nguyen Van A  ", "Nguyen Van A")]
+    [InlineData("   ", null)]
+    public async Task Handle_WithFullName_NormalizesStoresAndReturnsIt(string fullName, string? expected)
+    {
+        _users.ExistsAsync(Arg.Any<string>(), default).Returns(false);
+        _roles.FindByNameAsync("driver", default).Returns(new Role("driver", "Driver"));
+
+        var result = await _sut.Handle(
+            new CreateUserCommand("named@test.com", "P@ss1", "driver", null, null,
+                FullName: fullName), default);
+
+        result.Value.FullName.Should().Be(expected);
+        await _users.Received(1).AddAsync(
+            Arg.Is<FreshFlow.Auth.Domain.Aggregates.User>(u => u.FullName == expected), default);
+    }
+
     [Fact]
     public async Task Handle_MarketAgentWithMarketId_CreatesMarketAssignment()
     {

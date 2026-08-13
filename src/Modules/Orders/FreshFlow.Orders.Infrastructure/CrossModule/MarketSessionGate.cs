@@ -12,10 +12,9 @@ internal sealed class MarketSessionGate(AppDbContext db, IConfiguration configur
     public async Task<MarketSessionGateResult> CheckAsync(
         Guid? marketId, DateOnly serviceDate, bool lockForConfirmation, CancellationToken ct)
     {
-        if (!configuration.GetValue("Orders:MarketSessions:Enforce", true))
-            return new MarketSessionGateResult(true, true);
+        var enforce = configuration.GetValue("Orders:MarketSessions:Enforce", true);
         if (!marketId.HasValue)
-            return new MarketSessionGateResult(false, false);
+            return new MarketSessionGateResult(!enforce, !enforce);
 
         var connection = db.Database.GetDbConnection();
         var openedHere = connection.State != ConnectionState.Open;
@@ -26,7 +25,7 @@ internal sealed class MarketSessionGate(AppDbContext db, IConfiguration configur
             await using var command = connection.CreateCommand();
             command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = """
-                SELECT status
+                SELECT id, status
                 FROM market_sessions
                 WHERE market_id = @market_id AND service_date = @service_date
                   AND deleted_at IS NULL
@@ -39,8 +38,13 @@ internal sealed class MarketSessionGate(AppDbContext db, IConfiguration configur
             date.ParameterName = "service_date";
             date.Value = serviceDate;
             command.Parameters.Add(date);
-            var status = await command.ExecuteScalarAsync(ct) as string;
-            return new MarketSessionGateResult(status is not null, status == "Open");
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+                return new MarketSessionGateResult(!enforce, !enforce);
+
+            var sessionId = reader.GetGuid(0);
+            var status = reader.GetString(1);
+            return new MarketSessionGateResult(true, !enforce || status == "Open", sessionId);
         }
         finally
         {

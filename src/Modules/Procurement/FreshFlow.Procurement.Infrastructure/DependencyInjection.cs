@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IMarketAgentReader, MarketAgentReader>();
         services.AddScoped<IOperationalSettingsReader, OperationalSettingsReader>();
         services.AddScoped<IMarketSessionReadinessReader, MarketSessionReadinessReader>();
+        services.AddScoped<IMarketSessionTrackingReader, MarketSessionTrackingReader>();
         services.AddScoped<IMarketSessionRepository, MarketSessionRepository>();
         services.AddScoped<IProcurementBatchRepository, ProcurementBatchRepository>();
         services.AddScoped<IProcurementBatchingService, BatchConfirmedOrdersService>();

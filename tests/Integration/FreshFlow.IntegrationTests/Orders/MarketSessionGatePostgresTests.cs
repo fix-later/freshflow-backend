@@ -46,5 +46,11 @@ public sealed class MarketSessionGatePostgresTests(AuthWebAppFactory factory)
         await confirmationTransaction.CommitAsync();
         (await closeTask).Should().Be(1);
         (await gate.CheckAsync(marketId, date, false, default)).IsOpen.Should().BeFalse();
+
+        confirmationScope.ServiceProvider.GetRequiredService<IConfiguration>()
+            ["Orders:MarketSessions:Enforce"] = "false";
+        var bypassed = await gate.CheckAsync(marketId, date, false, default);
+        bypassed.IsOpen.Should().BeTrue();
+        bypassed.SessionId.Should().Be(session.Id);
     }
 }
