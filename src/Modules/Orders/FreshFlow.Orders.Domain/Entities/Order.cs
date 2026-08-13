@@ -274,6 +274,9 @@ public sealed class Order : AggregateRoot
         if (marketSessionId == Guid.Empty)
             return Result.Failure(Error.Validation(
                 "INVALID_MARKET_SESSION", "A market session ID cannot be empty."));
+        if (confirmedAtUtc.HasValue && confirmedAtUtc.Value.Kind != DateTimeKind.Utc)
+            return Result.Failure(Error.Validation(
+                "INVALID_CONFIRMATION_TIME", "The confirmation timestamp must be UTC."));
 
         var confirmedAt = confirmedAtUtc ?? DateTime.UtcNow;
         MarketSessionId = marketSessionId;

@@ -32,7 +32,5 @@ public partial class DropPricingSettings : Migration
                 table.PrimaryKey("PK_pricing_settings", x => x.Id);
             });
 
-        migrationBuilder.Sql(
-            "CREATE UNIQUE INDEX ix_pricing_settings_singleton ON pricing_settings ((true));");
     }
 }

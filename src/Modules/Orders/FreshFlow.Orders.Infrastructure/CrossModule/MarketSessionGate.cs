@@ -12,10 +12,9 @@ internal sealed class MarketSessionGate(AppDbContext db, IConfiguration configur
     public async Task<MarketSessionGateResult> CheckAsync(
         Guid? marketId, DateOnly serviceDate, bool lockForConfirmation, CancellationToken ct)
     {
-        if (!configuration.GetValue("Orders:MarketSessions:Enforce", true))
-            return new MarketSessionGateResult(true, true);
+        var enforce = configuration.GetValue("Orders:MarketSessions:Enforce", true);
         if (!marketId.HasValue)
-            return new MarketSessionGateResult(false, false);
+            return new MarketSessionGateResult(!enforce, !enforce);
 
         var connection = db.Database.GetDbConnection();
         var openedHere = connection.State != ConnectionState.Open;
@@ -41,11 +40,11 @@ internal sealed class MarketSessionGate(AppDbContext db, IConfiguration configur
             command.Parameters.Add(date);
             await using var reader = await command.ExecuteReaderAsync(ct);
             if (!await reader.ReadAsync(ct))
-                return new MarketSessionGateResult(false, false);
+                return new MarketSessionGateResult(!enforce, !enforce);
 
             var sessionId = reader.GetGuid(0);
             var status = reader.GetString(1);
-            return new MarketSessionGateResult(true, status == "Open", sessionId);
+            return new MarketSessionGateResult(true, !enforce || status == "Open", sessionId);
         }
         finally
         {

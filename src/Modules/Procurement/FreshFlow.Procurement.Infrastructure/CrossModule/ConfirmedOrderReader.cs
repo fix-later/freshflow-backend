@@ -62,6 +62,10 @@ internal sealed class ConfirmedOrderReader(AppDbContext db) : IConfirmedOrderRea
     public async Task<IReadOnlyList<ConfirmedOrderDto>> ReadEligibleForSessionAsync(
         Guid marketSessionId, CancellationToken ct)
     {
+        var session = await db.Set<MarketSession>()
+            .AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == marketSessionId && candidate.DeletedAt == null, ct);
+        var (startUtc, endUtc) = GetUtcBounds(session.ServiceDate);
         var coveredOrderIds = db.Set<ProcurementBatchOrder>()
             .AsNoTracking()
             .Where(link => link.DeletedAt == null)
@@ -70,7 +74,11 @@ internal sealed class ConfirmedOrderReader(AppDbContext db) : IConfirmedOrderRea
             .AsNoTracking()
             .Where(row =>
                 row.Status == ConfirmedStatus &&
-                row.MarketSessionId == marketSessionId &&
+                (row.MarketSessionId == marketSessionId ||
+                 (row.MarketSessionId == null &&
+                  row.MarketId == session.MarketId &&
+                  row.ScheduledFor >= startUtc &&
+                  row.ScheduledFor < endUtc)) &&
                 row.DeletedAt == null &&
                 !coveredOrderIds.Contains(row.Id))
             .ToListAsync(ct);

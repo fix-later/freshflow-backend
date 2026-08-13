@@ -6,6 +6,7 @@ using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.IntegrationTests.Infrastructure;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
+using FreshFlow.Procurement.Application.Abstractions;
 using FreshFlow.Procurement.Domain.Entities;
 using FreshFlow.Procurement.Domain.Enums;
 using MediatR;
@@ -55,6 +56,23 @@ public sealed class ProcurementBatchCompletionEndpointTests(AuthWebAppFactory fa
         var act = () => PublishDeliveryCompletedAsync(orderId);
 
         await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task ReadStatuses_SoftDeletedOrder_IsExcludedAsync()
+    {
+        var restaurantId = await CreateRestaurantAsync();
+        var orderId = await SeedOrderAsync(restaurantId, OrderStatus.Confirmed);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var order = await db.Set<Order>().SingleAsync(candidate => candidate.Id == orderId);
+        db.Entry(order).Property(nameof(Order.DeletedAt)).CurrentValue = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        var statuses = await scope.ServiceProvider.GetRequiredService<IConfirmedOrderReader>()
+            .ReadStatusesAsync([orderId], default);
+
+        statuses.Should().NotContainKey(orderId);
     }
 
     private async Task<Guid> CreateRestaurantAsync()

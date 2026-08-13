@@ -42,4 +42,14 @@ public sealed class OrderMarketSessionTests
         order.MarketSessionId.Should().Be(sessionId);
         order.ConfirmedAt.Should().Be(confirmedAt);
     }
+
+    [Fact]
+    public void Confirm_RejectsNonUtcTimestamp()
+    {
+        var order = new Order(Guid.NewGuid(), DateTime.UtcNow.AddDays(1), null);
+        order.AddItem(Guid.NewGuid(), "Tomato", 1, 10m);
+
+        order.Confirm(confirmedAtUtc: DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified))
+            .Error.Code.Should().Be("INVALID_CONFIRMATION_TIME");
+    }
 }

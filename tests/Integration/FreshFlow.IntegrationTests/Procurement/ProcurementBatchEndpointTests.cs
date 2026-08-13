@@ -30,6 +30,36 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
+    public async Task MarketSessionTracking_ExecutesPostgresSeamAsync()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var restaurantId = await CreateRestaurantAsync();
+        var targetDate = new DateOnly(2042, 4, 9);
+        var seed = await SeedConfirmedOrderAsync(restaurantId, targetDate);
+        Guid sessionId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            sessionId = await db.Set<MarketSession>()
+                .Where(session => session.MarketId == seed.MarketId && session.ServiceDate == targetDate)
+                .Select(session => session.Id)
+                .SingleAsync();
+            await db.Set<Order>()
+                .Where(order => order.Id == seed.OrderId)
+                .ExecuteUpdateAsync(update => update.SetProperty(order => order.MarketSessionId, sessionId));
+        }
+
+        var response = await _client.GetFromJsonAsync<Envelope<MarketSessionTrackingDto>>(
+            $"/api/v1/admin/market-sessions/{sessionId}/tracking?page=1&pageSize=10");
+
+        response!.Data!.Summary.TotalOrders.Should().Be(1);
+        response.Data.Orders.Should().ContainSingle(order => order.OrderId == seed.OrderId);
+        response.Data.Products.Should().ContainSingle(product =>
+            product.MarketProductId == seed.MarketProductId && product.TotalQuantity == 5);
+    }
+
+    [Fact]
     public async Task AutoBatch_PersistsFlipsListsAndDeduplicatesExistingCoverageAsync()
     {
         var token = await LoginAsAdminAsync();

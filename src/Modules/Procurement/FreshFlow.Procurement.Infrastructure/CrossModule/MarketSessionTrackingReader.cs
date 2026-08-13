@@ -29,19 +29,12 @@ internal sealed class MarketSessionTrackingReader(AppDbContext db) : IMarketSess
         var rows = db.Set<MarketSessionTrackingOrderRow>()
             .AsNoTracking()
             .Where(row => row.MarketSessionId == marketSessionId);
-        var headers = rows
-            .Select(row => new TrackingOrderHeader(
-                row.OrderId,
-                row.RestaurantId,
-                row.RestaurantName,
-                row.Status,
-                row.TotalAmount,
-                row.ConfirmedAt))
-            .Distinct();
-
-        var totalOrders = await headers.CountAsync(ct);
-        var cancelledOrders = await headers.CountAsync(
-            order => order.Status == "Cancelled", ct);
+        var totalOrders = await rows.Select(row => row.OrderId).Distinct().CountAsync(ct);
+        var cancelledOrders = await rows
+            .Where(row => row.Status == "Cancelled")
+            .Select(row => row.OrderId)
+            .Distinct()
+            .CountAsync(ct);
         var activeLines = rows.Where(row =>
             row.Status != "Cancelled" &&
             row.OrderItemId != null);
@@ -49,29 +42,45 @@ internal sealed class MarketSessionTrackingReader(AppDbContext db) : IMarketSess
         var totalLineItems = await activeLines.CountAsync(ct);
         var totalQuantity = await activeLines.SumAsync(
             row => (long?)(row.Quantity ?? 0), ct) ?? 0;
-        var products = await activeLines
-            .GroupBy(row => row.MarketProductId)
-            .Select(group => new MarketSessionTrackingProductDto(
-                group.Key!.Value,
-                group.Max(row => row.ProductName)!,
-                group.Select(row => row.OrderId).Distinct().Count(),
-                group.Sum(row => (long)(row.Quantity ?? 0))))
+        var productRows = await activeLines
+            .GroupBy(row => new { row.MarketProductId, row.ProductName })
+            .Select(group => new
+            {
+                group.Key.MarketProductId,
+                group.Key.ProductName,
+                OrderCount = group.Select(row => row.OrderId).Distinct().Count(),
+                TotalQuantity = group.Sum(row => (long)(row.Quantity ?? 0))
+            })
             .OrderBy(product => product.ProductName)
             .ToListAsync(ct);
+        var products = productRows.Select(product => new MarketSessionTrackingProductDto(
+            product.MarketProductId!.Value,
+            product.ProductName!,
+            product.OrderCount,
+            product.TotalQuantity)).ToList();
 
-        var pageHeaders = await headers
+        var pageOrderIds = await rows
+            .GroupBy(row => row.OrderId)
+            .Select(group => new { OrderId = group.Key, ConfirmedAt = group.Max(row => row.ConfirmedAt) })
             .OrderByDescending(order => order.ConfirmedAt)
             .ThenByDescending(order => order.OrderId)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Select(order => order.OrderId)
             .ToListAsync(ct);
-        var pageOrderIds = pageHeaders.Select(order => order.OrderId).ToArray();
-        var itemRows = pageOrderIds.Length == 0
+        var pageRows = pageOrderIds.Count == 0
             ? []
             : await rows
-                .Where(row => pageOrderIds.Contains(row.OrderId) && row.OrderItemId != null)
+                .Where(row => pageOrderIds.Contains(row.OrderId))
                 .OrderBy(row => row.ProductName)
                 .ToListAsync(ct);
+        var pageHeaders = pageRows
+            .GroupBy(row => row.OrderId)
+            .Select(group => group.First())
+            .OrderByDescending(order => order.ConfirmedAt)
+            .ThenByDescending(order => order.OrderId)
+            .ToList();
+        var itemRows = pageRows.Where(row => row.OrderItemId != null);
         var itemsByOrder = itemRows.ToLookup(row => row.OrderId);
         var orders = pageHeaders.Select(order => new MarketSessionTrackingOrderDto(
                 order.OrderId,
@@ -118,11 +127,4 @@ internal sealed class MarketSessionTrackingReader(AppDbContext db) : IMarketSess
             activeBatch);
     }
 
-    private sealed record TrackingOrderHeader(
-        Guid OrderId,
-        Guid RestaurantId,
-        string RestaurantName,
-        string Status,
-        decimal TotalAmount,
-        DateTime? ConfirmedAt);
 }

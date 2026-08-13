@@ -38,7 +38,8 @@ public partial class AddOrderMarketSessionTracking : Migration
                 GROUP BY entity_id
             ) AS confirmed
             WHERE o."Id" = confirmed.entity_id
-              AND o.confirmed_at IS NULL;
+              AND o.confirmed_at IS NULL
+              AND o.deleted_at IS NULL;
 
             WITH membership AS (
                 SELECT DISTINCT ON (link.order_id)
@@ -47,14 +48,27 @@ public partial class AddOrderMarketSessionTracking : Migration
                 FROM procurement_batch_orders AS link
                 INNER JOIN procurement_batches AS batch
                     ON batch.id = link.procurement_batch_id
-                WHERE batch.market_session_id IS NOT NULL
+                   AND batch.deleted_at IS NULL
+                WHERE link.deleted_at IS NULL
+                  AND batch.market_session_id IS NOT NULL
                 ORDER BY link.order_id, link.updated_at DESC, batch.created_at DESC
             )
             UPDATE orders AS o
             SET market_session_id = membership.market_session_id
             FROM membership
             WHERE o."Id" = membership.order_id
-              AND o.market_session_id IS NULL;
+              AND o.market_session_id IS NULL
+              AND o.deleted_at IS NULL;
+
+            UPDATE orders AS o
+            SET market_session_id = session.id
+            FROM market_sessions AS session
+            WHERE o.market_session_id IS NULL
+              AND o.deleted_at IS NULL
+              AND o."Status" IN ('Confirmed', 'Batched')
+              AND o.market_id = session.market_id
+              AND (o."ScheduledFor" AT TIME ZONE 'Asia/Ho_Chi_Minh')::date = session.service_date
+              AND session.deleted_at IS NULL;
             """);
 
         migrationBuilder.CreateIndex(
