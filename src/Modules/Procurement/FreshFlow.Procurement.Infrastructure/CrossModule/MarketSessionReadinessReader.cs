@@ -21,6 +21,11 @@ internal sealed class MarketSessionReadinessReader(AppDbContext db) : IMarketSes
 
         return new VehicleAvailabilityDto(
             await available.CountAsync(ct),
-            await available.SumAsync(vehicle => vehicle.CapacityKg, ct));
+            await available.SumAsync(vehicle => vehicle.CapacityKg, ct),
+            await available
+                .OrderBy(vehicle => vehicle.PlateNumber)
+                .Select(vehicle => new MarketSessionVehicleOptionDto(
+                    vehicle.Id, vehicle.PlateNumber, vehicle.CapacityKg, vehicle.VehicleType, true))
+                .ToListAsync(ct));
     }
 }

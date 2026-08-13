@@ -285,26 +285,9 @@ public sealed class ProcurementBatch : AggregateRoot
         IReadOnlyDictionary<Guid, Guid> assignments,
         DateTime assignedAtUtc)
     {
-        if (Status == ProcurementBatchStatus.Built)
-        {
-            return Result.Failure(Error.Conflict(
-                "BATCH_NOT_MANIFESTED",
-                $"Procurement batch '{Id}' must be manifested before agent assignment."));
-        }
-
-        if (Status == ProcurementBatchStatus.Cancelled)
-        {
-            return Result.Failure(Error.Conflict(
-                "BATCH_CANCELLED",
-                $"Procurement batch '{Id}' has been cancelled."));
-        }
-
-        if (Status is not ProcurementBatchStatus.Manifested and not ProcurementBatchStatus.Purchasing)
-        {
-            return Result.Failure(Error.Conflict(
-                "BATCH_ALREADY_IN_PROGRESS",
-                $"Procurement batch '{Id}' is already in progress."));
-        }
+        var canAssign = ValidateItemAssignment();
+        if (canAssign.IsFailure)
+            return canAssign;
 
         assignments ??= new Dictionary<Guid, Guid>();
         var itemsByProduct = _items.ToDictionary(item => item.MarketProductId);
@@ -349,6 +332,32 @@ public sealed class ProcurementBatch : AggregateRoot
                 MarketId,
                 agentUserId,
                 assignedAtUtc));
+        }
+
+        return Result.Success();
+    }
+
+    public Result ValidateItemAssignment()
+    {
+        if (Status == ProcurementBatchStatus.Built)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_NOT_MANIFESTED",
+                $"Procurement batch '{Id}' must be manifested before agent assignment."));
+        }
+
+        if (Status == ProcurementBatchStatus.Cancelled)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_CANCELLED",
+                $"Procurement batch '{Id}' has been cancelled."));
+        }
+
+        if (Status is not ProcurementBatchStatus.Manifested and not ProcurementBatchStatus.Purchasing)
+        {
+            return Result.Failure(Error.Conflict(
+                "BATCH_ALREADY_IN_PROGRESS",
+                $"Procurement batch '{Id}' is already in progress."));
         }
 
         return Result.Success();

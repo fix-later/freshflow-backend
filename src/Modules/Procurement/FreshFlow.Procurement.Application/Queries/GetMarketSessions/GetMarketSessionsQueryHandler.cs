@@ -33,7 +33,7 @@ internal sealed class GetMarketSessionsQueryHandler(
         var result = new List<MarketSessionDto>(rows.Count);
         foreach (var row in rows)
         {
-            var readiness = await lifecycle.ReadReadinessAsync(row.MarketId, row.HubId, row.ServiceDate, ct);
+            var readiness = await lifecycle.ReadReadinessAsync(row, ct);
             result.Add(ToDto(row, names.GetValueOrDefault(row.MarketId).Name, readiness));
         }
 
@@ -56,6 +56,10 @@ internal sealed class GetMarketSessionsQueryHandler(
         readiness.EligibleAgentCount,
         readiness.AvailableVehicleCount,
         readiness.HubVehicleCapacityKg,
+        readiness.ReferenceVehicleCapacityKg,
+        session.PlannedCapacityKg,
+        session.Vehicles.Select(row => row.VehicleId).ToList().AsReadOnly(),
+        session.Agents.Select(row => row.UserId).ToList().AsReadOnly(),
         readiness.IsReady ? "ready" : session.Status == MarketSessionStatus.Draft ? "blocked" : "warning",
         readiness.Warnings,
         session.CreatedAt,

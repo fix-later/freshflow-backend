@@ -68,17 +68,25 @@ internal sealed class MarketSessionRepository(AppDbContext db) : IMarketSessionR
     }
 
     public Task<MarketSession?> FindByIdAsync(Guid id, CancellationToken ct) =>
-        db.Set<MarketSession>().SingleOrDefaultAsync(
+        db.Set<MarketSession>()
+            .Include(session => session.Vehicles)
+            .Include(session => session.Agents)
+            .SingleOrDefaultAsync(
             session => session.Id == id && session.DeletedAt == null, ct);
 
     public Task<MarketSession?> FindForUpdateAsync(Guid id, CancellationToken ct) =>
         db.Set<MarketSession>()
             .FromSqlInterpolated($"SELECT * FROM market_sessions WHERE id = {id} AND deleted_at IS NULL FOR UPDATE")
+            .Include(session => session.Vehicles)
+            .Include(session => session.Agents)
             .SingleOrDefaultAsync(ct);
 
     public Task<MarketSession?> FindByMarketAndDateAsync(
         Guid marketId, DateOnly serviceDate, CancellationToken ct) =>
-        db.Set<MarketSession>().SingleOrDefaultAsync(session =>
+        db.Set<MarketSession>()
+            .Include(session => session.Vehicles)
+            .Include(session => session.Agents)
+            .SingleOrDefaultAsync(session =>
             session.MarketId == marketId &&
             session.ServiceDate == serviceDate &&
             session.DeletedAt == null, ct);
@@ -90,7 +98,10 @@ internal sealed class MarketSessionRepository(AppDbContext db) : IMarketSessionR
         MarketSessionStatus? status,
         CancellationToken ct)
     {
-        var query = db.Set<MarketSession>().AsNoTracking().Where(session => session.DeletedAt == null);
+        var query = db.Set<MarketSession>().AsNoTracking()
+            .Include(session => session.Vehicles)
+            .Include(session => session.Agents)
+            .Where(session => session.DeletedAt == null);
         if (from.HasValue) query = query.Where(session => session.ServiceDate >= from.Value);
         if (to.HasValue) query = query.Where(session => session.ServiceDate <= to.Value);
         if (marketId.HasValue) query = query.Where(session => session.MarketId == marketId.Value);

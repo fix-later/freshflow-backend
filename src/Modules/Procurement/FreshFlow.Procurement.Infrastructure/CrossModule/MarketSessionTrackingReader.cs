@@ -42,6 +42,20 @@ internal sealed class MarketSessionTrackingReader(AppDbContext db) : IMarketSess
         var totalLineItems = await activeLines.CountAsync(ct);
         var totalQuantity = await activeLines.SumAsync(
             row => (long?)(row.Quantity ?? 0), ct) ?? 0;
+        var activeOrderTotals = rows
+            .Where(row => row.Status != "Cancelled")
+            .GroupBy(row => row.OrderId)
+            .Select(group => new
+            {
+                SubtotalAmount = group.Max(row => row.SubtotalAmount),
+                VatAmount = group.Max(row => row.VatAmount),
+                DeliveryFee = group.Max(row => row.DeliveryFee),
+                TotalAmount = group.Max(row => row.TotalAmount)
+            });
+        var merchandiseAmount = await activeOrderTotals.SumAsync(row => row.SubtotalAmount, ct);
+        var vatAmount = await activeOrderTotals.SumAsync(row => row.VatAmount, ct);
+        var deliveryFee = await activeOrderTotals.SumAsync(row => row.DeliveryFee, ct);
+        var grandTotal = await activeOrderTotals.SumAsync(row => row.TotalAmount, ct);
         var productRows = await activeLines
             .GroupBy(row => new { row.MarketProductId, row.ProductName })
             .Select(group => new
@@ -87,6 +101,9 @@ internal sealed class MarketSessionTrackingReader(AppDbContext db) : IMarketSess
                 order.RestaurantId,
                 order.RestaurantName,
                 order.Status.ToLowerInvariant(),
+                order.SubtotalAmount,
+                order.VatAmount,
+                order.DeliveryFee,
                 order.TotalAmount,
                 order.ConfirmedAt,
                 itemsByOrder[order.OrderId]
@@ -120,7 +137,11 @@ internal sealed class MarketSessionTrackingReader(AppDbContext db) : IMarketSess
                 totalOrders - cancelledOrders,
                 cancelledOrders,
                 totalLineItems,
-                totalQuantity),
+                totalQuantity,
+                merchandiseAmount,
+                vatAmount,
+                deliveryFee,
+                grandTotal),
             products.AsReadOnly(),
             orders,
             new ProcurementBatchPaginationDto(totalOrders, page, pageSize),

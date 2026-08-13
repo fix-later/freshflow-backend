@@ -53,11 +53,14 @@ public sealed class RoutePlanningInputBuilderTests
         vehicles.GetPageAsync(null, 10_000, true, hubId, Arg.Any<CancellationToken>())
             .Returns((new[] { reservedVehicle, freeVehicle }, null));
         var settings = Substitute.For<IVehicleCapacityPolicy>();
+        var sessionVehicles = Substitute.For<IMarketSessionVehicleReader>();
+        sessionVehicles.ReadAssignedVehicleIdsAsync(hubId, Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
+            .Returns(new HashSet<Guid> { freeVehicle.Id });
         settings.CapacityUtilizationPercent.Returns(90m);
         settings.BoxTareKg.Returns(1m);
         settings.MaxStopsPerVehicle.Returns(20);
         var sut = new RoutePlanningInputBuilder(
-            hubs, restaurants, orders, packing, deliveries, routes, vehicles, settings);
+            hubs, restaurants, orders, packing, deliveries, routes, vehicles, sessionVehicles, settings);
 
         var result = await sut.BuildAsync(hubId, new DateOnly(2026, 8, 10), default);
 

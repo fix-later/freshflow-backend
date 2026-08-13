@@ -6,4 +6,14 @@ public interface IMarketSessionReadinessReader
         Guid hubId, DateOnly serviceDate, CancellationToken ct);
 }
 
-public sealed record VehicleAvailabilityDto(int Count, decimal CapacityKg);
+public sealed record VehicleAvailabilityDto(
+    int Count,
+    decimal CapacityKg,
+    IReadOnlyList<MarketSessionVehicleOptionDto>? Vehicles = null);
+
+public sealed record MarketSessionVehicleOptionDto(
+    Guid VehicleId,
+    string PlateNumber,
+    decimal CapacityKg,
+    string VehicleType,
+    bool IsAvailable);

@@ -48,8 +48,7 @@ internal sealed class CloseMarketSessionCommandHandler(
         await batching.BuildSessionBatchAsync(closed.Id, false, ct); // failure stays pending for hosted retry
         var refreshed = await sessions.FindByIdAsync(closed.Id, ct) ?? closed;
         var names = await markets.ReadMarketCodesAsync([closed.MarketId], ct);
-        var readiness = await lifecycle.ReadReadinessAsync(
-            closed.MarketId, closed.HubId, closed.ServiceDate, ct);
+        var readiness = await lifecycle.ReadReadinessAsync(closed, ct);
         return Result<MarketSessionDto>.Success(GetMarketSessionsQueryHandler.ToDto(
             refreshed, names.GetValueOrDefault(closed.MarketId).Name, readiness));
     }

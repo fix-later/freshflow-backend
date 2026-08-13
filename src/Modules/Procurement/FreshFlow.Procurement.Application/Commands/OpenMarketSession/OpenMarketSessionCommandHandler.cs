@@ -26,8 +26,7 @@ internal sealed class OpenMarketSessionCommandHandler(
 
         if (session.Status == MarketSessionStatus.Open)
         {
-            var currentReadiness = await lifecycle.ReadReadinessAsync(
-                session.MarketId, session.HubId, session.ServiceDate, ct);
+            var currentReadiness = await lifecycle.ReadReadinessAsync(session, ct);
             var currentNames = await markets.ReadMarketCodesAsync([session.MarketId], ct);
             return Result<MarketSessionDto>.Success(GetMarketSessionsQueryHandler.ToDto(
                 session, currentNames.GetValueOrDefault(session.MarketId).Name, currentReadiness));
@@ -36,7 +35,9 @@ internal sealed class OpenMarketSessionCommandHandler(
         var activeHubs = await hubs.ReadActiveHubsAsync([session.MarketId], ct);
         if (!activeHubs.TryGetValue(session.MarketId, out var hubId))
             return NotReady("HUB_NOT_CONFIGURED");
-        var readiness = await lifecycle.ReadReadinessAsync(session.MarketId, hubId, session.ServiceDate, ct);
+        var readiness = session.Vehicles.Count > 0 || session.Agents.Count > 0
+            ? await lifecycle.ReadReadinessAsync(session, ct)
+            : await lifecycle.ReadReadinessAsync(session.MarketId, hubId, session.ServiceDate, ct);
         if (!readiness.IsReady)
             return NotReady(string.Join(',', readiness.Warnings));
 

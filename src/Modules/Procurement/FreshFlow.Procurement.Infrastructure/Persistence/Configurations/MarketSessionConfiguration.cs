@@ -25,6 +25,9 @@ internal sealed class MarketSessionConfiguration : IEntityTypeConfiguration<Mark
         builder.Property(session => session.ClosedBy).HasColumnName("closed_by");
         builder.Property(session => session.CloseReason).HasColumnName("close_reason").HasMaxLength(500);
         builder.Property(session => session.BatchingCompletedAt).HasColumnName("batching_completed_at");
+        builder.Property(session => session.PlannedCapacityKg)
+            .HasColumnName("planned_capacity_kg")
+            .HasColumnType("numeric(12,3)");
         builder.Property(session => session.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(session => session.UpdatedAt)
             .HasColumnName("updated_at").IsConcurrencyToken().IsRequired();
@@ -37,5 +40,18 @@ internal sealed class MarketSessionConfiguration : IEntityTypeConfiguration<Mark
         builder.HasIndex(session => new { session.Status, session.ClosesAt })
             .HasFilter("deleted_at IS NULL")
             .HasDatabaseName("idx_market_sessions_status_closes_at");
+
+        builder.HasMany(session => session.Vehicles)
+            .WithOne()
+            .HasForeignKey(row => row.SessionId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Metadata.FindNavigation(nameof(MarketSession.Vehicles))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+        builder.HasMany(session => session.Agents)
+            .WithOne()
+            .HasForeignKey(row => row.SessionId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Metadata.FindNavigation(nameof(MarketSession.Agents))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
     }
 }

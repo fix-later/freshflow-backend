@@ -113,6 +113,7 @@ public static class ErrorExtensions
                         or "REFERENCE_PRICE_MISSING"
                         or "INVALID_AGENT"
                         or "AGENT_NOT_ELIGIBLE"
+                        or "AGENT_NOT_ASSIGNED_TO_SESSION"
                         or "PRODUCT_NOT_IN_BATCH"
                         or "PURCHASE_LINES_MISMATCH"
                         or "INVALID_PURCHASE_LINE"
@@ -124,6 +125,7 @@ public static class ErrorExtensions
                         or "INVOICE_LINE_UNIT_REQUIRED" or "INVOICE_NOT_ISSUED" or "INVOICE_EXPORT_INCOMPLETE"
                         or "MARKET_SESSION_NOT_AVAILABLE" or "MARKET_SESSION_NOT_READY"
                         or "INVALID_MARKET_SESSION" or "INVALID_MARKET_SESSION_CLOSE_TIME"
+                        or "INVALID_MARKET_SESSION_RESOURCES"
                         or "ORDER_MARKET_MISMATCH"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);

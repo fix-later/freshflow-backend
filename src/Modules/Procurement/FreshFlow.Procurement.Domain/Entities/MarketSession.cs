@@ -6,6 +6,9 @@ namespace FreshFlow.Procurement.Domain.Entities;
 
 public sealed class MarketSession : AggregateRoot
 {
+    private readonly List<MarketSessionVehicle> _vehicles = [];
+    private readonly List<MarketSessionAgent> _agents = [];
+
     private MarketSession() { }
 
     public Guid MarketId { get; private set; }
@@ -18,6 +21,9 @@ public sealed class MarketSession : AggregateRoot
     public Guid? ClosedBy { get; private set; }
     public string? CloseReason { get; private set; }
     public DateTime? BatchingCompletedAt { get; private set; }
+    public decimal? PlannedCapacityKg { get; private set; }
+    public IReadOnlyCollection<MarketSessionVehicle> Vehicles => _vehicles.AsReadOnly();
+    public IReadOnlyCollection<MarketSessionAgent> Agents => _agents.AsReadOnly();
 
     public static Result<MarketSession> Create(
         Guid marketId,
@@ -90,6 +96,35 @@ public sealed class MarketSession : AggregateRoot
         ClosedAt = atUtc;
         ClosedBy = actorId;
         CloseReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        UpdatedAt = atUtc;
+        return Result.Success();
+    }
+
+    public Result ConfigureResources(
+        decimal plannedCapacityKg,
+        IEnumerable<Guid> vehicleIds,
+        IEnumerable<Guid> agentUserIds,
+        Guid? actorId,
+        DateTime atUtc)
+    {
+        if (Status == MarketSessionStatus.Closed)
+            return ClosedConflict();
+
+        var vehicles = vehicleIds?.Distinct().ToArray() ?? [];
+        var agents = agentUserIds?.Distinct().ToArray() ?? [];
+        if (plannedCapacityKg <= 0m || vehicles.Length == 0 || agents.Length == 0 ||
+            vehicles.Contains(Guid.Empty) || agents.Contains(Guid.Empty))
+        {
+            return Result.Failure(Error.Validation(
+                "INVALID_MARKET_SESSION_RESOURCES",
+                "A positive capacity, at least one vehicle, and at least one market agent are required."));
+        }
+
+        PlannedCapacityKg = plannedCapacityKg;
+        _vehicles.Clear();
+        _vehicles.AddRange(vehicles.Select(id => new MarketSessionVehicle(Id, id, actorId, atUtc)));
+        _agents.Clear();
+        _agents.AddRange(agents.Select(id => new MarketSessionAgent(Id, id, actorId, atUtc)));
         UpdatedAt = atUtc;
         return Result.Success();
     }
