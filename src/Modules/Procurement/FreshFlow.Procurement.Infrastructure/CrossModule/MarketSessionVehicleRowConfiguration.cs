@@ -10,6 +10,7 @@ internal sealed class MarketSessionVehicleRowConfiguration : IEntityTypeConfigur
         builder.HasNoKey();
         builder.ToSqlQuery("""
             SELECT id AS "Id", hub_id AS "HubId", capacity_kg AS "CapacityKg",
+                   plate_number AS "PlateNumber", vehicle_type AS "VehicleType",
                    is_available AS "IsAvailable", deleted_at AS "DeletedAt"
             FROM vehicles
             """);

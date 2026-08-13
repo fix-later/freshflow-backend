@@ -26,7 +26,32 @@ public sealed class MarketSessionLifecycleService(
             hubId.HasValue,
             agentCount,
             vehicleAvailability.Count,
+            vehicleAvailability.CapacityKg,
             vehicleAvailability.CapacityKg);
+    }
+
+    public async Task<MarketSessionReadiness> ReadReadinessAsync(MarketSession session, CancellationToken ct)
+    {
+        var live = await ReadReadinessAsync(session.MarketId, session.HubId, session.ServiceDate, ct);
+        if (session.Vehicles.Count == 0 && session.Agents.Count == 0)
+            return live;
+
+        var vehicleIds = session.Vehicles.Select(row => row.VehicleId).ToHashSet();
+        var selectedVehicles = (session.HubId.HasValue
+                ? await vehicles.ReadVehicleAvailabilityAsync(session.HubId.Value, session.ServiceDate, ct)
+                : new VehicleAvailabilityDto(0, 0m))
+            .Vehicles?.Where(vehicle => vehicleIds.Contains(vehicle.VehicleId)).ToList() ?? [];
+        var eligibleAgentIds = (await agents.ListEligibleMarketAgentsAsync(session.MarketId, ct))
+            .Select(agent => agent.UserId)
+            .ToHashSet();
+        var selectedAgentCount = session.Agents.Count(row => eligibleAgentIds.Contains(row.UserId));
+        return new MarketSessionReadiness(
+            live.BatchingEnabled,
+            live.HasHub,
+            selectedAgentCount,
+            selectedVehicles.Count,
+            selectedVehicles.Sum(vehicle => vehicle.CapacityKg),
+            live.ReferenceVehicleCapacityKg);
     }
 
     public async Task EnsureRollingWindowAsync(CancellationToken ct)
@@ -58,6 +83,22 @@ public sealed class MarketSessionLifecycleService(
                 if (create.IsFailure)
                     continue;
 
+                var eligibleAgents = await agents.ListEligibleMarketAgentsAsync(marketId, ct);
+                if (resolvedHubId.HasValue)
+                {
+                    var availableVehicles = await vehicles.ReadVehicleAvailabilityAsync(
+                        resolvedHubId.Value, serviceDate, ct);
+                    if (availableVehicles.Vehicles is { Count: > 0 } && eligibleAgents.Count > 0)
+                    {
+                        create.Value.ConfigureResources(
+                            availableVehicles.CapacityKg,
+                            availableVehicles.Vehicles.Select(vehicle => vehicle.VehicleId),
+                            eligibleAgents.Select(agent => agent.UserId),
+                            null,
+                            timeProvider.GetUtcNow().UtcDateTime);
+                    }
+                }
+
                 await sessions.AddAsync(create.Value, ct);
                 await sessions.SaveChangesAsync(ct); // unique violation means another instance won
             }
@@ -85,7 +126,8 @@ public sealed record MarketSessionReadiness(
     bool HasHub,
     int EligibleAgentCount,
     int AvailableVehicleCount,
-    decimal HubVehicleCapacityKg)
+    decimal HubVehicleCapacityKg,
+    decimal ReferenceVehicleCapacityKg)
 {
     public bool IsReady => BatchingEnabled && HasHub && EligibleAgentCount > 0 && AvailableVehicleCount > 0;
 

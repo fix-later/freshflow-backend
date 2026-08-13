@@ -28,9 +28,14 @@ public sealed class MarketSessionLifecycleServiceTests
             .Returns(new Dictionary<Guid, Guid> { [marketId] = hubId });
         var agents = Substitute.For<IMarketAgentReader>();
         agents.CountEligibleMarketAgentsAsync(marketId, default).Returns(1);
+        var agentId = Guid.NewGuid();
+        agents.ListEligibleMarketAgentsAsync(marketId, default)
+            .Returns([new MarketAgentOptionDto(agentId, "agent@test.local", "Agent")]);
         var vehicles = Substitute.For<IMarketSessionReadinessReader>();
+        var vehicleId = Guid.NewGuid();
         vehicles.ReadVehicleAvailabilityAsync(hubId, Arg.Any<DateOnly>(), default)
-            .Returns(new VehicleAvailabilityDto(1, 500m));
+            .Returns(new VehicleAvailabilityDto(1, 500m,
+                [new MarketSessionVehicleOptionDto(vehicleId, "51A-001", 500m, "van", true)]));
         var settings = Substitute.For<IOperationalSettingsReader>();
         settings.ReadAsync(default)
             .Returns(new ProcurementOperationalSettingsDto(true, new TimeOnly(22, 0), 7));
@@ -44,6 +49,10 @@ public sealed class MarketSessionLifecycleServiceTests
             Enumerable.Range(15, 6).Select(day => new DateOnly(2026, 8, day)));
         created.Should().OnlyContain(session =>
             session.Status == MarketSessionStatus.Open && session.HubId == hubId);
+        created.Should().OnlyContain(session =>
+            session.PlannedCapacityKg == 500m &&
+            session.Vehicles.Single().VehicleId == vehicleId &&
+            session.Agents.Single().UserId == agentId);
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

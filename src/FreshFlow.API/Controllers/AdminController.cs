@@ -21,6 +21,7 @@ using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.Procurement.Application.Commands.AssignBatchItems;
 using FreshFlow.Procurement.Application.Commands.CancelBatch;
 using FreshFlow.Procurement.Application.Commands.CloseMarketSession;
+using FreshFlow.Procurement.Application.Commands.ConfigureMarketSessionResources;
 using FreshFlow.Procurement.Application.Commands.GenerateManifest;
 using FreshFlow.Procurement.Application.Commands.OpenMarketSession;
 using FreshFlow.Procurement.Application.Commands.ResetBatchingDay;
@@ -28,6 +29,7 @@ using FreshFlow.Procurement.Application.Commands.RunAutoBatch;
 using FreshFlow.Procurement.Application.Commands.UpdateMarketSession;
 using FreshFlow.Procurement.Application.Dtos;
 using FreshFlow.Procurement.Application.Queries.GetMarketSession;
+using FreshFlow.Procurement.Application.Queries.GetMarketSessionResourceOptions;
 using FreshFlow.Procurement.Application.Queries.GetMarketSessions;
 using FreshFlow.Procurement.Application.Queries.GetMarketSessionTracking;
 using FreshFlow.Procurement.Application.Queries.GetProcurementBatches;
@@ -269,6 +271,28 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
+    [HttpGet("market-sessions/{id:guid}/resource-options")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetMarketSessionResourceOptionsAsync(Guid id, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetMarketSessionResourceOptionsQuery(id), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpPut("market-sessions/{id:guid}/resources")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> ConfigureMarketSessionResourcesAsync(
+        Guid id,
+        [FromBody] ConfigureMarketSessionResourcesRequest body,
+        CancellationToken ct)
+    {
+        if (!TryGetActorId(out var actorId))
+            return Unauthorized();
+        var result = await sender.Send(new ConfigureMarketSessionResourcesCommand(
+            id, body.PlannedCapacityKg, body.VehicleIds, body.AgentUserIds, actorId), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
     [HttpPut("market-sessions/{id:guid}")]
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> UpdateMarketSessionAsync(
@@ -480,4 +504,8 @@ public sealed record RunAutoBatchRequest(DateOnly? TargetDate, bool? DryRun, boo
 public sealed record ResetOrderGroupsRequest(DateOnly TargetDate, string Confirmation);
 public sealed record CancelOrderGroupRequest(string? Reason);
 public sealed record UpdateMarketSessionRequest(DateTimeOffset ClosesAt);
+public sealed record ConfigureMarketSessionResourcesRequest(
+    decimal PlannedCapacityKg,
+    IReadOnlyList<Guid> VehicleIds,
+    IReadOnlyList<Guid> AgentUserIds);
 public sealed record CloseMarketSessionRequest(string? Reason);

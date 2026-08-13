@@ -16,6 +16,7 @@ public sealed class RoutePlanningInputBuilder(
     IDeliveryRepository deliveries,
     IDeliveryRouteRepository routes,
     IVehicleRepository vehicles,
+    IMarketSessionVehicleReader sessionVehicles,
     IVehicleCapacityPolicy settings) : IRoutePlanningInputBuilder
 {
     public async Task<Result<RoutePlanningInput>> BuildAsync(
@@ -82,8 +83,12 @@ public sealed class RoutePlanningInputBuilder(
 
         var (fleet, _) = await vehicles.GetPageAsync(null, 10_000, true, hubId, ct);
         var reservedVehicleIds = await routes.GetReservedVehicleIdsAsync(serviceDate, ct);
+        var assignedVehicleIds = await sessionVehicles.ReadAssignedVehicleIdsAsync(hubId, serviceDate, ct);
         var planningVehicles = fleet
-            .Where(vehicle => vehicle.IsAvailable && !reservedVehicleIds.Contains(vehicle.Id))
+            .Where(vehicle =>
+                vehicle.IsAvailable &&
+                !reservedVehicleIds.Contains(vehicle.Id) &&
+                (assignedVehicleIds.Count == 0 || assignedVehicleIds.Contains(vehicle.Id)))
             .OrderBy(vehicle => vehicle.Id)
             .Select(vehicle => new PlanningVehicle(
                 vehicle.Id, vehicle.PlateNumber, vehicle.VehicleType, Profile(vehicle.VehicleType),
@@ -107,7 +112,9 @@ public sealed class RoutePlanningInputBuilder(
                     snapshot.Append(CultureInfo.InvariantCulture, $"{line.OrderItemId:N}:{line.Quantity}:{line.CapacityKg};");
             }
         }
-        foreach (var vehicle in fleet.OrderBy(x => x.Id))
+        foreach (var vehicle in fleet
+                     .Where(vehicle => assignedVehicleIds.Count == 0 || assignedVehicleIds.Contains(vehicle.Id))
+                     .OrderBy(x => x.Id))
             snapshot.Append(CultureInfo.InvariantCulture,
                 $"V:{vehicle.Id:N}:{vehicle.CapacityKg}:{vehicle.VehicleType}:{vehicle.IsAvailable}:{vehicle.DeletedAt is null}:{reservedVehicleIds.Contains(vehicle.Id)};");
 

@@ -23,4 +23,25 @@ public sealed class MarketSessionTests
         session.Close(null, null, now.AddHours(2)).IsSuccess.Should().BeTrue();
         session.Open(hubId, now.AddHours(2)).Error.Code.Should().Be("MARKET_SESSION_CLOSED");
     }
+
+    [Fact]
+    public void ConfigureResources_ReplacesSelection_AndClosedSessionRejectsChanges()
+    {
+        var now = new DateTime(2026, 8, 13, 3, 0, 0, DateTimeKind.Utc);
+        var session = MarketSession.Create(
+            Guid.NewGuid(), Guid.NewGuid(), new DateOnly(2026, 8, 15), now.AddDays(1),
+            MarketSessionCreatedSource.Manual, true).Value;
+        var vehicleId = Guid.NewGuid();
+        var agentId = Guid.NewGuid();
+
+        session.ConfigureResources(750m, [vehicleId, vehicleId], [agentId], Guid.NewGuid(), now)
+            .IsSuccess.Should().BeTrue();
+
+        session.PlannedCapacityKg.Should().Be(750m);
+        session.Vehicles.Select(row => row.VehicleId).Should().Equal(vehicleId);
+        session.Agents.Select(row => row.UserId).Should().Equal(agentId);
+        session.Close(null, null, now.AddHours(1));
+        session.ConfigureResources(500m, [Guid.NewGuid()], [Guid.NewGuid()], null, now.AddHours(2))
+            .Error.Code.Should().Be("MARKET_SESSION_CLOSED");
+    }
 }

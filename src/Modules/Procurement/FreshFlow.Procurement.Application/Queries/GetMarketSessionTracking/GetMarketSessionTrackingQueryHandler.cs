@@ -24,8 +24,7 @@ internal sealed class GetMarketSessionTrackingQueryHandler(
 
         var data = await tracking.ReadAsync(request.Id, request.Page, request.PageSize, ct);
         var names = await markets.ReadMarketCodesAsync([session.MarketId], ct);
-        var readiness = await lifecycle.ReadReadinessAsync(
-            session.MarketId, session.HubId, session.ServiceDate, ct);
+        var readiness = await lifecycle.ReadReadinessAsync(session, ct);
 
         return Result<MarketSessionTrackingDto>.Success(new(
             GetMarketSessionsQueryHandler.ToDto(

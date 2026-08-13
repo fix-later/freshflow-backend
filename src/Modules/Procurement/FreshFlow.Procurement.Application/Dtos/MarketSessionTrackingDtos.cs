@@ -13,7 +13,11 @@ public sealed record MarketSessionTrackingSummaryDto(
     int ActiveOrders,
     int CancelledOrders,
     int TotalLineItems,
-    long TotalQuantity);
+    long TotalQuantity,
+    decimal MerchandiseAmount = 0m,
+    decimal VatAmount = 0m,
+    decimal DeliveryFee = 0m,
+    decimal GrandTotal = 0m);
 
 public sealed record MarketSessionTrackingProductDto(
     Guid MarketProductId,
@@ -26,6 +30,9 @@ public sealed record MarketSessionTrackingOrderDto(
     Guid RestaurantId,
     string RestaurantName,
     string Status,
+    decimal SubtotalAmount,
+    decimal VatAmount,
+    decimal DeliveryFee,
     decimal TotalAmount,
     DateTime? ConfirmedAt,
     IReadOnlyList<MarketSessionTrackingOrderItemDto> Items);

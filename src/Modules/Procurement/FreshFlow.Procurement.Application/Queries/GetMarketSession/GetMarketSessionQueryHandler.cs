@@ -19,8 +19,7 @@ internal sealed class GetMarketSessionQueryHandler(
         if (session is null)
             return Result<MarketSessionDto>.Failure(Error.NotFound("MARKET_SESSION", request.Id));
         var names = await markets.ReadMarketCodesAsync([session.MarketId], ct);
-        var readiness = await lifecycle.ReadReadinessAsync(
-            session.MarketId, session.HubId, session.ServiceDate, ct);
+        var readiness = await lifecycle.ReadReadinessAsync(session, ct);
         return Result<MarketSessionDto>.Success(GetMarketSessionsQueryHandler.ToDto(
             session, names.GetValueOrDefault(session.MarketId).Name, readiness));
     }

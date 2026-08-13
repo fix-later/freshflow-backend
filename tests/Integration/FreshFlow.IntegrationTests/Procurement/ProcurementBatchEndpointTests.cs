@@ -57,6 +57,56 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         response.Data.Orders.Should().ContainSingle(order => order.OrderId == seed.OrderId);
         response.Data.Products.Should().ContainSingle(product =>
             product.MarketProductId == seed.MarketProductId && product.TotalQuantity == 5);
+        response.Data.Summary.MerchandiseAmount.Should().Be(response.Data.Orders.Single().SubtotalAmount);
+        response.Data.Summary.GrandTotal.Should().Be(response.Data.Orders.Single().TotalAmount);
+        response.Data.Orders.Single().Items.Should().ContainSingle(item => item.Subtotal == 50_000m);
+    }
+
+    [Fact]
+    public async Task MarketSessionResources_ConfiguresCapacityVehicleAndAgentsAsync()
+    {
+        var token = await LoginAsAdminAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var restaurantId = await CreateRestaurantAsync();
+        var seed = await SeedConfirmedOrderAsync(restaurantId, new DateOnly(2042, 4, 8));
+        var agent = await CreateUserAccountAsync("market_agent", seed.MarketId);
+        var vehicle = new Vehicle($"SESSION-{Guid.NewGuid():N}"[..20], 125m, VehicleType.van, null, seed.HubId);
+        var session = MarketSession.Create(
+            seed.MarketId,
+            seed.HubId,
+            new DateOnly(2042, 4, 9),
+            DateTime.UtcNow.AddDays(1),
+            MarketSessionCreatedSource.Manual,
+            true).Value;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Set<Vehicle>().Add(vehicle);
+            db.Set<MarketSession>().Add(session);
+            await db.SaveChangesAsync();
+        }
+
+        var options = await _client.GetFromJsonAsync<Envelope<MarketSessionResourcesDto>>(
+            $"/api/v1/admin/market-sessions/{session.Id}/resource-options");
+        options!.Data!.ReferenceVehicleCapacityKg.Should().Be(125m);
+        options.Data.Vehicles.Should().ContainSingle(candidate => candidate.VehicleId == vehicle.Id);
+        options.Data.Agents.Should().ContainSingle(candidate => candidate.UserId == agent.Id);
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/v1/admin/market-sessions/{session.Id}/resources",
+            new
+            {
+                plannedCapacityKg = 90m,
+                vehicleIds = new[] { vehicle.Id },
+                agentUserIds = new[] { agent.Id }
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var configured = await response.Content.ReadFromJsonAsync<Envelope<MarketSessionResourcesDto>>();
+        configured!.Data!.PlannedCapacityKg.Should().Be(90m);
+        configured.Data.SelectedVehicleCapacityKg.Should().Be(125m);
+        configured.Data.Vehicles.Should().ContainSingle(candidate => candidate.Selected);
+        configured.Data.Agents.Should().ContainSingle(candidate => candidate.Selected);
     }
 
     [Fact]
@@ -121,6 +171,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
 
         var agentA = await CreateUserAccountAsync("market_agent", seed.MarketId);
         var agentUserId = agentA.Id;
+        await SetSessionAgentsForBatchAsync(batchId, agentUserId);
         var purchaseRequest = new
         {
             lines = new[]
@@ -575,6 +626,7 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             var firstAgent = await CreateUserAccountAsync("market_agent", first.MarketId);
             var secondAgent = await CreateUserAccountAsync("market_agent", first.MarketId);
             var ineligible = await CreateUserAccountAsync("hub_staff");
+            await SetSessionAgentsForBatchAsync(batchId, firstAgent.Id, secondAgent.Id);
 
             var rejected = await _client.PutAsJsonAsync(
                 $"/api/v1/admin/batches/{batchId}/item-assignments",
@@ -1005,6 +1057,25 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         db.Entry(item).Property(candidate => candidate.AssignedAt)
             .CurrentValue = DateTime.UtcNow;
         await db.SaveChangesAsync();
+    }
+
+    private async Task SetSessionAgentsForBatchAsync(Guid batchId, params Guid[] agentUserIds)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var sessionId = await db.Set<ProcurementBatch>()
+            .Where(batch => batch.Id == batchId)
+            .Select(batch => batch.MarketSessionId!.Value)
+            .SingleAsync();
+
+        foreach (var agentUserId in agentUserIds)
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($$"""
+                INSERT INTO market_session_agents (session_id, user_id, assigned_by, assigned_at)
+                VALUES ({{sessionId}}, {{agentUserId}}, NULL, NOW())
+                ON CONFLICT DO NOTHING
+                """);
+        }
     }
 
     private async Task AssertPurchaseStateAsync(

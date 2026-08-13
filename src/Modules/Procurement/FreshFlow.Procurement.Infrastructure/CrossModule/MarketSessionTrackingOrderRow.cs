@@ -7,6 +7,9 @@ internal sealed class MarketSessionTrackingOrderRow
     public Guid RestaurantId { get; init; }
     public string RestaurantName { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
+    public decimal SubtotalAmount { get; init; }
+    public decimal VatAmount { get; init; }
+    public decimal DeliveryFee { get; init; }
     public decimal TotalAmount { get; init; }
     public DateTime? ConfirmedAt { get; init; }
     public Guid? OrderItemId { get; init; }

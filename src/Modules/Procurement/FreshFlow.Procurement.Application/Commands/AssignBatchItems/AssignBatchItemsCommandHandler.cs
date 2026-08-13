@@ -23,10 +23,16 @@ internal sealed class AssignBatchItemsCommandHandler(
                 Error.NotFound("PROCUREMENT_BATCH", request.BatchId));
         }
 
-        foreach (var agentUserId in request.Assignments
-                     .Where(assignment => assignment.AgentUserId != Guid.Empty)
-                     .Select(assignment => assignment.AgentUserId)
-                     .Distinct())
+        var canAssign = batch.ValidateItemAssignment();
+        if (canAssign.IsFailure)
+            return Result<ProcurementBatchDto>.Failure(canAssign.Error);
+
+        var agentUserIds = request.Assignments
+            .Where(assignment => assignment.AgentUserId != Guid.Empty)
+            .Select(assignment => assignment.AgentUserId)
+            .Distinct()
+            .ToArray();
+        foreach (var agentUserId in agentUserIds)
         {
             if (!await marketAgents.IsEligibleMarketAgentAsync(
                     agentUserId,
@@ -39,6 +45,18 @@ internal sealed class AssignBatchItemsCommandHandler(
             }
         }
 
+        foreach (var agentUserId in agentUserIds)
+        {
+            if (batch.MarketSessionId.HasValue &&
+                !await marketAgents.IsAssignedToSessionAsync(
+                    agentUserId, batch.MarketSessionId.Value, cancellationToken))
+            {
+                return Result<ProcurementBatchDto>.Failure(Error.Validation(
+                    "AGENT_NOT_ASSIGNED_TO_SESSION",
+                    "User is not assigned to this market session."));
+            }
+        }
+
         var assignments = new Dictionary<Guid, Guid>();
         if (request.Assignments.Any(assignment =>
                 !assignments.TryAdd(assignment.MarketProductId, assignment.AgentUserId)))
@@ -48,9 +66,7 @@ internal sealed class AssignBatchItemsCommandHandler(
                 "Item assignments must contain unique market product IDs."));
         }
 
-        var assignment = batch.AssignItems(
-            assignments,
-            timeProvider.GetUtcNow().UtcDateTime);
+        var assignment = batch.AssignItems(assignments, timeProvider.GetUtcNow().UtcDateTime);
         if (assignment.IsFailure)
             return Result<ProcurementBatchDto>.Failure(assignment.Error);
 
