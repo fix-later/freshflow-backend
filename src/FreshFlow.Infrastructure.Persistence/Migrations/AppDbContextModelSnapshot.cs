@@ -3284,6 +3284,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("confirmed_receipt_at");
 
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -3352,6 +3356,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("market_id");
 
+                    b.Property<Guid?>("MarketSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("market_session_id");
+
                     b.Property<string>("Notes")
                         .HasColumnType("text");
 
@@ -3403,6 +3411,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("OrderGroupId")
                         .HasDatabaseName("idx_orders_order_group_id");
+
+                    b.HasIndex("MarketSessionId")
+                        .HasDatabaseName("idx_orders_market_session_id")
+                        .HasFilter("market_session_id IS NOT NULL AND deleted_at IS NULL");
 
                     b.HasIndex("ScheduledFor")
                         .HasDatabaseName("idx_orders_scheduled_for");

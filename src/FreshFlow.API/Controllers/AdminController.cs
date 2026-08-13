@@ -29,6 +29,7 @@ using FreshFlow.Procurement.Application.Commands.UpdateMarketSession;
 using FreshFlow.Procurement.Application.Dtos;
 using FreshFlow.Procurement.Application.Queries.GetMarketSession;
 using FreshFlow.Procurement.Application.Queries.GetMarketSessions;
+using FreshFlow.Procurement.Application.Queries.GetMarketSessionTracking;
 using FreshFlow.Procurement.Application.Queries.GetProcurementBatches;
 using FreshFlow.Procurement.Application.Queries.GetProcurementProgress;
 using MediatR;
@@ -252,6 +253,19 @@ public sealed class AdminController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetMarketSessionAsync(Guid id, CancellationToken ct)
     {
         var result = await sender.Send(new GetMarketSessionQuery(id), ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("market-sessions/{id:guid}/tracking")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetMarketSessionTrackingAsync(
+        Guid id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken ct = default)
+    {
+        var result = await sender.Send(
+            new GetMarketSessionTrackingQuery(id, page, pageSize), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 

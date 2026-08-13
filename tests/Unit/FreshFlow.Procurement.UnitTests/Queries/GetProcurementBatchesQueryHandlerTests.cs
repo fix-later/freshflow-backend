@@ -13,12 +13,14 @@ public sealed class GetProcurementBatchesQueryHandlerTests
     public async Task Handle_ReturnsItemsMembersStatusesAndPaginationAsync()
     {
         var orderId = Guid.NewGuid();
+        var marketSessionId = Guid.NewGuid();
         var build = ProcurementBatch.Build(
             new DateOnly(2026, 7, 15),
             Guid.NewGuid(),
             [(Guid.NewGuid(), "Tomato", 4, orderId)],
             Guid.NewGuid(),
-            "TD-260715-1");
+            "TD-260715-1",
+            marketSessionId);
         var repository = Substitute.For<IProcurementBatchRepository>();
         repository.ListAsync(2, 10, default, default, default)
             .Returns((
@@ -35,6 +37,7 @@ public sealed class GetProcurementBatchesQueryHandlerTests
 
         result.Value.Batches.Should().ContainSingle();
         result.Value.Batches[0].Code.Should().Be("TD-260715-1");
+        result.Value.Batches[0].MarketSessionId.Should().Be(marketSessionId);
         result.Value.Batches[0].Members.Should().ContainSingle()
             .Which.Status.Should().Be("Batched");
         result.Value.Batches[0].Items.Should().ContainSingle()

@@ -27,4 +27,19 @@ public sealed class OrderMarketSessionTests
                 new DateTime(2026, 8, 13, 18, 0, 0, DateTimeKind.Utc))
             .Should().Be(new DateOnly(2026, 8, 14));
     }
+
+    [Fact]
+    public void Confirm_PersistsSessionMembershipAndTimestamp()
+    {
+        var sessionId = Guid.NewGuid();
+        var confirmedAt = new DateTime(2026, 8, 13, 3, 15, 0, DateTimeKind.Utc);
+        var order = new Order(Guid.NewGuid(), confirmedAt.AddDays(1), null);
+        order.AddItem(Guid.NewGuid(), "Tomato", 1, 10m);
+
+        var result = order.Confirm(sessionId, confirmedAt);
+
+        result.IsSuccess.Should().BeTrue();
+        order.MarketSessionId.Should().Be(sessionId);
+        order.ConfirmedAt.Should().Be(confirmedAt);
+    }
 }

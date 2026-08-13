@@ -7,10 +7,8 @@ public interface IConfirmedOrderReader
         bool force,
         CancellationToken ct);
 
-    public Task<IReadOnlyList<ConfirmedOrderDto>> ReadEligibleForMarketAsync(
-        DateOnly batchDate,
-        Guid marketId,
-        CancellationToken ct);
+    public Task<IReadOnlyList<ConfirmedOrderDto>> ReadEligibleForSessionAsync(
+        Guid marketSessionId, CancellationToken ct);
 
     public Task<DateOnly?> FindOldestEligibleCycleAsync(DateOnly throughDate, CancellationToken ct);
 

@@ -42,6 +42,7 @@ public sealed class Order : AggregateRoot
 
     public Guid RestaurantId { get; private set; }
     public Guid? MarketId { get; private set; }
+    public Guid? MarketSessionId { get; private set; }
     public Guid? OrderGroupId { get; private set; }
     public Guid? ScheduledOrderId { get; private set; }
     public OrderStatus Status { get; private set; }
@@ -68,6 +69,7 @@ public sealed class Order : AggregateRoot
     public DateTime? CancelledAt { get; private set; }
     public string? CancellationReason { get; private set; }
     public DateTime? ConfirmedReceiptAt { get; private set; }
+    public DateTime? ConfirmedAt { get; private set; }
 
     public IReadOnlyCollection<OrderItem> Items => _items.AsReadOnly();
 
@@ -252,7 +254,7 @@ public sealed class Order : AggregateRoot
     /// Transitions the order from Draft to Confirmed, locking item prices and accruing
     /// the total as outstanding debt (B2B credit model).
     /// </summary>
-    public Result Confirm()
+    public Result Confirm(Guid? marketSessionId = null, DateTime? confirmedAtUtc = null)
     {
         var canConfirm = CanConfirm();
         if (canConfirm.IsFailure)
@@ -269,10 +271,17 @@ public sealed class Order : AggregateRoot
                 return pricing;
         }
 
+        if (marketSessionId == Guid.Empty)
+            return Result.Failure(Error.Validation(
+                "INVALID_MARKET_SESSION", "A market session ID cannot be empty."));
+
+        var confirmedAt = confirmedAtUtc ?? DateTime.UtcNow;
+        MarketSessionId = marketSessionId;
+        ConfirmedAt = confirmedAt;
         TransitionTo(OrderStatus.Confirmed);
         PaymentStatus = OrderPaymentStatus.Outstanding;
 
-        RaiseDomainEvent(new OrderConfirmedDomainEvent(Id, RestaurantId, TotalAmount, DateTime.UtcNow));
+        RaiseDomainEvent(new OrderConfirmedDomainEvent(Id, RestaurantId, TotalAmount, confirmedAt));
 
         return Result.Success();
     }

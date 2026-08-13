@@ -38,8 +38,7 @@ public sealed class BatchConfirmedOrdersService(
         if (!operational.BatchingEnabled)
             return Skipped("batching_disabled");
 
-        var eligibleOrders = await orders.ReadEligibleForMarketAsync(
-            session.ServiceDate, session.MarketId, ct);
+        var eligibleOrders = await orders.ReadEligibleForSessionAsync(session.Id, ct);
         if (eligibleOrders.Count == 0)
         {
             if (!dryRun)

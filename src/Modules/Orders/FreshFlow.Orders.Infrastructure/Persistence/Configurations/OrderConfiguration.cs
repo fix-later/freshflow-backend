@@ -17,6 +17,7 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         // docs/03-database-schema.md fk_orders_restaurant).
         builder.Property(o => o.RestaurantId).IsRequired();
         builder.Property(o => o.MarketId).HasColumnName("market_id");
+        builder.Property(o => o.MarketSessionId).HasColumnName("market_session_id");
         builder.Property(o => o.OrderGroupId);
         builder.Property(o => o.ScheduledOrderId);
 
@@ -84,6 +85,8 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.CancellationReason);
         builder.Property(o => o.ConfirmedReceiptAt)
             .HasColumnName("confirmed_receipt_at");
+        builder.Property(o => o.ConfirmedAt)
+            .HasColumnName("confirmed_at");
 
         builder.Property(o => o.CreatedAt).IsRequired();
         builder.Property(o => o.UpdatedAt).IsRequired().IsConcurrencyToken();
@@ -111,6 +114,10 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.HasIndex(o => new { o.MarketId, o.ScheduledFor })
             .HasFilter("market_id IS NOT NULL AND deleted_at IS NULL")
             .HasDatabaseName("idx_orders_market_scheduled_for");
+
+        builder.HasIndex(o => o.MarketSessionId)
+            .HasFilter("market_session_id IS NOT NULL AND deleted_at IS NULL")
+            .HasDatabaseName("idx_orders_market_session_id");
 
         builder.HasIndex(o => o.ScheduledOrderId)
             .HasDatabaseName("idx_orders_scheduled_order_id");
