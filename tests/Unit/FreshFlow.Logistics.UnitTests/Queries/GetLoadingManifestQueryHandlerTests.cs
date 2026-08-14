@@ -17,6 +17,7 @@ public sealed class GetLoadingManifestQueryHandlerTests
     private static readonly Guid NearRestaurantId = Guid.NewGuid();
     private static readonly Guid FarRestaurantId = Guid.NewGuid();
     private static readonly Guid EmptyRestaurantId = Guid.NewGuid();
+    private static readonly Guid NearMarketProductId = Guid.NewGuid();
 
     [Fact]
     public async Task Handle_MissingRoute_ReturnsNotFoundAsync()
@@ -52,8 +53,10 @@ public sealed class GetLoadingManifestQueryHandlerTests
         packing.GetLinesByOrdersAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
             .Returns(new List<OrderPackingLines>
             {
-                new(nearOrderId, [new OrderPackingLine(nearOrderId, Guid.NewGuid(), "Tomato", 5, 10m)]),
-                new(farOrderId, [new OrderPackingLine(farOrderId, Guid.NewGuid(), "Fish", 3, 15m)]),
+                new(nearOrderId,
+                    [new OrderPackingLine(nearOrderId, Guid.NewGuid(), "Tomato", 5, 10m, NearMarketProductId)]),
+                new(farOrderId,
+                    [new OrderPackingLine(farOrderId, Guid.NewGuid(), "Fish", 3, 15m, Guid.NewGuid())]),
             });
 
         var sut = new GetLoadingManifestQueryHandler(
@@ -68,7 +71,8 @@ public sealed class GetLoadingManifestQueryHandlerTests
         result.Value.Stops[0].RestaurantName.Should().Be("Far");
         result.Value.Stops[0].Lines.Should().ContainSingle(l => l.ProductName == "Fish" && l.OrderId == farOrderId);
         result.Value.Stops[1].StopOrder.Should().Be(1);
-        result.Value.Stops[1].Lines.Should().ContainSingle(l => l.ProductName == "Tomato" && l.OrderId == nearOrderId);
+        result.Value.Stops[1].Lines.Should().ContainSingle(l =>
+            l.ProductName == "Tomato" && l.OrderId == nearOrderId && l.MarketProductId == NearMarketProductId);
     }
 
     private static DeliveryRoute CreateRoute() =>

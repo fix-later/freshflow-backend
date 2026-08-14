@@ -27,4 +27,5 @@ public sealed record MarketProductSnapshotDto(
     string? VatRate = null,
     decimal? OriginLatitude = null,
     decimal? OriginLongitude = null,
-    Guid? MarketId = null);
+    Guid? MarketId = null,
+    string? PackingCode = null);

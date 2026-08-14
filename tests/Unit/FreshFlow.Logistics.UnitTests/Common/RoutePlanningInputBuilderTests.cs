@@ -41,7 +41,7 @@ public sealed class RoutePlanningInputBuilderTests
         packing.GetLinesByOrdersAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
             .Returns([
                 new OrderPackingLines(newOrderId,
-                    [new OrderPackingLine(newOrderId, Guid.NewGuid(), "Product", 10m, 5m)])
+                    [new OrderPackingLine(newOrderId, Guid.NewGuid(), "Product", 10m, 5m, Guid.NewGuid())])
             ]);
         var deliveries = Substitute.For<IDeliveryRepository>();
         deliveries.GetExistingOrderIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())

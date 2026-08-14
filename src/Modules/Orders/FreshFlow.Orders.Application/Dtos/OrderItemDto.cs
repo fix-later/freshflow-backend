@@ -12,4 +12,5 @@ public sealed record OrderItemDto(
     string? ImageUrl,
     string? VatRateCode = null,
     decimal? VatRatePercent = null,
-    decimal? VatAmount = null);
+    decimal? VatAmount = null,
+    string? PackingCode = null);

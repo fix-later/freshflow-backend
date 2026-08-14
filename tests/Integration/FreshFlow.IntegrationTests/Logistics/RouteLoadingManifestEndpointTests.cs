@@ -54,6 +54,7 @@ public sealed class RouteLoadingManifestEndpointTests(AuthWebAppFactory factory)
         // ToSqlQuery projection on Postgres).
         line.OrderId.Should().Be(seed.AtHubOrderId);
         line.OrderItemId.Should().NotBeEmpty();
+        line.MarketProductId.Should().Be(seed.MarketProductId);
         // The Draft order at the SAME restaurant must be filtered out
         // (proves ListByRestaurantsAndStatusAsync's status filter on Postgres).
         stop.Lines.Should().NotContain(line => line.ProductName == "Draft-only greens");
@@ -99,7 +100,7 @@ public sealed class RouteLoadingManifestEndpointTests(AuthWebAppFactory factory)
         db.Set<Order>().Add(draftOrder); // stays Draft -> excluded from the manifest
         await db.SaveChangesAsync();
 
-        return new SeededGoods(market.Id, atHubOrder.Id);
+        return new SeededGoods(market.Id, atHubOrder.Id, packedMarketProduct.Id);
     }
 
     private async Task<Guid> SeedRouteAsync(Guid marketId, Guid restaurantId)
@@ -153,7 +154,7 @@ public sealed class RouteLoadingManifestEndpointTests(AuthWebAppFactory factory)
             .Which.RestaurantId.Should().NotBeNull().And.Subject!.Value;
     }
 
-    private sealed record SeededGoods(Guid MarketId, Guid AtHubOrderId);
+    private sealed record SeededGoods(Guid MarketId, Guid AtHubOrderId, Guid MarketProductId);
 
     private sealed record UserListBody(IReadOnlyList<UserSummaryBody> Data);
 

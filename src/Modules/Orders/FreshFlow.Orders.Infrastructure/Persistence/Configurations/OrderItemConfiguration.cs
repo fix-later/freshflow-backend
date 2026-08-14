@@ -19,6 +19,9 @@ internal sealed class OrderItemConfiguration : IEntityTypeConfiguration<OrderIte
         builder.Property(i => i.MarketProductId).IsRequired();
 
         builder.Property(i => i.ProductNameSnapshot).IsRequired().HasMaxLength(200);
+        builder.Property(i => i.PackingCodeSnapshot)
+            .HasColumnName("packing_code_snapshot")
+            .HasMaxLength(50);
         builder.Property(i => i.Quantity).IsRequired();
         builder.Property(i => i.UnitPrice).IsRequired().HasColumnType("numeric(12,2)");
         builder.Property(i => i.LockedUnitPrice).HasColumnType("numeric(12,2)");

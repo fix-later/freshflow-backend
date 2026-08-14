@@ -54,7 +54,8 @@ internal sealed class AddOrderItemCommandHandler(
             snapshot.ProductName,
             request.Quantity,
             snapshot.CurrentPrice,
-            snapshot.MarketId);
+            snapshot.MarketId,
+            snapshot.PackingCode);
         if (addResult.IsFailure)
             return Result<OrderDto>.Failure(addResult.Error);
 

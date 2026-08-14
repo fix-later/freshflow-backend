@@ -22,6 +22,7 @@ internal sealed class MarketProductRowConfiguration : IEntityTypeConfiguration<M
                 mp."ReservedQuantity",
                 p."MinimumOrderQuantity",
                 p."VatRate",
+                pc."Code" AS "PackingCode",
                 CASE WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL
                     THEN h.latitude ELSE m."Latitude" END AS "OriginLatitude",
                 CASE WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL
@@ -29,6 +30,7 @@ internal sealed class MarketProductRowConfiguration : IEntityTypeConfiguration<M
             FROM market_products mp
             INNER JOIN products p ON mp."ProductId" = p."Id"
             INNER JOIN markets m ON mp."MarketId" = m."Id" AND m."DeletedAt" IS NULL
+            LEFT JOIN packing_codes pc ON p."PackingCodeId" = pc."Id" AND pc."DeletedAt" IS NULL
             LEFT JOIN hubs h ON h.market_id = mp."MarketId"
                 AND h.is_active = TRUE AND h.deleted_at IS NULL
             WHERE mp."deleted_at" IS NULL AND p."DeletedAt" IS NULL
@@ -44,5 +46,6 @@ internal sealed class MarketProductRowConfiguration : IEntityTypeConfiguration<M
         builder.Property(m => m.VatRate);
         builder.Property(m => m.OriginLatitude);
         builder.Property(m => m.OriginLongitude);
+        builder.Property(m => m.PackingCode);
     }
 }

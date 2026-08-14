@@ -14,6 +14,7 @@ internal sealed class OrderPackingLineRowConfiguration
             SELECT
                 oi."OrderId"             AS "OrderId",
                 oi."Id"                  AS "OrderItemId",
+                oi."MarketProductId"     AS "MarketProductId",
                 oi."ProductNameSnapshot" AS "ProductName",
                 COALESCE(oi."ActualQuantity", oi."Quantity") AS "Quantity",
                 pc."CapacityKg"          AS "CapacityKg"
@@ -26,6 +27,7 @@ internal sealed class OrderPackingLineRowConfiguration
             """);
         builder.Property(x => x.OrderId);
         builder.Property(x => x.OrderItemId);
+        builder.Property(x => x.MarketProductId);
         builder.Property(x => x.ProductName);
         builder.Property(x => x.Quantity);
         builder.Property(x => x.CapacityKg);

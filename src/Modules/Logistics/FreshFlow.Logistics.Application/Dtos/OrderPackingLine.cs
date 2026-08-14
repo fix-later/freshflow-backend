@@ -5,7 +5,8 @@ public sealed record OrderPackingLine(
     Guid OrderItemId,
     string ProductName,
     decimal Quantity,
-    decimal? CapacityKg);
+    decimal? CapacityKg,
+    Guid MarketProductId);
 
 public sealed record OrderPackingLines(
     Guid OrderId,

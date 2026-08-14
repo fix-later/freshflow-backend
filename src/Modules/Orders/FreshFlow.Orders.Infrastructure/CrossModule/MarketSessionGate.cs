@@ -25,11 +25,19 @@ internal sealed class MarketSessionGate(AppDbContext db, IConfiguration configur
             await using var command = connection.CreateCommand();
             command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = """
-                SELECT id, status
-                FROM market_sessions
-                WHERE market_id = @market_id AND service_date = @service_date
-                  AND deleted_at IS NULL
-                """ + (lockForConfirmation ? " FOR SHARE" : string.Empty);
+                SELECT ms.id, ms.status, ms.planned_capacity_kg,
+                       COALESCE((
+                           SELECT SUM(oi."Quantity")
+                           FROM orders o
+                           JOIN order_items oi ON oi."OrderId" = o."Id"
+                           WHERE o.market_session_id = ms.id
+                             AND o.deleted_at IS NULL
+                             AND o."Status" <> 'Cancelled'
+                       ), 0) AS confirmed_goods_kg
+                FROM market_sessions ms
+                WHERE ms.market_id = @market_id AND ms.service_date = @service_date
+                  AND ms.deleted_at IS NULL
+                """ + (lockForConfirmation ? " FOR SHARE OF ms" : string.Empty);
             var market = command.CreateParameter();
             market.ParameterName = "market_id";
             market.Value = marketId.Value;
@@ -44,7 +52,10 @@ internal sealed class MarketSessionGate(AppDbContext db, IConfiguration configur
 
             var sessionId = reader.GetGuid(0);
             var status = reader.GetString(1);
-            return new MarketSessionGateResult(true, !enforce || status == "Open", sessionId);
+            decimal? plannedCapacityKg = reader.IsDBNull(2) ? null : reader.GetDecimal(2);
+            var confirmedGoodsKg = reader.IsDBNull(3) ? 0m : reader.GetDecimal(3);
+            return new MarketSessionGateResult(
+                true, !enforce || status == "Open", sessionId, plannedCapacityKg, confirmedGoodsKg);
         }
         finally
         {

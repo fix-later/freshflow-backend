@@ -126,6 +126,10 @@ internal sealed class PreviewOrderConfirmationQueryHandler(
             else if (!gate.IsOpen)
                 issues.Add(new PreviewIssueDto(
                     "MARKET_SESSION_NOT_OPEN", "The market session is no longer accepting orders."));
+            else if (gate.PlannedCapacityKg is { } capacityKg && capacityKg > 0m
+                && gate.ConfirmedGoodsKg + order.Items.Sum(item => item.Quantity) > capacityKg)
+                issues.Add(new PreviewIssueDto(
+                    "MARKET_SESSION_CAPACITY_EXCEEDED", "The market session has reached its planned capacity."));
         }
 
         return Result<OrderConfirmationPreviewDto>.Success(new OrderConfirmationPreviewDto(

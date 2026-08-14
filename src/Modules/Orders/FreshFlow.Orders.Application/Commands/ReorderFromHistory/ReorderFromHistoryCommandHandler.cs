@@ -70,7 +70,8 @@ internal sealed class ReorderFromHistoryCommandHandler(
                 snapshot.ProductName,
                 sourceItem.Quantity,
                 snapshot.CurrentPrice,
-                snapshot.MarketId);
+                snapshot.MarketId,
+                snapshot.PackingCode);
 
             if (addResult.IsFailure)
                 return Result<OrderDto>.Failure(addResult.Error);

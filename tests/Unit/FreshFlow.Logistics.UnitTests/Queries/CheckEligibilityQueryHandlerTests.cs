@@ -111,7 +111,7 @@ public sealed class CheckEligibilityQueryHandlerTests
             .Returns([
                 new OrderPackingLines(
                     orderId,
-                    [new OrderPackingLine(orderId, Guid.NewGuid(), "Fish", 91, 10m)])
+                    [new OrderPackingLine(orderId, Guid.NewGuid(), "Fish", 91, 10m, Guid.NewGuid())])
             ]);
         var routes = new InMemoryDeliveryRouteRepository();
         await routes.AddAsync(route, default);
