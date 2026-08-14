@@ -32,13 +32,25 @@ public sealed class MarketSessionLifecycleService(
 
     public async Task<MarketSessionReadiness> ReadReadinessAsync(MarketSession session, CancellationToken ct)
     {
-        var live = await ReadReadinessAsync(session.MarketId, session.HubId, session.ServiceDate, ct);
+        // session.HubId is a snapshot taken when the session is auto-created; a hub linked to the market
+        // afterwards leaves it null forever (the rolling-window job skips existing sessions). Resolve the
+        // market's active hub live -- exactly as OpenMarketSession does -- so readiness reflects the
+        // current hub link instead of the stale snapshot.
+        var effectiveHubId = session.HubId;
+        if (effectiveHubId is null)
+        {
+            var activeHubs = await hubs.ReadActiveHubsAsync([session.MarketId], ct);
+            if (activeHubs.TryGetValue(session.MarketId, out var resolvedHubId) && resolvedHubId != Guid.Empty)
+                effectiveHubId = resolvedHubId;
+        }
+
+        var live = await ReadReadinessAsync(session.MarketId, effectiveHubId, session.ServiceDate, ct);
         if (session.Vehicles.Count == 0 && session.Agents.Count == 0)
             return live;
 
         var vehicleIds = session.Vehicles.Select(row => row.VehicleId).ToHashSet();
-        var selectedVehicles = (session.HubId.HasValue
-                ? await vehicles.ReadVehicleAvailabilityAsync(session.HubId.Value, session.ServiceDate, ct)
+        var selectedVehicles = (effectiveHubId.HasValue
+                ? await vehicles.ReadVehicleAvailabilityAsync(effectiveHubId.Value, session.ServiceDate, ct)
                 : new VehicleAvailabilityDto(0, 0m))
             .Vehicles?.Where(vehicle => vehicleIds.Contains(vehicle.VehicleId)).ToList() ?? [];
         var eligibleAgentIds = (await agents.ListEligibleMarketAgentsAsync(session.MarketId, ct))
