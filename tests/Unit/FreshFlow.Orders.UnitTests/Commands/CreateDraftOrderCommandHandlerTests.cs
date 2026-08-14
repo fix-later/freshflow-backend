@@ -31,7 +31,8 @@ public sealed class CreateDraftOrderCommandHandlerTests
             .Returns(new RestaurantSnapshotDto(RestaurantId, IsApproved: true));
 
         _marketProductReader.FindAsync(MarketProductId, Arg.Any<CancellationToken>())
-            .Returns(new MarketProductSnapshotDto(MarketProductId, "Cà chua", 20_000m, AvailableQuantity: 50));
+            .Returns(new MarketProductSnapshotDto(
+                MarketProductId, "Cà chua", 20_000m, AvailableQuantity: 50, PackingCode: "BOX-15"));
 
         _operationalSettings.GetAsync(Arg.Any<CancellationToken>())
             .Returns(OperationalSettings.CreateDefault());
@@ -218,6 +219,7 @@ public sealed class CreateDraftOrderCommandHandlerTests
         result.Value.Items.Should().ContainSingle();
         result.Value.Items[0].ProductNameSnapshot.Should().Be("Cà chua");
         result.Value.Items[0].UnitPrice.Should().Be(20_000m);
+        result.Value.Items[0].PackingCode.Should().Be("BOX-15");
     }
 
     [Fact]

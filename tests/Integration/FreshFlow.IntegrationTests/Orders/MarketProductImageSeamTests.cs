@@ -5,6 +5,7 @@ using FluentAssertions;
 using FreshFlow.Catalog.Domain.Entities;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.IntegrationTests.Infrastructure;
+using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Dtos;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Pricing.Domain.Entities;
@@ -21,20 +22,26 @@ public sealed class MarketProductImageSeamTests(AuthWebAppFactory factory)
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
-    public async Task GetOrder_ReturnsProductImageUrlAsync()
+    public async Task GetOrder_ReturnsProductImageAndPackingCodeAsync()
     {
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", adminToken);
         var restaurantId = await CreateRestaurantAsync();
-        var orderId = await SeedOrderAsync(restaurantId);
+        var seed = await SeedOrderAsync(restaurantId);
 
-        var response = await _client.GetAsync($"/api/v1/orders/{orderId}");
+        var response = await _client.GetAsync($"/api/v1/orders/{seed.OrderId}");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<Envelope<OrderDto>>();
-        body!.Data!.Items.Should().ContainSingle()
-            .Which.ImageUrl.Should().Be("https://img/tomato.jpg");
+        var item = body!.Data!.Items.Should().ContainSingle().Which;
+        item.ImageUrl.Should().Be("https://img/tomato.jpg");
+        item.PackingCode.Should().Be(seed.PackingCode);
+
+        using var scope = factory.Services.CreateScope();
+        var reader = scope.ServiceProvider.GetRequiredService<IMarketProductReader>();
+        var snapshot = await reader.FindAsync(seed.MarketProductId, default);
+        snapshot!.PackingCode.Should().Be(seed.PackingCode);
     }
 
     private async Task<string> LoginAsync(string identifier, string password)
@@ -67,22 +74,26 @@ public sealed class MarketProductImageSeamTests(AuthWebAppFactory factory)
             .Which.RestaurantId.Should().NotBeNull().And.Subject!.Value;
     }
 
-    private async Task<Guid> SeedOrderAsync(Guid restaurantId)
+    private async Task<SeededOrder> SeedOrderAsync(Guid restaurantId)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var unit = new UnitOfMeasurement($"kg-{Guid.NewGuid():N}", "kg");
+        var packingCode = new PackingCode($"BOX-{Guid.NewGuid():N}", null, 15m);
         var market = new Market(
             $"Order Image Market {Guid.NewGuid():N}",
             "HCMC",
             "1 Test Street",
             null,
             null);
-        var product = new Product("Order Image Tomato", unit.Id, null, null, null);
+        var product = new Product(
+            "Order Image Tomato", unit.Id, null, null, null, packingCodeId: packingCode.Id);
         product.Update(
-            "Order Image Tomato", null, unit.Id, null, imageUrl: "https://img/tomato.jpg");
+            "Order Image Tomato", null, unit.Id, null,
+            imageUrl: "https://img/tomato.jpg", packingCodeId: packingCode.Id);
         db.Set<UnitOfMeasurement>().Add(unit);
+        db.Set<PackingCode>().Add(packingCode);
         db.Set<Market>().Add(market);
         db.Set<Product>().Add(product);
         await db.SaveChangesAsync();
@@ -92,14 +103,17 @@ public sealed class MarketProductImageSeamTests(AuthWebAppFactory factory)
         await db.SaveChangesAsync();
 
         var order = new Order(restaurantId, null, null);
-        order.AddItem(marketProduct.Id, product.Name, 1, marketProduct.CurrentPrice);
+        order.AddItem(
+            marketProduct.Id, product.Name, 1, marketProduct.CurrentPrice,
+            packingCodeSnapshot: packingCode.Code);
         order.ClearDomainEvents();
         db.Set<Order>().Add(order);
         await db.SaveChangesAsync();
 
-        return order.Id;
+        return new SeededOrder(order.Id, marketProduct.Id, packingCode.Code);
     }
 
+    private sealed record SeededOrder(Guid OrderId, Guid MarketProductId, string PackingCode);
     private sealed record UserListBody(IReadOnlyList<UserSummaryBody> Data);
     private sealed record UserSummaryBody(Guid? RestaurantId);
 }

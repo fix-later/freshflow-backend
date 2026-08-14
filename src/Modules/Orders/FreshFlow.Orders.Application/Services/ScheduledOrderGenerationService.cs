@@ -165,7 +165,8 @@ public sealed class ScheduledOrderGenerationService(
                 snapshot.ProductName,
                 item.Quantity,
                 snapshot.CurrentPrice,
-                snapshot.MarketId);
+                snapshot.MarketId,
+                snapshot.PackingCode);
             if (add.IsFailure)
                 return add.Error.Message;
             orderRepository.TrackNewItem(order.Items.Last());

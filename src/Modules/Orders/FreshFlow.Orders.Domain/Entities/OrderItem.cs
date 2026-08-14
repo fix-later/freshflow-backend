@@ -6,7 +6,12 @@ public sealed class OrderItem : BaseEntity
 {
     private OrderItem() { } // EF Core
 
-    public OrderItem(Guid marketProductId, string productNameSnapshot, int quantity, decimal unitPrice)
+    public OrderItem(
+        Guid marketProductId,
+        string productNameSnapshot,
+        int quantity,
+        decimal unitPrice,
+        string? packingCodeSnapshot = null)
     {
         ValidateProductNameSnapshot(productNameSnapshot);
         ValidateQuantity(quantity);
@@ -16,6 +21,7 @@ public sealed class OrderItem : BaseEntity
         ProductNameSnapshot = productNameSnapshot;
         Quantity = quantity;
         UnitPrice = unitPrice;
+        PackingCodeSnapshot = packingCodeSnapshot;
     }
 
     public Guid OrderId { get; private set; }
@@ -23,6 +29,7 @@ public sealed class OrderItem : BaseEntity
     public string ProductNameSnapshot { get; private set; } = string.Empty;
     public int Quantity { get; private set; }
     public decimal UnitPrice { get; private set; }
+    public string? PackingCodeSnapshot { get; private set; }
     public decimal? LockedUnitPrice { get; private set; }
     public decimal? LockedTotal { get; private set; }
     public string? VatRateCode { get; private set; }

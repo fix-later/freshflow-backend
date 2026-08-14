@@ -62,7 +62,8 @@ internal sealed class GetLoadingManifestQueryHandler(
                     .Where(order => order.RestaurantId == stop.EntityId)
                     .SelectMany(order => linesByOrder.GetValueOrDefault(order.OrderId, []))
                     .Select(line => new LoadingLineDto(
-                        line.OrderId, line.OrderItemId, line.ProductName, line.Quantity, line.CapacityKg))
+                        line.OrderId, line.OrderItemId, line.ProductName, line.Quantity, line.CapacityKg,
+                        line.MarketProductId))
                     .ToList()))
             .Where(stop => stop.Lines.Count > 0)
             .OrderByDescending(stop => stop.StopOrder)

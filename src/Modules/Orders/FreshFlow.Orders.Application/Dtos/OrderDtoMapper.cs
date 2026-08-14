@@ -37,7 +37,8 @@ internal static class OrderDtoMapper
                 images?.GetValueOrDefault(i.MarketProductId),
                 i.VatRateCode,
                 i.VatRatePercent,
-                i.LockedVatAmount))
+                i.LockedVatAmount,
+                i.PackingCodeSnapshot))
             .ToList(),
         order.OrderGroupId,
         order.ScheduledOrderId,

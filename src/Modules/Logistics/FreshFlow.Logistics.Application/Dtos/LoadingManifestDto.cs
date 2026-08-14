@@ -22,4 +22,5 @@ public sealed record LoadingLineDto(
     Guid OrderItemId,
     string ProductName,
     decimal Quantity,
-    decimal? CapacityKg);
+    decimal? CapacityKg,
+    Guid MarketProductId);

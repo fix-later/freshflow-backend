@@ -17,4 +17,5 @@ internal sealed class MarketProductRow
     public string? VatRate { get; set; }
     public decimal? OriginLatitude { get; set; }
     public decimal? OriginLongitude { get; set; }
+    public string? PackingCode { get; set; }
 }
