@@ -54,6 +54,7 @@ public static class ErrorExtensions
                         or "MARKET_SESSION_NOT_CLOSED"
                         or "MARKET_SESSION_CLOSED"
                         or "MARKET_SESSION_CUTOFF_PASSED"
+                        or "MARKET_SESSION_CAPACITY_EXCEEDED"
                         or "MARKET_SESSION_CONFLICT")
             return new ConflictObjectResult(body);
 

@@ -139,6 +139,13 @@ public sealed class OrderConfirmationService(
             if (!gate.IsOpen)
                 return Result<OrderDto>.Failure(Error.Conflict(
                     "MARKET_SESSION_NOT_OPEN", "The market session is no longer accepting orders."));
+            // Hard capacity ceiling: reject a confirm that would push the session's goods weight
+            // past the admin-configured PlannedCapacityKg. Correctness under concurrent confirms
+            // relies on the surrounding SERIALIZABLE transaction (same guarantee as stock reservation).
+            if (gate.PlannedCapacityKg is { } capacityKg && capacityKg > 0m
+                && gate.ConfirmedGoodsKg + order.Items.Sum(item => item.Quantity) > capacityKg)
+                return Result<OrderDto>.Failure(Error.Conflict(
+                    "MARKET_SESSION_CAPACITY_EXCEEDED", "The market session has reached its planned capacity."));
             marketSessionId = gate.SessionId;
         }
 

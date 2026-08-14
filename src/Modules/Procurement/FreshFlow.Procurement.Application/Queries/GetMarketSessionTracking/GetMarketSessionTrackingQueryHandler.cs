@@ -26,6 +26,9 @@ internal sealed class GetMarketSessionTrackingQueryHandler(
         var names = await markets.ReadMarketCodesAsync([session.MarketId], ct);
         var readiness = await lifecycle.ReadReadinessAsync(session, ct);
 
+        var isCapacityExceeded = session.PlannedCapacityKg is { } capacityKg
+            && capacityKg > 0m && data.Summary.TotalQuantity > capacityKg;
+
         return Result<MarketSessionTrackingDto>.Success(new(
             GetMarketSessionsQueryHandler.ToDto(
                 session, names.GetValueOrDefault(session.MarketId).Name, readiness),
@@ -33,6 +36,7 @@ internal sealed class GetMarketSessionTrackingQueryHandler(
             data.Products,
             data.Orders,
             data.OrdersPagination,
-            data.Batch));
+            data.Batch,
+            isCapacityExceeded));
     }
 }

@@ -6,7 +6,8 @@ public sealed record MarketSessionTrackingDto(
     IReadOnlyList<MarketSessionTrackingProductDto> Products,
     IReadOnlyList<MarketSessionTrackingOrderDto> Orders,
     ProcurementBatchPaginationDto OrdersPagination,
-    MarketSessionTrackingBatchDto? Batch);
+    MarketSessionTrackingBatchDto? Batch,
+    bool IsCapacityExceeded = false);
 
 public sealed record MarketSessionTrackingSummaryDto(
     int TotalOrders,
