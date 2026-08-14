@@ -96,7 +96,8 @@ public sealed class DeliveryRoutePersistenceConfigurationTests
         restaurant.Should().NotBeNull();
         restaurant!.FindPrimaryKey().Should().BeNull();
         restaurant.GetForeignKeys().Should().BeEmpty();
-        restaurant.GetSqlQuery().Should().Contain("FROM delivery_addresses");
+        restaurant.GetSqlQuery().Should().Contain("FROM restaurants");
+        restaurant.GetSqlQuery().Should().Contain("LEFT JOIN delivery_addresses");
     }
 
     [Fact]
