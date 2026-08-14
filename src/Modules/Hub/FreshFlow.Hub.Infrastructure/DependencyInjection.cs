@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<IHubOutboundRepository, HubOutboundRepository>();
         services.AddScoped<IHubHandoverRepository, HubHandoverRepository>();
         services.AddScoped<IHubStaffAssignmentRepository, HubStaffAssignmentRepository>();
+        services.AddScoped<IHubDriverAssignmentRepository, HubDriverAssignmentRepository>();
         services.AddScoped<IHubSortingProgressRepository, HubSortingProgressRepository>();
         services.AddScoped<IHubStaffReader, HubStaffReader>();
         services.AddScoped<IMarketReader, MarketReader>();
