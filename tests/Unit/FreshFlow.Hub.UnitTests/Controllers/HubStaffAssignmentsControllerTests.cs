@@ -2,9 +2,11 @@ using System.Reflection;
 using System.Security.Claims;
 using FluentAssertions;
 using FreshFlow.API.Controllers;
+using FreshFlow.Hub.Application.Commands.ReplaceHubDriverAssignments;
 using FreshFlow.Hub.Application.Commands.ReplaceHubStaffAssignments;
 using FreshFlow.Hub.Application.Dtos;
 using FreshFlow.Hub.Application.Queries.GetAssignedHubs;
+using FreshFlow.Hub.Application.Queries.GetHubDriverAssignments;
 using FreshFlow.Hub.Application.Queries.GetHubStaffAssignments;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
@@ -82,6 +84,65 @@ public sealed class HubStaffAssignmentsControllerTests
         result.Should().BeOfType<OkObjectResult>();
         await sender.Received(1).Send(
             Arg.Is<GetAssignedHubsQuery>(query => query.UserId == userId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(nameof(HubStaffAssignmentsController.GetDriverAssignmentsAsync))]
+    [InlineData(nameof(HubStaffAssignmentsController.ReplaceDriverAssignmentsAsync))]
+    public void DriverEndpoints_RequireAdminOrOperationsManager(string methodName)
+    {
+        var attr = typeof(HubStaffAssignmentsController)
+            .GetMethod(methodName)!
+            .GetCustomAttribute<AuthorizeAttribute>();
+
+        attr.Should().NotBeNull();
+        attr!.Roles.Should().Be("admin,operations_manager");
+    }
+
+    [Fact]
+    public async Task ReplaceDriverAssignments_SendsReplaceListAndReturnsEnvelopeAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var hubId = Guid.NewGuid();
+        var userIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var actorUserId = Guid.NewGuid();
+        sender.Send(Arg.Any<ReplaceHubDriverAssignmentsCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<HubDriverAssignmentsDto>.Success(
+                new HubDriverAssignmentsDto(hubId, userIds)));
+        var controller = CreateController(sender, actorUserId);
+
+        var result = await controller.ReplaceDriverAssignmentsAsync(
+            hubId,
+            new ReplaceHubDriverAssignmentsRequest(userIds),
+            default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<ReplaceHubDriverAssignmentsCommand>(command =>
+                command.HubId == hubId &&
+                command.DriverUserIds.SequenceEqual(userIds) &&
+                command.ActorUserId == actorUserId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetDriverAssignments_SendsQueryWithActorUserIdAsync()
+    {
+        var sender = Substitute.For<ISender>();
+        var hubId = Guid.NewGuid();
+        var actorUserId = Guid.NewGuid();
+        sender.Send(Arg.Any<GetHubDriverAssignmentsQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Result<HubDriverAssignmentsDto>.Success(
+                new HubDriverAssignmentsDto(hubId, [])));
+        var controller = CreateController(sender, actorUserId);
+
+        var result = await controller.GetDriverAssignmentsAsync(hubId, default);
+
+        result.Should().BeOfType<OkObjectResult>();
+        await sender.Received(1).Send(
+            Arg.Is<GetHubDriverAssignmentsQuery>(query =>
+                query.HubId == hubId && query.ActorUserId == actorUserId),
             Arg.Any<CancellationToken>());
     }
 
