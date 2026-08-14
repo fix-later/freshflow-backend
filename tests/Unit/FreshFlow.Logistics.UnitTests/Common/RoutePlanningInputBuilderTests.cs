@@ -34,8 +34,8 @@ public sealed class RoutePlanningInputBuilderTests
                 Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>(),
                 hubId, Arg.Any<DateOnly>())
             .Returns([
-                new OrderStatusLookupDto(reservedOrderId, "AtHub", restaurantId, hubId),
-                new OrderStatusLookupDto(newOrderId, "Batched", restaurantId, hubId)
+                new OrderStatusLookupDto(reservedOrderId, "AtHub", restaurantId, hubId, 10.1m, 106.1m),
+                new OrderStatusLookupDto(newOrderId, "Batched", restaurantId, hubId, 10.2m, 106.2m)
             ]);
         var packing = Substitute.For<IOrderPackingReader>();
         packing.GetLinesByOrdersAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())

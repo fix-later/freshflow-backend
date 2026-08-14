@@ -12,6 +12,8 @@ internal sealed class OrderStatusRowConfiguration : IEntityTypeConfiguration<Ord
             """
             SELECT o."Id" AS "OrderId", o."Status" AS "Status",
                    o."RestaurantId" AS "RestaurantId", o."ScheduledFor" AS "ScheduledFor",
+                   o."delivery_latitude" AS "DeliveryLatitude",
+                   o."delivery_longitude" AS "DeliveryLongitude",
                    pb.hub_id AS "HubId"
             FROM orders o
             LEFT JOIN procurement_batch_orders pbo
@@ -25,5 +27,7 @@ internal sealed class OrderStatusRowConfiguration : IEntityTypeConfiguration<Ord
         builder.Property(o => o.RestaurantId);
         builder.Property(o => o.HubId);
         builder.Property(o => o.ScheduledFor);
+        builder.Property(o => o.DeliveryLatitude);
+        builder.Property(o => o.DeliveryLongitude);
     }
 }

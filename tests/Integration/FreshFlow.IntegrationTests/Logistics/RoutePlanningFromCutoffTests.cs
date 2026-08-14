@@ -126,6 +126,9 @@ public sealed class RoutePlanningFromCutoffTests(AuthWebAppFactory factory)
             null);
         order.AddItem(marketProduct.Id, product.Name, 10, marketProduct.CurrentPrice)
             .IsSuccess.Should().BeTrue();
+        order.CaptureDeliveryAddress(
+            Guid.NewGuid(), "Route Recipient", "0900000000", "2 Route St", 10.76m, 106.68m)
+            .IsSuccess.Should().BeTrue();
         order.ClearDomainEvents();
         db.Set<Order>().Add(order);
         db.Entry(order).Property(nameof(Order.Status)).CurrentValue = OrderStatus.Batched;

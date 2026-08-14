@@ -43,13 +43,21 @@ public sealed class RoutePlanningInputBuilder(
                 [], [], Revision("empty", hubId, serviceDate)));
         }
 
-        var coordinateByRestaurant = new Dictionary<Guid, RestaurantCoordinateDto>();
+        // Stops are located at the address captured at checkout (orders.delivery_latitude/longitude),
+        // not the restaurant's default address. The restaurant record only supplies the display name.
+        // ponytail: multiple checkout addresses for one restaurant in a session collapse to a single stop
+        // (the earliest order's coords); split into per-address stops if chains order to several branches/day.
+        var badOrder = routableOrders.FirstOrDefault(o => !Valid(o.DeliveryLatitude, o.DeliveryLongitude));
+        if (badOrder is not null)
+            return MissingCoordinates($"Order '{badOrder.OrderId}' has no checkout delivery coordinates.");
+
+        var nameByRestaurant = new Dictionary<Guid, string>();
         foreach (var restaurantId in routableOrders.Select(x => x.RestaurantId).Distinct().Order())
         {
-            var coordinate = await restaurants.FindByRestaurantIdAsync(restaurantId, ct);
-            if (coordinate is null || !Valid(coordinate.Latitude, coordinate.Longitude))
+            var restaurant = await restaurants.FindByRestaurantIdAsync(restaurantId, ct);
+            if (restaurant is null)
                 return MissingCoordinates($"Restaurant '{restaurantId}' has no coordinates configured.");
-            coordinateByRestaurant[restaurantId] = coordinate;
+            nameByRestaurant[restaurantId] = restaurant.Name;
         }
 
         var packingRows = await packing.GetLinesByOrdersAsync(routableOrders.Select(x => x.OrderId).ToList(), ct);
@@ -73,11 +81,11 @@ public sealed class RoutePlanningInputBuilder(
             .OrderBy(group => group.Key)
             .Select(group =>
             {
-                var coordinate = coordinateByRestaurant[group.Key];
+                var anchor = group.OrderBy(x => x.OrderId).First();
                 var orderIds = group.Select(x => x.OrderId).Order().ToList().AsReadOnly();
                 return new RestaurantDemand(
-                    group.Key, coordinate.Name, orderIds,
-                    coordinate.Latitude!.Value, coordinate.Longitude!.Value,
+                    group.Key, nameByRestaurant[group.Key], orderIds,
+                    anchor.DeliveryLatitude!.Value, anchor.DeliveryLongitude!.Value,
                     orderIds.Sum(orderId => packingByOrder[orderId].Sum(LineLoad)));
             })
             .ToList()
