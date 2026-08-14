@@ -105,7 +105,8 @@ public sealed class Order : AggregateRoot
         int quantity,
         decimal unitPrice,
         Guid? marketId = null,
-        string? packingCodeSnapshot = null)
+        string? packingCodeSnapshot = null,
+        decimal? packingWeightKgSnapshot = null)
     {
         if (Status != OrderStatus.Draft)
             return Result.Failure(Error.Conflict(
@@ -118,7 +119,8 @@ public sealed class Order : AggregateRoot
         if (marketId.HasValue)
             MarketId = marketId;
         var item = new OrderItem(
-            marketProductId, productNameSnapshot, quantity, unitPrice, packingCodeSnapshot);
+            marketProductId, productNameSnapshot, quantity, unitPrice,
+            packingCodeSnapshot, packingWeightKgSnapshot);
         _items.Add(item);
         RecalculateTotal();
 

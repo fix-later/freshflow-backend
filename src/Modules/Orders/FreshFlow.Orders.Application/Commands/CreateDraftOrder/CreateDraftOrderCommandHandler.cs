@@ -79,7 +79,8 @@ internal sealed class CreateDraftOrderCommandHandler(
                 requestedItem.Quantity,
                 snapshot.CurrentPrice,
                 snapshot.MarketId,
-                snapshot.PackingCode);
+                snapshot.PackingCode,
+                snapshot.PackingWeightKg);
             if (add.IsFailure)
                 return Result<OrderDto>.Failure(add.Error);
         }
