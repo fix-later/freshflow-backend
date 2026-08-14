@@ -23,6 +23,7 @@ internal sealed class MarketProductRowConfiguration : IEntityTypeConfiguration<M
                 p."MinimumOrderQuantity",
                 p."VatRate",
                 pc."Code" AS "PackingCode",
+                pc."CapacityKg" AS "PackingWeightKg",
                 CASE WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL
                     THEN h.latitude ELSE m."Latitude" END AS "OriginLatitude",
                 CASE WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL
@@ -47,5 +48,6 @@ internal sealed class MarketProductRowConfiguration : IEntityTypeConfiguration<M
         builder.Property(m => m.OriginLatitude);
         builder.Property(m => m.OriginLongitude);
         builder.Property(m => m.PackingCode);
+        builder.Property(m => m.PackingWeightKg);
     }
 }

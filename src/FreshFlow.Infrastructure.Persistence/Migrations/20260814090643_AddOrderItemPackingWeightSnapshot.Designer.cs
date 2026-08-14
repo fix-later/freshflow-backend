@@ -3,6 +3,7 @@ using System;
 using FreshFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FreshFlow.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260814090643_AddOrderItemPackingWeightSnapshot")]
+    partial class AddOrderItemPackingWeightSnapshot
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -32,7 +35,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    dr.id AS \"DeliveryRouteId\",\n    v.capacity_kg AS \"CapacityKg\"\nFROM delivery_routes dr\nJOIN vehicles v ON v.id = dr.vehicle_id\nWHERE dr.deleted_at IS NULL\n  AND v.deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    dr.id AS \"DeliveryRouteId\",\r\n    v.capacity_kg AS \"CapacityKg\"\r\nFROM delivery_routes dr\r\nJOIN vehicles v ON v.id = dr.vehicle_id\r\nWHERE dr.deleted_at IS NULL\r\n  AND v.deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.DeliveryRow", b =>
@@ -58,7 +61,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    id AS \"DeliveryId\",\n    delivery_route_id AS \"DeliveryRouteId\",\n    status AS \"Status\",\n    estimated_arrival AS \"EstimatedArrival\",\n    actual_arrival AS \"ActualArrival\",\n    updated_at AS \"UpdatedAt\"\nFROM deliveries\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    id AS \"DeliveryId\",\r\n    delivery_route_id AS \"DeliveryRouteId\",\r\n    status AS \"Status\",\r\n    estimated_arrival AS \"EstimatedArrival\",\r\n    actual_arrival AS \"ActualArrival\",\r\n    updated_at AS \"UpdatedAt\"\r\nFROM deliveries\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.HandoverDepartureRow", b =>
@@ -71,7 +74,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    delivery_route_id AS \"DeliveryRouteId\",\n    MIN(driver_confirmed_at) AS \"DriverConfirmedAt\"\nFROM hub_handover_events\nWHERE status = 'CHECKED_OUT'\n  AND driver_confirmed_at IS NOT NULL\n  AND deleted_at IS NULL\nGROUP BY delivery_route_id");
+                    b.ToSqlQuery("SELECT\r\n    delivery_route_id AS \"DeliveryRouteId\",\r\n    MIN(driver_confirmed_at) AS \"DriverConfirmedAt\"\r\nFROM hub_handover_events\r\nWHERE status = 'CHECKED_OUT'\r\n  AND driver_confirmed_at IS NOT NULL\r\n  AND deleted_at IS NULL\r\nGROUP BY delivery_route_id");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.HubInboundEventRow", b =>
@@ -94,7 +97,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    id AS \"InboundEventId\",\n    hub_id AS \"HubId\",\n    status AS \"Status\",\n    total_quantity_kg AS \"TotalQuantityKg\",\n    arrived_at AS \"ArrivedAt\"\nFROM hub_inbound_events\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    id AS \"InboundEventId\",\r\n    hub_id AS \"HubId\",\r\n    status AS \"Status\",\r\n    total_quantity_kg AS \"TotalQuantityKg\",\r\n    arrived_at AS \"ArrivedAt\"\r\nFROM hub_inbound_events\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.HubOutboundEventRow", b =>
@@ -116,7 +119,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    id AS \"OutboundEventId\",\n    hub_id AS \"HubId\",\n    destination_route_id AS \"DestinationRouteId\",\n    total_quantity_kg AS \"TotalQuantityKg\",\n    dispatched_at AS \"DispatchedAt\"\nFROM hub_outbound_events\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    id AS \"OutboundEventId\",\r\n    hub_id AS \"HubId\",\r\n    destination_route_id AS \"DestinationRouteId\",\r\n    total_quantity_kg AS \"TotalQuantityKg\",\r\n    dispatched_at AS \"DispatchedAt\"\r\nFROM hub_outbound_events\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.HubRow", b =>
@@ -130,7 +133,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    id AS \"HubId\",\n    name AS \"HubName\"\nFROM hubs\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    id AS \"HubId\",\r\n    name AS \"HubName\"\r\nFROM hubs\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.MarketProductDetailRow", b =>
@@ -148,7 +151,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    mp.\"Id\" AS \"MarketProductId\",\n    p.\"Name\" AS \"ProductName\",\n    m.\"Name\" AS \"MarketName\"\nFROM market_products mp\nJOIN products p ON p.\"Id\" = mp.\"ProductId\"\nJOIN markets m ON m.\"Id\" = mp.\"MarketId\"\nWHERE mp.\"deleted_at\" IS NULL\n  AND p.\"DeletedAt\" IS NULL\n  AND m.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    mp.\"Id\" AS \"MarketProductId\",\r\n    p.\"Name\" AS \"ProductName\",\r\n    m.\"Name\" AS \"MarketName\"\r\nFROM market_products mp\r\nJOIN products p ON p.\"Id\" = mp.\"ProductId\"\r\nJOIN markets m ON m.\"Id\" = mp.\"MarketId\"\r\nWHERE mp.\"deleted_at\" IS NULL\r\n  AND p.\"DeletedAt\" IS NULL\r\n  AND m.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.OrderItemCategoryRow", b =>
@@ -164,7 +167,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    oi.\"OrderId\" AS \"OrderId\",\n    oi.\"Quantity\" AS \"Quantity\",\n    c.\"Name\" AS \"CategoryName\"\nFROM order_items oi\nINNER JOIN market_products mp ON oi.\"MarketProductId\" = mp.\"Id\"\nINNER JOIN products p ON mp.\"ProductId\" = p.\"Id\"\nLEFT JOIN product_categories c ON p.\"CategoryId\" = c.\"Id\"\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    oi.\"OrderId\" AS \"OrderId\",\r\n    oi.\"Quantity\" AS \"Quantity\",\r\n    c.\"Name\" AS \"CategoryName\"\r\nFROM order_items oi\r\nINNER JOIN market_products mp ON oi.\"MarketProductId\" = mp.\"Id\"\r\nINNER JOIN products p ON mp.\"ProductId\" = p.\"Id\"\r\nLEFT JOIN product_categories c ON p.\"CategoryId\" = c.\"Id\"\r\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.OrderSummaryRow", b =>
@@ -190,7 +193,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    \"Id\" AS \"OrderId\",\n    \"RestaurantId\" AS \"RestaurantId\",\n    \"Status\" AS \"Status\",\n    \"TotalAmount\" AS \"TotalAmount\",\n    \"CreatedAt\" AS \"CreatedAt\",\n    \"CancelledAt\" AS \"CancelledAt\"\nFROM orders\nWHERE \"deleted_at\" IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    \"Id\" AS \"OrderId\",\r\n    \"RestaurantId\" AS \"RestaurantId\",\r\n    \"Status\" AS \"Status\",\r\n    \"TotalAmount\" AS \"TotalAmount\",\r\n    \"CreatedAt\" AS \"CreatedAt\",\r\n    \"CancelledAt\" AS \"CancelledAt\"\r\nFROM orders\r\nWHERE \"deleted_at\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.PriceSnapshotRow", b =>
@@ -218,7 +221,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    \"MarketProductId\" AS \"MarketProductId\",\n    date_trunc('hour', \"RecordedAt\", 'UTC') AS \"BucketStartUtc\",\n    MIN(\"Price\") AS \"MinPrice\",\n    MAX(\"Price\") AS \"MaxPrice\",\n    AVG(\"Price\") AS \"AvgPrice\",\n    COUNT(*)::integer AS \"SnapshotCount\",\n    stddev_samp(\"Price\") AS \"PriceVolatility\"\nFROM price_snapshots\nGROUP BY \"MarketProductId\", date_trunc('hour', \"RecordedAt\", 'UTC')");
+                    b.ToSqlQuery("SELECT\r\n    \"MarketProductId\" AS \"MarketProductId\",\r\n    date_trunc('hour', \"RecordedAt\", 'UTC') AS \"BucketStartUtc\",\r\n    MIN(\"Price\") AS \"MinPrice\",\r\n    MAX(\"Price\") AS \"MaxPrice\",\r\n    AVG(\"Price\") AS \"AvgPrice\",\r\n    COUNT(*)::integer AS \"SnapshotCount\",\r\n    stddev_samp(\"Price\") AS \"PriceVolatility\"\r\nFROM price_snapshots\r\nGROUP BY \"MarketProductId\", date_trunc('hour', \"RecordedAt\", 'UTC')");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.ProcurementBatchItemRow", b =>
@@ -237,7 +240,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    procurement_batch_id AS \"ProcurementBatchId\",\n    reference_unit_price AS \"ReferenceUnitPrice\",\n    actual_quantity AS \"ActualQuantity\",\n    actual_unit_price AS \"ActualUnitPrice\"\nFROM procurement_batch_items\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    procurement_batch_id AS \"ProcurementBatchId\",\r\n    reference_unit_price AS \"ReferenceUnitPrice\",\r\n    actual_quantity AS \"ActualQuantity\",\r\n    actual_unit_price AS \"ActualUnitPrice\"\r\nFROM procurement_batch_items\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.ProcurementBatchRow", b =>
@@ -263,7 +266,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    id AS \"BatchId\",\n    batch_date AS \"BatchDate\",\n    market_id AS \"MarketId\",\n    status AS \"Status\",\n    manifested_at AS \"ManifestedAt\",\n    handed_off_at AS \"HandedOffAt\"\nFROM procurement_batches\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    id AS \"BatchId\",\r\n    batch_date AS \"BatchDate\",\r\n    market_id AS \"MarketId\",\r\n    status AS \"Status\",\r\n    manifested_at AS \"ManifestedAt\",\r\n    handed_off_at AS \"HandedOffAt\"\r\nFROM procurement_batches\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.ProcurementExceptionRow", b =>
@@ -277,7 +280,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    procurement_batch_id AS \"ProcurementBatchId\",\n    type AS \"Type\"\nFROM procurement_exceptions\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    procurement_batch_id AS \"ProcurementBatchId\",\r\n    type AS \"Type\"\r\nFROM procurement_exceptions\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Analytics.Infrastructure.CrossModule.RestaurantCoordinateRow", b =>
@@ -297,7 +300,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT da.\"RestaurantId\", r.\"Name\" AS \"Name\", da.\"Latitude\", da.\"Longitude\"\nFROM delivery_addresses da\nJOIN restaurants r ON r.\"Id\" = da.\"RestaurantId\"\nWHERE da.\"IsDefault\" = true AND da.\"DeletedAt\" IS NULL AND r.status = 'active'");
+                    b.ToSqlQuery("SELECT da.\"RestaurantId\", r.\"Name\" AS \"Name\", da.\"Latitude\", da.\"Longitude\"\r\nFROM delivery_addresses da\r\nJOIN restaurants r ON r.\"Id\" = da.\"RestaurantId\"\r\nWHERE da.\"IsDefault\" = true AND da.\"DeletedAt\" IS NULL AND r.status = 'active'");
                 });
 
             modelBuilder.Entity("FreshFlow.Auth.Domain.Aggregates.User", b =>
@@ -1669,7 +1672,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT id AS \"RouteId\", hub_id AS \"HubId\", status AS \"Status\",\n       driver_user_id AS \"DriverUserId\"\nFROM delivery_routes\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT id AS \"RouteId\", hub_id AS \"HubId\", status AS \"Status\",\r\n       driver_user_id AS \"DriverUserId\"\r\nFROM delivery_routes\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubOrderLineRow", b =>
@@ -1701,7 +1704,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    oi.\"OrderId\"             AS \"OrderId\",\n    oi.\"Id\"                  AS \"OrderItemId\",\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\n    mp.\"Id\"                  AS \"MarketProductId\",\n    mp.\"ProductId\"           AS \"ProductId\",\n    COALESCE(u.\"Name\", p.unit) AS \"Unit\",\n    oi.\"Quantity\"            AS \"Quantity\",\n    pc.\"CapacityKg\"          AS \"CapacityKg\"\nFROM order_items oi\nINNER JOIN orders o          ON o.\"Id\" = oi.\"OrderId\" AND o.\"deleted_at\" IS NULL\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\nINNER JOIN products p        ON p.\"Id\" = mp.\"ProductId\"\nLEFT JOIN units_of_measurement u ON u.\"Id\" = p.\"UnitId\"\nLEFT JOIN packing_codes pc   ON pc.\"Id\" = p.\"PackingCodeId\" AND pc.\"DeletedAt\" IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    oi.\"OrderId\"             AS \"OrderId\",\r\n    oi.\"Id\"                  AS \"OrderItemId\",\r\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\r\n    mp.\"Id\"                  AS \"MarketProductId\",\r\n    mp.\"ProductId\"           AS \"ProductId\",\r\n    COALESCE(u.\"Name\", p.unit) AS \"Unit\",\r\n    oi.\"Quantity\"            AS \"Quantity\",\r\n    pc.\"CapacityKg\"          AS \"CapacityKg\"\r\nFROM order_items oi\r\nINNER JOIN orders o          ON o.\"Id\" = oi.\"OrderId\" AND o.\"deleted_at\" IS NULL\r\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\r\nINNER JOIN products p        ON p.\"Id\" = mp.\"ProductId\"\r\nLEFT JOIN units_of_measurement u ON u.\"Id\" = p.\"UnitId\"\r\nLEFT JOIN packing_codes pc   ON pc.\"Id\" = p.\"PackingCodeId\" AND pc.\"DeletedAt\" IS NULL\r\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubProcurementBatchRow", b =>
@@ -1730,7 +1733,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT id AS \"BatchId\",\n       batch_date AS \"BatchDate\",\n       market_id AS \"MarketId\",\n       hub_id AS \"HubId\",\n       status AS \"Status\",\n       handed_off_at AS \"HandedOffAt\",\n       assigned_agent_user_id AS \"AssignedAgentUserId\"\nFROM procurement_batches\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT id AS \"BatchId\",\r\n       batch_date AS \"BatchDate\",\r\n       market_id AS \"MarketId\",\r\n       hub_id AS \"HubId\",\r\n       status AS \"Status\",\r\n       handed_off_at AS \"HandedOffAt\",\r\n       assigned_agent_user_id AS \"AssignedAgentUserId\"\r\nFROM procurement_batches\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubProcurementItemRow", b =>
@@ -1759,7 +1762,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT procurement_batch_id AS \"ProcurementBatchId\",\n       market_product_id AS \"MarketProductId\",\n       product_name_snapshot AS \"ProductName\",\n       total_quantity AS \"TargetQuantity\",\n       actual_quantity AS \"ActualQuantity\",\n       actual_unit_price AS \"ActualUnitPrice\",\n       purchased_at AS \"PurchasedAt\"\nFROM procurement_batch_items\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT procurement_batch_id AS \"ProcurementBatchId\",\r\n       market_product_id AS \"MarketProductId\",\r\n       product_name_snapshot AS \"ProductName\",\r\n       total_quantity AS \"TargetQuantity\",\r\n       actual_quantity AS \"ActualQuantity\",\r\n       actual_unit_price AS \"ActualUnitPrice\",\r\n       purchased_at AS \"PurchasedAt\"\r\nFROM procurement_batch_items\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubProcurementOrderRow", b =>
@@ -1772,7 +1775,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT procurement_batch_id AS \"ProcurementBatchId\",\n       order_id AS \"OrderId\"\nFROM procurement_batch_orders\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT procurement_batch_id AS \"ProcurementBatchId\",\r\n       order_id AS \"OrderId\"\r\nFROM procurement_batch_orders\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubRestaurantOrderRow", b =>
@@ -1799,7 +1802,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT pb.hub_id           AS \"HubId\",\n       pbo.order_id        AS \"OrderId\",\n       o.\"RestaurantId\"    AS \"RestaurantId\",\n       r.\"Name\"            AS \"RestaurantName\",\n       o.\"Status\"          AS \"Status\",\n       o.\"ScheduledFor\"    AS \"ScheduledFor\"\nFROM procurement_batches pb\nJOIN procurement_batch_orders pbo ON pbo.procurement_batch_id = pb.id AND pbo.deleted_at IS NULL\nJOIN orders o        ON o.\"Id\" = pbo.order_id AND o.\"deleted_at\" IS NULL\nJOIN restaurants r   ON r.\"Id\" = o.\"RestaurantId\"\nWHERE pb.deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT pb.hub_id           AS \"HubId\",\r\n       pbo.order_id        AS \"OrderId\",\r\n       o.\"RestaurantId\"    AS \"RestaurantId\",\r\n       r.\"Name\"            AS \"RestaurantName\",\r\n       o.\"Status\"          AS \"Status\",\r\n       o.\"ScheduledFor\"    AS \"ScheduledFor\"\r\nFROM procurement_batches pb\r\nJOIN procurement_batch_orders pbo ON pbo.procurement_batch_id = pb.id AND pbo.deleted_at IS NULL\r\nJOIN orders o        ON o.\"Id\" = pbo.order_id AND o.\"deleted_at\" IS NULL\r\nJOIN restaurants r   ON r.\"Id\" = o.\"RestaurantId\"\r\nWHERE pb.deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.HubStaffUserRow", b =>
@@ -1819,7 +1822,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    u.\"Id\" AS \"UserId\",\n    r.\"Name\" AS \"RoleName\",\n    u.\"IsActive\" AS \"IsActive\",\n    u.\"DeletedAt\" AS \"DeletedAt\"\nFROM users AS u\nINNER JOIN roles AS r ON u.\"RoleId\" = r.\"Id\"");
+                    b.ToSqlQuery("SELECT\r\n    u.\"Id\" AS \"UserId\",\r\n    r.\"Name\" AS \"RoleName\",\r\n    u.\"IsActive\" AS \"IsActive\",\r\n    u.\"DeletedAt\" AS \"DeletedAt\"\r\nFROM users AS u\r\nINNER JOIN roles AS r ON u.\"RoleId\" = r.\"Id\"");
                 });
 
             modelBuilder.Entity("FreshFlow.Hub.Infrastructure.CrossModule.MarketRow", b =>
@@ -1854,7 +1857,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    oi.\"Id\" AS \"OrderItemId\",\n    oi.\"OrderId\" AS \"OrderId\",\n    oi.\"MarketProductId\" AS \"MarketProductId\",\n    oi.\"Quantity\"::numeric AS \"Quantity\",\n    oi.\"ActualQuantity\" AS \"ActualQuantity\"\nFROM order_items oi");
+                    b.ToSqlQuery("SELECT\r\n    oi.\"Id\" AS \"OrderItemId\",\r\n    oi.\"OrderId\" AS \"OrderId\",\r\n    oi.\"MarketProductId\" AS \"MarketProductId\",\r\n    oi.\"Quantity\"::numeric AS \"Quantity\",\r\n    oi.\"ActualQuantity\" AS \"ActualQuantity\"\r\nFROM order_items oi");
                 });
 
             modelBuilder.Entity("FreshFlow.Infrastructure.Persistence.Entities.AssistantConversation", b =>
@@ -2171,7 +2174,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    o.\"Id\" AS \"OrderId\",\n    o.\"RestaurantId\",\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\n    COALESCE(u.\"Name\", p.unit) AS \"Unit\",\n    COALESCE(oi.\"ActualQuantity\", oi.\"Quantity\") AS \"Quantity\",\n    COALESCE(oi.\"ActualUnitPrice\", oi.\"LockedUnitPrice\", oi.\"UnitPrice\") AS \"UnitPrice\",\n    oi.vat_rate_code AS \"VatRateCode\"\nFROM orders o\nINNER JOIN order_items oi ON oi.\"OrderId\" = o.\"Id\"\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\nINNER JOIN products p ON p.\"Id\" = mp.\"ProductId\"\nLEFT JOIN units_of_measurement u ON u.\"Id\" = p.\"UnitId\"\nWHERE o.deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    o.\"Id\" AS \"OrderId\",\r\n    o.\"RestaurantId\",\r\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\r\n    COALESCE(u.\"Name\", p.unit) AS \"Unit\",\r\n    COALESCE(oi.\"ActualQuantity\", oi.\"Quantity\") AS \"Quantity\",\r\n    COALESCE(oi.\"ActualUnitPrice\", oi.\"LockedUnitPrice\", oi.\"UnitPrice\") AS \"UnitPrice\",\r\n    oi.vat_rate_code AS \"VatRateCode\"\r\nFROM orders o\r\nINNER JOIN order_items oi ON oi.\"OrderId\" = o.\"Id\"\r\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\r\nINNER JOIN products p ON p.\"Id\" = mp.\"ProductId\"\r\nLEFT JOIN units_of_measurement u ON u.\"Id\" = p.\"UnitId\"\r\nWHERE o.deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Invoicing.Infrastructure.CrossModule.RestaurantTaxProfileRow", b =>
@@ -2200,7 +2203,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT \"Id\", \"UserId\", \"Name\", \"TaxCode\", \"InvoiceLegalName\", \"InvoiceAddress\", \"InvoiceEmail\"\nFROM restaurants");
+                    b.ToSqlQuery("SELECT \"Id\", \"UserId\", \"Name\", \"TaxCode\", \"InvoiceLegalName\", \"InvoiceAddress\", \"InvoiceEmail\"\r\nFROM restaurants");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Domain.Entities.Delivery", b =>
@@ -2644,7 +2647,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT u.\"Id\" AS \"UserId\", r.\"Name\" AS \"RoleName\", u.\"IsActive\" AS \"IsActive\"\nFROM users u\nJOIN roles r ON r.\"Id\" = u.\"RoleId\"\nWHERE u.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT u.\"Id\" AS \"UserId\", r.\"Name\" AS \"RoleName\", u.\"IsActive\" AS \"IsActive\"\r\nFROM users u\r\nJOIN roles r ON r.\"Id\" = u.\"RoleId\"\r\nWHERE u.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.HubCoordinateRow", b =>
@@ -2667,7 +2670,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT id AS \"Id\",\n       market_id AS \"MarketId\",\n       name AS \"Name\",\n       latitude AS \"Latitude\",\n       longitude AS \"Longitude\"\nFROM hubs\nWHERE deleted_at IS NULL AND is_active = TRUE");
+                    b.ToSqlQuery("SELECT id AS \"Id\",\r\n       market_id AS \"MarketId\",\r\n       name AS \"Name\",\r\n       latitude AS \"Latitude\",\r\n       longitude AS \"Longitude\"\r\nFROM hubs\r\nWHERE deleted_at IS NULL AND is_active = TRUE");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.HubDiscrepancyStatusRow", b =>
@@ -2677,7 +2680,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT order_id AS \"OrderId\"\nFROM hub_discrepancies\nWHERE status = 'OPEN' AND deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT order_id AS \"OrderId\"\r\nFROM hub_discrepancies\r\nWHERE status = 'OPEN' AND deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.HubSortingStateRow", b =>
@@ -2700,7 +2703,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    sorting.route_id     AS \"RouteId\",\n    sorting.hub_id       AS \"HubId\",\n    hub.market_id        AS \"MarketId\",\n    sorting.service_date AS \"ServiceDate\",\n    sorting.status       AS \"Status\"\nFROM hub_sorting_progress sorting\nINNER JOIN hubs hub ON hub.id = sorting.hub_id AND hub.deleted_at IS NULL\nWHERE sorting.deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    sorting.route_id     AS \"RouteId\",\r\n    sorting.hub_id       AS \"HubId\",\r\n    hub.market_id        AS \"MarketId\",\r\n    sorting.service_date AS \"ServiceDate\",\r\n    sorting.status       AS \"Status\"\r\nFROM hub_sorting_progress sorting\r\nINNER JOIN hubs hub ON hub.id = sorting.hub_id AND hub.deleted_at IS NULL\r\nWHERE sorting.deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.MarketCoordinateRow", b =>
@@ -2740,7 +2743,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT ms.id AS \"Id\", ms.hub_id AS \"HubId\",\n       ms.service_date AS \"ServiceDate\", ms.status AS \"Status\"\nFROM market_sessions ms\nWHERE ms.hub_id IS NOT NULL AND ms.deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT ms.id AS \"Id\", ms.hub_id AS \"HubId\",\r\n       ms.service_date AS \"ServiceDate\", ms.status AS \"Status\"\r\nFROM market_sessions ms\r\nWHERE ms.hub_id IS NOT NULL AND ms.deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.MarketSessionVehicleAssignmentRow", b =>
@@ -2756,7 +2759,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT ms.hub_id AS \"HubId\", ms.service_date AS \"ServiceDate\", msv.vehicle_id AS \"VehicleId\"\nFROM market_sessions ms\nJOIN market_session_vehicles msv ON msv.session_id = ms.id\nWHERE ms.hub_id IS NOT NULL AND ms.deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT ms.hub_id AS \"HubId\", ms.service_date AS \"ServiceDate\", msv.vehicle_id AS \"VehicleId\"\r\nFROM market_sessions ms\r\nJOIN market_session_vehicles msv ON msv.session_id = ms.id\r\nWHERE ms.hub_id IS NOT NULL AND ms.deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.OrderMarketRow", b =>
@@ -2780,7 +2783,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT o.\"Id\" AS \"OrderId\", o.\"Status\" AS \"Status\",\n       o.\"ScheduledFor\" AS \"ScheduledFor\",\n       mp.\"MarketId\" AS \"MarketId\", m.\"Name\" AS \"MarketName\"\nFROM order_items oi\nJOIN orders o ON o.\"Id\" = oi.\"OrderId\" AND o.\"deleted_at\" IS NULL\nJOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\" AND mp.\"deleted_at\" IS NULL\nJOIN markets m ON m.\"Id\" = mp.\"MarketId\" AND m.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT o.\"Id\" AS \"OrderId\", o.\"Status\" AS \"Status\",\r\n       o.\"ScheduledFor\" AS \"ScheduledFor\",\r\n       mp.\"MarketId\" AS \"MarketId\", m.\"Name\" AS \"MarketName\"\r\nFROM order_items oi\r\nJOIN orders o ON o.\"Id\" = oi.\"OrderId\" AND o.\"deleted_at\" IS NULL\r\nJOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\" AND mp.\"deleted_at\" IS NULL\r\nJOIN markets m ON m.\"Id\" = mp.\"MarketId\" AND m.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.OrderPackingLineRow", b =>
@@ -2806,7 +2809,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    oi.\"OrderId\"             AS \"OrderId\",\n    oi.\"Id\"                  AS \"OrderItemId\",\n    oi.\"MarketProductId\"     AS \"MarketProductId\",\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\n    COALESCE(oi.\"ActualQuantity\", oi.\"Quantity\") AS \"Quantity\",\n    pc.\"CapacityKg\"          AS \"CapacityKg\"\nFROM order_items oi\nINNER JOIN orders o          ON o.\"Id\" = oi.\"OrderId\" AND o.\"deleted_at\" IS NULL\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\nINNER JOIN products p        ON p.\"Id\" = mp.\"ProductId\"\nLEFT JOIN packing_codes pc   ON pc.\"Id\" = p.\"PackingCodeId\" AND pc.\"DeletedAt\" IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    oi.\"OrderId\"             AS \"OrderId\",\r\n    oi.\"Id\"                  AS \"OrderItemId\",\r\n    oi.\"MarketProductId\"     AS \"MarketProductId\",\r\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\r\n    COALESCE(oi.\"ActualQuantity\", oi.\"Quantity\") AS \"Quantity\",\r\n    pc.\"CapacityKg\"          AS \"CapacityKg\"\r\nFROM order_items oi\r\nINNER JOIN orders o          ON o.\"Id\" = oi.\"OrderId\" AND o.\"deleted_at\" IS NULL\r\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\r\nINNER JOIN products p        ON p.\"Id\" = mp.\"ProductId\"\r\nLEFT JOIN packing_codes pc   ON pc.\"Id\" = p.\"PackingCodeId\" AND pc.\"DeletedAt\" IS NULL\r\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.OrderStatusRow", b =>
@@ -2835,7 +2838,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT o.\"Id\" AS \"OrderId\", o.\"Status\" AS \"Status\",\n       o.\"RestaurantId\" AS \"RestaurantId\", o.\"ScheduledFor\" AS \"ScheduledFor\",\n       o.\"delivery_latitude\" AS \"DeliveryLatitude\",\n       o.\"delivery_longitude\" AS \"DeliveryLongitude\",\n       pb.hub_id AS \"HubId\"\nFROM orders o\nLEFT JOIN procurement_batch_orders pbo\n  ON pbo.order_id = o.\"Id\" AND pbo.deleted_at IS NULL\nLEFT JOIN procurement_batches pb\n  ON pb.id = pbo.procurement_batch_id AND pb.deleted_at IS NULL\nWHERE o.\"deleted_at\" IS NULL");
+                    b.ToSqlQuery("SELECT o.\"Id\" AS \"OrderId\", o.\"Status\" AS \"Status\",\r\n       o.\"RestaurantId\" AS \"RestaurantId\", o.\"ScheduledFor\" AS \"ScheduledFor\",\r\n       o.\"delivery_latitude\" AS \"DeliveryLatitude\",\r\n       o.\"delivery_longitude\" AS \"DeliveryLongitude\",\r\n       pb.hub_id AS \"HubId\"\r\nFROM orders o\r\nLEFT JOIN procurement_batch_orders pbo\r\n  ON pbo.order_id = o.\"Id\" AND pbo.deleted_at IS NULL\r\nLEFT JOIN procurement_batches pb\r\n  ON pb.id = pbo.procurement_batch_id AND pb.deleted_at IS NULL\r\nWHERE o.\"deleted_at\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.RestaurantCoordinateRow", b =>
@@ -2855,7 +2858,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT da.\"RestaurantId\", r.\"Name\" AS \"Name\", da.\"Latitude\", da.\"Longitude\"\nFROM delivery_addresses da\nJOIN restaurants r ON r.\"Id\" = da.\"RestaurantId\"\nWHERE da.\"IsDefault\" = true AND da.\"DeletedAt\" IS NULL AND r.status = 'active'");
+                    b.ToSqlQuery("SELECT da.\"RestaurantId\", r.\"Name\" AS \"Name\", da.\"Latitude\", da.\"Longitude\"\r\nFROM delivery_addresses da\r\nJOIN restaurants r ON r.\"Id\" = da.\"RestaurantId\"\r\nWHERE da.\"IsDefault\" = true AND da.\"DeletedAt\" IS NULL AND r.status = 'active'");
                 });
 
             modelBuilder.Entity("FreshFlow.Logistics.Infrastructure.CrossModule.RestaurantOwnerRow", b =>
@@ -3071,7 +3074,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT o.\"Id\" AS \"OrderId\", r.\"UserId\" AS \"UserId\"\nFROM orders o\nJOIN restaurants r ON r.\"Id\" = o.\"RestaurantId\"\nWHERE o.\"deleted_at\" IS NULL");
+                    b.ToSqlQuery("SELECT o.\"Id\" AS \"OrderId\", r.\"UserId\" AS \"UserId\"\r\nFROM orders o\r\nJOIN restaurants r ON r.\"Id\" = o.\"RestaurantId\"\r\nWHERE o.\"deleted_at\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Notifications.Infrastructure.CrossModule.NotificationRecipientRow", b =>
@@ -3088,7 +3091,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT r.\"Id\" AS \"RestaurantId\", r.\"UserId\", u.\"Email\"\nFROM restaurants r\nJOIN users u ON u.\"Id\" = r.\"UserId\"\nWHERE u.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT r.\"Id\" AS \"RestaurantId\", r.\"UserId\", u.\"Email\"\r\nFROM restaurants r\r\nJOIN users u ON u.\"Id\" = r.\"UserId\"\r\nWHERE u.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Domain.Entities.CreditStatement", b =>
@@ -3902,7 +3905,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT \"Id\", \"RestaurantId\", \"RecipientName\", \"Phone\", \"AddressLine\", \"Latitude\", \"Longitude\"\nFROM delivery_addresses\nWHERE \"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT \"Id\", \"RestaurantId\", \"RecipientName\", \"Phone\", \"AddressLine\", \"Latitude\", \"Longitude\"\r\nFROM delivery_addresses\r\nWHERE \"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.FavoriteListItemRow", b =>
@@ -3947,7 +3950,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    rf.restaurant_id     AS \"RestaurantId\",\n    rf.market_product_id AS \"MarketProductId\",\n    rf.created_at        AS \"CreatedAt\",\n    mp.\"ProductId\"       AS \"ProductId\",\n    p.\"Name\"             AS \"ProductName\",\n    p.\"ImageUrl\"         AS \"ImageUrl\",\n    mp.\"MarketId\"        AS \"MarketId\",\n    m.\"Name\"             AS \"MarketName\",\n    c.\"Name\"             AS \"Category\",\n    u.\"Name\"             AS \"Unit\",\n    mp.\"CurrentPrice\"    AS \"CurrentPrice\",\n    (mp.\"CurrentQuantity\" - mp.\"ReservedQuantity\") AS \"AvailableQuantity\"\nFROM restaurant_favorites rf\nINNER JOIN market_products mp ON rf.market_product_id = mp.\"Id\"\nINNER JOIN products p         ON mp.\"ProductId\" = p.\"Id\"\nINNER JOIN markets m          ON mp.\"MarketId\" = m.\"Id\"\nLEFT JOIN units_of_measurement u ON p.\"UnitId\" = u.\"Id\" AND u.\"DeletedAt\" IS NULL\nLEFT JOIN product_categories  c  ON p.\"CategoryId\" = c.\"Id\" AND c.\"DeletedAt\" IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL AND m.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    rf.restaurant_id     AS \"RestaurantId\",\r\n    rf.market_product_id AS \"MarketProductId\",\r\n    rf.created_at        AS \"CreatedAt\",\r\n    mp.\"ProductId\"       AS \"ProductId\",\r\n    p.\"Name\"             AS \"ProductName\",\r\n    p.\"ImageUrl\"         AS \"ImageUrl\",\r\n    mp.\"MarketId\"        AS \"MarketId\",\r\n    m.\"Name\"             AS \"MarketName\",\r\n    c.\"Name\"             AS \"Category\",\r\n    u.\"Name\"             AS \"Unit\",\r\n    mp.\"CurrentPrice\"    AS \"CurrentPrice\",\r\n    (mp.\"CurrentQuantity\" - mp.\"ReservedQuantity\") AS \"AvailableQuantity\"\r\nFROM restaurant_favorites rf\r\nINNER JOIN market_products mp ON rf.market_product_id = mp.\"Id\"\r\nINNER JOIN products p         ON mp.\"ProductId\" = p.\"Id\"\r\nINNER JOIN markets m          ON mp.\"MarketId\" = m.\"Id\"\r\nLEFT JOIN units_of_measurement u ON p.\"UnitId\" = u.\"Id\" AND u.\"DeletedAt\" IS NULL\r\nLEFT JOIN product_categories  c  ON p.\"CategoryId\" = c.\"Id\" AND c.\"DeletedAt\" IS NULL\r\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL AND m.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.MarketProductImageRow", b =>
@@ -3960,7 +3963,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT mp.\"Id\"       AS \"MarketProductId\",\n       p.\"ImageUrl\"  AS \"ImageUrl\"\nFROM market_products mp\nJOIN products p ON p.\"Id\" = mp.\"ProductId\"\nWHERE mp.\"deleted_at\" IS NULL\n  AND p.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT mp.\"Id\"       AS \"MarketProductId\",\r\n       p.\"ImageUrl\"  AS \"ImageUrl\"\r\nFROM market_products mp\r\nJOIN products p ON p.\"Id\" = mp.\"ProductId\"\r\nWHERE mp.\"deleted_at\" IS NULL\r\n  AND p.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.MarketProductRow", b =>
@@ -4004,7 +4007,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    mp.\"Id\",\n    mp.\"MarketId\",\n    p.\"Name\" AS \"ProductName\",\n    mp.\"CurrentPrice\",\n    mp.\"CurrentQuantity\",\n    mp.\"ReservedQuantity\",\n    p.\"MinimumOrderQuantity\",\n    p.\"VatRate\",\n    pc.\"Code\" AS \"PackingCode\",\n    pc.\"CapacityKg\" AS \"PackingWeightKg\",\n    CASE WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL\n        THEN h.latitude ELSE m.\"Latitude\" END AS \"OriginLatitude\",\n    CASE WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL\n        THEN h.longitude ELSE m.\"Longitude\" END AS \"OriginLongitude\"\nFROM market_products mp\nINNER JOIN products p ON mp.\"ProductId\" = p.\"Id\"\nINNER JOIN markets m ON mp.\"MarketId\" = m.\"Id\" AND m.\"DeletedAt\" IS NULL\nLEFT JOIN packing_codes pc ON p.\"PackingCodeId\" = pc.\"Id\" AND pc.\"DeletedAt\" IS NULL\nLEFT JOIN hubs h ON h.market_id = mp.\"MarketId\"\n    AND h.is_active = TRUE AND h.deleted_at IS NULL\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    mp.\"Id\",\r\n    mp.\"MarketId\",\r\n    p.\"Name\" AS \"ProductName\",\r\n    mp.\"CurrentPrice\",\r\n    mp.\"CurrentQuantity\",\r\n    mp.\"ReservedQuantity\",\r\n    p.\"MinimumOrderQuantity\",\r\n    p.\"VatRate\",\r\n    pc.\"Code\" AS \"PackingCode\",\n    pc.\"CapacityKg\" AS \"PackingWeightKg\",\r\n    CASE WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL\r\n        THEN h.latitude ELSE m.\"Latitude\" END AS \"OriginLatitude\",\r\n    CASE WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL\r\n        THEN h.longitude ELSE m.\"Longitude\" END AS \"OriginLongitude\"\r\nFROM market_products mp\r\nINNER JOIN products p ON mp.\"ProductId\" = p.\"Id\"\r\nINNER JOIN markets m ON mp.\"MarketId\" = m.\"Id\" AND m.\"DeletedAt\" IS NULL\r\nLEFT JOIN packing_codes pc ON p.\"PackingCodeId\" = pc.\"Id\" AND pc.\"DeletedAt\" IS NULL\r\nLEFT JOIN hubs h ON h.market_id = mp.\"MarketId\"\r\n    AND h.is_active = TRUE AND h.deleted_at IS NULL\r\nWHERE mp.\"deleted_at\" IS NULL AND p.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.MarketSessionGateRow", b =>
@@ -4021,7 +4024,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT market_id AS \"MarketId\", service_date AS \"ServiceDate\", status AS \"Status\"\nFROM market_sessions\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT market_id AS \"MarketId\", service_date AS \"ServiceDate\", status AS \"Status\"\r\nFROM market_sessions\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Orders.Infrastructure.CrossModule.RestaurantRow", b =>
@@ -4218,7 +4221,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    p.\"Id\",\n    p.\"Name\",\n    p.\"ImageUrl\",\n    u.\"Name\"  AS \"Unit\",\n    c.\"Name\"  AS \"Category\",\n    pc.\"CapacityKg\"\nFROM products p\nINNER JOIN units_of_measurement u ON p.\"UnitId\" = u.\"Id\"\nLEFT  JOIN product_categories   c ON p.\"CategoryId\" = c.\"Id\"\nLEFT  JOIN packing_codes       pc ON p.\"PackingCodeId\" = pc.\"Id\" AND pc.\"DeletedAt\" IS NULL\nWHERE p.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT\r\n    p.\"Id\",\r\n    p.\"Name\",\r\n    p.\"ImageUrl\",\r\n    u.\"Name\"  AS \"Unit\",\r\n    c.\"Name\"  AS \"Category\",\r\n    pc.\"CapacityKg\"\r\nFROM products p\r\nINNER JOIN units_of_measurement u ON p.\"UnitId\" = u.\"Id\"\r\nLEFT  JOIN product_categories   c ON p.\"CategoryId\" = c.\"Id\"\r\nLEFT  JOIN packing_codes       pc ON p.\"PackingCodeId\" = pc.\"Id\" AND pc.\"DeletedAt\" IS NULL\r\nWHERE p.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Pricing.Infrastructure.CrossModule.ProductRow", b =>
@@ -4737,7 +4740,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT \"Id\", \"Status\", market_id, market_session_id, \"ScheduledFor\", deleted_at\nFROM orders\nWHERE deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT \"Id\", \"Status\", market_id, market_session_id, \"ScheduledFor\", deleted_at\r\nFROM orders\r\nWHERE deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.HubByMarketRow", b =>
@@ -4750,7 +4753,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT id AS \"HubId\", market_id AS \"MarketId\"\nFROM hubs\nWHERE deleted_at IS NULL AND is_active = TRUE AND market_id IS NOT NULL");
+                    b.ToSqlQuery("SELECT id AS \"HubId\", market_id AS \"MarketId\"\r\nFROM hubs\r\nWHERE deleted_at IS NULL AND is_active = TRUE AND market_id IS NOT NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.MarketAgentUserRow", b =>
@@ -4780,7 +4783,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT u.\"Id\", u.\"RoleId\", r.\"Name\" AS \"RoleName\", u.\"Email\", u.\"FullName\",\n       u.\"IsActive\", u.\"DeletedAt\"\nFROM users AS u\nINNER JOIN roles AS r ON u.\"RoleId\" = r.\"Id\"");
+                    b.ToSqlQuery("SELECT u.\"Id\", u.\"RoleId\", r.\"Name\" AS \"RoleName\", u.\"Email\", u.\"FullName\",\r\n       u.\"IsActive\", u.\"DeletedAt\"\r\nFROM users AS u\r\nINNER JOIN roles AS r ON u.\"RoleId\" = r.\"Id\"");
                 });
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.MarketCodeRow", b =>
@@ -4797,7 +4800,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT \"Id\", \"Code\", \"Name\"\nFROM markets\nWHERE \"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT \"Id\", \"Code\", \"Name\"\r\nFROM markets\r\nWHERE \"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.MarketProductImageRow", b =>
@@ -4810,7 +4813,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT mp.\"Id\"       AS \"MarketProductId\",\n       p.\"ImageUrl\"  AS \"ImageUrl\"\nFROM market_products mp\nJOIN products p ON p.\"Id\" = mp.\"ProductId\"\nWHERE mp.\"deleted_at\" IS NULL\n  AND p.\"DeletedAt\" IS NULL");
+                    b.ToSqlQuery("SELECT mp.\"Id\"       AS \"MarketProductId\",\r\n       p.\"ImageUrl\"  AS \"ImageUrl\"\r\nFROM market_products mp\r\nJOIN products p ON p.\"Id\" = mp.\"ProductId\"\r\nWHERE mp.\"deleted_at\" IS NULL\r\n  AND p.\"DeletedAt\" IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.MarketProductMarketRow", b =>
@@ -4890,7 +4893,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT o.market_session_id                         AS \"MarketSessionId\",\n       o.\"Id\"                                     AS \"OrderId\",\n       o.\"RestaurantId\"                           AS \"RestaurantId\",\n       r.\"Name\"                                   AS \"RestaurantName\",\n       o.\"Status\"                                 AS \"Status\",\n       o.subtotal_amount                           AS \"SubtotalAmount\",\n       o.vat_amount                                AS \"VatAmount\",\n       o.delivery_fee                              AS \"DeliveryFee\",\n       o.\"TotalAmount\"                            AS \"TotalAmount\",\n       o.confirmed_at                             AS \"ConfirmedAt\",\n       oi.\"Id\"                                    AS \"OrderItemId\",\n       oi.\"MarketProductId\"                       AS \"MarketProductId\",\n       oi.\"ProductNameSnapshot\"                   AS \"ProductName\",\n       oi.\"Quantity\"                              AS \"Quantity\",\n       COALESCE(oi.\"LockedUnitPrice\", oi.\"UnitPrice\") AS \"UnitPrice\",\n       COALESCE(oi.\"LockedTotal\", oi.\"Quantity\" * oi.\"UnitPrice\") AS \"Subtotal\"\nFROM orders o\nJOIN restaurants r ON r.\"Id\" = o.\"RestaurantId\"\nLEFT JOIN order_items oi ON oi.\"OrderId\" = o.\"Id\"\nWHERE o.market_session_id IS NOT NULL\n  AND o.deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT o.market_session_id                         AS \"MarketSessionId\",\r\n       o.\"Id\"                                     AS \"OrderId\",\r\n       o.\"RestaurantId\"                           AS \"RestaurantId\",\r\n       r.\"Name\"                                   AS \"RestaurantName\",\r\n       o.\"Status\"                                 AS \"Status\",\r\n       o.subtotal_amount                           AS \"SubtotalAmount\",\r\n       o.vat_amount                                AS \"VatAmount\",\r\n       o.delivery_fee                              AS \"DeliveryFee\",\r\n       o.\"TotalAmount\"                            AS \"TotalAmount\",\r\n       o.confirmed_at                             AS \"ConfirmedAt\",\r\n       oi.\"Id\"                                    AS \"OrderItemId\",\r\n       oi.\"MarketProductId\"                       AS \"MarketProductId\",\r\n       oi.\"ProductNameSnapshot\"                   AS \"ProductName\",\r\n       oi.\"Quantity\"                              AS \"Quantity\",\r\n       COALESCE(oi.\"LockedUnitPrice\", oi.\"UnitPrice\") AS \"UnitPrice\",\r\n       COALESCE(oi.\"LockedTotal\", oi.\"Quantity\" * oi.\"UnitPrice\") AS \"Subtotal\"\r\nFROM orders o\r\nJOIN restaurants r ON r.\"Id\" = o.\"RestaurantId\"\r\nLEFT JOIN order_items oi ON oi.\"OrderId\" = o.\"Id\"\r\nWHERE o.market_session_id IS NOT NULL\r\n  AND o.deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.MarketSessionVehicleRow", b =>
@@ -4920,7 +4923,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT id AS \"Id\", hub_id AS \"HubId\", capacity_kg AS \"CapacityKg\",\n       plate_number AS \"PlateNumber\", vehicle_type AS \"VehicleType\",\n       is_available AS \"IsAvailable\", deleted_at AS \"DeletedAt\"\nFROM vehicles");
+                    b.ToSqlQuery("SELECT id AS \"Id\", hub_id AS \"HubId\", capacity_kg AS \"CapacityKg\",\r\n       plate_number AS \"PlateNumber\", vehicle_type AS \"VehicleType\",\r\n       is_available AS \"IsAvailable\", deleted_at AS \"DeletedAt\"\r\nFROM vehicles");
                 });
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.OperationalSettingsRow", b =>
@@ -4952,7 +4955,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT vehicle_id AS \"VehicleId\", service_date AS \"ServiceDate\"\nFROM delivery_routes\nWHERE vehicle_id IS NOT NULL AND status <> 'cancelled' AND deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT vehicle_id AS \"VehicleId\", service_date AS \"ServiceDate\"\r\nFROM delivery_routes\r\nWHERE vehicle_id IS NOT NULL AND status <> 'cancelled' AND deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.UserMarketAssignmentRow", b =>

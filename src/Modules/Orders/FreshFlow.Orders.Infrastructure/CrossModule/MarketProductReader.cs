@@ -24,6 +24,7 @@ internal sealed class MarketProductReader(AppDbContext db) : IMarketProductReade
                 row.OriginLatitude,
                 row.OriginLongitude,
                 row.MarketId,
-                row.PackingCode);
+                row.PackingCode,
+                row.PackingWeightKg);
     }
 }

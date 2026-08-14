@@ -28,4 +28,5 @@ public sealed record MarketProductSnapshotDto(
     decimal? OriginLatitude = null,
     decimal? OriginLongitude = null,
     Guid? MarketId = null,
-    string? PackingCode = null);
+    string? PackingCode = null,
+    decimal? PackingWeightKg = null);

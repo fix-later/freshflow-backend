@@ -11,7 +11,8 @@ public sealed class OrderItem : BaseEntity
         string productNameSnapshot,
         int quantity,
         decimal unitPrice,
-        string? packingCodeSnapshot = null)
+        string? packingCodeSnapshot = null,
+        decimal? packingWeightKgSnapshot = null)
     {
         ValidateProductNameSnapshot(productNameSnapshot);
         ValidateQuantity(quantity);
@@ -22,6 +23,7 @@ public sealed class OrderItem : BaseEntity
         Quantity = quantity;
         UnitPrice = unitPrice;
         PackingCodeSnapshot = packingCodeSnapshot;
+        PackingWeightKgSnapshot = packingWeightKgSnapshot;
     }
 
     public Guid OrderId { get; private set; }
@@ -30,6 +32,9 @@ public sealed class OrderItem : BaseEntity
     public int Quantity { get; private set; }
     public decimal UnitPrice { get; private set; }
     public string? PackingCodeSnapshot { get; private set; }
+
+    /// <summary>Kilograms one box holds, as the packing code read at draft time.</summary>
+    public decimal? PackingWeightKgSnapshot { get; private set; }
     public decimal? LockedUnitPrice { get; private set; }
     public decimal? LockedTotal { get; private set; }
     public string? VatRateCode { get; private set; }
