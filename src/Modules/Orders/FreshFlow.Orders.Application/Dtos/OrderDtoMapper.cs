@@ -38,7 +38,8 @@ internal static class OrderDtoMapper
                 i.VatRateCode,
                 i.VatRatePercent,
                 i.LockedVatAmount,
-                i.PackingCodeSnapshot))
+                i.PackingCodeSnapshot,
+                i.PackingWeightKgSnapshot))
             .ToList(),
         order.OrderGroupId,
         order.ScheduledOrderId,

@@ -22,6 +22,10 @@ internal sealed class OrderItemConfiguration : IEntityTypeConfiguration<OrderIte
         builder.Property(i => i.PackingCodeSnapshot)
             .HasColumnName("packing_code_snapshot")
             .HasMaxLength(50);
+        // Same precision as packing_codes.CapacityKg, which it is a copy of.
+        builder.Property(i => i.PackingWeightKgSnapshot)
+            .HasColumnName("packing_weight_kg_snapshot")
+            .HasColumnType("numeric(12,3)");
         builder.Property(i => i.Quantity).IsRequired();
         builder.Property(i => i.UnitPrice).IsRequired().HasColumnType("numeric(12,2)");
         builder.Property(i => i.LockedUnitPrice).HasColumnType("numeric(12,2)");

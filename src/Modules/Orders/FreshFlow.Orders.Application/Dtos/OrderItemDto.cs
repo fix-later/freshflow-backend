@@ -13,4 +13,5 @@ public sealed record OrderItemDto(
     string? VatRateCode = null,
     decimal? VatRatePercent = null,
     decimal? VatAmount = null,
-    string? PackingCode = null);
+    string? PackingCode = null,
+    decimal? PackingWeightKg = null);

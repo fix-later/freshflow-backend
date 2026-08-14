@@ -18,4 +18,7 @@ internal sealed class MarketProductRow
     public decimal? OriginLatitude { get; set; }
     public decimal? OriginLongitude { get; set; }
     public string? PackingCode { get; set; }
+
+    /// <summary>`packing_codes.CapacityKg` — what one box of this product holds.</summary>
+    public decimal? PackingWeightKg { get; set; }
 }
