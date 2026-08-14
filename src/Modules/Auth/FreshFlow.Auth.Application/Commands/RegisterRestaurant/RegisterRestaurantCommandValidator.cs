@@ -30,6 +30,16 @@ public sealed class RegisterRestaurantCommandValidator : AbstractValidator<Regis
             .MaximumLength(20)
             .When(x => !string.IsNullOrWhiteSpace(x.TaxCode));
 
+        RuleFor(x => x.InvoiceLegalName)
+            .NotEmpty()
+            .MaximumLength(300)
+            .When(x => x.InvoiceLegalName is not null);
+
+        RuleFor(x => x.InvoiceAddress)
+            .NotEmpty()
+            .MaximumLength(256)
+            .When(x => x.InvoiceAddress is not null);
+
         // Phone is optional; when provided the trimmed form must match the format.
         // Normalisation (trim + lowercase) happens in the domain: User.Create stores phone?.Trim().ToLowerInvariant().
         RuleFor(x => x.Phone)

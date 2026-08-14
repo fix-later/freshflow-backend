@@ -16,6 +16,7 @@ internal sealed class RoutePlanConfiguration : IEntityTypeConfiguration<RoutePla
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("id");
         builder.Property(x => x.HubId).HasColumnName("hub_id");
+        builder.Property(x => x.MarketSessionId).HasColumnName("market_session_id");
         builder.Property(x => x.ServiceDate).HasColumnName("service_date").HasColumnType("date");
         builder.Property(x => x.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.OptimizationCriteria).HasColumnName("optimization_criteria").HasConversion<string>().HasMaxLength(20);

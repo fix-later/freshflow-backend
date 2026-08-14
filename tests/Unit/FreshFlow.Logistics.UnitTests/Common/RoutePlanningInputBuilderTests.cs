@@ -12,7 +12,7 @@ namespace FreshFlow.Logistics.UnitTests.Common;
 public sealed class RoutePlanningInputBuilderTests
 {
     [Fact]
-    public async Task BuildAsync_ExcludesReservedOrdersAndVehiclesAsync()
+    public async Task BuildAsync_IncludesBatchedAndExcludesReservedOrdersAndVehiclesAsync()
     {
         var hubId = Guid.NewGuid();
         var restaurantId = Guid.NewGuid();
@@ -31,11 +31,11 @@ public sealed class RoutePlanningInputBuilderTests
                 Arg.Any<CancellationToken>())
             .Returns([(restaurantId, 2)]);
         orders.ListByRestaurantsAndStatusAsync(
-                Arg.Any<IReadOnlyCollection<Guid>>(), "AtHub", Arg.Any<CancellationToken>(),
+                Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>(),
                 hubId, Arg.Any<DateOnly>())
             .Returns([
                 new OrderStatusLookupDto(reservedOrderId, "AtHub", restaurantId, hubId),
-                new OrderStatusLookupDto(newOrderId, "AtHub", restaurantId, hubId)
+                new OrderStatusLookupDto(newOrderId, "Batched", restaurantId, hubId)
             ]);
         var packing = Substitute.For<IOrderPackingReader>();
         packing.GetLinesByOrdersAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
@@ -72,6 +72,11 @@ public sealed class RoutePlanningInputBuilderTests
         await packing.Received(1).GetLinesByOrdersAsync(
             Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { newOrderId })),
             Arg.Any<CancellationToken>());
+        await orders.Received(1).ListByRestaurantsAndStatusAsync(
+            Arg.Any<IReadOnlyCollection<Guid>>(),
+            Arg.Is<IReadOnlyCollection<string>>(statuses =>
+                statuses.SequenceEqual(new[] { "Batched", "PickedUp", "AtHub" })),
+            Arg.Any<CancellationToken>(), hubId, Arg.Any<DateOnly>());
         await vehicles.Received(1).GetPageAsync(
             null, 10_000, true, hubId, Arg.Any<CancellationToken>());
     }

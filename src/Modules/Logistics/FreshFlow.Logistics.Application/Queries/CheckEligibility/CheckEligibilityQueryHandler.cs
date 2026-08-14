@@ -25,7 +25,7 @@ internal sealed class CheckEligibilityQueryHandler(
             .Select(stop => stop.EntityId)
             .ToList();
         var atHubOrders = await orders.ListByRestaurantsAndStatusAsync(
-            restaurantIds, "AtHub", ct, route.HubId, route.ServiceDate);
+            restaurantIds, ["AtHub"], ct, route.HubId, route.ServiceDate);
         var packingByOrder = atHubOrders.Count == 0
             ? []
             : await packing.GetLinesByOrdersAsync(

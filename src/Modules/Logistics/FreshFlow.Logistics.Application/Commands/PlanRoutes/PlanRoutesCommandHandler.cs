@@ -12,6 +12,7 @@ namespace FreshFlow.Logistics.Application.Commands.PlanRoutes;
 
 internal sealed class PlanRoutesCommandHandler(
     IRoutePlanningInputBuilder inputs,
+    IMarketSessionReader sessions,
     IRouteMatrixProvider matrices,
     IRoutePlanningSolver solver,
     IRoutePlanRepository plans,
@@ -29,11 +30,15 @@ internal sealed class PlanRoutesCommandHandler(
             return Result<RoutePlanDto>.Failure(Error.Validation(
                 "VALIDATION_ERROR", "OptimizationCriteria must be DISTANCE, TIME, or COST."));
 
-        var inputResult = await inputs.BuildAsync(request.HubId, request.ServiceDate, ct);
+        var session = await sessions.FindByIdAsync(request.MarketSessionId, ct);
+        if (session is null)
+            return Result<RoutePlanDto>.Failure(Error.NotFound("MARKET_SESSION", request.MarketSessionId));
+
+        var inputResult = await inputs.BuildAsync(session.HubId, session.ServiceDate, ct);
         if (!inputResult.IsSuccess)
             return Result<RoutePlanDto>.Failure(inputResult.Error);
         var input = inputResult.Value;
-        var existing = await plans.FindProposedAsync(request.HubId, request.ServiceDate, ct);
+        var existing = await plans.FindProposedAsync(request.MarketSessionId, ct);
         if (input.Demands.Count == 0)
         {
             if (existing is not null)
@@ -44,7 +49,7 @@ internal sealed class PlanRoutesCommandHandler(
                 await plans.TrySaveChangesAsync(ct);
             }
             return Result<RoutePlanDto>.Success(new RoutePlanDto(
-                null, "empty", request.HubId, request.ServiceDate, criteria.ToString().ToUpperInvariant(),
+                null, "empty", session.HubId, session.ServiceDate, criteria.ToString().ToUpperInvariant(),
                 "NONE", false, input.InputRevision, 0, 0, 0, 0, 0, [], [], [], DateTime.UtcNow));
         }
 
@@ -70,7 +75,7 @@ internal sealed class PlanRoutesCommandHandler(
             checked((int)Math.Ceiling((x.RoadDurationSeconds + 60d * x.Restaurants.Count * settings.ServiceTimeMinutes) / 60d)));
         var totalCost = Math.Round(totalDistance * settings.CostPerKm, 2);
         var plan = RoutePlan.Create(
-            input.HubId, input.ServiceDate, criteria, matrix.Provider, matrix.IsEstimated,
+            request.MarketSessionId, input.HubId, input.ServiceDate, criteria, matrix.Provider, matrix.IsEstimated,
             input.InputRevision, solution.Unassigned, solution.Routes.Count,
             totalLoad, totalDistance, totalDuration, totalCost);
 
@@ -106,7 +111,8 @@ internal sealed class PlanRoutesCommandHandler(
             var routeDistance = Math.Round(solved.DistanceMeters / 1000m, 2);
             var routeDuration = checked((int)Math.Ceiling(
                 (solved.RoadDurationSeconds + 60d * solved.Restaurants.Count * settings.ServiceTimeMinutes) / 60d));
-            var route = DeliveryRoute.CreateHubRoute(input.HubId, input.ServiceDate, stops, null);
+            var route = DeliveryRoute.CreateHubRoute(
+                input.HubId, input.ServiceDate, stops, null, request.MarketSessionId);
             route.ApplyOptimization(stops, routeDistance, routeDuration,
                 Math.Round(routeDistance * settings.CostPerKm, 2), criteria);
             route.AttachToPlan(plan.Id, solved.Vehicle.Id, solved.Restaurants.Sum(x => x.LoadKg),

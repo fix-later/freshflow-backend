@@ -210,9 +210,9 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         db.Set<User>().AddRange(user, missingProfileUser);
         await db.SaveChangesAsync();
 
-        var restaurantId = await restaurants.CreateAsync(user.Id, "Invoice Restaurant", taxCode: null, default);
+        var restaurantId = await restaurants.CreateAsync(user.Id, "Invoice Restaurant", taxCode: null, invoiceLegalName: null, invoiceAddress: null, default);
         var missingProfileRestaurantId = await restaurants.CreateAsync(
-            missingProfileUser.Id, "Missing Profile Restaurant", taxCode: null, default);
+            missingProfileUser.Id, "Missing Profile Restaurant", taxCode: null, invoiceLegalName: null, invoiceAddress: null, default);
         await restaurants.UpdateTaxProfileAsync(
             restaurantId,
             "0312345678",

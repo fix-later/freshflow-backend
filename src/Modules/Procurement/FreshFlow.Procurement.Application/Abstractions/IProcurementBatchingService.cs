@@ -9,10 +9,4 @@ public interface IProcurementBatchingService
         Guid marketSessionId,
         bool dryRun,
         CancellationToken ct);
-
-    public Task<Result<BatchingResult>> BuildBatchesAsync(
-        DateOnly batchDate,
-        bool dryRun,
-        bool force,
-        CancellationToken ct);
 }

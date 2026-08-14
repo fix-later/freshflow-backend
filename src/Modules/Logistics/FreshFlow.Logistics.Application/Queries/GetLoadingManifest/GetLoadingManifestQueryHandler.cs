@@ -46,7 +46,7 @@ internal sealed class GetLoadingManifestQueryHandler(
         else
         {
             atHubOrders = await orders.ListByRestaurantsAndStatusAsync(
-                restaurantIds, OrderStatusAtHub, ct, route.HubId, route.ServiceDate);
+                restaurantIds, [OrderStatusAtHub], ct, route.HubId, route.ServiceDate);
         }
 
         var linesByOrder = (await packing.GetLinesByOrdersAsync(

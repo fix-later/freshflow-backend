@@ -8,7 +8,7 @@ public sealed class RoutePlan
     private RoutePlan() => Unassigned = [];
 
     private RoutePlan(
-        Guid hubId, DateOnly serviceDate, OptimizationCriteria criteria,
+        Guid marketSessionId, Guid hubId, DateOnly serviceDate, OptimizationCriteria criteria,
         string routingProvider, bool isEstimated, string inputRevision,
         IReadOnlyList<RoutePlanUnassigned> unassigned, int vehiclesUsed,
         decimal totalLoadKg, decimal totalDistanceKm,
@@ -16,6 +16,7 @@ public sealed class RoutePlan
     {
         Id = Guid.NewGuid();
         HubId = hubId;
+        MarketSessionId = marketSessionId;
         ServiceDate = serviceDate;
         Status = RoutePlanStatus.proposed;
         OptimizationCriteria = criteria;
@@ -32,6 +33,7 @@ public sealed class RoutePlan
     }
 
     public Guid Id { get; private set; }
+    public Guid MarketSessionId { get; private set; }
     public Guid HubId { get; private set; }
     public DateOnly ServiceDate { get; private set; }
     public RoutePlanStatus Status { get; private set; }
@@ -50,12 +52,14 @@ public sealed class RoutePlan
     public DateTime? DeletedAt { get; private set; }
 
     public static RoutePlan Create(
-        Guid hubId, DateOnly serviceDate, OptimizationCriteria criteria,
+        Guid marketSessionId, Guid hubId, DateOnly serviceDate, OptimizationCriteria criteria,
         string routingProvider, bool isEstimated, string inputRevision,
         IReadOnlyList<RoutePlanUnassigned> unassigned, int vehiclesUsed,
         decimal totalLoadKg, decimal totalDistanceKm,
         int estimatedDurationMinutes, decimal estimatedCost)
     {
+        if (marketSessionId == Guid.Empty)
+            throw new ArgumentException("Market session id is required.", nameof(marketSessionId));
         if (hubId == Guid.Empty)
             throw new ArgumentException("Hub id is required.", nameof(hubId));
         if (string.IsNullOrWhiteSpace(routingProvider))
@@ -64,7 +68,7 @@ public sealed class RoutePlan
             throw new ArgumentException("Input revision is required.", nameof(inputRevision));
 
         return new RoutePlan(
-            hubId, serviceDate, criteria, routingProvider, isEstimated, inputRevision,
+            marketSessionId, hubId, serviceDate, criteria, routingProvider, isEstimated, inputRevision,
             unassigned, vehiclesUsed, totalLoadKg, totalDistanceKm,
             estimatedDurationMinutes, estimatedCost);
     }

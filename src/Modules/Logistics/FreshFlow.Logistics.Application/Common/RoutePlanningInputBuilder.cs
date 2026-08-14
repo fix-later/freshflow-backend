@@ -19,6 +19,8 @@ public sealed class RoutePlanningInputBuilder(
     IMarketSessionVehicleReader sessionVehicles,
     IVehicleCapacityPolicy settings) : IRoutePlanningInputBuilder
 {
+    private static readonly string[] RoutableOrderStatuses = ["Batched", "PickedUp", "AtHub"];
+
     public async Task<Result<RoutePlanningInput>> BuildAsync(
         Guid hubId, DateOnly serviceDate, CancellationToken ct)
     {
@@ -28,13 +30,13 @@ public sealed class RoutePlanningInputBuilder(
         if (!Valid(hub.Latitude, hub.Longitude))
             return MissingCoordinates($"Hub '{hubId}' has no coordinates configured.");
 
-        var routable = await orders.ListRoutableRestaurantsAsync(serviceDate, ["AtHub"], ct);
-        var atHubOrders = await orders.ListByRestaurantsAndStatusAsync(
-            routable.Select(x => x.RestaurantId).ToList(), "AtHub", ct, hubId, serviceDate);
+        var routable = await orders.ListRoutableRestaurantsAsync(serviceDate, RoutableOrderStatuses, ct);
+        var routableOrders = await orders.ListByRestaurantsAndStatusAsync(
+            routable.Select(x => x.RestaurantId).ToList(), RoutableOrderStatuses, ct, hubId, serviceDate);
         var reservedOrderIds = await deliveries.GetExistingOrderIdsAsync(
-            atHubOrders.Select(x => x.OrderId).ToList(), ct);
-        atHubOrders = atHubOrders.Where(x => !reservedOrderIds.Contains(x.OrderId)).ToList();
-        if (atHubOrders.Count == 0)
+            routableOrders.Select(x => x.OrderId).ToList(), ct);
+        routableOrders = routableOrders.Where(x => !reservedOrderIds.Contains(x.OrderId)).ToList();
+        if (routableOrders.Count == 0)
         {
             return Result<RoutePlanningInput>.Success(new RoutePlanningInput(
                 hubId, hub.Name, hub.Latitude.Value, hub.Longitude.Value, serviceDate,
@@ -42,7 +44,7 @@ public sealed class RoutePlanningInputBuilder(
         }
 
         var coordinateByRestaurant = new Dictionary<Guid, RestaurantCoordinateDto>();
-        foreach (var restaurantId in atHubOrders.Select(x => x.RestaurantId).Distinct().Order())
+        foreach (var restaurantId in routableOrders.Select(x => x.RestaurantId).Distinct().Order())
         {
             var coordinate = await restaurants.FindByRestaurantIdAsync(restaurantId, ct);
             if (coordinate is null || !Valid(coordinate.Latitude, coordinate.Longitude))
@@ -50,14 +52,14 @@ public sealed class RoutePlanningInputBuilder(
             coordinateByRestaurant[restaurantId] = coordinate;
         }
 
-        var packingRows = await packing.GetLinesByOrdersAsync(atHubOrders.Select(x => x.OrderId).ToList(), ct);
+        var packingRows = await packing.GetLinesByOrdersAsync(routableOrders.Select(x => x.OrderId).ToList(), ct);
         var packingByOrder = packingRows.ToDictionary(x => x.OrderId, x => x.Lines);
-        if (atHubOrders.Any(order => !packingByOrder.TryGetValue(order.OrderId, out var lines)
+        if (routableOrders.Any(order => !packingByOrder.TryGetValue(order.OrderId, out var lines)
                 || lines.Count == 0 || lines.Any(line => line.CapacityKg is null or <= 0m)))
         {
             return Result<RoutePlanningInput>.Failure(Error.Validation(
                 "ROUTE_WEIGHT_INCOMPLETE",
-                "Every AtHub order line must have a valid packing code before route planning."));
+                "Every routable order line must have a valid packing code before route planning."));
         }
 
         decimal LineLoad(OrderPackingLine line)
@@ -66,7 +68,7 @@ public sealed class RoutePlanningInputBuilder(
             return line.Quantity + Math.Ceiling(line.Quantity / capacity) * settings.BoxTareKg;
         }
 
-        var demands = atHubOrders
+        var demands = routableOrders
             .GroupBy(order => order.RestaurantId)
             .OrderBy(group => group.Key)
             .Select(group =>
