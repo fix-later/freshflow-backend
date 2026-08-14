@@ -22,7 +22,8 @@ public sealed class CalculateRouteCommandHandlerTests
             .Returns(new HubCoordinateDto(hubId, Guid.NewGuid(), "Hub A", 10.1m, 106.1m));
         restaurants.FindByRestaurantIdAsync(restaurantId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantCoordinateDto(restaurantId, "Bistro B", 10.2m, 106.2m));
-        var sut = new CalculateRouteCommandHandler(hubs, restaurants, repository);
+        var sut = new CalculateRouteCommandHandler(
+            hubs, restaurants, NoOrders(), repository);
 
         var result = await sut.Handle(
             new CalculateRouteCommand(
@@ -55,7 +56,8 @@ public sealed class CalculateRouteCommandHandlerTests
         var repository = new InMemoryDeliveryRouteRepository();
         var hubs = Substitute.For<IHubCoordinateReader>();
         var restaurants = Substitute.For<IRestaurantCoordinateReader>();
-        var sut = new CalculateRouteCommandHandler(hubs, restaurants, repository);
+        var sut = new CalculateRouteCommandHandler(
+            hubs, restaurants, NoOrders(), repository);
 
         var result = await sut.Handle(Command(hubId, Guid.NewGuid()), default);
 
@@ -74,7 +76,8 @@ public sealed class CalculateRouteCommandHandlerTests
         var restaurants = Substitute.For<IRestaurantCoordinateReader>();
         hubs.FindByIdAsync(hubId, Arg.Any<CancellationToken>())
             .Returns(new HubCoordinateDto(hubId, Guid.NewGuid(), "Hub A", 10.1m, 106.1m));
-        var sut = new CalculateRouteCommandHandler(hubs, restaurants, repository);
+        var sut = new CalculateRouteCommandHandler(
+            hubs, restaurants, NoOrders(), repository);
 
         var result = await sut.Handle(Command(hubId, restaurantId), default);
 
@@ -92,7 +95,8 @@ public sealed class CalculateRouteCommandHandlerTests
         var restaurants = Substitute.For<IRestaurantCoordinateReader>();
         hubs.FindByIdAsync(hubId, Arg.Any<CancellationToken>())
             .Returns(new HubCoordinateDto(hubId, Guid.NewGuid(), "Hub A", null, 106.1m));
-        var sut = new CalculateRouteCommandHandler(hubs, restaurants, repository);
+        var sut = new CalculateRouteCommandHandler(
+            hubs, restaurants, NoOrders(), repository);
 
         var result = await sut.Handle(Command(hubId, Guid.NewGuid()), default);
 
@@ -113,7 +117,8 @@ public sealed class CalculateRouteCommandHandlerTests
             .Returns(new HubCoordinateDto(hubId, Guid.NewGuid(), "Hub A", 10.1m, 106.1m));
         restaurants.FindByRestaurantIdAsync(restaurantId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantCoordinateDto(restaurantId, "Bistro B", 10.2m, null));
-        var sut = new CalculateRouteCommandHandler(hubs, restaurants, repository);
+        var sut = new CalculateRouteCommandHandler(
+            hubs, restaurants, NoOrders(), repository);
 
         var result = await sut.Handle(Command(hubId, restaurantId), default);
 
@@ -122,13 +127,53 @@ public sealed class CalculateRouteCommandHandlerTests
         repository.Routes.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// The stop is where the order goes — the address captured at checkout —
+    /// not the restaurant's default address. A restaurant ordering to a second
+    /// branch was otherwise driven to its head office.
+    /// </summary>
+    [Fact]
+    public async Task Handle_OrderHasCheckoutAddress_StopsThereNotAtDefaultAsync()
+    {
+        var hubId = Guid.NewGuid();
+        var restaurantId = Guid.NewGuid();
+        var repository = new InMemoryDeliveryRouteRepository();
+        var hubs = Substitute.For<IHubCoordinateReader>();
+        var restaurants = Substitute.For<IRestaurantCoordinateReader>();
+        var orders = Substitute.For<IOrderStatusReader>();
+        hubs.FindByIdAsync(hubId, Arg.Any<CancellationToken>())
+            .Returns(new HubCoordinateDto(hubId, Guid.NewGuid(), "Hub A", 10.1m, 106.1m));
+        restaurants.FindByRestaurantIdAsync(restaurantId, Arg.Any<CancellationToken>())
+            .Returns(new RestaurantCoordinateDto(restaurantId, "Bistro B", 10.2m, 106.2m));
+        orders.ListByRestaurantsAndStatusAsync(
+                Arg.Any<IReadOnlyCollection<Guid>>(),
+                Arg.Any<IReadOnlyCollection<string>>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<DateOnly?>())
+            .Returns([
+                new OrderStatusLookupDto(
+                    Guid.NewGuid(), "Batched", restaurantId, hubId, 10.9m, 106.9m)
+            ]);
+        var sut = new CalculateRouteCommandHandler(hubs, restaurants, orders, repository);
+
+        var result = await sut.Handle(Command(hubId, restaurantId), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Stops[1].Latitude.Should().Be(10.9m);
+        result.Value.Stops[1].Longitude.Should().Be(106.9m);
+        // The name still comes from the restaurant record.
+        result.Value.Stops[1].EntityName.Should().Be("Bistro B");
+    }
+
     [Fact]
     public async Task Handle_MoreThan20Stops_ReturnsStopLimitExceededAsync()
     {
         var repository = new InMemoryDeliveryRouteRepository();
         var hubs = Substitute.For<IHubCoordinateReader>();
         var restaurants = Substitute.For<IRestaurantCoordinateReader>();
-        var sut = new CalculateRouteCommandHandler(hubs, restaurants, repository);
+        var sut = new CalculateRouteCommandHandler(
+            hubs, restaurants, NoOrders(), repository);
         var destinationRestaurantIds = Enumerable.Range(0, 20).Select(_ => Guid.NewGuid()).ToList();
 
         var result = await sut.Handle(
@@ -142,6 +187,20 @@ public sealed class CalculateRouteCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("STOP_LIMIT_EXCEEDED");
         repository.Routes.Should().BeEmpty();
+    }
+
+    /// <summary>A day with nothing routable — stops fall back to the restaurant.</summary>
+    private static IOrderStatusReader NoOrders()
+    {
+        var orders = Substitute.For<IOrderStatusReader>();
+        orders.ListByRestaurantsAndStatusAsync(
+                Arg.Any<IReadOnlyCollection<Guid>>(),
+                Arg.Any<IReadOnlyCollection<string>>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<DateOnly?>())
+            .Returns([]);
+        return orders;
     }
 
     private static CalculateRouteCommand Command(Guid hubId, Guid restaurantId) =>
