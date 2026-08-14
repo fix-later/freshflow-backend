@@ -51,7 +51,7 @@ internal sealed class ConfirmPickupCommandHandler(
 
         var expectedOrders = await orders.ListByRestaurantsAndStatusAsync(
             restaurantStopOrders.Keys,
-            OrderStatusAtHub,
+            [OrderStatusAtHub],
             ct,
             route.HubId,
             route.ServiceDate);

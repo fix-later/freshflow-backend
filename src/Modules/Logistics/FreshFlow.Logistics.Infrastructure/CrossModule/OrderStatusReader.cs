@@ -19,7 +19,7 @@ internal sealed class OrderStatusReader(AppDbContext db) : IOrderStatusReader
 
     public async Task<IReadOnlyList<OrderStatusLookupDto>> ListByRestaurantsAndStatusAsync(
         IReadOnlyCollection<Guid> restaurantIds,
-        string status,
+        IReadOnlyCollection<string> statuses,
         CancellationToken ct,
         Guid? hubId = null,
         DateOnly? serviceDate = null)
@@ -29,7 +29,7 @@ internal sealed class OrderStatusReader(AppDbContext db) : IOrderStatusReader
 
         var query = db.Set<OrderStatusRow>()
             .AsNoTracking()
-            .Where(o => o.Status == status
+            .Where(o => statuses.Contains(o.Status)
                         && restaurantIds.Contains(o.RestaurantId)
                         && (hubId == null || o.HubId == hubId));
 

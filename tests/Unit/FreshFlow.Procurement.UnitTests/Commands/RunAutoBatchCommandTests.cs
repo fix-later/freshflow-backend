@@ -2,6 +2,8 @@ using FluentAssertions;
 using FreshFlow.Procurement.Application.Abstractions;
 using FreshFlow.Procurement.Application.Commands.RunAutoBatch;
 using FreshFlow.Procurement.Application.Dtos;
+using FreshFlow.Procurement.Domain.Entities;
+using FreshFlow.Procurement.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
 using NSubstitute;
 
@@ -28,31 +30,32 @@ public sealed class RunAutoBatchCommandTests
     public async Task Handler_NoTargetDate_UsesDueCycleAsync()
     {
         var service = Substitute.For<IProcurementBatchingService>();
+        var date = new DateOnly(2026, 7, 15);
+        var session = MarketSession.Create(
+            Guid.NewGuid(), Guid.NewGuid(), date,
+            new DateTime(2026, 7, 14, 15, 0, 0, DateTimeKind.Utc),
+            MarketSessionCreatedSource.Auto, true).Value;
+        session.Close(null, null, Now.UtcDateTime);
+        var sessions = Substitute.For<IMarketSessionRepository>();
+        sessions.ListAsync(date, date, null, MarketSessionStatus.Closed, default).Returns([session]);
+
         var settings = Substitute.For<IOperationalSettingsReader>();
         settings.ReadAsync(default)
             .Returns(new ProcurementOperationalSettingsDto(true, new TimeOnly(22, 0)));
-        service.BuildBatchesAsync(
-                new DateOnly(2026, 7, 15),
-                true,
-                false,
-                default)
-            .Returns(Result<BatchingResult>.Success(
-                new BatchingResult(0, 0, 0, false, null, [])));
+        service.BuildSessionBatchAsync(session.Id, true, default).Returns(Result<BatchingResult>.Success(
+            new BatchingResult(0, 0, 0, false, null, [])));
         var handler = new RunAutoBatchCommandHandler(
             service,
             settings,
-            new FixedTimeProvider(Now));
+            new FixedTimeProvider(Now),
+            sessions);
 
         var result = await handler.Handle(
             new RunAutoBatchCommand(null, true, false),
             default);
 
         result.IsSuccess.Should().BeTrue();
-        await service.Received(1).BuildBatchesAsync(
-            new DateOnly(2026, 7, 15),
-            true,
-            false,
-            default);
+        await service.Received(1).BuildSessionBatchAsync(session.Id, true, default);
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

@@ -59,6 +59,7 @@ public static class DependencyInjection
         services.AddScoped<IVehicleCapacityPolicy, VehicleCapacityPolicy>();
         services.AddScoped<IRoutePlanningInputBuilder, RoutePlanningInputBuilder>();
         services.AddScoped<IMarketSessionVehicleReader, MarketSessionVehicleReader>();
+        services.AddScoped<IMarketSessionReader, MarketSessionReader>();
         services.AddScoped<GoongRouteMatrixProvider>();
         services.AddScoped<IRouteMatrixCacheStore, RouteMatrixCacheStore>();
         services.AddScoped<IRouteMatrixProvider>(sp => new CachingRouteMatrixProvider(

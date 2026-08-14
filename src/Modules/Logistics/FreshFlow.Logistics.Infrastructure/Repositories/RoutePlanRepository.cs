@@ -11,10 +11,9 @@ internal sealed class RoutePlanRepository(AppDbContext db) : IRoutePlanRepositor
     public Task<RoutePlan?> FindByIdAsync(Guid id, CancellationToken ct) =>
         db.Set<RoutePlan>().FirstOrDefaultAsync(x => x.Id == id && x.DeletedAt == null, ct);
 
-    public Task<RoutePlan?> FindProposedAsync(Guid hubId, DateOnly serviceDate, CancellationToken ct) =>
+    public Task<RoutePlan?> FindProposedAsync(Guid marketSessionId, CancellationToken ct) =>
         db.Set<RoutePlan>().FirstOrDefaultAsync(x =>
-            x.HubId == hubId && x.ServiceDate == serviceDate
-            && x.Status == RoutePlanStatus.proposed && x.DeletedAt == null, ct);
+            x.MarketSessionId == marketSessionId && x.Status == RoutePlanStatus.proposed && x.DeletedAt == null, ct);
 
     public async Task<IReadOnlyList<DeliveryRoute>> GetRoutesAsync(Guid planId, CancellationToken ct) =>
         await db.Set<DeliveryRoute>()

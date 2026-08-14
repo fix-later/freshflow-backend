@@ -32,8 +32,6 @@ public sealed class MarketSessionBatchingTests
         var batches = Substitute.For<IProcurementBatchRepository>();
         var service = new BatchConfirmedOrdersService(
             orders,
-            Substitute.For<IMarketProductMarketReader>(),
-            Substitute.For<IHubByMarketReader>(),
             Substitute.For<IMarketCodeReader>(),
             settings,
             batches,

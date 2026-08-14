@@ -6,7 +6,7 @@ public interface IOrderStatusReader
 
     public Task<IReadOnlyList<OrderStatusLookupDto>> ListByRestaurantsAndStatusAsync(
         IReadOnlyCollection<Guid> restaurantIds,
-        string status,
+        IReadOnlyCollection<string> statuses,
         CancellationToken ct,
         Guid? hubId = null,
         DateOnly? serviceDate = null);

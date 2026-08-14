@@ -15,10 +15,12 @@ public sealed class DeliveryRoute
         IReadOnlyList<RouteStop> stops,
         Guid? createdBy,
         Guid? hubId = null,
-        RouteType routeType = RouteType.direct)
+        RouteType routeType = RouteType.direct,
+        Guid marketSessionId = default)
     {
         Id = Guid.NewGuid();
         HubId = hubId;
+        MarketSessionId = marketSessionId;
         RouteType = routeType;
         Status = RouteStatus.planned;
         ServiceDate = serviceDate;
@@ -30,6 +32,8 @@ public sealed class DeliveryRoute
 
     public Guid Id { get; private set; }
     public Guid? HubId { get; private set; }
+    // ponytail: Guid.Empty supports the legacy manual hub-route endpoint until it becomes session-centered.
+    public Guid MarketSessionId { get; private set; }
     public RouteType RouteType { get; private set; }
     public RouteStatus Status { get; private set; }
     public DateOnly ServiceDate { get; private set; }
@@ -74,7 +78,8 @@ public sealed class DeliveryRoute
         Guid hubId,
         DateOnly serviceDate,
         IReadOnlyList<RouteStop> stops,
-        Guid? createdBy)
+        Guid? createdBy,
+        Guid marketSessionId = default)
     {
         ArgumentNullException.ThrowIfNull(stops);
 
@@ -90,7 +95,7 @@ public sealed class DeliveryRoute
         if (!stops.Any(stop => stop.EntityType == StopEntityType.restaurant))
             throw new ArgumentException("A hub route requires at least one restaurant stop.", nameof(stops));
 
-        return new DeliveryRoute(serviceDate, stops, createdBy, hubId, RouteType.hub_relay);
+        return new DeliveryRoute(serviceDate, stops, createdBy, hubId, RouteType.hub_relay, marketSessionId);
     }
 
     public void Select()

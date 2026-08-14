@@ -53,7 +53,7 @@ public sealed class RoutesController(ISender sender) : ControllerBase
         CancellationToken ct)
     {
         var result = await sender.Send(
-            new PlanRoutesCommand(body.HubId, body.ServiceDate, body.OptimizationCriteria),
+            new PlanRoutesCommand(body.MarketSessionId, body.OptimizationCriteria),
             ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -275,8 +275,7 @@ public sealed record CalculateRouteRequest(
     DateOnly ServiceDate);
 
 public sealed record PlanRoutesRequest(
-    Guid HubId,
-    DateOnly ServiceDate,
+    Guid MarketSessionId,
     string? OptimizationCriteria);
 
 public sealed record OptimizeRouteRequest(string OptimizationCriteria);

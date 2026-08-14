@@ -11,7 +11,7 @@ internal sealed class RunAutoBatchCommandHandler(
     IProcurementBatchingService batchingService,
     IOperationalSettingsReader settings,
     TimeProvider timeProvider,
-    IMarketSessionRepository? sessions = null)
+    IMarketSessionRepository sessions)
     : IRequestHandler<RunAutoBatchCommand, Result<BatchingResult>>
 {
     public async Task<Result<BatchingResult>> Handle(
@@ -26,10 +26,6 @@ internal sealed class RunAutoBatchCommandHandler(
                 timeProvider.GetUtcNow(),
                 operationalSettings.DailyCutoffTime);
         }
-
-        if (sessions is null)
-            return await batchingService.BuildBatchesAsync(
-                batchDate.Value, request.DryRun, request.Force, cancellationToken);
 
         var closed = await sessions.ListAsync(
             batchDate, batchDate, null, MarketSessionStatus.Closed, cancellationToken);

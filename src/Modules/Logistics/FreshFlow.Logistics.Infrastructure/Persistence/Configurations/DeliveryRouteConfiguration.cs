@@ -21,6 +21,9 @@ internal sealed class DeliveryRouteConfiguration : IEntityTypeConfiguration<Deli
 
         builder.Property(r => r.HubId)
             .HasColumnName("hub_id");
+        builder.Property(r => r.MarketSessionId)
+            .HasColumnName("market_session_id");
+
 
         builder.Property(r => r.RouteType)
             .HasColumnName("route_type")
