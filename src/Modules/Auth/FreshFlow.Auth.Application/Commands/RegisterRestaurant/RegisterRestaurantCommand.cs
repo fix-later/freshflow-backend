@@ -7,4 +7,6 @@ public sealed record RegisterRestaurantCommand(
     string Password,
     string RestaurantName,
     string? Phone,
-    string? TaxCode = null) : ICommand<RegisterRestaurantResponse>;
+    string? TaxCode = null,
+    string? InvoiceLegalName = null,
+    string? InvoiceAddress = null) : ICommand<RegisterRestaurantResponse>;

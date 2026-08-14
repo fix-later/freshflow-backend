@@ -7,7 +7,13 @@ namespace FreshFlow.Auth.Infrastructure.CrossModule;
 
 internal sealed class RestaurantRepository(AppDbContext db) : IRestaurantRepository
 {
-    public async Task<Guid> CreateAsync(Guid userId, string restaurantName, string? taxCode, CancellationToken ct)
+    public async Task<Guid> CreateAsync(
+        Guid userId,
+        string restaurantName,
+        string? taxCode,
+        string? invoiceLegalName,
+        string? invoiceAddress,
+        CancellationToken ct)
     {
         var row = new RestaurantRow
         {
@@ -15,6 +21,8 @@ internal sealed class RestaurantRepository(AppDbContext db) : IRestaurantReposit
             UserId = userId,
             Name = restaurantName,
             TaxCode = taxCode,
+            InvoiceLegalName = invoiceLegalName,
+            InvoiceAddress = invoiceAddress,
             Status = RestaurantStatus.Pending,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow

@@ -119,4 +119,20 @@ public sealed class RegisterRestaurantCommandValidatorTests
                 "owner@test.com", "ValidP@ss1!", "My Restaurant", null, null));
         result.IsValid.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("", "123 Nguyễn Huệ", nameof(RegisterRestaurantCommand.InvoiceLegalName))]
+    [InlineData("Công ty FreshFlow", " ", nameof(RegisterRestaurantCommand.InvoiceAddress))]
+    public async Task Validate_BlankInvoiceField_Fails(
+        string invoiceLegalName,
+        string invoiceAddress,
+        string expectedProperty)
+    {
+        var result = await _sut.ValidateAsync(
+            new RegisterRestaurantCommand(
+                "owner@test.com", "ValidP@ss1!", "My Restaurant", null, null,
+                invoiceLegalName, invoiceAddress));
+
+        result.Errors.Should().Contain(e => e.PropertyName == expectedProperty);
+    }
 }
