@@ -73,18 +73,24 @@ public sealed class CoordinateReaderTests
     }
 
     [Fact]
-    public async Task RestaurantCoordinateReader_NonDefaultOrDeletedAddress_ReturnsNullAsync()
+    public async Task RestaurantCoordinateReader_NoLiveDefaultAddress_ReturnsNameWithNullCoordinatesAsync()
     {
         using var fixture = await SqliteFixture.CreateAsync();
         var restaurantId = Guid.NewGuid();
-        await fixture.InsertRestaurantAsync(restaurantId, "Deleted Address");
+        await fixture.InsertRestaurantAsync(restaurantId, "No Default");
         await fixture.InsertDeliveryAddressAsync(restaurantId, 10.111m, 106.222m, isDefault: false);
         await fixture.InsertDeliveryAddressAsync(restaurantId, 10.333m, 106.444m, isDefault: true, deleted: true);
         var sut = new RestaurantCoordinateReader(fixture.Context);
 
         var result = await sut.FindByRestaurantIdAsync(restaurantId, default);
 
-        result.Should().BeNull();
+        // Stops use the order's checkout coordinates, so an active restaurant must still resolve its
+        // display name when it has no live default address; only the coordinates come back null.
+        result.Should().NotBeNull();
+        result!.RestaurantId.Should().Be(restaurantId);
+        result.Name.Should().Be("No Default");
+        result.Latitude.Should().BeNull();
+        result.Longitude.Should().BeNull();
     }
 
     [Theory]
