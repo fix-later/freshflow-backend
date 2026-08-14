@@ -40,7 +40,8 @@ internal sealed class OrderStatusReader(AppDbContext db) : IOrderStatusReader
         }
 
         return await query
-            .Select(o => new OrderStatusLookupDto(o.OrderId, o.Status, o.RestaurantId, o.HubId))
+            .Select(o => new OrderStatusLookupDto(
+                o.OrderId, o.Status, o.RestaurantId, o.HubId, o.DeliveryLatitude, o.DeliveryLongitude))
             .ToListAsync(ct);
     }
 

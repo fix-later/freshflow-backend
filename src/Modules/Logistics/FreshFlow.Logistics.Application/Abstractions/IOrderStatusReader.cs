@@ -21,4 +21,6 @@ public sealed record OrderStatusLookupDto(
     Guid OrderId,
     string Status,
     Guid RestaurantId,
-    Guid? HubId = null);
+    Guid? HubId = null,
+    decimal? DeliveryLatitude = null,
+    decimal? DeliveryLongitude = null);
