@@ -26,6 +26,7 @@ internal sealed class GetAssignedProcurementTasksQueryHandler(
             .Distinct()
             .ToArray();
         var statuses = await orders.ReadStatusesAsync(orderIds, cancellationToken);
+        var restaurantNames = await orders.ReadRestaurantNamesAsync(orderIds, cancellationToken);
         var marketProductIds = page
             .SelectMany(batch => batch.Items)
             .Select(item => item.MarketProductId)
@@ -44,7 +45,8 @@ internal sealed class GetAssignedProcurementTasksQueryHandler(
                             batch.Items.Where(item =>
                                 item.AssignedAgentUserId == request.AgentUserId),
                             batch.Orders.Select(order => order.OrderId),
-                            itemCosts)))
+                            itemCosts),
+                        restaurantNames))
                     .ToList()
                     .AsReadOnly(),
                 new ProcurementBatchPaginationDto(

@@ -53,7 +53,8 @@ public sealed record ProcurementBatchItemDto(
 
 public sealed record ProcurementBatchMemberDto(
     Guid OrderId,
-    string Status);
+    string Status,
+    string? RestaurantName = null);
 
 public sealed record ProcurementExceptionDto(
     Guid Id,
@@ -97,7 +98,8 @@ internal static class ProcurementBatchDtoMapper
         ProcurementBatch batch,
         IReadOnlyDictionary<Guid, string> orderStatuses,
         IReadOnlyDictionary<Guid, MarketProductInfoDto>? infoByMarketProduct = null,
-        ProcurementCostSummaryDto? agentCostSummary = null) =>
+        ProcurementCostSummaryDto? agentCostSummary = null,
+        IReadOnlyDictionary<Guid, string>? restaurantNames = null) =>
         new(
             batch.Id,
             batch.Code,
@@ -127,7 +129,8 @@ internal static class ProcurementBatchDtoMapper
                 .AsReadOnly(),
             batch.Orders.Select(link => new ProcurementBatchMemberDto(
                     link.OrderId,
-                    orderStatuses.GetValueOrDefault(link.OrderId, "Unknown")))
+                    orderStatuses.GetValueOrDefault(link.OrderId, "Unknown"),
+                    restaurantNames?.GetValueOrDefault(link.OrderId)))
                 .ToList()
                 .AsReadOnly(),
             batch.Exceptions
