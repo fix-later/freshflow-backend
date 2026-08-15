@@ -22,8 +22,7 @@ internal sealed class GetMarketProductsQueryHandler(
         var (items, nextCursor) = await reader.GetPageAsync(
             request.MarketId, request.Category, request.Cursor, request.PageSize, request.Tag, ct);
 
-        // UC-PRI-09: overlay live price/quantity/availableQuantity from the price board.
-        // TODO: switch to Redis cache (IPriceBoardCache) when ready — see UC-PRI-07.
+        // UC-PRI-09: overlay live price/quantity/availableQuantity from Redis.
         var liveItems = await OverlayLivePricesAsync(request.MarketId, items, ct);
 
         return Result<MarketProductPageDto>.Success(

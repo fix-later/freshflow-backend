@@ -13,8 +13,8 @@ namespace FreshFlow.IntegrationTests.Pricing;
 /// <summary>
 /// UC-PRI-09 — Live price board overlay on GET /api/v1/markets/{marketId}/products.
 ///
-/// These tests verify that the price board reader (v1: DbPriceBoardReader) correctly
-/// overlays live price/quantity/availableQuantity onto the paginated DB product list.
+/// These tests verify that cache misses preserve the price/quantity/availableQuantity
+/// already loaded with the paginated DB product list.
 ///
 /// Key UC-PRI-09 behaviours under test:
 /// - AvailableQuantity = CurrentQuantity - ReservedQuantity.
@@ -71,7 +71,7 @@ public sealed class PriceBoardOverlayEndpointTests(AuthWebAppFactory factory)
     [Fact]
     public async Task GetMarketProducts_WithSeededProduct_ReturnsCurrentDbPriceAsync()
     {
-        // Arrange — verifies v1 DB-direct reader returns the correct price
+        // Arrange — verifies a Redis miss preserves the DB price
         var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", adminToken);
@@ -89,7 +89,7 @@ public sealed class PriceBoardOverlayEndpointTests(AuthWebAppFactory factory)
         var env = await response.Content
             .ReadFromJsonAsync<PagedEnvelope<MarketProductItemBody>>();
         env!.Data![0].CurrentPrice.Should().Be(88_000m,
-            "DbPriceBoardReader returns the live DB price via overlay");
+            "a Redis miss falls back to the DB price");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
