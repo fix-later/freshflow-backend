@@ -8,14 +8,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace FreshFlow.IntegrationTests.Procurement;
 
-// The image seam is a keyless ToSqlQuery join (market_products -> products); ToSqlQuery does not
-// run on the EF InMemory provider, so it is only actually proven against real Postgres here.
+// The product-info seam is a keyless ToSqlQuery join; ToSqlQuery does not run on the EF InMemory
+// provider, so it is only actually proven against real Postgres here.
 [Trait("Category", "Integration")]
 public sealed class MarketProductImageSeamTests(AuthWebAppFactory factory)
     : IClassFixture<AuthWebAppFactory>
 {
     [Fact]
-    public async Task ReadImages_ResolvesProductImageUrl_AndOmitsNullImageAsync()
+    public async Task ReadInfo_ResolvesImageAndPackingMetadataAsync()
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -24,8 +24,11 @@ public sealed class MarketProductImageSeamTests(AuthWebAppFactory factory)
         db.Set<UnitOfMeasurement>().Add(unit);
         await db.SaveChangesAsync();
 
-        var withImage = new Product($"Imaged {Guid.NewGuid():N}", unit.Id, null, null, null);
-        withImage.Update("Imaged", null, unit.Id, null, imageUrl: "https://img/tomato.jpg");
+        var packingCode = new PackingCode($"BOX-15KG-{Guid.NewGuid():N}", null, 15m);
+        db.Set<PackingCode>().Add(packingCode);
+        var withImage = new Product(
+            $"Imaged {Guid.NewGuid():N}", unit.Id, null, null, null, packingCodeId: packingCode.Id);
+        withImage.Update("Imaged", null, unit.Id, null, imageUrl: "https://img/tomato.jpg", packingCodeId: packingCode.Id);
         var withoutImage = new Product($"Plain {Guid.NewGuid():N}", unit.Id, null, null, null);
         db.Set<Product>().AddRange(withImage, withoutImage);
         await db.SaveChangesAsync();
@@ -37,12 +40,17 @@ public sealed class MarketProductImageSeamTests(AuthWebAppFactory factory)
 
         var reader = scope.ServiceProvider.GetRequiredService<IMarketProductImageReader>();
 
-        var images = await reader.ReadImagesAsync(
+        var info = await reader.ReadInfoAsync(
             [mpWithImage.Id, mpWithoutImage.Id],
             default);
 
-        images.Should().ContainKey(mpWithImage.Id)
-            .WhoseValue.Should().Be("https://img/tomato.jpg");
-        images.Should().NotContainKey(mpWithoutImage.Id);
+        info[mpWithImage.Id].Should().BeEquivalentTo(new
+        {
+            ImageUrl = "https://img/tomato.jpg",
+            PackingCode = packingCode.Code,
+            PackingCapacityKg = 15m
+        });
+        info[mpWithoutImage.Id].ImageUrl.Should().BeNull();
+        info[mpWithoutImage.Id].PackingCode.Should().BeNull();
     }
 }

@@ -30,7 +30,7 @@ internal sealed class GetAssignedProcurementTaskQueryHandler(
         var marketProductIds = batch.Items
             .Select(item => item.MarketProductId)
             .ToArray();
-        var imageUrls = await images.ReadImagesAsync(marketProductIds, cancellationToken);
+        var productInfo = await images.ReadInfoAsync(marketProductIds, cancellationToken);
         var itemCosts = await orders.ReadItemCostsAsync(orderIds, cancellationToken);
         var costSummary = ProcurementCostSummaryCalculator.Calculate(
             batch.Items.Where(item => item.AssignedAgentUserId == request.AgentUserId),
@@ -38,6 +38,6 @@ internal sealed class GetAssignedProcurementTaskQueryHandler(
             itemCosts);
 
         return Result<ProcurementBatchDto>.Success(
-            ProcurementBatchDtoMapper.Map(batch, statuses, imageUrls, costSummary));
+            ProcurementBatchDtoMapper.Map(batch, statuses, productInfo, costSummary));
     }
 }

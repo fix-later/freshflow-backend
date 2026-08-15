@@ -37,10 +37,13 @@ public sealed class GetAssignedProcurementTaskQueryHandlerTests
         orders.ReadItemCostsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
             .Returns([new ConfirmedOrderItemCostDto(orderId, productId, 50_000m)]);
         var images = Substitute.For<IMarketProductImageReader>();
-        images.ReadImagesAsync(
+        images.ReadInfoAsync(
                 Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { productId })),
                 default)
-            .Returns(new Dictionary<Guid, string> { [productId] = "https://img/tomato.jpg" });
+            .Returns(new Dictionary<Guid, MarketProductInfoDto>
+            {
+                [productId] = new("https://img/tomato.jpg", "BOX-15KG", 15m)
+            });
         var handler = new GetAssignedProcurementTaskQueryHandler(repository, orders, images);
 
         var result = await handler.Handle(
@@ -64,7 +67,9 @@ public sealed class GetAssignedProcurementTaskQueryHandlerTests
             member.OrderId == orderId &&
             member.Status == "Batched");
         result.Value.Items.Should().ContainSingle(item =>
-            item.ProductImageUrl == "https://img/tomato.jpg");
+            item.ProductImageUrl == "https://img/tomato.jpg" &&
+            item.PackingCode == "BOX-15KG" &&
+            item.PackingCapacityKg == 15m);
     }
 
     [Fact]
