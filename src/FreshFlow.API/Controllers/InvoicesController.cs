@@ -4,6 +4,7 @@ using FreshFlow.API.Extensions;
 using FreshFlow.Invoicing.Application.Queries.ExportInvoice;
 using FreshFlow.Invoicing.Application.Queries.GetInvoiceById;
 using FreshFlow.Invoicing.Application.Queries.GetInvoices;
+using FreshFlow.Invoicing.Application.Queries.GetInvoiceSummary;
 using FreshFlow.Invoicing.Infrastructure.Documents;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -26,6 +27,22 @@ public sealed class InvoicesController(ISender sender, InvoicePdfRenderer pdfRen
         CancellationToken ct = default)
     {
         var query = new GetInvoicesQuery(ResolveUserId(), IsPrivileged(), restaurantId, status, page, pageSize);
+        var result = await sender.Send(query, ct);
+        return result.IsSuccess
+            ? Ok(ApiResponse.Ok(result.Value))
+            : result.Error.ToActionResult();
+    }
+
+    /// <summary>Aggregates issued invoices for reconciliation; this is not a VAT invoice.</summary>
+    [HttpGet("summary")]
+    public async Task<IActionResult> SummaryAsync(
+        [FromQuery] DateTimeOffset? from,
+        [FromQuery] DateTimeOffset? to,
+        [FromQuery] Guid? restaurantId,
+        CancellationToken ct)
+    {
+        var query = new GetInvoiceSummaryQuery(
+            ResolveUserId(), IsPrivileged(), restaurantId, from, to);
         var result = await sender.Send(query, ct);
         return result.IsSuccess
             ? Ok(ApiResponse.Ok(result.Value))

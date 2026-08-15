@@ -73,6 +73,11 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         deletedMarketProduct.VatRateCode.Should().Be("10");
 
         (await reader.GetByOrderIdAsync(seed.SoftDeletedOrderId, default)).Should().BeNull();
+        (await reader.GetByOrderIdAsync(seed.DraftOrderId, default)).Should().BeNull();
+
+        var uninvoicedOrderIds = await reader.GetUninvoicedDeliveredOrderIdsAsync(100, default);
+        uninvoicedOrderIds.Should().Contain(seed.OrderId);
+        uninvoicedOrderIds.Should().NotContain(seed.DraftOrderId);
     }
 
     [Fact]
@@ -102,6 +107,7 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         using var scope = factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IInvoiceIssuanceService>();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var invoices = scope.ServiceProvider.GetRequiredService<IInvoiceRepository>();
 
         await service.IssueForDeliveredOrderAsync(seed.OrderId, default);
         await service.IssueForDeliveredOrderAsync(seed.OrderId, default);
@@ -154,6 +160,14 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             line.LineSubtotal == 5_000m &&
             line.LineVatAmount == 0m &&
             line.LineTotal == 5_000m);
+
+        var totals = await invoices.SummarizeIssuedAsync(
+            seed.RestaurantId,
+            DateTime.UtcNow.AddDays(-1),
+            DateTime.UtcNow.AddDays(1),
+            default);
+        totals.Count.Should().Be(1);
+        totals.Total.Should().Be(93_680m);
     }
 
     [Fact]
@@ -304,7 +318,11 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             unknownVatMarketProduct.Id,
             deletedProductMarketProduct.Id,
             deletedMarketProduct.Id);
-        db.Set<Order>().AddRange(order, missingProfileOrder, softDeletedOrder);
+        var draftOrder = new Order(restaurantId, null, null);
+        draftOrder.AddItem(fivePercentMarketProduct.Id, FivePercentProduct, 1, 10_000m)
+            .IsSuccess.Should().BeTrue();
+        draftOrder.ClearDomainEvents();
+        db.Set<Order>().AddRange(order, missingProfileOrder, softDeletedOrder, draftOrder);
         db.Entry(softDeletedOrder).Property(nameof(Order.DeletedAt)).CurrentValue = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
@@ -315,7 +333,8 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             missingProfileRestaurantId,
             order.Id,
             missingProfileOrder.Id,
-            softDeletedOrder.Id);
+            softDeletedOrder.Id,
+            draftOrder.Id);
     }
 
     private static Order CreateDeliveredOrder(
@@ -387,5 +406,6 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         Guid MissingProfileRestaurantId,
         Guid OrderId,
         Guid MissingProfileOrderId,
-        Guid SoftDeletedOrderId);
+        Guid SoftDeletedOrderId,
+        Guid DraftOrderId);
 }

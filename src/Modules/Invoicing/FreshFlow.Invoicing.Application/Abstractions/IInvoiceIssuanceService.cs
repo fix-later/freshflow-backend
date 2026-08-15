@@ -7,4 +7,7 @@ public interface IInvoiceIssuanceService
 
     /// <summary>Re-attempts issuance for still-pending invoices, honoring the attempt cap and backoff.</summary>
     public Task<int> RetryDueAsync(int maxAttempts, TimeSpan backoff, int batchSize, CancellationToken ct);
+
+    /// <summary>Recovers delivered orders whose completion event did not create an invoice.</summary>
+    public Task<int> ReconcileMissingAsync(int batchSize, CancellationToken ct);
 }

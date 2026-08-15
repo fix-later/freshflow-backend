@@ -23,5 +23,10 @@ public interface IInvoiceRepository
     public Task<(IReadOnlyList<Invoice> Items, int Total)> ListAsync(
         Guid? restaurantId, InvoiceStatus? status, int skip, int take, CancellationToken ct);
 
+    public Task<InvoiceTotals> SummarizeIssuedAsync(
+        Guid? restaurantId, DateTime fromUtc, DateTime toUtc, CancellationToken ct);
+
     public Task SaveChangesAsync(CancellationToken ct);
 }
+
+public sealed record InvoiceTotals(int Count, decimal SubTotal, decimal VatAmount, decimal Total);

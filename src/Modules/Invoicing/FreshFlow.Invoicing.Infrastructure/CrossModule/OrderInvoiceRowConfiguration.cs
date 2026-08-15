@@ -28,6 +28,7 @@ internal sealed class OrderInvoiceRowConfiguration : IEntityTypeConfiguration<Or
             INNER JOIN products p ON p."Id" = mp."ProductId"
             LEFT JOIN units_of_measurement u ON u."Id" = p."UnitId"
             WHERE o.deleted_at IS NULL
+              AND o."Status" = 'Delivered'
             """);
 
         builder.Property(r => r.OrderId);
