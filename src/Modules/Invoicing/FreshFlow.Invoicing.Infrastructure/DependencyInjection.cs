@@ -5,6 +5,7 @@ using FreshFlow.Invoicing.Application.Abstractions;
 using FreshFlow.Invoicing.Application.Behaviors;
 using FreshFlow.Invoicing.Application.Services;
 using FreshFlow.Invoicing.Infrastructure.CrossModule;
+using FreshFlow.Invoicing.Infrastructure.Documents;
 using FreshFlow.Invoicing.Infrastructure.Jobs;
 using FreshFlow.Invoicing.Infrastructure.Persistence.Repositories;
 using FreshFlow.Invoicing.Infrastructure.Provider;
@@ -12,6 +13,7 @@ using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using QuestPDF.Infrastructure;
 
 namespace FreshFlow.Invoicing.Infrastructure;
 
@@ -25,6 +27,7 @@ public static class DependencyInjection
         EfAssemblyRegistry.Register(Assembly.GetExecutingAssembly());
         services.TryAddSingleton(config);
         services.TryAddSingleton(TimeProvider.System);
+        QuestPDF.Settings.License = LicenseType.Community;
 
         var applicationAssembly = typeof(IInvoiceRepository).Assembly;
         services.AddMediatR(cfg =>
@@ -42,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<IOrderInvoiceReader, OrderInvoiceReader>();
         services.AddScoped<IRestaurantReader, RestaurantReader>();
         services.AddScoped<IInvoiceIssuanceService, InvoiceIssuanceService>();
+        services.AddSingleton<InvoicePdfRenderer>();
 
         services.AddHostedService<InvoiceIssuanceRetryHostedService>();
 
