@@ -50,12 +50,16 @@ internal sealed class CreateScheduledOrderCommandHandler(
         Guid? marketId = null;
         if (marketProductReader is not null)
         {
-            foreach (var marketProductId in request.Items.Select(item => item.MarketProductId).Distinct())
+            foreach (var group in request.Items.GroupBy(item => item.MarketProductId))
             {
-                var snapshot = await marketProductReader.FindAsync(marketProductId, cancellationToken);
+                var snapshot = await marketProductReader.FindAsync(group.Key, cancellationToken);
                 if (snapshot is null)
                     return Result<ScheduledOrderDto>.Failure(Error.Validation(
-                        "INVALID_PRODUCT", $"Product '{marketProductId}' is not available."));
+                        "INVALID_PRODUCT", $"Product '{group.Key}' is not available."));
+                var quantityResult = OrderPricingCalculator.ValidateQuantity(
+                    group.Sum(item => item.Quantity), snapshot);
+                if (quantityResult.IsFailure)
+                    return Result<ScheduledOrderDto>.Failure(quantityResult.Error);
                 if (snapshot.MarketId.HasValue && marketId.HasValue && snapshot.MarketId != marketId)
                     return Result<ScheduledOrderDto>.Failure(Error.Validation(
                         "ORDER_MARKET_MISMATCH", "A recurring order can only contain products from one market."));

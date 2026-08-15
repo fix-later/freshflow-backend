@@ -39,6 +39,7 @@ public sealed class CreatePackingCodeCommandValidatorTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
+    [InlineData(2.5)]
     [InlineData(26)]
     public async Task Validate_CapacityOutsideAllowedRange_Fails(decimal capacityKg)
     {

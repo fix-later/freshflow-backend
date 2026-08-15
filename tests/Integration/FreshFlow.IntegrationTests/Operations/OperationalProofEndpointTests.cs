@@ -12,6 +12,7 @@ using FreshFlow.Logistics.Application.Dtos;
 using FreshFlow.Logistics.Domain.Entities;
 using FreshFlow.Logistics.Domain.Enums;
 using FreshFlow.Logistics.Domain.ValueObjects;
+using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Procurement.Application.Dtos;
 using FreshFlow.Procurement.Domain.Entities;
 using FreshFlow.Procurement.Domain.Enums;
@@ -73,7 +74,7 @@ public sealed class OperationalProofEndpointTests(AuthWebAppFactory factory)
         var operationsManager = await CreateUserAsync("operations_manager");
         var driver = await CreateUserAsync("driver");
         var hubStaff = await CreateUserAsync("hub_staff");
-        var (routeId, emptyRouteId, proofUrl) = await SeedRoutesAsync();
+        var (routeId, emptyRouteId, proofUrl, _) = await SeedRoutesAsync();
 
         Authenticate(await LoginAsync(operationsManager.Email, Password));
         var response = await _client.GetAsync($"/api/v1/logistics/routes/{routeId}/deliveries");
@@ -101,6 +102,19 @@ public sealed class OperationalProofEndpointTests(AuthWebAppFactory factory)
         Authenticate(await LoginAsync(hubStaff.Email, Password));
         (await _client.GetAsync($"/api/v1/logistics/routes/{routeId}/deliveries"))
             .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task DeliveryProofReader_ReturnsStoredProofForOrderAsync()
+    {
+        var (_, _, proofUrl, orderId) = await SeedRoutesAsync();
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var reader = scope.ServiceProvider.GetRequiredService<IDeliveryProofReader>();
+
+        var result = await reader.FindByOrderIdAsync(orderId, default);
+
+        result.Should().Be(proofUrl);
     }
 
     [Fact]
@@ -164,7 +178,7 @@ public sealed class OperationalProofEndpointTests(AuthWebAppFactory factory)
         return (assignedHub.Id, assignedInbound.Id, otherHub.Id, otherInbound.Id);
     }
 
-    private async Task<(Guid RouteId, Guid EmptyRouteId, string ProofUrl)> SeedRoutesAsync()
+    private async Task<(Guid RouteId, Guid EmptyRouteId, string ProofUrl, Guid ProofOrderId)> SeedRoutesAsync()
     {
         var route = CreateRoute();
         var emptyRoute = CreateRoute();
@@ -179,7 +193,7 @@ public sealed class OperationalProofEndpointTests(AuthWebAppFactory factory)
         db.Set<Delivery>().AddRange(first, second);
         await db.SaveChangesAsync();
 
-        return (route.Id, emptyRoute.Id, proofUrl);
+        return (route.Id, emptyRoute.Id, proofUrl, second.OrderId);
     }
 
     private static DeliveryRoute CreateRoute() =>

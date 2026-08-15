@@ -1,5 +1,6 @@
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Dtos;
+using FreshFlow.Orders.Application.Services;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 
@@ -52,6 +53,10 @@ internal sealed class UpdateOrderItemCommandHandler(
                 "INSUFFICIENT_STOCK",
                 $"Requested quantity {requestedTotalQuantity} exceeds available stock " +
                 $"{snapshot.AvailableQuantity} for product '{item.MarketProductId}'."));
+
+        var quantityResult = OrderPricingCalculator.ValidateQuantity(requestedTotalQuantity, snapshot);
+        if (quantityResult.IsFailure)
+            return Result<OrderDto>.Failure(quantityResult.Error);
 
         var updateResult = order.UpdateItem(request.OrderItemId, request.Quantity);
         if (updateResult.IsFailure)

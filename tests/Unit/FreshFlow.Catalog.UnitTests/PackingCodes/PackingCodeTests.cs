@@ -25,6 +25,13 @@ public sealed class PackingCodeTests
     }
 
     [Fact]
+    public void Constructor_FractionalCapacity_Throws()
+    {
+        var act = () => new PackingCode("BOX-2.5", null, 2.5m);
+        act.Should().Throw<ArgumentException>().WithParameterName("capacityKg");
+    }
+
+    [Fact]
     public void Constructor_ValidValues_TrimsAndActivates()
     {
         var code = new PackingCode(" BOX-15 ", " Standard box ", 15m);

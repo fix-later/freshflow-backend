@@ -7,7 +7,8 @@ internal static class OrderDtoMapper
 {
     public static OrderDto ToDto(
         Order order,
-        IReadOnlyDictionary<Guid, string>? images = null) => new(
+        IReadOnlyDictionary<Guid, string>? images = null,
+        string? proofUrl = null) => new(
         order.Id,
         order.RestaurantId,
         ToApiStatus(order.Status),
@@ -61,7 +62,8 @@ internal static class OrderDtoMapper
         order.RoutingProvider is "HAVERSINE_FALLBACK",
         order.MarketId,
         order.MarketSessionId,
-        order.ConfirmedAt);
+        order.ConfirmedAt,
+        proofUrl);
 
     public static OrderListItemDto ToListItemDto(Order order) => new(
         order.Id,

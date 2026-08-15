@@ -30,7 +30,8 @@ public sealed record OrderDto(
     bool DeliveryDistanceEstimated = false,
     Guid? MarketId = null,
     Guid? MarketSessionId = null,
-    DateTime? ConfirmedAt = null);
+    DateTime? ConfirmedAt = null,
+    string? ProofUrl = null);
 
 public sealed record DeliveryAddressSnapshotDto(
     Guid AddressId,

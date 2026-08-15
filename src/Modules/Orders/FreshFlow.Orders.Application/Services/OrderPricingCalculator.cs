@@ -36,6 +36,10 @@ internal static class OrderPricingCalculator
                     $"{product.ProductName} requires at least {product.MinimumOrderQuantity}; requested {quantity}."));
             }
 
+            var quantityResult = ValidateQuantity(quantity, product);
+            if (quantityResult.IsFailure)
+                return Result<OrderPricingQuote>.Failure(quantityResult.Error);
+
             var tax = ResolveTax(product.VatRate);
             taxes[group.Key] = tax;
             vatAmount += group.Sum(item => decimal.Round(
@@ -59,6 +63,18 @@ internal static class OrderPricingCalculator
             distanceKm,
             calculatedFee,
             subtotal + vatAmount + calculatedFee));
+    }
+
+    internal static Result ValidateQuantity(int quantity, MarketProductSnapshotDto product)
+    {
+        if (product.PackingWeightKg is not { } packingKg
+            || packingKg <= 0m
+            || quantity % packingKg == 0m)
+            return Result.Success();
+
+        return Result.Failure(Error.Validation(
+            "PACKING_QUANTITY_MISMATCH",
+            $"{product.ProductName} must be ordered in multiples of {packingKg} kg; requested {quantity} kg."));
     }
 
     private static OrderItemTaxSnapshot ResolveTax(string? rate)

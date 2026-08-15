@@ -1,5 +1,6 @@
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Dtos;
+using FreshFlow.Orders.Domain.Enums;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 
@@ -8,7 +9,8 @@ namespace FreshFlow.Orders.Application.Queries.GetOrder;
 internal sealed class GetOrderQueryHandler(
     IOrderRepository orderRepository,
     IRestaurantReader restaurantReader,
-    IMarketProductImageReader marketProductImageReader) : IRequestHandler<GetOrderQuery, Result<OrderDto>>
+    IMarketProductImageReader marketProductImageReader,
+    IDeliveryProofReader deliveryProofReader) : IRequestHandler<GetOrderQuery, Result<OrderDto>>
 {
     public async Task<Result<OrderDto>> Handle(GetOrderQuery request, CancellationToken cancellationToken)
     {
@@ -27,7 +29,10 @@ internal sealed class GetOrderQueryHandler(
         var images = await marketProductImageReader.ReadImagesAsync(
             order.Items.Select(item => item.MarketProductId).ToArray(),
             cancellationToken);
+        var proofUrl = order.Status == OrderStatus.Delivered
+            ? await deliveryProofReader.FindByOrderIdAsync(order.Id, cancellationToken)
+            : null;
 
-        return Result<OrderDto>.Success(OrderDtoMapper.ToDto(order, images));
+        return Result<OrderDto>.Success(OrderDtoMapper.ToDto(order, images, proofUrl));
     }
 }
