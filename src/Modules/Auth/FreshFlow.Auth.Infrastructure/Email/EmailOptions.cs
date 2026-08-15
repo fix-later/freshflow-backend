@@ -11,7 +11,4 @@ internal sealed class EmailOptions
     public string FromAddress { get; init; } = "no-reply@fishfix.vn";
 
     public string FromName { get; init; } = "FreshFlow";
-
-    [Required]
-    public string FrontendBaseUrl { get; init; } = string.Empty;
 }

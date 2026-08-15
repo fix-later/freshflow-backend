@@ -46,12 +46,17 @@ internal sealed class InvoiceIssuanceRetryHostedService(
         {
             using var scope = scopeFactory.CreateScope();
             var issuance = scope.ServiceProvider.GetRequiredService<IInvoiceIssuanceService>();
+            var batchSize = Math.Max(1, ReadInt("Invoicing:Retry:BatchSize", DefaultBatchSize));
+            var reconciled = await issuance.ReconcileMissingAsync(batchSize, stoppingToken);
             var processed = await issuance.RetryDueAsync(
                 Math.Max(2, ReadInt("Invoicing:Retry:MaxAttempts", DefaultMaxAttempts)),
-                TimeSpan.FromSeconds(ReadInt("Invoicing:Retry:BackoffSeconds", DefaultBackoffSeconds)),
-                ReadInt("Invoicing:Retry:BatchSize", DefaultBatchSize),
+                TimeSpan.FromSeconds(Math.Max(
+                    0, ReadInt("Invoicing:Retry:BackoffSeconds", DefaultBackoffSeconds))),
+                batchSize,
                 stoppingToken);
 
+            if (reconciled > 0)
+                logger.LogInformation("Recovered {Count} missing invoice(s).", reconciled);
             if (processed > 0)
                 logger.LogInformation("Re-attempted issuance for {Count} pending invoices.", processed);
         }

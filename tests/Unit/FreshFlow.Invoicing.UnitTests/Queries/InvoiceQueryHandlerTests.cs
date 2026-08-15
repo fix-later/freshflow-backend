@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreshFlow.Invoicing.Application.Abstractions;
 using FreshFlow.Invoicing.Application.Queries.GetInvoiceById;
 using FreshFlow.Invoicing.Application.Queries.GetInvoices;
+using FreshFlow.Invoicing.Application.Queries.GetInvoiceSummary;
 using FreshFlow.Invoicing.Domain.Entities;
 using NSubstitute;
 
@@ -66,6 +67,39 @@ public sealed class InvoiceQueryHandlerTests
         var result = await handler.Handle(new GetInvoicesQuery(UserId, true, null, "bogus", 1, 20), default);
 
         result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("VALIDATION_ERROR");
+    }
+
+    [Fact]
+    public async Task GetInvoiceSummary_NonAdminScopesAndReturnsIssuedTotalsAsync()
+    {
+        var from = new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(7));
+        var to = from.AddMonths(1);
+        _restaurantReader.FindRestaurantIdByUserIdAsync(UserId, Arg.Any<CancellationToken>())
+            .Returns(RestaurantId);
+        _repo.SummarizeIssuedAsync(
+                RestaurantId, from.UtcDateTime, to.UtcDateTime, Arg.Any<CancellationToken>())
+            .Returns(new InvoiceTotals(2, 100m, 8m, 108m));
+        var handler = new GetInvoiceSummaryQueryHandler(_repo, _restaurantReader);
+
+        var result = await handler.Handle(
+            new GetInvoiceSummaryQuery(UserId, false, null, from, to), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.RestaurantId.Should().Be(RestaurantId);
+        result.Value.InvoiceCount.Should().Be(2);
+        result.Value.Total.Should().Be(108m);
+        result.Value.Notice.Should().Contain("không phải hóa đơn VAT");
+    }
+
+    [Fact]
+    public async Task GetInvoiceSummary_InvalidPeriod_ReturnsValidationErrorAsync()
+    {
+        var handler = new GetInvoiceSummaryQueryHandler(_repo, _restaurantReader);
+
+        var result = await handler.Handle(
+            new GetInvoiceSummaryQuery(UserId, true, null, null, null), default);
+
         result.Error.Code.Should().Be("VALIDATION_ERROR");
     }
 

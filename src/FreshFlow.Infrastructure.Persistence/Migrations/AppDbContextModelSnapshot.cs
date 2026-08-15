@@ -2174,7 +2174,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    o.\"Id\" AS \"OrderId\",\n    o.\"RestaurantId\",\n    o.delivery_fee AS \"DeliveryFee\",\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\n    COALESCE(u.\"Name\", p.unit) AS \"Unit\",\n    oi.\"Quantity\" AS \"Quantity\",\n    COALESCE(oi.\"LockedUnitPrice\", oi.\"UnitPrice\") AS \"UnitPrice\",\n    oi.vat_rate_code AS \"VatRateCode\"\nFROM orders o\nINNER JOIN order_items oi ON oi.\"OrderId\" = o.\"Id\"\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\nINNER JOIN products p ON p.\"Id\" = mp.\"ProductId\"\nLEFT JOIN units_of_measurement u ON u.\"Id\" = p.\"UnitId\"\nWHERE o.deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT\n    o.\"Id\" AS \"OrderId\",\n    o.\"RestaurantId\",\n    o.delivery_fee AS \"DeliveryFee\",\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\n    COALESCE(u.\"Name\", p.unit) AS \"Unit\",\n    oi.\"Quantity\" AS \"Quantity\",\n    COALESCE(oi.\"LockedUnitPrice\", oi.\"UnitPrice\") AS \"UnitPrice\",\n    oi.vat_rate_code AS \"VatRateCode\"\nFROM orders o\nINNER JOIN order_items oi ON oi.\"OrderId\" = o.\"Id\"\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\nINNER JOIN products p ON p.\"Id\" = mp.\"ProductId\"\nLEFT JOIN units_of_measurement u ON u.\"Id\" = p.\"UnitId\"\nWHERE o.deleted_at IS NULL\n  AND o.\"Status\" = 'Delivered'");
                 });
 
             modelBuilder.Entity("FreshFlow.Invoicing.Infrastructure.CrossModule.RestaurantTaxProfileRow", b =>

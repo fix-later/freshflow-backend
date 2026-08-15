@@ -108,6 +108,27 @@ public sealed class InvoiceIssuanceServiceTests
     }
 
     [Fact]
+    public async Task ReconcileMissing_IssuesDeliveredOrdersWithoutInvoicesAsync()
+    {
+        _orderReader.GetUninvoicedDeliveredOrderIdsAsync(10, Arg.Any<CancellationToken>())
+            .Returns([OrderId]);
+        _repo.ExistsForOrderAsync(OrderId, Arg.Any<CancellationToken>()).Returns(false);
+        ArrangeBillableOrder();
+        _restaurantReader.GetTaxProfileAsync(RestaurantId, Arg.Any<CancellationToken>())
+            .Returns(new RestaurantTaxProfile(
+                RestaurantId, "Nhà hàng A", "0312345678", "Cty A", "Addr", null));
+        _provider.IssueAsync(Arg.Any<InvoiceIssueRequest>(), Arg.Any<CancellationToken>())
+            .Returns(Result<IssuedInvoice>.Success(Issued()));
+
+        var processed = await _sut.ReconcileMissingAsync(10, default);
+
+        processed.Should().Be(1);
+        await _repo.Received().AddAsync(
+            Arg.Is<Invoice>(invoice => invoice.OrderId == OrderId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task RetryDue_CompleteBuyerProfile_UpdatesBuyerAndIssuesAsync()
     {
         var invoice = new Invoice(

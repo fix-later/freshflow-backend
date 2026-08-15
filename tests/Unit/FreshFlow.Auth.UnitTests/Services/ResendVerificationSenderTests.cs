@@ -14,8 +14,7 @@ public sealed class ResendVerificationSenderTests
     {
         ResendApiKey = "re_test_key",
         FromAddress = "no-reply@fishfix.vn",
-        FromName = "FreshFlow",
-        FrontendBaseUrl = "http://localhost:3000"
+        FromName = "FreshFlow"
     });
 
     private static (ResendVerificationSender sut, FakeHttpMessageHandler handler) BuildSut(

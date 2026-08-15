@@ -4,7 +4,7 @@ namespace FreshFlow.Auth.Application.Abstractions;
 
 public interface IPasswordResetTokenRepository
 {
-    public Task<PasswordResetToken?> FindByHashAsync(string tokenHash, CancellationToken ct);
+    public Task<PasswordResetToken?> FindLatestPendingByUserIdAsync(Guid userId, CancellationToken ct);
 
     /// <summary>
     /// Marks all pending (non-expired, non-used) reset tokens for the given user as used,

@@ -10,6 +10,9 @@ namespace FreshFlow.Invoicing.Application.Abstractions;
 public interface IOrderInvoiceReader
 {
     public Task<OrderInvoiceSnapshot?> GetByOrderIdAsync(Guid orderId, CancellationToken ct);
+
+    public Task<IReadOnlyList<Guid>> GetUninvoicedDeliveredOrderIdsAsync(
+        int batchSize, CancellationToken ct);
 }
 
 public sealed record OrderInvoiceSnapshot(

@@ -60,5 +60,29 @@ internal sealed class InvoiceRepository(AppDbContext db) : IInvoiceRepository
         return (items, total);
     }
 
+    public async Task<InvoiceTotals> SummarizeIssuedAsync(
+        Guid? restaurantId, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
+    {
+        var query = db.Set<Invoice>()
+            .AsNoTracking()
+            .Where(i =>
+                i.Status == InvoiceStatus.Issued &&
+                i.IssuedAt >= fromUtc &&
+                i.IssuedAt < toUtc);
+
+        if (restaurantId is not null)
+            query = query.Where(i => i.RestaurantId == restaurantId);
+
+        return await query
+            .GroupBy(_ => 1)
+            .Select(group => new InvoiceTotals(
+                group.Count(),
+                group.Sum(i => i.SubTotal),
+                group.Sum(i => i.VatAmount),
+                group.Sum(i => i.Total)))
+            .SingleOrDefaultAsync(ct)
+            ?? new InvoiceTotals(0, 0m, 0m, 0m);
+    }
+
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }

@@ -70,6 +70,36 @@ public sealed class InvoiceIssuanceService(
         await invoices.SaveChangesAsync(ct);
     }
 
+    public async Task<int> ReconcileMissingAsync(int batchSize, CancellationToken ct)
+    {
+        if (batchSize <= 0)
+            throw new ArgumentException("batchSize must be greater than zero.", nameof(batchSize));
+
+        var orderIds = await orderReader.GetUninvoicedDeliveredOrderIdsAsync(batchSize, ct);
+        var processed = 0;
+        foreach (var orderId in orderIds)
+        {
+            try
+            {
+                await IssueForDeliveredOrderAsync(orderId, ct);
+                processed++;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Failed to reconcile missing invoice for OrderId={OrderId}.",
+                    orderId);
+            }
+        }
+
+        return processed;
+    }
+
     public async Task<int> RetryDueAsync(int maxAttempts, TimeSpan backoff, int batchSize, CancellationToken ct)
     {
         var threshold = DateTime.UtcNow.Subtract(backoff);

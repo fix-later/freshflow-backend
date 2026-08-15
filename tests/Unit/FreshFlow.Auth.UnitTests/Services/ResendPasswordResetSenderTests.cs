@@ -14,8 +14,7 @@ public sealed class ResendPasswordResetSenderTests
     {
         ResendApiKey = "re_test_key",
         FromAddress = "no-reply@fishfix.vn",
-        FromName = "FreshFlow",
-        FrontendBaseUrl = "http://localhost:3000"
+        FromName = "FreshFlow"
     });
 
     private static (ResendPasswordResetSender sut, FakeHttpMessageHandler handler) BuildSut(
@@ -31,13 +30,13 @@ public sealed class ResendPasswordResetSenderTests
     }
 
     [Fact]
-    public async Task SendResetLinkAsync_ValidRequest_PostsToEmailsEndpoint()
+    public async Task SendResetCodeAsync_ValidRequest_PostsToEmailsEndpoint()
     {
         // Arrange
         var (sut, handler) = BuildSut(HttpStatusCode.OK);
 
         // Act
-        await sut.SendResetLinkAsync("owner@test.vn", "raw-reset-token-123", default);
+        await sut.SendResetCodeAsync("owner@test.vn", "123456", default);
 
         // Assert — one POST to the Resend emails endpoint, no exception
         handler.RequestCount.Should().Be(1);
@@ -48,29 +47,26 @@ public sealed class ResendPasswordResetSenderTests
     [InlineData(HttpStatusCode.BadRequest)]
     [InlineData(HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.InternalServerError)]
-    public async Task SendResetLinkAsync_ErrorResponse_ThrowsHttpRequestException(HttpStatusCode statusCode)
+    public async Task SendResetCodeAsync_ErrorResponse_ThrowsHttpRequestException(HttpStatusCode statusCode)
     {
         // Arrange
         var (sut, _) = BuildSut(statusCode);
 
         // Act
-        var act = async () => await sut.SendResetLinkAsync("owner@test.vn", "token", default);
+        var act = async () => await sut.SendResetCodeAsync("owner@test.vn", "123456", default);
 
         // Assert — EnsureSuccessStatusCode propagates to caller
         await act.Should().ThrowAsync<HttpRequestException>();
     }
 
     [Fact]
-    public async Task SendResetLinkAsync_ResetLinkContainsEscapedToken()
+    public async Task SendResetCodeAsync_EmailContainsOtp()
     {
-        // Arrange — token with characters that need URL-encoding
         var (sut, handler) = BuildSut(HttpStatusCode.OK);
 
-        // Act
-        await sut.SendResetLinkAsync("u@test.vn", "tok en+special", default);
+        await sut.SendResetCodeAsync("u@test.vn", "654321", default);
 
-        // Assert — handler received the request (body encoding verified via no-throw)
-        handler.RequestCount.Should().Be(1);
+        handler.LastRequestBody.Should().Contain("654321");
     }
 }
 
@@ -79,12 +75,16 @@ internal sealed class FakeHttpMessageHandler(HttpStatusCode statusCode) : HttpMe
 {
     public int RequestCount { get; private set; }
     public string? LastRequestUri { get; private set; }
+    public string? LastRequestBody { get; private set; }
 
-    protected override Task<HttpResponseMessage> SendAsync(
+    protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
         RequestCount++;
         LastRequestUri = request.RequestUri?.ToString();
-        return Task.FromResult(new HttpResponseMessage(statusCode));
+        LastRequestBody = request.Content is null
+            ? null
+            : await request.Content.ReadAsStringAsync(cancellationToken);
+        return new HttpResponseMessage(statusCode);
     }
 }
