@@ -345,7 +345,10 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         agentAListBody!.Data!.Batches.Should().ContainSingle(batch =>
             batch.Id == batchId &&
             batch.Items.Any(item => item.AssignedAgentUserId == agentUserId) &&
-            batch.Items.Any(item => item.ReferenceUnitPrice == 10_000m));
+            batch.Items.Any(item => item.ReferenceUnitPrice == 10_000m) &&
+            batch.Members.Any(member =>
+                member.OrderId == seed.OrderId &&
+                member.RestaurantName == "Procurement Test Restaurant"));
 
         var ownerDetail = await _client.GetAsync(
             $"/api/v1/procurement/tasks/{batchId}");
@@ -353,6 +356,9 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         var ownerDetailBody = await ownerDetail.Content
             .ReadFromJsonAsync<Envelope<ProcurementBatchDto>>();
         ownerDetailBody!.Data!.Id.Should().Be(batchId);
+        ownerDetailBody.Data.Members.Should().ContainSingle(member =>
+            member.OrderId == seed.OrderId &&
+            member.RestaurantName == "Procurement Test Restaurant");
         ownerDetailBody.Data.AgentCostSummary.Should().BeEquivalentTo(new
         {
             RestaurantOrderTotal = 50_000m,

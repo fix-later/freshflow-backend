@@ -36,6 +36,8 @@ public sealed class GetAssignedProcurementTaskQueryHandlerTests
             .Returns(new Dictionary<Guid, string> { [orderId] = "Batched" });
         orders.ReadItemCostsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
             .Returns([new ConfirmedOrderItemCostDto(orderId, productId, 50_000m)]);
+        orders.ReadRestaurantNamesAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
+            .Returns(new Dictionary<Guid, string> { [orderId] = "Nhà hàng Phở Thìn" });
         var images = Substitute.For<IMarketProductImageReader>();
         images.ReadInfoAsync(
                 Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { productId })),
@@ -65,7 +67,8 @@ public sealed class GetAssignedProcurementTaskQueryHandlerTests
             item.ReferenceUnitPrice == 10_000m);
         result.Value.Members.Should().ContainSingle(member =>
             member.OrderId == orderId &&
-            member.Status == "Batched");
+            member.Status == "Batched" &&
+            member.RestaurantName == "Nhà hàng Phở Thìn");
         result.Value.Items.Should().ContainSingle(item =>
             item.ProductImageUrl == "https://img/tomato.jpg" &&
             item.PackingCode == "BOX-15KG" &&

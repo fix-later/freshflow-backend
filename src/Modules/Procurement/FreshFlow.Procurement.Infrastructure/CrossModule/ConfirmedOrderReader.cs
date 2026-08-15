@@ -140,6 +140,23 @@ internal sealed class ConfirmedOrderReader(AppDbContext db) : IConfirmedOrderRea
             .ToDictionaryAsync(row => row.Id, row => row.Status, ct);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, string>> ReadRestaurantNamesAsync(
+        IReadOnlyCollection<Guid> orderIds,
+        CancellationToken ct)
+    {
+        var ids = orderIds.Distinct().ToArray();
+
+        return await db.Database.SqlQuery<OrderRestaurantNameRow>(
+                $"""
+                 SELECT o."Id" AS "OrderId", r."Name" AS "RestaurantName"
+                 FROM orders o
+                 JOIN restaurants r ON r."Id" = o."RestaurantId"
+                 WHERE o.deleted_at IS NULL
+                 """)
+            .Where(row => ids.Contains(row.OrderId))
+            .ToDictionaryAsync(row => row.OrderId, row => row.RestaurantName, ct);
+    }
+
     public async Task<IReadOnlyList<ConfirmedOrderItemCostDto>> ReadItemCostsAsync(
         IReadOnlyCollection<Guid> orderIds,
         CancellationToken ct)
@@ -174,5 +191,11 @@ internal sealed class ConfirmedOrderReader(AppDbContext db) : IConfirmedOrderRea
         {
             return TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
         }
+    }
+
+    private sealed class OrderRestaurantNameRow
+    {
+        public Guid OrderId { get; init; }
+        public string RestaurantName { get; init; } = string.Empty;
     }
 }

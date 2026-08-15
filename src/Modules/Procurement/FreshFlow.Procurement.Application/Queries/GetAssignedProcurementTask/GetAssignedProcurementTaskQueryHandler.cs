@@ -27,6 +27,7 @@ internal sealed class GetAssignedProcurementTaskQueryHandler(
             .Select(link => link.OrderId)
             .ToArray();
         var statuses = await orders.ReadStatusesAsync(orderIds, cancellationToken);
+        var restaurantNames = await orders.ReadRestaurantNamesAsync(orderIds, cancellationToken);
         var marketProductIds = batch.Items
             .Select(item => item.MarketProductId)
             .ToArray();
@@ -38,6 +39,11 @@ internal sealed class GetAssignedProcurementTaskQueryHandler(
             itemCosts);
 
         return Result<ProcurementBatchDto>.Success(
-            ProcurementBatchDtoMapper.Map(batch, statuses, productInfo, costSummary));
+            ProcurementBatchDtoMapper.Map(
+                batch,
+                statuses,
+                productInfo,
+                costSummary,
+                restaurantNames));
     }
 }

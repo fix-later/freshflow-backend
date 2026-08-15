@@ -37,6 +37,8 @@ public sealed class GetAssignedProcurementTasksQueryHandlerTests
                     ids.SequenceEqual(new[] { orderId })),
                 default)
             .Returns(new Dictionary<Guid, string> { [orderId] = "Batched" });
+        orders.ReadRestaurantNamesAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
+            .Returns(new Dictionary<Guid, string> { [orderId] = "Nhà hàng Phở Thìn" });
         var images = Substitute.For<IMarketProductImageReader>();
         images.ReadInfoAsync(
                 Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { productId })),
@@ -60,8 +62,9 @@ public sealed class GetAssignedProcurementTasksQueryHandlerTests
         result.Value.Batches[0].Items[0].ProductImageUrl.Should().Be("https://img/tomato.jpg");
         result.Value.Batches[0].Items[0].PackingCode.Should().Be("BOX-15KG");
         result.Value.Batches[0].Items[0].PackingCapacityKg.Should().Be(15m);
-        result.Value.Batches[0].Members.Should().ContainSingle()
-            .Which.Status.Should().Be("Batched");
+        result.Value.Batches[0].Members.Should().ContainSingle(member =>
+            member.Status == "Batched" &&
+            member.RestaurantName == "Nhà hàng Phở Thìn");
         result.Value.Pagination.Should().BeEquivalentTo(new
         {
             Total = 11,

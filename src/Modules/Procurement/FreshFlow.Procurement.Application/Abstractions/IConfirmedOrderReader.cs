@@ -16,6 +16,10 @@ public interface IConfirmedOrderReader
         IReadOnlyCollection<Guid> orderIds,
         CancellationToken ct);
 
+    public Task<IReadOnlyDictionary<Guid, string>> ReadRestaurantNamesAsync(
+        IReadOnlyCollection<Guid> orderIds,
+        CancellationToken ct);
+
     public Task<IReadOnlyList<ConfirmedOrderItemCostDto>> ReadItemCostsAsync(
         IReadOnlyCollection<Guid> orderIds,
         CancellationToken ct);
