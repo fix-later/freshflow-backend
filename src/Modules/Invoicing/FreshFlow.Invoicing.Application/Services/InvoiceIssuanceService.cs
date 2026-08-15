@@ -50,6 +50,9 @@ public sealed class InvoiceIssuanceService(
                 l.ProductName, l.Unit!, l.Quantity, l.UnitPrice, code, VatRateResolver.ToPercent(code));
         }).ToList();
 
+        if (order.DeliveryFee > 0m)
+            lines.Add(new InvoiceLine("Phí giao hàng", "lần", 1m, order.DeliveryFee, VatRateResolver.CodeKct, 0m));
+
         var invoice = new Invoice(
             order.OrderId,
             order.RestaurantId,

@@ -15,6 +15,10 @@ public interface IConfirmedOrderReader
     public Task<IReadOnlyDictionary<Guid, string>> ReadStatusesAsync(
         IReadOnlyCollection<Guid> orderIds,
         CancellationToken ct);
+
+    public Task<IReadOnlyList<ConfirmedOrderItemCostDto>> ReadItemCostsAsync(
+        IReadOnlyCollection<Guid> orderIds,
+        CancellationToken ct);
 }
 
 public sealed record ConfirmedOrderDto(
@@ -26,3 +30,8 @@ public sealed record ConfirmedOrderItemDto(
     Guid MarketProductId,
     string ProductNameSnapshot,
     int Quantity);
+
+public sealed record ConfirmedOrderItemCostDto(
+    Guid OrderId,
+    Guid MarketProductId,
+    decimal RestaurantOrderTotal);

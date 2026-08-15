@@ -2147,6 +2147,9 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FreshFlow.Invoicing.Infrastructure.CrossModule.OrderInvoiceRow", b =>
                 {
+                    b.Property<decimal>("DeliveryFee")
+                        .HasColumnType("numeric");
+
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
@@ -2171,7 +2174,7 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    o.\"Id\" AS \"OrderId\",\n    o.\"RestaurantId\",\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\n    COALESCE(u.\"Name\", p.unit) AS \"Unit\",\n    COALESCE(oi.\"ActualQuantity\", oi.\"Quantity\") AS \"Quantity\",\n    COALESCE(oi.\"ActualUnitPrice\", oi.\"LockedUnitPrice\", oi.\"UnitPrice\") AS \"UnitPrice\",\n    oi.vat_rate_code AS \"VatRateCode\"\nFROM orders o\nINNER JOIN order_items oi ON oi.\"OrderId\" = o.\"Id\"\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\nINNER JOIN products p ON p.\"Id\" = mp.\"ProductId\"\nLEFT JOIN units_of_measurement u ON u.\"Id\" = p.\"UnitId\"\nWHERE o.deleted_at IS NULL");
+                    b.ToSqlQuery("SELECT\n    o.\"Id\" AS \"OrderId\",\n    o.\"RestaurantId\",\n    o.delivery_fee AS \"DeliveryFee\",\n    oi.\"ProductNameSnapshot\" AS \"ProductName\",\n    COALESCE(u.\"Name\", p.unit) AS \"Unit\",\n    oi.\"Quantity\" AS \"Quantity\",\n    COALESCE(oi.\"LockedUnitPrice\", oi.\"UnitPrice\") AS \"UnitPrice\",\n    oi.vat_rate_code AS \"VatRateCode\"\nFROM orders o\nINNER JOIN order_items oi ON oi.\"OrderId\" = o.\"Id\"\nINNER JOIN market_products mp ON mp.\"Id\" = oi.\"MarketProductId\"\nINNER JOIN products p ON p.\"Id\" = mp.\"ProductId\"\nLEFT JOIN units_of_measurement u ON u.\"Id\" = p.\"UnitId\"\nWHERE o.deleted_at IS NULL");
                 });
 
             modelBuilder.Entity("FreshFlow.Invoicing.Infrastructure.CrossModule.RestaurantTaxProfileRow", b =>
@@ -4686,6 +4689,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.ConfirmedOrderItemRow", b =>
                 {
+                    b.Property<decimal?>("LockedTotal")
+                        .HasColumnType("numeric")
+                        .HasColumnName("LockedTotal");
+
                     b.Property<Guid>("MarketProductId")
                         .HasColumnType("uuid")
                         .HasColumnName("MarketProductId");
@@ -4702,6 +4709,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("integer")
                         .HasColumnName("Quantity");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("numeric")
+                        .HasColumnName("UnitPrice");
 
                     b.ToTable((string)null);
 

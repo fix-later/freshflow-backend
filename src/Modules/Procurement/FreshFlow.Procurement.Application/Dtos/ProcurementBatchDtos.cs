@@ -1,3 +1,4 @@
+using FreshFlow.Procurement.Application.Abstractions;
 using FreshFlow.Procurement.Domain.Entities;
 using FreshFlow.Procurement.Domain.Enums;
 
@@ -26,7 +27,12 @@ public sealed record ProcurementBatchDto(
     bool IsCompleted,
     DateTime? CancelledAt,
     string? CancellationReason,
-    DateTime? CompletedAt);
+    DateTime? CompletedAt,
+    ProcurementCostSummaryDto? AgentCostSummary = null);
+
+public sealed record ProcurementCostSummaryDto(
+    decimal RestaurantOrderTotal,
+    decimal ActualPurchaseTotal);
 
 public sealed record ItemAssignmentDto(
     Guid MarketProductId,
@@ -88,7 +94,8 @@ internal static class ProcurementBatchDtoMapper
     public static ProcurementBatchDto Map(
         ProcurementBatch batch,
         IReadOnlyDictionary<Guid, string> orderStatuses,
-        IReadOnlyDictionary<Guid, string>? imagesByMarketProduct = null) =>
+        IReadOnlyDictionary<Guid, string>? imagesByMarketProduct = null,
+        ProcurementCostSummaryDto? agentCostSummary = null) =>
         new(
             batch.Id,
             batch.Code,
@@ -135,5 +142,29 @@ internal static class ProcurementBatchDtoMapper
             IsCompleted(batch, orderStatuses),
             batch.CancelledAt,
             batch.CancellationReason,
-            batch.CompletedAt);
+            batch.CompletedAt,
+            agentCostSummary);
+}
+
+internal static class ProcurementCostSummaryCalculator
+{
+    public static ProcurementCostSummaryDto Calculate(
+        IEnumerable<ProcurementBatchItem> items,
+        IEnumerable<Guid> orderIds,
+        IReadOnlyCollection<ConfirmedOrderItemCostDto> orderItemCosts)
+    {
+        var itemList = items.ToList();
+        var productIds = itemList.Select(item => item.MarketProductId).ToHashSet();
+        var coveredOrderIds = orderIds.ToHashSet();
+
+        return new ProcurementCostSummaryDto(
+            orderItemCosts
+                .Where(cost =>
+                    coveredOrderIds.Contains(cost.OrderId) &&
+                    productIds.Contains(cost.MarketProductId))
+                .Sum(cost => cost.RestaurantOrderTotal),
+            itemList
+                .Where(item => item.ActualQuantity is not null && item.ActualUnitPrice is not null)
+                .Sum(item => item.ActualQuantity!.Value * item.ActualUnitPrice!.Value));
+    }
 }

@@ -65,6 +65,12 @@ public sealed class GetBatchOverviewQueryHandlerTests
                     ids.ToHashSet().SetEquals(new[] { orderA, orderB })),
                 default)
             .Returns(new Dictionary<Guid, string> { [orderA] = "Batched" });
+        orders.ReadItemCostsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
+            .Returns([
+                new ConfirmedOrderItemCostDto(orderA, productA, 20m),
+                new ConfirmedOrderItemCostDto(orderA, productB, 60m),
+                new ConfirmedOrderItemCostDto(orderB, productC, 120m)
+            ]);
         var handler = new GetBatchOverviewQueryHandler(repository, orders);
 
         var result = await handler.Handle(new GetBatchOverviewQuery(batch.Id), default);
@@ -78,7 +84,9 @@ public sealed class GetBatchOverviewQueryHandlerTests
             TotalItemCount = 3,
             ItemsPurchased = 2,
             ItemsPending = 1,
-            ExceptionCount = 1
+            ExceptionCount = 1,
+            RestaurantOrderTotal = 200m,
+            ActualPurchaseTotal = 78m
         });
         result.Value.Agents.Should().BeEquivalentTo([
             new
@@ -88,6 +96,8 @@ public sealed class GetBatchOverviewQueryHandlerTests
                 ItemsPurchased = 2,
                 ItemsPending = 0,
                 ExceptionsReported = 1,
+                RestaurantOrderTotal = 80m,
+                ActualPurchaseTotal = 78m,
                 ReferenceCostTotal = (decimal?)80m,
                 ActualCostTotal = (decimal?)78m,
                 VarianceTotal = (decimal?)(-2m)
@@ -99,6 +109,8 @@ public sealed class GetBatchOverviewQueryHandlerTests
                 ItemsPurchased = 0,
                 ItemsPending = 1,
                 ExceptionsReported = 0,
+                RestaurantOrderTotal = 120m,
+                ActualPurchaseTotal = 0m,
                 ReferenceCostTotal = (decimal?)120m,
                 ActualCostTotal = (decimal?)null,
                 VarianceTotal = (decimal?)null

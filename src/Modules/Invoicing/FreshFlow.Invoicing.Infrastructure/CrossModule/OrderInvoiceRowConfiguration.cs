@@ -8,8 +8,7 @@ internal sealed class OrderInvoiceRowConfiguration : IEntityTypeConfiguration<Or
     public void Configure(EntityTypeBuilder<OrderInvoiceRow> builder)
     {
         // Read-only projection over Orders' immutable confirmation snapshots.
-        // Quantity is the delivered amount (ActualQuantity when a shortage was recorded, else ordered).
-        // Unit price uses the procurement actual when present, then the confirmation snapshot.
+        // Procurement actuals are internal costs; buyer invoices use terms locked at confirmation.
         // Column casing is mixed by table and verified against each *Configuration.cs — do not guess.
         builder.HasNoKey();
         builder.ToSqlQuery(
@@ -17,10 +16,11 @@ internal sealed class OrderInvoiceRowConfiguration : IEntityTypeConfiguration<Or
             SELECT
                 o."Id" AS "OrderId",
                 o."RestaurantId",
+                o.delivery_fee AS "DeliveryFee",
                 oi."ProductNameSnapshot" AS "ProductName",
                 COALESCE(u."Name", p.unit) AS "Unit",
-                COALESCE(oi."ActualQuantity", oi."Quantity") AS "Quantity",
-                COALESCE(oi."ActualUnitPrice", oi."LockedUnitPrice", oi."UnitPrice") AS "UnitPrice",
+                oi."Quantity" AS "Quantity",
+                COALESCE(oi."LockedUnitPrice", oi."UnitPrice") AS "UnitPrice",
                 oi.vat_rate_code AS "VatRateCode"
             FROM orders o
             INNER JOIN order_items oi ON oi."OrderId" = o."Id"
@@ -32,6 +32,7 @@ internal sealed class OrderInvoiceRowConfiguration : IEntityTypeConfiguration<Or
 
         builder.Property(r => r.OrderId);
         builder.Property(r => r.RestaurantId);
+        builder.Property(r => r.DeliveryFee);
         builder.Property(r => r.ProductName);
         builder.Property(r => r.Unit);
         builder.Property(r => r.Quantity);

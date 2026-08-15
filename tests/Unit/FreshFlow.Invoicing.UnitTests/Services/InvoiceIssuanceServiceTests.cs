@@ -43,7 +43,7 @@ public sealed class InvoiceIssuanceServiceTests
     public async Task IssueForDeliveredOrder_Success_MarksIssuedAsync()
     {
         _repo.ExistsForOrderAsync(OrderId, Arg.Any<CancellationToken>()).Returns(false);
-        ArrangeBillableOrder();
+        ArrangeBillableOrder(deliveryFee: 10_000m);
         _restaurantReader.GetTaxProfileAsync(RestaurantId, Arg.Any<CancellationToken>())
             .Returns(new RestaurantTaxProfile(RestaurantId, "Nhà hàng A", "0312345678", "Cty A", "Addr", "a@x.vn"));
         InvoiceIssueRequest? request = null;
@@ -58,12 +58,15 @@ public sealed class InvoiceIssuanceServiceTests
         captured()!.Status.Should().Be(InvoiceStatus.Issued);
         captured()!.TaxAuthorityCode.Should().Be("MCQT-1");
         captured()!.BuyerTaxCode.Should().Be("0312345678");
-        captured()!.SubTotal.Should().Be(50000m);
+        captured()!.SubTotal.Should().Be(60_000m);
         captured()!.VatAmount.Should().Be(2500m);
+        captured()!.Total.Should().Be(62_500m);
         request.Should().NotBeNull();
-        request!.Lines.Should().ContainSingle();
+        request!.Lines.Should().HaveCount(2);
         request.Lines[0].Should().Be(new InvoiceIssueLine(
             "Cà chua", "thùng", 10m, 5000m, "5", 5m, 50000m, 2500m, 52500m));
+        request.Lines[1].Should().Be(new InvoiceIssueLine(
+            "Phí giao hàng", "lần", 1m, 10_000m, "KCT", 0m, 10_000m, 0m, 10_000m));
     }
 
     [Fact]
@@ -150,10 +153,10 @@ public sealed class InvoiceIssuanceServiceTests
         invoice.Status.Should().Be(InvoiceStatus.Failed);
     }
 
-    private void ArrangeBillableOrder() =>
+    private void ArrangeBillableOrder(decimal deliveryFee = 0m) =>
         _orderReader.GetByOrderIdAsync(OrderId, Arg.Any<CancellationToken>())
             .Returns(new OrderInvoiceSnapshot(
-                OrderId, RestaurantId,
+                OrderId, RestaurantId, deliveryFee,
                 [new OrderInvoiceLineSnapshot("Cà chua", "thùng", 10m, 5000m, "5")]));
 
     private Func<Invoice?> CaptureAddedInvoice()

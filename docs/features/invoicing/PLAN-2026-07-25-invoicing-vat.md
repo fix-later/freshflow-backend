@@ -46,7 +46,7 @@ Driver giao xong → UpdateDeliveryStatus → DeliveryCompletedIntegrationEvent(
     ├─ (đã có) Orders: mark receipt / credit
     ├─ (đã có) Notifications
     └─ (MỚI) Invoicing.DeliveryCompletedIntegrationEventHandler
-          1. đọc order + lines qua seam — dùng ActualQuantity ?? Quantity (giao thực, KHÔNG phải đặt)
+          1. đọc snapshot lúc confirm qua seam — Quantity, LockedUnitPrice, VAT và delivery fee
           2. đọc hồ sơ thuế người mua qua seam (MST, tên, địa chỉ, email)
           3. tạo Invoice(Draft) → lưu
           4. IEInvoiceProvider.IssueAsync(...) → NCC ký số + trả mã CQT + link tra cứu
@@ -86,8 +86,8 @@ Driver giao xong → UpdateDeliveryStatus → DeliveryCompletedIntegrationEvent(
 | `retry_count` | int | số lần thử |
 | `created_at` | timestamptz | UTC |
 
-Line snapshot: nhúng JSON `lines` hoặc bảng `invoice_lines` (Product, ActualQuantity, UnitPrice,
-VatRate, LineTotal). **Append-only sau khi Issued** — không sửa (điều chỉnh = hóa đơn mới ở v2).
+Line snapshot: nhúng JSON `lines` hoặc bảng `invoice_lines` (Product, Quantity, LockedUnitPrice,
+VatRate, LineTotal) và delivery fee. **Append-only sau khi Issued** — không sửa (điều chỉnh = hóa đơn mới ở v2).
 
 ## 5. Adapter — che lock-in NCC (1 interface, 1 impl)
 
@@ -114,8 +114,8 @@ Impl `MisaEInvoiceProvider` (hoặc VNPT) → config `Invoicing:EInvoice:*` (end
 
 ## 6. Seam đọc cross-module (keyless Row — Invoicing.Infrastructure/CrossModule)
 
-- `OrderInvoiceRow` — OrderId → lines (ProductName, `ActualQuantity ?? Quantity`, LockedUnitPrice,
-  VatRate, LineTotal). Đọc `orders` + `order_items`. ⚠️ **casing lẫn lộn** (`orders."Id"` PascalCase,
+- `OrderInvoiceRow` — OrderId → snapshot lúc confirm (ProductName, Quantity, LockedUnitPrice,
+  VatRate, DeliveryFee). Đọc `orders` + `order_items`. ⚠️ **casing lẫn lộn** (`orders."Id"` PascalCase,
   `order_items` không có soft-delete) — copy seam có sẵn, đừng đoán.
 - `RestaurantTaxProfileRow` — RestaurantId → MST, tên, địa chỉ, email. Đọc `restaurants`.
 
@@ -148,8 +148,8 @@ RBAC: `restaurant` chỉ thấy HĐ của mình (resolve userId→restaurant nh�
 
 ## 9. Cần chốt trước khi code (nghiệp vụ, không phải kỹ thuật)
 
-1. **Số lượng trên HĐ = giao thực (`ActualQuantity`)**, không phải đặt — Hub có thể báo thiếu. Xuất
-   HĐ sau khi giao là đúng vì lúc đó mới biết actual.
+1. **Giá trị trên HĐ = điều khoản lúc confirm** — Quantity, LockedUnitPrice, VAT và delivery fee.
+   ActualQuantity/ActualUnitPrice là dữ liệu vận hành và giá vốn nội bộ, không đổi giá bán cho nhà hàng.
 2. **Chữ ký số server-side** cần cert **HSM/remote signing**, không USB token (không tự động hóa
    trên server) — quyết định hạ tầng lúc chọn NCC.
 3. **Thuế suất thực phẩm tươi** — rà từng nhóm hàng (5% / KCT / 10%), quyết cách nhập `vat_rate`.
@@ -159,7 +159,7 @@ RBAC: `restaurant` chỉ thấy HĐ của mình (resolve userId→restaurant nh�
 ## 10. Scope
 
 - **v1**: schema (4 mục) → module scaffold → Invoice aggregate + persistence → adapter 1 NCC
-  sandbox → seam + integration test → handler DeliveryCompleted (issue, dùng ActualQuantity) →
+  sandbox → seam + integration test → handler DeliveryCompleted (issue, dùng snapshot confirm) →
   retry job → tax-profile endpoint → query xem/tải HĐ.
 - **Sau (v2)**: hóa đơn điều chỉnh/hủy (hook = `RestaurantRefundIssuedIntegrationEvent` khi refund
   ở Hub), HĐ tổng hợp, nhiều NCC.
