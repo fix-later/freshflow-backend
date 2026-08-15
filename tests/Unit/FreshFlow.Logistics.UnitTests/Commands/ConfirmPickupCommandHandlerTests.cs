@@ -11,6 +11,24 @@ namespace FreshFlow.Logistics.UnitTests.Commands;
 public sealed class ConfirmPickupCommandHandlerTests
 {
     [Fact]
+    public async Task Handle_PlannedRouteWithoutSnapshots_CreatesPendingDeliveriesAsync()
+    {
+        var routes = new InMemoryDeliveryRouteRepository();
+        var deliveries = new InMemoryDeliveryRepository();
+        var driverId = Guid.NewGuid();
+        var orderIds = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        var route = AssignedPlannedRoute(driverId, orderIds);
+        await routes.AddAsync(route, default);
+        var sut = new ConfirmPickupCommandHandler(routes, deliveries, new InMemoryOrderStatusReader());
+
+        var result = await sut.Handle(new ConfirmPickupCommand(route.Id, driverId, orderIds), default);
+
+        result.IsSuccess.Should().BeTrue();
+        deliveries.Deliveries.Select(delivery => delivery.OrderId).Should().BeEquivalentTo(orderIds);
+        deliveries.SaveChangesCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task Handle_AssignedRouteWithAtHubOrders_CreatesPendingDeliveriesAsync()
     {
         var routes = new InMemoryDeliveryRouteRepository();
@@ -244,6 +262,26 @@ public sealed class ConfirmPickupCommandHandlerTests
     {
         var route = ReviewedRoute(restaurantId);
         route.Assign(Guid.NewGuid(), driverId);
+        return route;
+    }
+
+    private static DeliveryRoute AssignedPlannedRoute(Guid driverId, IReadOnlyList<Guid> orderIds)
+    {
+        var vehicleId = Guid.NewGuid();
+        var hubId = Guid.NewGuid();
+        var route = DeliveryRoute.CreateHubRoute(
+            hubId,
+            new DateOnly(2026, 7, 11),
+            [
+                new RouteStop(0, StopEntityType.hub, hubId, "Hub", 10.1m, 106.1m, null, null),
+                new RouteStop(
+                    1, StopEntityType.restaurant, Guid.NewGuid(), "Restaurant", 10.2m, 106.2m, null, null,
+                    orderIds)
+            ],
+            null);
+        route.AttachToPlan(Guid.NewGuid(), vehicleId, 1m, "car", DateTime.UtcNow);
+        route.ReserveSuggestedVehicle();
+        route.Assign(vehicleId, driverId);
         return route;
     }
 
