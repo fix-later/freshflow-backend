@@ -40,13 +40,39 @@ internal sealed class ConfirmPickupCommandHandler(
         if (route.RoutePlanId is not null)
         {
             var snapshots = await deliveries.GetByRouteIdsAsync([route.Id], ct);
-            var expectedIds = snapshots.Select(x => x.OrderId).ToHashSet();
-            if (request.OrderIds.Count != expectedIds.Count || !expectedIds.SetEquals(request.OrderIds))
+            if (snapshots.Count > 0)
+            {
+                var snapshotOrderIds = snapshots.Select(x => x.OrderId).ToHashSet();
+                if (request.OrderIds.Count != snapshotOrderIds.Count || !snapshotOrderIds.SetEquals(request.OrderIds))
+                    return Result<ConfirmPickupResultDto>.Failure(Error.Validation(
+                        "PICKUP_ORDERS_INCOMPLETE",
+                        "Pickup order ids must exactly match the approved route snapshot."));
+                return Result<ConfirmPickupResultDto>.Success(new ConfirmPickupResultDto(
+                    route.Id, snapshots.Select(x => x.Id).ToList().AsReadOnly()));
+            }
+
+            var plannedOrderIds = route.Stops
+                .Where(stop => stop.OrderIds is not null)
+                .SelectMany(stop => stop.OrderIds!)
+                .ToHashSet();
+            if (request.OrderIds.Count != plannedOrderIds.Count || !plannedOrderIds.SetEquals(request.OrderIds))
                 return Result<ConfirmPickupResultDto>.Failure(Error.Validation(
                     "PICKUP_ORDERS_INCOMPLETE",
                     "Pickup order ids must exactly match the approved route snapshot."));
+
+            var plannedDeliveries = route.Stops
+                .Where(stop => stop.OrderIds is not null)
+                .SelectMany(stop => stop.OrderIds!.Select(orderId =>
+                    Delivery.Create(route.Id, orderId, stop.StopOrder, stop.EstimatedArrivalAt)))
+                .ToList()
+                .AsReadOnly();
+            await deliveries.AddRangeAsync(plannedDeliveries, ct);
+            if (!await deliveries.TrySaveChangesAsync(ct))
+                return Result<ConfirmPickupResultDto>.Failure(
+                    Error.Conflict("DELIVERY_ALREADY_EXISTS", "Delivery already exists for this order."));
+
             return Result<ConfirmPickupResultDto>.Success(new ConfirmPickupResultDto(
-                route.Id, snapshots.Select(x => x.Id).ToList().AsReadOnly()));
+                route.Id, plannedDeliveries.Select(x => x.Id).ToList().AsReadOnly()));
         }
 
         var expectedOrders = await orders.ListByRestaurantsAndStatusAsync(
