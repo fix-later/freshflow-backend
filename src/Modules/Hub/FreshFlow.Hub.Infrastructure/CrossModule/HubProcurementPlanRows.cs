@@ -18,11 +18,14 @@ internal sealed class HubProcurementItemRow
 {
     public Guid ProcurementBatchId { get; set; }
     public Guid MarketProductId { get; set; }
+    public Guid? ProductId { get; set; }
     public string ProductName { get; set; } = string.Empty;
     public int TargetQuantity { get; set; }
     public int? ActualQuantity { get; set; }
     public decimal? ActualUnitPrice { get; set; }
     public DateTime? PurchasedAt { get; set; }
+    public string? PackingCode { get; set; }
+    public decimal? PackingCapacityKg { get; set; }
 }
 
 internal sealed class HubProcurementOrderRow
@@ -60,15 +63,24 @@ internal sealed class HubProcurementItemRowConfiguration
         builder.HasNoKey();
         builder.ToSqlQuery(
             """
-            SELECT procurement_batch_id AS "ProcurementBatchId",
-                   market_product_id AS "MarketProductId",
-                   product_name_snapshot AS "ProductName",
-                   total_quantity AS "TargetQuantity",
-                   actual_quantity AS "ActualQuantity",
-                   actual_unit_price AS "ActualUnitPrice",
-                   purchased_at AS "PurchasedAt"
-            FROM procurement_batch_items
-            WHERE deleted_at IS NULL
+            SELECT pbi.procurement_batch_id AS "ProcurementBatchId",
+                   pbi.market_product_id AS "MarketProductId",
+                   mp."ProductId" AS "ProductId",
+                   pbi.product_name_snapshot AS "ProductName",
+                   pbi.total_quantity AS "TargetQuantity",
+                   pbi.actual_quantity AS "ActualQuantity",
+                   pbi.actual_unit_price AS "ActualUnitPrice",
+                   pbi.purchased_at AS "PurchasedAt",
+                   pc."Code" AS "PackingCode",
+                   pc."CapacityKg" AS "PackingCapacityKg"
+            FROM procurement_batch_items pbi
+            LEFT JOIN market_products mp
+              ON mp."Id" = pbi.market_product_id AND mp.deleted_at IS NULL
+            LEFT JOIN products p
+              ON p."Id" = mp."ProductId" AND p."DeletedAt" IS NULL
+            LEFT JOIN packing_codes pc
+              ON pc."Id" = p."PackingCodeId" AND pc."DeletedAt" IS NULL
+            WHERE pbi.deleted_at IS NULL
             """);
     }
 }
