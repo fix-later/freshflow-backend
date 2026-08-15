@@ -371,7 +371,7 @@ implementation is sound; the notes below only affect the Planned GAPs and their 
   order_items.ActualUnitPrice; EF reports no pending model changes.
 - API contract: procurement purchase and handover HTTP requests are unchanged; the internal handover
   event now carries per-product actual quantity/price. Order detail adds nullable
-  items[].actualUnitPrice; invoicing prefers it over the confirmation price snapshot.
+  items[].actualUnitPrice for internal cost reporting; invoicing keeps the confirmation price snapshot.
 - Test results: solution build passed (0 errors, 23 existing warnings); Orders unit tests 553/553;
   Procurement unit tests 124/124; Invoicing unit tests 36/36; related Orders/Invoicing PostgreSQL
   integration tests 16/16; Procurement endpoint PostgreSQL integration tests 8/8, including failed

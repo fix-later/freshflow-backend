@@ -60,9 +60,8 @@ order total against the restaurant's outstanding balance.
 **Confirmation fails** with a domain error if the order total would exceed the restaurant's available
 credit — there is no gateway redirect, payment token, or webhook.
 
-**Price Band:** If actual purchase price differs ≤ 10% from `locked_unit_price` → auto-adjust the
-charged amount, no user action. If > 10% → notify restaurant, wait 30 minutes, then auto-confirm to
-keep delivery schedule. If actual price is LOWER → restaurant is charged the lower price automatically.
+**Procurement variance:** The buyer's charge and invoice stay fixed to the commercial terms locked at
+confirmation. Actual purchase quantity/price is internal cost data; FreshFlow absorbs any gain or loss.
 
 ---
 

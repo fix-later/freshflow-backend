@@ -21,6 +21,6 @@ internal sealed class OrderInvoiceReader(AppDbContext db) : IOrderInvoiceReader
                 r.ProductName, r.Unit, r.Quantity, r.UnitPrice, r.VatRateCode))
             .ToList();
 
-        return new OrderInvoiceSnapshot(orderId, rows[0].RestaurantId, lines);
+        return new OrderInvoiceSnapshot(orderId, rows[0].RestaurantId, rows[0].DeliveryFee, lines);
     }
 }

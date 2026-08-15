@@ -42,12 +42,13 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
 
         snapshot.Should().NotBeNull();
         snapshot!.RestaurantId.Should().Be(seed.RestaurantId);
+        snapshot.DeliveryFee.Should().Be(5_000m);
         snapshot.Lines.Should().HaveCount(5);
 
         var fivePercent = snapshot.Lines.Should().ContainSingle(line =>
             line.ProductName == FivePercentProduct).Which;
-        fivePercent.Quantity.Should().Be(2.5m);
-        fivePercent.UnitPrice.Should().Be(11_000m);
+        fivePercent.Quantity.Should().Be(3m);
+        fivePercent.UnitPrice.Should().Be(10_000m);
         fivePercent.VatRateCode.Should().Be("5");
         fivePercent.Unit.Should().StartWith("kg-");
 
@@ -113,20 +114,24 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             .SingleAsync(value => value.OrderId == seed.OrderId);
         invoice.Status.Should().Be(InvoiceStatus.Issued);
         invoice.TaxAuthorityCode.Should().StartWith("DEV-MCQT-");
-        invoice.SubTotal.Should().Be(84_500m);
-        invoice.VatAmount.Should().Be(1_555m);
-        invoice.Total.Should().Be(86_055m);
-        invoice.Lines.Should().HaveCount(5);
+        invoice.SubTotal.Should().Be(92_000m);
+        invoice.VatAmount.Should().Be(1_680m);
+        invoice.Total.Should().Be(93_680m);
+        invoice.Total.Should().Be(await db.Set<Order>()
+            .Where(order => order.Id == seed.OrderId)
+            .Select(order => order.TotalAmount)
+            .SingleAsync());
+        invoice.Lines.Should().HaveCount(6);
 
         var fivePercent = invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == FivePercentProduct).Which;
-        fivePercent.Quantity.Should().Be(2.5m);
-        fivePercent.UnitPrice.Should().Be(11_000m);
+        fivePercent.Quantity.Should().Be(3m);
+        fivePercent.UnitPrice.Should().Be(10_000m);
         fivePercent.VatRateCode.Should().Be("5");
         fivePercent.Unit.Should().StartWith("kg-");
-        fivePercent.LineSubtotal.Should().Be(27_500m);
-        fivePercent.LineVatAmount.Should().Be(1_375m);
-        fivePercent.LineTotal.Should().Be(28_875m);
+        fivePercent.LineSubtotal.Should().Be(30_000m);
+        fivePercent.LineVatAmount.Should().Be(1_500m);
+        fivePercent.LineTotal.Should().Be(31_500m);
         invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == KctProduct && line.VatRateCode == "KCT");
         invoice.Lines.Should().ContainSingle(line =>
@@ -143,6 +148,12 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             line.LineSubtotal == 1_000m &&
             line.LineVatAmount == 100m &&
             line.LineTotal == 1_100m);
+        invoice.Lines.Should().ContainSingle(line =>
+            line.ProductName == "Phí giao hàng" &&
+            line.Unit == "lần" &&
+            line.LineSubtotal == 5_000m &&
+            line.LineVatAmount == 0m &&
+            line.LineTotal == 5_000m);
     }
 
     [Fact]
@@ -192,8 +203,12 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         document.Root.Attribute("legalValue")!.Value.Should().Be("false");
         document.Root.Element("Header")!.Element("TaxAuthorityCode")!.Value.Should().StartWith("DEV-MCQT-");
         document.Root.Element("Buyer")!.Element("TaxCode")!.Value.Should().Be("0312345678");
-        document.Root.Element("Lines")!.Elements("Line").Should().OnlyContain(line =>
+        var lines = document.Root.Element("Lines")!.Elements("Line").ToList();
+        lines.Where(line => line.Element("ProductName")!.Value != "Phí giao hàng").Should().OnlyContain(line =>
             line.Element("Unit")!.Value.StartsWith("kg-", StringComparison.Ordinal));
+        lines.Should().ContainSingle(line =>
+            line.Element("ProductName")!.Value == "Phí giao hàng" &&
+            line.Element("Unit")!.Value == "lần");
     }
 
     private async Task<SeedData> SeedAsync()
@@ -332,11 +347,10 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
                 [deletedMarketProductId] = new("10", 10m)
             },
             deliveryDistanceKm: 0m,
-            deliveryFee: 0m).IsSuccess.Should().BeTrue();
+            deliveryFee: 5_000m).IsSuccess.Should().BeTrue();
         order.Confirm().IsSuccess.Should().BeTrue();
 
         var fivePercentLine = order.Items.Single(item => item.ProductNameSnapshot == FivePercentProduct);
-        fivePercentLine.LockPricing(12_000m, "5", 5m);
         order.AdvanceStatus(OrderStatus.Batched).IsSuccess.Should().BeTrue();
         order.ApplyProcurementActuals(
             new Dictionary<Guid, OrderItemProcurementActual>
