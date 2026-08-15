@@ -11,6 +11,34 @@ namespace FreshFlow.API.Controllers;
 [Authorize]
 public sealed class MarketSessionsController(ISender sender) : ControllerBase
 {
+    [HttpGet("availability")]
+    [Authorize(Roles = "restaurant")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetAvailabilityAsync(
+        [FromQuery] Guid marketId,
+        [FromQuery] DateOnly serviceDate,
+        CancellationToken ct)
+    {
+        if (marketId == Guid.Empty || serviceDate == default)
+            return BadRequest(ApiResponse.Err(
+                "VALIDATION_ERROR", "MarketId and serviceDate are required."));
+
+        var result = await sender.Send(
+            new GetMarketSessionsQuery(serviceDate, serviceDate, marketId, null), ct);
+        if (result.IsFailure)
+            return result.Error.ToActionResult();
+
+        var session = result.Value.SingleOrDefault();
+        return Ok(ApiResponse.Ok(new MarketSessionAvailabilityResponse(
+            marketId,
+            serviceDate,
+            session is not null,
+            session?.Status == "open",
+            session?.Status,
+            session?.Id)));
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetAsync(
         [FromQuery] DateOnly? from,
@@ -33,3 +61,11 @@ public sealed class MarketSessionsController(ISender sender) : ControllerBase
         })));
     }
 }
+
+public sealed record MarketSessionAvailabilityResponse(
+    Guid MarketId,
+    DateOnly ServiceDate,
+    bool Exists,
+    bool IsOpen,
+    string? Status,
+    Guid? SessionId);
