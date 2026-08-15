@@ -4,6 +4,7 @@ using FreshFlow.API.Extensions;
 using FreshFlow.Invoicing.Application.Queries.ExportInvoice;
 using FreshFlow.Invoicing.Application.Queries.GetInvoiceById;
 using FreshFlow.Invoicing.Application.Queries.GetInvoices;
+using FreshFlow.Invoicing.Infrastructure.Documents;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,7 +14,7 @@ namespace FreshFlow.API.Controllers;
 [ApiController]
 [Route("api/v1/invoices")]
 [Authorize(Roles = "admin,operations_manager,restaurant")]
-public sealed class InvoicesController(ISender sender) : ControllerBase
+public sealed class InvoicesController(ISender sender, InvoicePdfRenderer pdfRenderer) : ControllerBase
 {
     /// <summary>Lists VAT invoices. Admin/ops see all; a restaurant sees only its own.</summary>
     [HttpGet]
@@ -51,6 +52,27 @@ public sealed class InvoicesController(ISender sender) : ControllerBase
         return result.IsSuccess
             ? File(Encoding.UTF8.GetBytes(result.Value.Xml), "application/xml", result.Value.FileName)
             : result.Error.ToActionResult();
+    }
+
+    /// <summary>Downloads a sandbox invoice as a clearly marked, non-legal PDF draft.</summary>
+    [HttpGet("{invoiceId:guid}/pdf")]
+    [Produces("application/pdf")]
+    public async Task<IActionResult> DownloadPdfAsync(Guid invoiceId, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new ExportInvoiceQuery(ResolveUserId(), IsPrivileged(), invoiceId), ct);
+        if (result.IsFailure)
+            return result.Error.ToActionResult();
+
+        if (!result.Value.Invoice.IsSandbox)
+            return UnprocessableEntity(ApiResponse.Err(
+                "INVOICE_PDF_PROVIDER_REQUIRED",
+                "A provider-issued invoice must use the PDF supplied by that provider."));
+
+        return File(
+            pdfRenderer.Render(result.Value.Invoice),
+            "application/pdf",
+            Path.ChangeExtension(result.Value.FileName, ".pdf"));
     }
 
     private bool IsPrivileged() => User.IsInRole("admin") || User.IsInRole("operations_manager");

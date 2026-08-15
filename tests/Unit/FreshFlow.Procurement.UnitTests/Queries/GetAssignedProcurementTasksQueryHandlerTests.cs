@@ -38,10 +38,13 @@ public sealed class GetAssignedProcurementTasksQueryHandlerTests
                 default)
             .Returns(new Dictionary<Guid, string> { [orderId] = "Batched" });
         var images = Substitute.For<IMarketProductImageReader>();
-        images.ReadImagesAsync(
+        images.ReadInfoAsync(
                 Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { productId })),
                 default)
-            .Returns(new Dictionary<Guid, string> { [productId] = "https://img/tomato.jpg" });
+            .Returns(new Dictionary<Guid, MarketProductInfoDto>
+            {
+                [productId] = new("https://img/tomato.jpg", "BOX-15KG", 15m)
+            });
         var handler = new GetAssignedProcurementTasksQueryHandler(repository, orders, images);
 
         var result = await handler.Handle(
@@ -55,6 +58,8 @@ public sealed class GetAssignedProcurementTasksQueryHandlerTests
         result.Value.Batches[0].Items.Should().ContainSingle()
             .Which.ReferenceUnitPrice.Should().Be(10_000m);
         result.Value.Batches[0].Items[0].ProductImageUrl.Should().Be("https://img/tomato.jpg");
+        result.Value.Batches[0].Items[0].PackingCode.Should().Be("BOX-15KG");
+        result.Value.Batches[0].Items[0].PackingCapacityKg.Should().Be(15m);
         result.Value.Batches[0].Members.Should().ContainSingle()
             .Which.Status.Should().Be("Batched");
         result.Value.Pagination.Should().BeEquivalentTo(new

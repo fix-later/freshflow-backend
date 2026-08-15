@@ -47,7 +47,9 @@ public sealed record ProcurementBatchItemDto(
     decimal? ActualUnitPrice,
     DateTime? PurchasedAt,
     Guid? AssignedAgentUserId,
-    string? ProductImageUrl);
+    string? ProductImageUrl,
+    string? PackingCode,
+    decimal? PackingCapacityKg);
 
 public sealed record ProcurementBatchMemberDto(
     Guid OrderId,
@@ -94,7 +96,7 @@ internal static class ProcurementBatchDtoMapper
     public static ProcurementBatchDto Map(
         ProcurementBatch batch,
         IReadOnlyDictionary<Guid, string> orderStatuses,
-        IReadOnlyDictionary<Guid, string>? imagesByMarketProduct = null,
+        IReadOnlyDictionary<Guid, MarketProductInfoDto>? infoByMarketProduct = null,
         ProcurementCostSummaryDto? agentCostSummary = null) =>
         new(
             batch.Id,
@@ -118,7 +120,9 @@ internal static class ProcurementBatchDtoMapper
                     item.ActualUnitPrice,
                     item.PurchasedAt,
                     item.AssignedAgentUserId,
-                    imagesByMarketProduct?.GetValueOrDefault(item.MarketProductId)))
+                    infoByMarketProduct?.GetValueOrDefault(item.MarketProductId)?.ImageUrl,
+                    infoByMarketProduct?.GetValueOrDefault(item.MarketProductId)?.PackingCode,
+                    infoByMarketProduct?.GetValueOrDefault(item.MarketProductId)?.PackingCapacityKg))
                 .ToList()
                 .AsReadOnly(),
             batch.Orders.Select(link => new ProcurementBatchMemberDto(

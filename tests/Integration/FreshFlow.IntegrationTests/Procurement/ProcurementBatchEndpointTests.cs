@@ -359,7 +359,9 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
             ActualPurchaseTotal = 0m
         });
         ownerDetailBody.Data.Items.Should().ContainSingle(item =>
-            item.ReferenceUnitPrice == 10_000m);
+            item.ReferenceUnitPrice == 10_000m &&
+            item.PackingCapacityKg == 5m &&
+            item.PackingCode!.StartsWith("BOX-5KG-"));
 
         var unknownTask = await _client.GetAsync(
             $"/api/v1/procurement/tasks/{Guid.NewGuid()}");
@@ -843,6 +845,8 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         {
             var unit = new UnitOfMeasurement($"kg-{Guid.NewGuid():N}", "kg");
             db.Set<UnitOfMeasurement>().Add(unit);
+            var packingCode = new PackingCode($"BOX-5KG-{Guid.NewGuid():N}", null, 5m);
+            db.Set<PackingCode>().Add(packingCode);
             await db.SaveChangesAsync();
 
             var market = new Market(
@@ -856,7 +860,8 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
                 unit.Id,
                 null,
                 null,
-                null);
+                null,
+                packingCodeId: packingCode.Id);
             db.Set<Market>().Add(market);
             db.Set<Product>().Add(product);
             await db.SaveChangesAsync();

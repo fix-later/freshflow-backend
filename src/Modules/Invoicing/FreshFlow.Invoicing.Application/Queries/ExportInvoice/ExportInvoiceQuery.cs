@@ -1,6 +1,7 @@
 using System.Xml;
 using System.Xml.Linq;
 using FreshFlow.Invoicing.Application.Abstractions;
+using FreshFlow.Invoicing.Application.Dtos;
 using FreshFlow.Invoicing.Domain.Entities;
 using FreshFlow.Invoicing.Domain.Enums;
 using FreshFlow.Invoicing.Domain.Validation;
@@ -12,7 +13,7 @@ namespace FreshFlow.Invoicing.Application.Queries.ExportInvoice;
 public sealed record ExportInvoiceQuery(Guid UserId, bool IsAdmin, Guid InvoiceId)
     : IQuery<ExportInvoiceResult>;
 
-public sealed record ExportInvoiceResult(string Xml, string FileName);
+public sealed record ExportInvoiceResult(string Xml, string FileName, InvoiceDto Invoice);
 
 internal sealed class ExportInvoiceQueryHandler(
     IInvoiceRepository invoices,
@@ -44,7 +45,8 @@ internal sealed class ExportInvoiceQueryHandler(
         var document = BuildDocument(invoice, isSandbox);
         return Result<ExportInvoiceResult>.Success(new ExportInvoiceResult(
             document.ToString(SaveOptions.DisableFormatting),
-            $"{(isSandbox ? "invoice-dev-draft" : "invoice")}-{invoice.Serial}-{invoice.Number}.xml"));
+            $"{(isSandbox ? "invoice-dev-draft" : "invoice")}-{invoice.Serial}-{invoice.Number}.xml",
+            InvoiceDto.From(invoice)));
     }
 
     private static bool IsComplete(Invoice invoice) =>
