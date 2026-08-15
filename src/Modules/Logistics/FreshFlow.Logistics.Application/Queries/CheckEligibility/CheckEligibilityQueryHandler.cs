@@ -93,6 +93,12 @@ internal sealed class CheckEligibilityQueryHandler(
 
             if (!driver.IsActive)
                 reasons.Add("DRIVER_INACTIVE");
+
+            if (route.HubId is { } hubId
+                && !await drivers.IsAssignedToHubAsync(driver.UserId, hubId, ct))
+            {
+                reasons.Add("DRIVER_NOT_ASSIGNED_TO_HUB");
+            }
         }
 
         return Result<EligibilityResultDto>.Success(new EligibilityResultDto(
