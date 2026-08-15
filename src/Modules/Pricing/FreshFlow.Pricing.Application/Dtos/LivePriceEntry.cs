@@ -1,10 +1,7 @@
 namespace FreshFlow.Pricing.Application.Dtos;
 
 /// <summary>
-/// Live price/quantity data for a single market product from the price board.
-/// For v1, sourced by <c>DbPriceBoardReader</c> reading directly from <c>market_products</c>.
-/// TODO: when the Redis-backed reader is ready (UC-PRI-07), this is populated from
-///       the <c>price:{marketId}:{productId}</c> hash instead.
+/// Live price/quantity data from the <c>price:{marketId}:{productId}</c> Redis hash.
 /// </summary>
 public sealed record LivePriceEntry(
     decimal Price,

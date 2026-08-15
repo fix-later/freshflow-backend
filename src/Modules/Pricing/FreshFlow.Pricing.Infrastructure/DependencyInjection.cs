@@ -78,9 +78,7 @@ public static class DependencyInjection
         });
         services.AddScoped<IPriceBoardCacheWriter, RedisPriceBoardCache>();
 
-        // UC-PRI-09: live price board reader — DB-direct for v1.
-        // TODO: swap DbPriceBoardReader for a Redis-backed reader when ready — see UC-PRI-07.
-        services.AddScoped<IPriceBoardReader, DbPriceBoardReader>();
+        services.AddScoped<IPriceBoardReader, RedisPriceBoardReader>();
 
         return services;
     }
