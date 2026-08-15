@@ -86,6 +86,7 @@ public static class DependencyInjection
         services.AddScoped<IMarketProductReader, MarketProductReader>();
         services.AddScoped<IMarketSessionGate, MarketSessionGate>();
         services.AddScoped<IMarketProductImageReader, MarketProductImageReader>();
+        services.AddScoped<IDeliveryProofReader, DeliveryProofReader>();
         services.AddScoped<IRestaurantReader, RestaurantReader>();
         services.AddScoped<IFavoriteReader, FavoriteReader>();
 

@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.Queries.GetOrder;
 using FreshFlow.Orders.Domain.Entities;
+using FreshFlow.Orders.Domain.Enums;
 using NSubstitute;
 using NSubstitute.ReturnsExtensions;
 
@@ -14,6 +15,7 @@ public sealed class GetOrderQueryHandlerTests
     private readonly IRestaurantReader _restaurantReader = Substitute.For<IRestaurantReader>();
     private readonly IMarketProductImageReader _marketProductImageReader =
         Substitute.For<IMarketProductImageReader>();
+    private readonly IDeliveryProofReader _deliveryProofReader = Substitute.For<IDeliveryProofReader>();
     private readonly GetOrderQueryHandler _sut;
 
     private static readonly Guid UserId = Guid.NewGuid();
@@ -28,7 +30,8 @@ public sealed class GetOrderQueryHandlerTests
         _sut = new GetOrderQueryHandler(
             _orderRepository,
             _restaurantReader,
-            _marketProductImageReader);
+            _marketProductImageReader,
+            _deliveryProofReader);
     }
 
     [Fact]
@@ -54,6 +57,8 @@ public sealed class GetOrderQueryHandlerTests
         result.Error.Code.Should().Be("FORBIDDEN");
         await _marketProductImageReader.DidNotReceive()
             .ReadImagesAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
+        await _deliveryProofReader.DidNotReceive()
+            .FindByOrderIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -70,8 +75,37 @@ public sealed class GetOrderQueryHandlerTests
         result.Value.Status.Should().Be("draft");
         result.Value.Items.Should().ContainSingle();
         result.Value.Items[0].ImageUrl.Should().BeNull();
+        result.Value.ProofUrl.Should().BeNull();
         result.Value.CreatedAt.Should().Be(order.CreatedAt);
         result.Value.UpdatedAt.Should().Be(order.UpdatedAt);
+        await _deliveryProofReader.DidNotReceive()
+            .FindByOrderIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_DeliveredOrder_ReturnsProofUrlAsync()
+    {
+        var order = NewOrder(RestaurantId);
+        foreach (var status in new[]
+                 {
+                     OrderStatus.Confirmed,
+                     OrderStatus.Batched,
+                     OrderStatus.PickedUp,
+                     OrderStatus.AtHub,
+                     OrderStatus.Delivering,
+                     OrderStatus.Delivered
+                 })
+            order.AdvanceStatus(status).IsSuccess.Should().BeTrue();
+
+        const string proofUrl = "https://res.cloudinary.com/demo/image/upload/pod.jpg";
+        _orderRepository.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        _deliveryProofReader.FindByOrderIdAsync(order.Id, Arg.Any<CancellationToken>())
+            .Returns(proofUrl);
+
+        var result = await _sut.Handle(new GetOrderQuery(UserId, IsAdmin: false, order.Id), default);
+
+        result.Value.Status.Should().Be("delivered");
+        result.Value.ProofUrl.Should().Be(proofUrl);
     }
 
     [Fact]
