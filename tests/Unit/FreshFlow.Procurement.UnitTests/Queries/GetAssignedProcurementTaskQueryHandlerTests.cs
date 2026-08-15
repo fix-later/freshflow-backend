@@ -34,6 +34,8 @@ public sealed class GetAssignedProcurementTaskQueryHandlerTests
                     ids.SequenceEqual(new[] { orderId })),
                 default)
             .Returns(new Dictionary<Guid, string> { [orderId] = "Batched" });
+        orders.ReadItemCostsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), default)
+            .Returns([new ConfirmedOrderItemCostDto(orderId, productId, 50_000m)]);
         var images = Substitute.For<IMarketProductImageReader>();
         images.ReadImagesAsync(
                 Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { productId })),
@@ -48,6 +50,11 @@ public sealed class GetAssignedProcurementTaskQueryHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Id.Should().Be(batch.Id);
         result.Value.Status.Should().Be("Manifested");
+        result.Value.AgentCostSummary.Should().BeEquivalentTo(new
+        {
+            RestaurantOrderTotal = 50_000m,
+            ActualPurchaseTotal = 0m
+        });
         result.Value.Items.Should().ContainSingle()
             .Which.AssignedAgentUserId.Should().Be(agentUserId);
         result.Value.Items.Should().ContainSingle(item =>

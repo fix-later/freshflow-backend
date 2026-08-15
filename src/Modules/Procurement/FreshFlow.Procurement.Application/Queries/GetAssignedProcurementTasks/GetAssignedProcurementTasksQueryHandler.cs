@@ -32,10 +32,19 @@ internal sealed class GetAssignedProcurementTasksQueryHandler(
             .Distinct()
             .ToArray();
         var imageUrls = await images.ReadImagesAsync(marketProductIds, cancellationToken);
+        var itemCosts = await orders.ReadItemCostsAsync(orderIds, cancellationToken);
 
         return Result<ProcurementBatchListDto>.Success(
             new ProcurementBatchListDto(
-                page.Select(batch => ProcurementBatchDtoMapper.Map(batch, statuses, imageUrls))
+                page.Select(batch => ProcurementBatchDtoMapper.Map(
+                        batch,
+                        statuses,
+                        imageUrls,
+                        ProcurementCostSummaryCalculator.Calculate(
+                            batch.Items.Where(item =>
+                                item.AssignedAgentUserId == request.AgentUserId),
+                            batch.Orders.Select(order => order.OrderId),
+                            itemCosts)))
                     .ToList()
                     .AsReadOnly(),
                 new ProcurementBatchPaginationDto(

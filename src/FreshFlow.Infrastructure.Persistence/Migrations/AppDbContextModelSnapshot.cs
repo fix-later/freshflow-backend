@@ -4689,6 +4689,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FreshFlow.Procurement.Infrastructure.CrossModule.ConfirmedOrderItemRow", b =>
                 {
+                    b.Property<decimal?>("LockedTotal")
+                        .HasColumnType("numeric")
+                        .HasColumnName("LockedTotal");
+
                     b.Property<Guid>("MarketProductId")
                         .HasColumnType("uuid")
                         .HasColumnName("MarketProductId");
@@ -4705,6 +4709,10 @@ namespace FreshFlow.Infrastructure.Persistence.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("integer")
                         .HasColumnName("Quantity");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("numeric")
+                        .HasColumnName("UnitPrice");
 
                     b.ToTable((string)null);
 

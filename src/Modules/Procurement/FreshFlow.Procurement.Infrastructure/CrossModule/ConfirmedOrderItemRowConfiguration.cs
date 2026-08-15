@@ -13,5 +13,7 @@ internal sealed class ConfirmedOrderItemRowConfiguration : IEntityTypeConfigurat
         builder.Property(row => row.MarketProductId).HasColumnName("MarketProductId");
         builder.Property(row => row.ProductNameSnapshot).HasColumnName("ProductNameSnapshot");
         builder.Property(row => row.Quantity).HasColumnName("Quantity");
+        builder.Property(row => row.UnitPrice).HasColumnName("UnitPrice");
+        builder.Property(row => row.LockedTotal).HasColumnName("LockedTotal");
     }
 }

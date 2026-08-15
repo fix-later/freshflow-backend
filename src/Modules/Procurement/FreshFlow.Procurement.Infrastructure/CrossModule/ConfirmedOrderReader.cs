@@ -140,6 +140,22 @@ internal sealed class ConfirmedOrderReader(AppDbContext db) : IConfirmedOrderRea
             .ToDictionaryAsync(row => row.Id, row => row.Status, ct);
     }
 
+    public async Task<IReadOnlyList<ConfirmedOrderItemCostDto>> ReadItemCostsAsync(
+        IReadOnlyCollection<Guid> orderIds,
+        CancellationToken ct)
+    {
+        var ids = orderIds.Distinct().ToArray();
+
+        return await db.Set<ConfirmedOrderItemRow>()
+            .AsNoTracking()
+            .Where(row => ids.Contains(row.OrderId))
+            .Select(row => new ConfirmedOrderItemCostDto(
+                row.OrderId,
+                row.MarketProductId,
+                row.LockedTotal ?? row.Quantity * row.UnitPrice))
+            .ToListAsync(ct);
+    }
+
     private static (DateTime StartUtc, DateTime EndUtc) GetUtcBounds(DateOnly date)
     {
         var localStart = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);

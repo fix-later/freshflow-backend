@@ -118,7 +118,9 @@ public sealed class ProcurementBatchOverviewEndpointTests(AuthWebAppFactory fact
                 TotalItemCount = 2,
                 ItemsPurchased = 1,
                 ItemsPending = 1,
-                ExceptionCount = 0
+                ExceptionCount = 0,
+                RestaurantOrderTotal = 20m,
+                ActualPurchaseTotal = 24m
             });
             body.Data.Agents.Should().BeEquivalentTo([
                 new
@@ -127,6 +129,8 @@ public sealed class ProcurementBatchOverviewEndpointTests(AuthWebAppFactory fact
                     ItemsAssigned = 1,
                     ItemsPurchased = 1,
                     ItemsPending = 0,
+                    RestaurantOrderTotal = 10m,
+                    ActualPurchaseTotal = 24m,
                     ReferenceCostTotal = (decimal?)20m,
                     ActualCostTotal = (decimal?)24m,
                     VarianceTotal = (decimal?)4m
@@ -137,6 +141,8 @@ public sealed class ProcurementBatchOverviewEndpointTests(AuthWebAppFactory fact
                     ItemsAssigned = 1,
                     ItemsPurchased = 0,
                     ItemsPending = 1,
+                    RestaurantOrderTotal = 10m,
+                    ActualPurchaseTotal = 0m,
                     ReferenceCostTotal = (decimal?)60m,
                     ActualCostTotal = (decimal?)null,
                     VarianceTotal = (decimal?)null

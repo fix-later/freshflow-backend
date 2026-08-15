@@ -25,8 +25,13 @@ internal sealed class GetBatchOverviewQueryHandler(
 
         var orderIds = batch.Orders.Select(order => order.OrderId).ToArray();
         var orderStatuses = await orders.ReadStatusesAsync(orderIds, cancellationToken);
+        var itemCosts = await orders.ReadItemCostsAsync(orderIds, cancellationToken);
         var itemsPurchased = batch.Items.Count(item => item.ActualQuantity is not null);
         var isCancelled = batch.Status == ProcurementBatchStatus.Cancelled;
+        var costSummary = ProcurementCostSummaryCalculator.Calculate(
+            batch.Items,
+            orderIds,
+            itemCosts);
 
         return Result<ProcurementBatchOverviewDto>.Success(new(
             batch.Id,
@@ -44,10 +49,12 @@ internal sealed class GetBatchOverviewQueryHandler(
             itemsPurchased,
             isCancelled ? 0 : batch.Items.Count - itemsPurchased,
             batch.Exceptions.Count(exception => !exception.IsDeleted),
+            costSummary.RestaurantOrderTotal,
+            costSummary.ActualPurchaseTotal,
             batch.Items
                 .Where(item => item.AssignedAgentUserId is not null)
                 .GroupBy(item => item.AssignedAgentUserId!.Value)
-                .Select(group => MapAgent(batch, group, isCancelled))
+                .Select(group => MapAgent(batch, group, orderIds, itemCosts, isCancelled))
                 .ToList()
                 .AsReadOnly(),
             orderIds
@@ -61,6 +68,8 @@ internal sealed class GetBatchOverviewQueryHandler(
     private static BatchAgentPerformanceDto MapAgent(
         ProcurementBatch batch,
         IGrouping<Guid, ProcurementBatchItem> group,
+        IReadOnlyCollection<Guid> orderIds,
+        IReadOnlyCollection<ConfirmedOrderItemCostDto> itemCosts,
         bool isCancelled)
     {
         var items = group.ToList();
@@ -77,6 +86,7 @@ internal sealed class GetBatchOverviewQueryHandler(
         decimal? actualCost = allSettled && purchased.All(item => item.ActualUnitPrice is not null)
             ? purchased.Sum(item => item.ActualUnitPrice!.Value * item.ActualQuantity!.Value)
             : null;
+        var costSummary = ProcurementCostSummaryCalculator.Calculate(items, orderIds, itemCosts);
 
         return new BatchAgentPerformanceDto(
             group.Key,
@@ -85,6 +95,8 @@ internal sealed class GetBatchOverviewQueryHandler(
             isCancelled ? 0 : items.Count - purchased.Count,
             batch.Exceptions.Count(exception =>
                 !exception.IsDeleted && exception.ReportedByUserId == group.Key),
+            costSummary.RestaurantOrderTotal,
+            costSummary.ActualPurchaseTotal,
             referenceCost,
             actualCost,
             referenceCost is not null && actualCost is not null

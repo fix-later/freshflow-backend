@@ -16,6 +16,8 @@ public sealed record ProcurementBatchOverviewDto(
     int ItemsPurchased,
     int ItemsPending,
     int ExceptionCount,
+    decimal RestaurantOrderTotal,
+    decimal ActualPurchaseTotal,
     IReadOnlyList<BatchAgentPerformanceDto> Agents,
     IReadOnlyList<BatchOrderStatusDto> Orders);
 
@@ -26,6 +28,8 @@ public sealed record BatchAgentPerformanceDto(
     int ItemsPurchased,
     int ItemsPending,
     int ExceptionsReported,
+    decimal RestaurantOrderTotal,
+    decimal ActualPurchaseTotal,
     decimal? ReferenceCostTotal,
     decimal? ActualCostTotal,
     decimal? VarianceTotal);

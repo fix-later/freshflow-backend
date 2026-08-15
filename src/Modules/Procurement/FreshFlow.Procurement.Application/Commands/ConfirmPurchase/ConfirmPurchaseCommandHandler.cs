@@ -55,8 +55,13 @@ internal sealed class ConfirmPurchaseCommandHandler(
             .Distinct()
             .ToArray();
         var statuses = await orders.ReadStatusesAsync(orderIds, cancellationToken);
+        var itemCosts = await orders.ReadItemCostsAsync(orderIds, cancellationToken);
+        var costSummary = ProcurementCostSummaryCalculator.Calculate(
+            batch.Items.Where(item => item.AssignedAgentUserId == request.AgentUserId),
+            orderIds,
+            itemCosts);
 
         return Result<ProcurementBatchDto>.Success(
-            ProcurementBatchDtoMapper.Map(batch, statuses));
+            ProcurementBatchDtoMapper.Map(batch, statuses, agentCostSummary: costSummary));
     }
 }

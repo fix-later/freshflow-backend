@@ -353,6 +353,11 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         var ownerDetailBody = await ownerDetail.Content
             .ReadFromJsonAsync<Envelope<ProcurementBatchDto>>();
         ownerDetailBody!.Data!.Id.Should().Be(batchId);
+        ownerDetailBody.Data.AgentCostSummary.Should().BeEquivalentTo(new
+        {
+            RestaurantOrderTotal = 50_000m,
+            ActualPurchaseTotal = 0m
+        });
         ownerDetailBody.Data.Items.Should().ContainSingle(item =>
             item.ReferenceUnitPrice == 10_000m);
 
@@ -381,6 +386,11 @@ public sealed class ProcurementBatchEndpointTests(AuthWebAppFactory factory)
         var purchaseBody = await purchase.Content
             .ReadFromJsonAsync<Envelope<ProcurementBatchDto>>();
         purchaseBody!.Data!.Status.Should().Be("Purchasing");
+        purchaseBody.Data.AgentCostSummary.Should().BeEquivalentTo(new
+        {
+            RestaurantOrderTotal = 50_000m,
+            ActualPurchaseTotal = 55_000m
+        });
         purchaseBody.Data.Items.Should().ContainSingle(item =>
             item.MarketProductId == seed.MarketProductId &&
             item.ActualQuantity == 5 &&
