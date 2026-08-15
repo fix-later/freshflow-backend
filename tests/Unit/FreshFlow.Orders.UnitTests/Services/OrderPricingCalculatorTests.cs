@@ -51,6 +51,31 @@ public sealed class OrderPricingCalculatorTests
         result.Error.Code.Should().Be("MINIMUM_ORDER_QUANTITY_NOT_MET");
     }
 
+    [Theory]
+    [InlineData(3, true)]
+    [InlineData(4, false)]
+    public void Calculate_ValidatesTotalQuantityAcrossProductLines(
+        int secondLineQuantity, bool expectedSuccess)
+    {
+        var marketProductId = Guid.NewGuid();
+        var order = new Order(Guid.NewGuid(), null, null);
+        order.AddItem(marketProductId, "Cà chua", 2, 10_000m);
+        order.AddItem(marketProductId, "Cà chua", secondLineQuantity, 10_000m);
+        var products = new Dictionary<Guid, MarketProductSnapshotDto>
+        {
+            [marketProductId] = new(
+                marketProductId, "Cà chua", 10_000m, 100,
+                PackingCode: "BOX-5", PackingWeightKg: 5m)
+        };
+
+        var result = OrderPricingCalculator.Calculate(
+            order, products, 0m, new DeliveryFeePolicy(0m, 0m, 0m, 0m));
+
+        result.IsSuccess.Should().Be(expectedSuccess);
+        if (!expectedSuccess)
+            result.Error.Code.Should().Be("PACKING_QUANTITY_MISMATCH");
+    }
+
     [Fact]
     public void Calculate_AppliesBaseMinimumAndRoundingUnit()
     {

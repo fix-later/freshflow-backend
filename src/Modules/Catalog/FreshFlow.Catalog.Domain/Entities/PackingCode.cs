@@ -57,5 +57,7 @@ public sealed class PackingCode : AggregateRoot
             throw new ArgumentException("Code is required.", nameof(code));
         if (capacityKg <= 0)
             throw new ArgumentException("CapacityKg must be > 0.", nameof(capacityKg));
+        if (capacityKg != decimal.Truncate(capacityKg))
+            throw new ArgumentException("CapacityKg must be a whole number of kilograms.", nameof(capacityKg));
     }
 }

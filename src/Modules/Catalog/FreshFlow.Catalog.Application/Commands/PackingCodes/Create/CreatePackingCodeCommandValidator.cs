@@ -27,6 +27,8 @@ internal sealed class CreatePackingCodeCommandValidator : AbstractValidator<Crea
 
         RuleFor(x => x.CapacityKg)
             .GreaterThan(0)
+            .Must(capacityKg => capacityKg == decimal.Truncate(capacityKg))
+            .WithMessage("CapacityKg must be a whole number of kilograms.")
             .LessThanOrEqualTo(maxLoadKg);
     }
 

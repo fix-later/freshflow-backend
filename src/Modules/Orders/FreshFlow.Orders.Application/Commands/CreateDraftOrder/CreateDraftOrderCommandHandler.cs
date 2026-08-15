@@ -67,6 +67,10 @@ internal sealed class CreateDraftOrderCommandHandler(
                     $"Requested quantity {requestedQuantity} exceeds available stock " +
                     $"{snapshot.AvailableQuantity} for product '{group.Key}'."));
 
+            var quantityResult = OrderPricingCalculator.ValidateQuantity(requestedQuantity, snapshot);
+            if (quantityResult.IsFailure)
+                return Result<OrderDto>.Failure(quantityResult.Error);
+
             snapshots[group.Key] = snapshot;
         }
 
