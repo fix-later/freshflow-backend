@@ -4,4 +4,4 @@ using MediatR;
 
 namespace FreshFlow.Logistics.Application.Queries.ListEligibleDrivers;
 
-public sealed record ListEligibleDriversQuery : IRequest<Result<IReadOnlyList<DriverDto>>>;
+public sealed record ListEligibleDriversQuery(Guid HubId) : IRequest<Result<IReadOnlyList<DriverDto>>>;

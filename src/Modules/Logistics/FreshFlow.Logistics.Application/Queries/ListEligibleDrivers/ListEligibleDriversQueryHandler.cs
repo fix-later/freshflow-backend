@@ -10,7 +10,7 @@ internal sealed class ListEligibleDriversQueryHandler(IDriverReader drivers)
     public async Task<Result<IReadOnlyList<DriverDto>>> Handle(
         ListEligibleDriversQuery request, CancellationToken ct)
     {
-        var eligible = await drivers.ListEligibleAsync(ct);
+        var eligible = await drivers.ListEligibleAsync(request.HubId, ct);
         return Result<IReadOnlyList<DriverDto>>.Success(eligible);
     }
 }

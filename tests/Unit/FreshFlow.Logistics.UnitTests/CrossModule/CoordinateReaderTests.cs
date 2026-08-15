@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreshFlow.Infrastructure.Persistence;
+using FreshFlow.Logistics.Application.Abstractions;
 using FreshFlow.Logistics.Infrastructure;
 using FreshFlow.Logistics.Infrastructure.CrossModule;
 using Microsoft.Data.Sqlite;
@@ -128,6 +129,30 @@ public sealed class CoordinateReaderTests
     }
 
     [Fact]
+    public async Task DriverReader_ListEligible_IsHubScopedAndIncludesDisplayFieldsAsync()
+    {
+        using var fixture = await SqliteFixture.CreateAsync();
+        var roleId = Guid.NewGuid();
+        var hubA = Guid.NewGuid();
+        var hubB = Guid.NewGuid();
+        var driverA = Guid.NewGuid();
+        var driverB = Guid.NewGuid();
+        await fixture.InsertRoleAsync(roleId, "driver");
+        await fixture.InsertUserAsync(
+            driverA, roleId, true, email: "a@test.freshflow", fullName: "Driver A");
+        await fixture.InsertUserAsync(
+            driverB, roleId, true, email: "b@test.freshflow", fullName: "Driver B");
+        await fixture.InsertHubDriverAssignmentAsync(hubA, driverA);
+        await fixture.InsertHubDriverAssignmentAsync(hubB, driverB);
+        var sut = new DriverReader(fixture.Context);
+
+        var result = await sut.ListEligibleAsync(hubA, default);
+
+        result.Should().ContainSingle().Which.Should().BeEquivalentTo(
+            new DriverDto(driverA, "Driver A", "a@test.freshflow", "driver", true));
+    }
+
+    [Fact]
     public async Task DriverReader_DeletedUser_ReturnsNullAsync()
     {
         using var fixture = await SqliteFixture.CreateAsync();
@@ -201,8 +226,18 @@ public sealed class CoordinateReaderTests
                 CREATE TABLE users (
                     "Id" TEXT NOT NULL,
                     "RoleId" TEXT NOT NULL,
+                    "Email" TEXT NOT NULL,
+                    "FullName" TEXT NULL,
                     "IsActive" INTEGER NOT NULL,
                     "DeletedAt" TEXT NULL
+                );
+                """);
+
+            await context.Database.ExecuteSqlRawAsync(
+                """
+                CREATE TABLE hub_driver_assignments (
+                    hub_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL
                 );
                 """);
 
@@ -251,11 +286,20 @@ public sealed class CoordinateReaderTests
             Guid id,
             Guid roleId,
             bool isActive,
-            bool deleted = false) =>
+            bool deleted = false,
+            string email = "driver@test.freshflow",
+            string? fullName = null) =>
             await Context.Database.ExecuteSqlInterpolatedAsync(
                 $"""
-                INSERT INTO users ("Id", "RoleId", "IsActive", "DeletedAt")
-                VALUES ({id}, {roleId}, {isActive}, {DeletedAt(deleted)});
+                INSERT INTO users ("Id", "RoleId", "Email", "FullName", "IsActive", "DeletedAt")
+                VALUES ({id}, {roleId}, {email}, {fullName}, {isActive}, {DeletedAt(deleted)});
+                """);
+
+        public async Task InsertHubDriverAssignmentAsync(Guid hubId, Guid userId) =>
+            await Context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                INSERT INTO hub_driver_assignments (hub_id, user_id)
+                VALUES ({hubId}, {userId});
                 """);
 
         public async Task InsertDeliveryAddressAsync(

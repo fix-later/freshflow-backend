@@ -143,7 +143,7 @@ public sealed class CheckEligibilityQueryHandlerTests
         var driverUserId = Guid.NewGuid();
         var drivers = Substitute.For<IDriverReader>();
         drivers.FindByUserIdAsync(driverUserId, Arg.Any<CancellationToken>())
-            .Returns(new DriverDto(driverUserId, "driver", true));
+            .Returns(new DriverDto(driverUserId, null, "driver@test.freshflow", "driver", true));
         var sut = CreateSut(routes, vehicles, drivers, orders: orders);
 
         var result = await sut.Handle(
@@ -218,7 +218,7 @@ public sealed class CheckEligibilityQueryHandlerTests
         var driverUserId = Guid.NewGuid();
         var drivers = Substitute.For<IDriverReader>();
         drivers.FindByUserIdAsync(driverUserId, Arg.Any<CancellationToken>())
-            .Returns(new DriverDto(driverUserId, "admin", true));
+            .Returns(new DriverDto(driverUserId, null, "admin@test.freshflow", "admin", true));
         var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle, drivers: drivers);
 
         var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, driverUserId), default);
@@ -235,7 +235,7 @@ public sealed class CheckEligibilityQueryHandlerTests
         var driverUserId = Guid.NewGuid();
         var drivers = Substitute.For<IDriverReader>();
         drivers.FindByUserIdAsync(driverUserId, Arg.Any<CancellationToken>())
-            .Returns(new DriverDto(driverUserId, "driver", false));
+            .Returns(new DriverDto(driverUserId, null, "driver@test.freshflow", "driver", false));
         var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle, drivers: drivers);
 
         var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, driverUserId), default);
@@ -252,7 +252,7 @@ public sealed class CheckEligibilityQueryHandlerTests
         var driverUserId = Guid.NewGuid();
         var drivers = Substitute.For<IDriverReader>();
         drivers.FindByUserIdAsync(driverUserId, Arg.Any<CancellationToken>())
-            .Returns(new DriverDto(driverUserId, "driver", true));
+            .Returns(new DriverDto(driverUserId, null, "driver@test.freshflow", "driver", true));
 
         var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle, drivers: drivers);
 
@@ -261,6 +261,28 @@ public sealed class CheckEligibilityQueryHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.IsEligible.Should().BeTrue();
         result.Value.Reasons.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_DriverAssignedToAnotherHub_ReturnsSpecificReasonAsync()
+    {
+        var hubId = Guid.NewGuid();
+        var route = CreateHubRoute(hubId);
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, hubId);
+        var driverUserId = Guid.NewGuid();
+        var drivers = Substitute.For<IDriverReader>();
+        drivers.FindByUserIdAsync(driverUserId, Arg.Any<CancellationToken>())
+            .Returns(new DriverDto(
+                driverUserId, "Driver One", "driver@test.freshflow", "driver", true));
+        drivers.IsAssignedToHubAsync(driverUserId, hubId, Arg.Any<CancellationToken>())
+            .Returns(false);
+        var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle, drivers: drivers);
+
+        var result = await sut.Handle(
+            new CheckEligibilityQuery(route.Id, vehicle.Id, driverUserId), default);
+
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.Reasons.Should().ContainSingle("DRIVER_NOT_ASSIGNED_TO_HUB");
     }
 
     private static CheckEligibilityQueryHandler CreateSut(
@@ -330,6 +352,15 @@ public sealed class CheckEligibilityQueryHandlerTests
 
         return DeliveryRoute.CreateDirect(serviceDate ?? new DateOnly(2026, 7, 9), stops, null);
     }
+
+    private static DeliveryRoute CreateHubRoute(Guid hubId) => DeliveryRoute.CreateHubRoute(
+        hubId,
+        new DateOnly(2026, 7, 9),
+        [
+            new RouteStop(0, StopEntityType.hub, hubId, "Hub", 10.1m, 106.1m, null, null),
+            new RouteStop(1, StopEntityType.restaurant, Guid.NewGuid(), "Restaurant", 10.2m, 106.2m, null, null)
+        ],
+        null);
 
     private static void SetVehicle(DeliveryRoute route, Guid vehicleId)
     {
