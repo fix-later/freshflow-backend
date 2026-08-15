@@ -58,7 +58,10 @@ internal sealed class HubProcurementPlanReader(AppDbContext db) : IHubProcuremen
                         item.TargetQuantity,
                         item.ActualQuantity,
                         item.ActualUnitPrice,
-                        item.PurchasedAt))
+                        item.PurchasedAt,
+                        item.ProductId,
+                        item.PackingCode,
+                        item.PackingCapacityKg))
                     .ToList()))
             .ToList();
 
@@ -82,7 +85,10 @@ internal sealed class HubProcurementPlanReader(AppDbContext db) : IHubProcuremen
                 item.TargetQuantity,
                 item.ActualQuantity,
                 item.ActualUnitPrice,
-                item.PurchasedAt))
+                item.PurchasedAt,
+                item.ProductId,
+                item.PackingCode,
+                item.PackingCapacityKg))
             .ToList();
     }
 

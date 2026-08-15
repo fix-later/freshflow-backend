@@ -10,6 +10,7 @@ using FreshFlow.Hub.Application.Commands.RecordOutbound;
 using FreshFlow.Hub.Application.Commands.ScanInbound;
 using FreshFlow.Hub.Application.Queries.GetHubOrdersByRestaurant;
 using FreshFlow.Hub.Application.Queries.GetHubProcurementPlan;
+using FreshFlow.Hub.Application.Queries.GetInboundLabels;
 using FreshFlow.Hub.Application.Queries.GetPendingInbound;
 using FreshFlow.Hub.Application.Queries.GetSortingProgress;
 using FreshFlow.Hub.Application.Queries.ListCrossDock;
@@ -134,6 +135,23 @@ public sealed class HubInboundController(ISender sender) : ControllerBase
                 ResolveUserId(),
                 BypassHubAssignment()),
             ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("{hubId:guid}/inbound/{inboundId:guid}/labels")]
+    public async Task<IActionResult> GetInboundLabelsAsync(
+        Guid hubId,
+        Guid inboundId,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new GetInboundLabelsQuery(
+                hubId,
+                inboundId,
+                ResolveUserId(),
+                BypassHubAssignment()),
+            ct);
+
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 

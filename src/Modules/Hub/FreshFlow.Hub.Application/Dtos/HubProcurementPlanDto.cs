@@ -19,7 +19,10 @@ public sealed record HubProcurementItemDto(
     int TargetQuantity,
     int? ActualQuantity,
     decimal? ActualUnitPrice,
-    DateTime? PurchasedAt);
+    DateTime? PurchasedAt,
+    Guid? ProductId = null,
+    string? PackingCode = null,
+    decimal? PackingCapacityKg = null);
 
 public sealed record HubHandedOffBatchDto(
     Guid BatchId,

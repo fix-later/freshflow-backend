@@ -128,6 +128,7 @@ public static class ErrorExtensions
                         or "INVALID_MARKET_SESSION" or "INVALID_MARKET_SESSION_CLOSE_TIME"
                         or "INVALID_MARKET_SESSION_RESOURCES"
                         or "ORDER_MARKET_MISMATCH"
+                        or "PACKING_CODE_MISSING"
             || error.Code.StartsWith("ACCOUNT_"))
             return new UnprocessableEntityObjectResult(body);
 
