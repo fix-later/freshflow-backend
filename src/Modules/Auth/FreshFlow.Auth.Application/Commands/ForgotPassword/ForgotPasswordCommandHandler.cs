@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Domain.Entities;
 using FreshFlow.SharedKernel.Application;
@@ -10,7 +11,7 @@ internal sealed class ForgotPasswordCommandHandler(
     IUserRepository users,
     IPasswordResetTokenRepository resetTokens,
     IPasswordResetSender sender,
-    ITokenService tokenService,
+    IPasswordHasher passwordHasher,
     ILogger<ForgotPasswordCommandHandler> logger) : IRequestHandler<ForgotPasswordCommand, Result>
 {
     public async Task<Result> Handle(ForgotPasswordCommand request, CancellationToken ct)
@@ -25,20 +26,19 @@ internal sealed class ForgotPasswordCommandHandler(
         // Invalidate any prior pending credential for this user.
         await resetTokens.InvalidatePendingAsync(user.Id, ct);
 
-        // Generate a fresh single-use token (same algorithm as refresh tokens).
-        var rawToken = tokenService.GenerateRefreshToken();
-        var tokenHash = tokenService.HashRefreshToken(rawToken);
+        var rawCode = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        var tokenHash = passwordHasher.Hash(rawCode);
 
         var resetToken = PasswordResetToken.Create(user.Id, tokenHash);
         await resetTokens.AddAsync(resetToken, ct);
         await resetTokens.SaveChangesAsync(ct);
 
-        // Dispatch reset link — swallow delivery failures to prevent account-existence oracle:
+        // Dispatch reset code — swallow delivery failures to prevent account-existence oracle:
         // a Resend API outage must not produce a 500 that distinguishes known from unknown emails.
         // The exception-filter re-raises OperationCanceledException so cancellation propagates normally.
         try
         {
-            await sender.SendResetLinkAsync(user.Email, rawToken, ct);
+            await sender.SendResetCodeAsync(user.Email, rawCode, ct);
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {

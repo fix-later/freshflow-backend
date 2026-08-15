@@ -8,29 +8,22 @@ internal sealed class ResetPasswordCommandHandler(
     IUserRepository users,
     IRefreshTokenRepository tokens,
     IPasswordResetTokenRepository resetTokens,
-    IPasswordHasher hasher,
-    ITokenService tokenService) : IRequestHandler<ResetPasswordCommand, Result>
+    IPasswordHasher hasher) : IRequestHandler<ResetPasswordCommand, Result>
 {
-    private static readonly Error TokenInvalid =
-        Error.Validation("RESET_TOKEN_INVALID", "The reset token does not match any pending request.");
-
-    private static readonly Error TokenExpired =
-        Error.Validation("RESET_TOKEN_EXPIRED", "The reset token has expired or has already been used.");
+    private static readonly Error OtpInvalid =
+        Error.Validation("RESET_OTP_INVALID", "The reset code is incorrect, expired, or already used.");
 
     public async Task<Result> Handle(ResetPasswordCommand request, CancellationToken ct)
     {
-        var tokenHash = tokenService.HashRefreshToken(request.Token);
-        var resetToken = await resetTokens.FindByHashAsync(tokenHash, ct);
+        var user = await users.FindByEmailAsync(request.Identifier.ToLowerInvariant(), ct);
 
-        if (resetToken is null)
-            return Result.Failure(TokenInvalid);
+        if (user is null || !user.IsActive)
+            return Result.Failure(OtpInvalid);
 
-        if (!resetToken.IsValid)
-            return Result.Failure(TokenExpired);
+        var resetToken = await resetTokens.FindLatestPendingByUserIdAsync(user.Id, ct);
 
-        var user = await users.FindByIdAsync(resetToken.UserId, ct);
-        if (user is null)
-            return Result.Failure(TokenInvalid);
+        if (resetToken is null || !resetToken.IsValid || !hasher.Verify(request.Code, resetToken.TokenHash))
+            return Result.Failure(OtpInvalid);
 
         var newHash = hasher.Hash(request.NewPassword);
         user.ChangePassword(newHash);

@@ -7,9 +7,11 @@ namespace FreshFlow.Auth.Infrastructure.Repositories;
 
 internal sealed class PasswordResetTokenRepository(AppDbContext db) : IPasswordResetTokenRepository
 {
-    public Task<PasswordResetToken?> FindByHashAsync(string tokenHash, CancellationToken ct) =>
+    public Task<PasswordResetToken?> FindLatestPendingByUserIdAsync(Guid userId, CancellationToken ct) =>
         db.Set<PasswordResetToken>()
-            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct);
+            .Where(t => t.UserId == userId && t.UsedAt == null)
+            .OrderByDescending(t => t.CreatedAt)
+            .FirstOrDefaultAsync(ct);
 
     public async Task InvalidatePendingAsync(Guid userId, CancellationToken ct) =>
         await db.Set<PasswordResetToken>()

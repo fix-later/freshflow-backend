@@ -1,7 +1,7 @@
 namespace FreshFlow.Auth.Domain.Entities;
 
 /// <summary>
-/// Single-use credential issued by the forgot-password flow.
+/// Single-use OTP credential issued by the forgot-password flow.
 /// Append-only: created once, marked used on consumption, never deleted.
 /// Expires after 15 minutes; issuing a new one must invalidate any pending prior credential.
 /// </summary>
@@ -23,7 +23,7 @@ public sealed class PasswordResetToken
     public Guid Id { get; private set; }
     public Guid UserId { get; private set; }
 
-    /// <summary>SHA-256 hex digest of the raw token sent to the user.</summary>
+    /// <summary>BCrypt hash of the OTP sent to the user.</summary>
     public string TokenHash { get; private set; } = string.Empty;
 
     public DateTime ExpiresAt { get; private set; }

@@ -77,7 +77,7 @@ public static class ErrorExtensions
         if (error.Code is "ACCOUNT_LOCKED")
             return new ObjectResult(body) { StatusCode = 423 };
 
-        if (error.Code is "RESET_TOKEN_INVALID" or "RESET_TOKEN_EXPIRED" or "OTP_INVALID")
+        if (error.Code is "RESET_OTP_INVALID" or "OTP_INVALID")
             return new BadRequestObjectResult(body);
 
         if (error.Code is "CHANNEL_NOT_SUPPORTED" or "CANNOT_DEACTIVATE_SELF" or "INVALID_MARKET"

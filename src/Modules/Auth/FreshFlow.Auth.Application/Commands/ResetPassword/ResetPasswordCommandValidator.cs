@@ -6,8 +6,13 @@ public sealed class ResetPasswordCommandValidator : AbstractValidator<ResetPassw
 {
     public ResetPasswordCommandValidator()
     {
-        RuleFor(x => x.Token)
-            .NotEmpty();
+        RuleFor(x => x.Identifier)
+            .NotEmpty()
+            .EmailAddress();
+
+        RuleFor(x => x.Code)
+            .NotEmpty()
+            .Matches("^[0-9]{6}$");
 
         RuleFor(x => x.NewPassword)
             .NotEmpty()

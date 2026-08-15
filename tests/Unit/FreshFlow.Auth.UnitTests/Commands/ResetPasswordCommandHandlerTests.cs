@@ -14,68 +14,85 @@ public sealed class ResetPasswordCommandHandlerTests
     private readonly IRefreshTokenRepository _tokens = Substitute.For<IRefreshTokenRepository>();
     private readonly IPasswordResetTokenRepository _resetTokens = Substitute.For<IPasswordResetTokenRepository>();
     private readonly IPasswordHasher _hasher = Substitute.For<IPasswordHasher>();
-    private readonly ITokenService _tokenService = Substitute.For<ITokenService>();
     private readonly ResetPasswordCommandHandler _sut;
 
     private static Role AdminRole() => new("admin", "Administrator");
 
     public ResetPasswordCommandHandlerTests()
     {
-        _tokenService.HashRefreshToken("raw-token").Returns("token-hash");
         _hasher.Hash(Arg.Any<string>()).Returns("new-password-hash");
-        _sut = new ResetPasswordCommandHandler(_users, _tokens, _resetTokens, _hasher, _tokenService);
+        _hasher.Verify("123456", "otp-hash").Returns(true);
+        _sut = new ResetPasswordCommandHandler(_users, _tokens, _resetTokens, _hasher);
     }
 
     [Fact]
-    public async Task Handle_TokenNotFound_ReturnsTokenInvalid()
+    public async Task Handle_UnknownEmail_ReturnsOtpInvalid()
     {
-        _resetTokens.FindByHashAsync("token-hash", default).Returns((PasswordResetToken?)null);
+        _users.FindByEmailAsync("user@test.com", default).Returns((User?)null);
 
-        var result = await _sut.Handle(new ResetPasswordCommand("raw-token", "NewP@ss1"), default);
+        var result = await _sut.Handle(new ResetPasswordCommand("user@test.com", "123456", "NewP@ss1"), default);
 
         result.IsSuccess.Should().BeFalse();
-        result.Error.Code.Should().Be("RESET_TOKEN_INVALID");
+        result.Error.Code.Should().Be("RESET_OTP_INVALID");
     }
 
     [Fact]
-    public async Task Handle_UsedToken_ReturnsTokenExpired()
+    public async Task Handle_UsedOtp_ReturnsOtpInvalid()
     {
-        var token = PasswordResetToken.Create(Guid.NewGuid(), "token-hash");
+        var user = User.Create("user@test.com", "old-hash", AdminRole());
+        var token = PasswordResetToken.Create(user.Id, "otp-hash");
         token.MarkUsed();
-        _resetTokens.FindByHashAsync("token-hash", default).Returns(token);
+        _users.FindByEmailAsync(user.Email, default).Returns(user);
+        _resetTokens.FindLatestPendingByUserIdAsync(user.Id, default).Returns(token);
 
-        var result = await _sut.Handle(new ResetPasswordCommand("raw-token", "NewP@ss1"), default);
+        var result = await _sut.Handle(new ResetPasswordCommand(user.Email, "123456", "NewP@ss1"), default);
 
         result.IsSuccess.Should().BeFalse();
-        result.Error.Code.Should().Be("RESET_TOKEN_EXPIRED");
+        result.Error.Code.Should().Be("RESET_OTP_INVALID");
     }
 
     [Fact]
-    public async Task Handle_ExpiredToken_ReturnsTokenExpired()
+    public async Task Handle_ExpiredOtp_ReturnsOtpInvalid()
     {
-        var token = PasswordResetToken.Create(Guid.NewGuid(), "token-hash");
+        var user = User.Create("user@test.com", "old-hash", AdminRole());
+        var token = PasswordResetToken.Create(user.Id, "otp-hash");
         // Force expiry via reflection
         typeof(PasswordResetToken)
             .GetProperty(nameof(PasswordResetToken.ExpiresAt))!
             .SetValue(token, DateTime.UtcNow.AddMinutes(-1));
-        _resetTokens.FindByHashAsync("token-hash", default).Returns(token);
+        _users.FindByEmailAsync(user.Email, default).Returns(user);
+        _resetTokens.FindLatestPendingByUserIdAsync(user.Id, default).Returns(token);
 
-        var result = await _sut.Handle(new ResetPasswordCommand("raw-token", "NewP@ss1"), default);
+        var result = await _sut.Handle(new ResetPasswordCommand(user.Email, "123456", "NewP@ss1"), default);
 
         result.IsSuccess.Should().BeFalse();
-        result.Error.Code.Should().Be("RESET_TOKEN_EXPIRED");
+        result.Error.Code.Should().Be("RESET_OTP_INVALID");
     }
 
     [Fact]
-    public async Task Handle_ValidToken_ChangesPasswordRevokesTokensAndMarksUsed()
+    public async Task Handle_IncorrectOtp_ReturnsOtpInvalid()
     {
-        var userId = Guid.NewGuid();
-        var token = PasswordResetToken.Create(userId, "token-hash");
         var user = User.Create("user@test.com", "old-hash", AdminRole());
-        _resetTokens.FindByHashAsync("token-hash", default).Returns(token);
-        _users.FindByIdAsync(userId, default).Returns(user);
+        var token = PasswordResetToken.Create(user.Id, "otp-hash");
+        _users.FindByEmailAsync(user.Email, default).Returns(user);
+        _resetTokens.FindLatestPendingByUserIdAsync(user.Id, default).Returns(token);
+        _hasher.Verify("000000", "otp-hash").Returns(false);
 
-        var result = await _sut.Handle(new ResetPasswordCommand("raw-token", "NewP@ss1"), default);
+        var result = await _sut.Handle(new ResetPasswordCommand(user.Email, "000000", "NewP@ss1"), default);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Code.Should().Be("RESET_OTP_INVALID");
+    }
+
+    [Fact]
+    public async Task Handle_ValidOtp_ChangesPasswordRevokesTokensAndMarksUsed()
+    {
+        var user = User.Create("user@test.com", "old-hash", AdminRole());
+        var token = PasswordResetToken.Create(user.Id, "otp-hash");
+        _users.FindByEmailAsync(user.Email, default).Returns(user);
+        _resetTokens.FindLatestPendingByUserIdAsync(user.Id, default).Returns(token);
+
+        var result = await _sut.Handle(new ResetPasswordCommand(user.Email, "123456", "NewP@ss1"), default);
 
         result.IsSuccess.Should().BeTrue();
         token.IsUsed.Should().BeTrue();

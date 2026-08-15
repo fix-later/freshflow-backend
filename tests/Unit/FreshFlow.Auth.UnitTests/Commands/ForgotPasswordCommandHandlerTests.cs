@@ -35,15 +35,14 @@ public sealed class ForgotPasswordCommandHandlerTests
     private readonly IPasswordResetTokenRepository _resetTokens =
         Substitute.For<IPasswordResetTokenRepository>();
     private readonly IPasswordResetSender _sender = Substitute.For<IPasswordResetSender>();
-    private readonly ITokenService _tokenService = Substitute.For<ITokenService>();
+    private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
     private readonly CapturingLogger _logger = new();
     private readonly ForgotPasswordCommandHandler _sut;
 
     public ForgotPasswordCommandHandlerTests()
     {
-        _tokenService.GenerateRefreshToken().Returns("rawtoken123");
-        _tokenService.HashRefreshToken("rawtoken123").Returns("hashedtoken123");
-        _sut = new ForgotPasswordCommandHandler(_users, _resetTokens, _sender, _tokenService, _logger);
+        _passwordHasher.Hash(Arg.Any<string>()).Returns("hashed-code");
+        _sut = new ForgotPasswordCommandHandler(_users, _resetTokens, _sender, _passwordHasher, _logger);
     }
 
     [Fact]
@@ -59,7 +58,7 @@ public sealed class ForgotPasswordCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         await _resetTokens.DidNotReceive().AddAsync(Arg.Any<PasswordResetToken>(), default);
         await _resetTokens.DidNotReceive().SaveChangesAsync(default);
-        await _sender.DidNotReceive().SendResetLinkAsync(Arg.Any<string>(), Arg.Any<string>(), default);
+        await _sender.DidNotReceive().SendResetCodeAsync(Arg.Any<string>(), Arg.Any<string>(), default);
     }
 
     [Fact]
@@ -77,7 +76,7 @@ public sealed class ForgotPasswordCommandHandlerTests
         // Assert
         result.IsSuccess.Should().BeTrue();
         await _resetTokens.DidNotReceive().AddAsync(Arg.Any<PasswordResetToken>(), default);
-        await _sender.DidNotReceive().SendResetLinkAsync(Arg.Any<string>(), Arg.Any<string>(), default);
+        await _sender.DidNotReceive().SendResetCodeAsync(Arg.Any<string>(), Arg.Any<string>(), default);
     }
 
     [Fact]
@@ -96,7 +95,8 @@ public sealed class ForgotPasswordCommandHandlerTests
         await _resetTokens.Received(1).InvalidatePendingAsync(user.Id, default);
         await _resetTokens.Received(1).AddAsync(Arg.Any<PasswordResetToken>(), default);
         await _resetTokens.Received(1).SaveChangesAsync(default);
-        await _sender.Received(1).SendResetLinkAsync("manager@example.com", "rawtoken123", default);
+        await _sender.Received(1).SendResetCodeAsync("manager@example.com",
+            Arg.Is<string>(code => code.Length == 6 && code.All(char.IsDigit)), default);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class ForgotPasswordCommandHandlerTests
         var user = User.Create("owner@test.vn", "hash", adminRole);
         _users.FindByEmailAsync("owner@test.vn", default).Returns(user);
         _sender
-            .When(s => s.SendResetLinkAsync(Arg.Any<string>(), Arg.Any<string>(), default))
+            .When(s => s.SendResetCodeAsync(Arg.Any<string>(), Arg.Any<string>(), default))
             .Do(_ => throw new HttpRequestException("Resend unavailable"));
 
         // Act
@@ -139,7 +139,7 @@ public sealed class ForgotPasswordCommandHandlerTests
         var user = User.Create("owner@test.vn", "hash", role);
         _users.FindByEmailAsync("owner@test.vn", default).Returns(user);
         _sender
-            .When(s => s.SendResetLinkAsync(Arg.Any<string>(), Arg.Any<string>(), default))
+            .When(s => s.SendResetCodeAsync(Arg.Any<string>(), Arg.Any<string>(), default))
             .Do(_ => throw new HttpRequestException("Resend unavailable"));
 
         // Act

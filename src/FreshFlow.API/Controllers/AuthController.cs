@@ -88,7 +88,8 @@ public sealed class AuthController(ISender sender) : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest body, CancellationToken ct)
     {
-        var result = await sender.Send(new ResetPasswordCommand(body.Token, body.NewPassword), ct);
+        var result = await sender.Send(
+            new ResetPasswordCommand(body.Identifier, body.Code, body.NewPassword), ct);
         return result.IsSuccess ? Ok(ApiResponse.OkEmpty()) : result.Error.ToActionResult();
     }
 
@@ -138,6 +139,6 @@ public sealed record ForgotPasswordRequest(string Identifier);
 public sealed record RefreshRequest(string RefreshToken);
 public sealed record LogoutRequest(string RefreshToken);
 public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
-public sealed record ResetPasswordRequest(string Token, string NewPassword);
+public sealed record ResetPasswordRequest(string Identifier, string Code, string NewPassword);
 public sealed record RequestVerificationRequest(string Identifier, string Channel);
 public sealed record VerifyRequest(string Identifier, string Channel, string Code);
