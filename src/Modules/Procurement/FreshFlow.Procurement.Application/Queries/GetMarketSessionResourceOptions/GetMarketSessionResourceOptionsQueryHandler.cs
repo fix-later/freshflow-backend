@@ -9,7 +9,8 @@ namespace FreshFlow.Procurement.Application.Queries.GetMarketSessionResourceOpti
 internal sealed class GetMarketSessionResourceOptionsQueryHandler(
     IMarketSessionRepository sessions,
     IMarketSessionReadinessReader vehicles,
-    IMarketAgentReader agents)
+    IMarketAgentReader agents,
+    IHubByMarketReader hubs)
     : IRequestHandler<GetMarketSessionResourceOptionsQuery, Result<MarketSessionResourcesDto>>
 {
     public async Task<Result<MarketSessionResourcesDto>> Handle(
@@ -19,17 +20,29 @@ internal sealed class GetMarketSessionResourceOptionsQueryHandler(
         if (session is null)
             return Result<MarketSessionResourcesDto>.Failure(Error.NotFound("MARKET_SESSION", request.SessionId));
 
-        return Result<MarketSessionResourcesDto>.Success(await MapAsync(session, vehicles, agents, ct));
+        return Result<MarketSessionResourcesDto>.Success(await MapAsync(session, vehicles, agents, hubs, ct));
     }
 
     internal static async Task<MarketSessionResourcesDto> MapAsync(
         MarketSession session,
         IMarketSessionReadinessReader vehicles,
         IMarketAgentReader agents,
+        IHubByMarketReader hubs,
         CancellationToken ct)
     {
-        var available = session.HubId.HasValue
-            ? await vehicles.ReadVehicleAvailabilityAsync(session.HubId.Value, session.ServiceDate, ct)
+        // session.HubId is a snapshot taken when the session is auto-created; a hub linked to the
+        // market afterwards leaves it null forever. Resolve the market's active hub live -- same
+        // pattern as MarketSessionLifecycleService.ReadReadinessAsync.
+        var effectiveHubId = session.HubId;
+        if (effectiveHubId is null)
+        {
+            var activeHubs = await hubs.ReadActiveHubsAsync([session.MarketId], ct);
+            if (activeHubs.TryGetValue(session.MarketId, out var resolvedHubId) && resolvedHubId != Guid.Empty)
+                effectiveHubId = resolvedHubId;
+        }
+
+        var available = effectiveHubId.HasValue
+            ? await vehicles.ReadVehicleAvailabilityAsync(effectiveHubId.Value, session.ServiceDate, ct)
             : new VehicleAvailabilityDto(0, 0m);
         var eligibleAgents = await agents.ListEligibleMarketAgentsAsync(session.MarketId, ct);
         var selectedVehicleIds = session.Vehicles.Select(row => row.VehicleId).ToHashSet();

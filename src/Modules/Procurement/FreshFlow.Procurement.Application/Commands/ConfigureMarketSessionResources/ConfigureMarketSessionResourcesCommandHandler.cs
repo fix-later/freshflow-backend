@@ -11,6 +11,7 @@ internal sealed class ConfigureMarketSessionResourcesCommandHandler(
     IMarketSessionRepository sessions,
     IMarketSessionReadinessReader vehicles,
     IMarketAgentReader agents,
+    IHubByMarketReader hubs,
     IAuditLogWriter auditLogs,
     TimeProvider timeProvider)
     : IRequestHandler<ConfigureMarketSessionResourcesCommand, Result<MarketSessionResourcesDto>>
@@ -22,7 +23,7 @@ internal sealed class ConfigureMarketSessionResourcesCommandHandler(
         if (session is null)
             return Result<MarketSessionResourcesDto>.Failure(Error.NotFound("MARKET_SESSION", request.SessionId));
 
-        var options = await GetMarketSessionResourceOptionsQueryHandler.MapAsync(session, vehicles, agents, ct);
+        var options = await GetMarketSessionResourceOptionsQueryHandler.MapAsync(session, vehicles, agents, hubs, ct);
         var availableVehicleIds = options.Vehicles.Select(vehicle => vehicle.VehicleId).ToHashSet();
         var eligibleAgentIds = options.Agents.Select(agent => agent.UserId).ToHashSet();
         if (request.VehicleIds.Distinct().Any(id => !availableVehicleIds.Contains(id)))
@@ -58,7 +59,7 @@ internal sealed class ConfigureMarketSessionResourcesCommandHandler(
             ct);
 
         return Result<MarketSessionResourcesDto>.Success(
-            await GetMarketSessionResourceOptionsQueryHandler.MapAsync(session, vehicles, agents, ct));
+            await GetMarketSessionResourceOptionsQueryHandler.MapAsync(session, vehicles, agents, hubs, ct));
     }
 
     private static Result<MarketSessionResourcesDto> Invalid(string message) =>

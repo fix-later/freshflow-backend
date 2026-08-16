@@ -13,7 +13,8 @@ public sealed class BatchConfirmedOrdersService(
     IOperationalSettingsReader settings,
     IProcurementBatchRepository batches,
     TimeProvider timeProvider,
-    IMarketSessionRepository sessions) : IProcurementBatchingService
+    IMarketSessionRepository sessions,
+    IHubByMarketReader hubs) : IProcurementBatchingService
 {
     public async Task<Result<BatchingResult>> BuildSessionBatchAsync(
         Guid marketSessionId,
@@ -42,7 +43,17 @@ public sealed class BatchConfirmedOrdersService(
             }
             return Skipped("no_eligible_orders");
         }
-        if (session.HubId is null)
+        // session.HubId is a snapshot taken when the session is auto-created; a hub linked to the
+        // market afterwards leaves it null forever. Resolve the market's active hub live before
+        // concluding it has none -- same pattern as MarketSessionLifecycleService.ReadReadinessAsync.
+        var effectiveHubId = session.HubId;
+        if (effectiveHubId is null)
+        {
+            var activeHubs = await hubs.ReadActiveHubsAsync([session.MarketId], ct);
+            if (activeHubs.TryGetValue(session.MarketId, out var resolvedHubId) && resolvedHubId != Guid.Empty)
+                effectiveHubId = resolvedHubId;
+        }
+        if (effectiveHubId is null)
             return Result<BatchingResult>.Failure(Error.Validation(
                 "HUB_NOT_CONFIGURED_FOR_MARKET", "The market session has no hub."));
 
@@ -56,7 +67,7 @@ public sealed class BatchConfirmedOrdersService(
             session.MarketId, session.ServiceDate, ct) + 1;
         var code = $"{market.Code ?? MarketCode.DeriveMarketCode(market.Name)}-{session.ServiceDate:yyMMdd}-{sequence}";
         var build = ProcurementBatch.Build(
-            session.ServiceDate, session.MarketId, lines, session.HubId.Value, code, session.Id);
+            session.ServiceDate, session.MarketId, lines, effectiveHubId.Value, code, session.Id);
         if (build.IsFailure)
             return Result<BatchingResult>.Failure(build.Error);
 
