@@ -1,0 +1,52 @@
+namespace FreshFlow.Orders.Application.Services;
+
+/// <summary>
+/// Computes UTC month-boundary timestamps for credit statements using Asia/Ho_Chi_Minh as
+/// the period-boundary timezone (DEC-CRE-03). Boundaries are computed in VN local time then
+/// converted to UTC for storage/comparison — <c>PeriodStart</c> is inclusive, <c>PeriodEnd</c>
+/// is exclusive (the first instant of the following month).
+/// </summary>
+public static class CreditStatementPeriodCalculator
+{
+    /// <summary>Asia/Ho_Chi_Minh, resolved once. Shared by anything converting statement
+    /// timestamps for display (e.g. the PDF renderer) so the resolve-with-fallback logic
+    /// below lives in one place per module.</summary>
+    public static readonly TimeZoneInfo VietnamTimeZone = ResolveVietnamTimeZone();
+
+    /// <summary>
+    /// Soft payment term (SCRUM-269, Tier 1): the statement is due this many days after the
+    /// period closes. Derived-only — not a paid/overdue lifecycle. A constant because the
+    /// term is a stable business rule; promote to config if it ever needs to vary.
+    /// </summary>
+    // ponytail: constant Net-N term; make it config if a per-tenant/variable term is ever needed.
+    public const int PaymentTermDays = 15;
+
+    /// <summary>
+    /// Soft payment due date for a statement whose (exclusive, UTC) period end is
+    /// <paramref name="periodEnd"/> — simply period end + <see cref="PaymentTermDays"/>.
+    /// </summary>
+    public static DateTime ResolveDueDate(DateTime periodEnd) => periodEnd.AddDays(PaymentTermDays);
+
+    public static (DateTime PeriodStart, DateTime PeriodEnd) ResolvePeriod(int year, int month)
+    {
+        var periodStartLocal = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        var periodEndLocal = periodStartLocal.AddMonths(1);
+
+        var periodStartUtc = TimeZoneInfo.ConvertTimeToUtc(periodStartLocal, VietnamTimeZone);
+        var periodEndUtc = TimeZoneInfo.ConvertTimeToUtc(periodEndLocal, VietnamTimeZone);
+
+        return (periodStartUtc, periodEndUtc);
+    }
+
+    private static TimeZoneInfo ResolveVietnamTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+        }
+    }
+}

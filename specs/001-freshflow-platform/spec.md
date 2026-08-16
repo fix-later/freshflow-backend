@@ -34,13 +34,10 @@ within 2 seconds. Delivers the live price board MVP with no other features neede
 2. **Given** a Kiosk Staff member assigned to Market A, **When** they attempt to
    update a price at Market B, **Then** the system rejects the action with a
    clear permission error.
-3. **Given** a price changes by 5% or more (or the configured threshold), **When**
-   the update is submitted, **Then** Restaurant users receive a highlighted
-   significant-change alert in addition to the normal price update.
-4. **Given** no Restaurant users are currently connected to the market board,
+3. **Given** no Restaurant users are currently connected to the market board,
    **When** a price is updated, **Then** the update is stored successfully and
    any user who connects afterward sees the current price immediately.
-5. **Given** a price or quantity update is submitted, **When** it is processed,
+4. **Given** a price or quantity update is submitted, **When** it is processed,
    **Then** the previous value is preserved in history — the record is never
    overwritten.
 
@@ -273,9 +270,6 @@ a price trend chart for the past 30 days.
 - **FR-007**: The system MUST store an immutable record of every price and
   quantity change (value, actor, timestamp). Records MUST NOT be modifiable or
   deletable.
-- **FR-008**: The system MUST flag price changes equal to or greater than 5%
-  (default threshold, configurable by Admin) as significant and deliver a
-  distinct alert to Restaurant users.
 - **FR-009**: Admins MUST be able to create, update, and deactivate products
   in the system-wide catalog.
 
@@ -308,8 +302,9 @@ a price trend chart for the past 30 days.
 - **FR-019**: Admins MUST be able to create a delivery schedule linking a route,
   a vehicle, and a departure time; the system MUST validate vehicle capacity
   against total order group weight and detect vehicle double-booking.
-- **FR-020**: Admins MUST be able to group confirmed orders into a logistics
-  batch for shared delivery cost.
+- **FR-020**: The system MUST automatically group confirmed, unbatched orders
+  into logistics batches at the daily cutoff and allow Admins to trigger the
+  same batching logic manually through an idempotent API with dry-run support.
 
 **Hub Management**
 
@@ -346,7 +341,7 @@ a price trend chart for the past 30 days.
 - **Price Snapshot**: Immutable record of a price or quantity change at a
   specific market for a specific product. Append-only — never modified.
 - **Order**: A restaurant's purchase request with status lifecycle:
-  PENDING → CONFIRMED → IN_TRANSIT → DELIVERED (or CANCELLED from PENDING/CONFIRMED).
+  PENDING → CONFIRMED → BATCHED → IN_TRANSIT → DELIVERED (or CANCELLED from PENDING/CONFIRMED).
 - **Order Line Item**: One row in an order: product, market, quantity, and
   price at time of order.
 - **Scheduled Order**: A recurrence definition (DAILY or WEEKLY, start time,

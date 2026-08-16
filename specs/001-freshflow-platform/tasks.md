@@ -253,7 +253,7 @@ src/FreshFlow.API/appsettings.json  (Serilog config)
 - [ ] T009 [US1] Implement POST /auth/login endpoint
 - [ ] T010 [US1] Implement POST /auth/refresh with token rotation
 - [ ] T011 [P] [US1] Implement POST /auth/logout endpoint
-- [ ] T012 [P] [US1] Implement POST /auth/register (Admin only) + market assignment endpoint
+- [ ] T012 [P] [US1] Implement POST /admin/users (Admin only) + market assignment and restaurant approval
 - [ ] T013 [P] [US1] Scaffold Angular app with routing, auth guard, and JWT HTTP interceptor
 - [ ] T014 [US1] Implement Angular login page and auth service
 - [ ] T015 [P] [US1] Set up Angular shared component library + kiosk feature module scaffold
@@ -340,26 +340,28 @@ tests/Integration/FreshFlow.IntegrationTests/Auth/LogoutEndpointTests.cs
 
 ---
 
-### T012 — Implement POST /auth/register (Admin only) + user market assignment
+### T012 — Implement POST /admin/users (Admin only) + market assignment and restaurant approval
 **Assignee**: BE/DevOps | **Estimated**: M (1 day) | **Story points**: 5
 
 **Files to create/modify**:
 ```
-src/Modules/Auth/FreshFlow.Auth.Application/Commands/Register/RegisterUserCommand.cs
-src/Modules/Auth/FreshFlow.Auth.Application/Commands/Register/RegisterUserCommandHandler.cs
-src/Modules/Auth/FreshFlow.Auth.Application/Commands/Register/RegisterUserCommandValidator.cs
-src/FreshFlow.API/Controllers/AdminController.cs  (POST /admin/users, PATCH /admin/users/{id}/approve)
+src/Modules/Auth/FreshFlow.Auth.Application/Commands/CreateUser/CreateUserCommand.cs
+src/Modules/Auth/FreshFlow.Auth.Application/Commands/CreateUser/CreateUserCommandHandler.cs
+src/Modules/Auth/FreshFlow.Auth.Application/Commands/CreateUser/CreateUserCommandValidator.cs
+src/Modules/Auth/FreshFlow.Auth.Application/Commands/ApproveRestaurant/ApproveRestaurantCommand.cs
+src/FreshFlow.API/Controllers/AdminController.cs  (POST /admin/users, PATCH /admin/restaurants/{id}/approve)
 src/Modules/Auth/FreshFlow.Auth.Application/Commands/AssignMarket/AssignMarketCommand.cs
-tests/Integration/FreshFlow.IntegrationTests/Auth/RegisterEndpointTests.cs
+tests/Integration/FreshFlow.IntegrationTests/Auth/AdminUsersEndpointTests.cs
 ```
 
 **Depends on**: T009
 
 **Acceptance criteria**:
-1. `POST /api/v1/auth/register` by an Admin with `role: kiosk_staff` creates the account and returns HTTP 201 with `userId`.
+1. `POST /api/v1/admin/users` by an Admin with `role: market_agent` creates the account, assigns the requested market, and returns HTTP 201 with `userId`.
 2. A non-Admin token returns HTTP 403.
 3. Duplicate email returns HTTP 409 `EMAIL_ALREADY_EXISTS`.
-4. `PATCH /api/v1/admin/users/{id}/approve` sets `is_active: true` for PENDING accounts.
+4. `POST /api/v1/admin/users` with `role: restaurant` creates a Restaurant account with `is_approved = false`.
+5. `PATCH /api/v1/admin/restaurants/{id}/approve` sets `is_approved = true`; public Restaurant self-registration is not exposed in v1.
 
 ---
 
@@ -520,12 +522,11 @@ freshflow-mobile/src/services/auth.service.ts  (complete refreshToken logic)
 - [ ] T022 [US1] Implement price + quantity update endpoint (PATCH) with PostgreSQL write and Redis cache update
 - [ ] T023 [US1] [HIGH-RISK: SignalR + Redis pub/sub] Implement PricingHub group management + broadcast on price update
 - [ ] T024 [P] [US1] Implement price history endpoint with cursor pagination
-- [ ] T025 [P] [US1] Implement significant price change detection + SignalR alert
 - [ ] T026 [US1] Implement Angular pricing dashboard with live SignalR feed
 - [ ] T027 [P] [US1] Implement Angular kiosk product list + price update screens
 - [ ] T028 [US1] Implement React Native kiosk product list + price update screen
 
-**Checkpoint**: Live demo — kiosk updates a price, Angular dashboard updates without refresh, significant alert highlights the row.
+**Checkpoint**: Live demo — kiosk updates a price, Angular dashboard updates without refresh via `PriceUpdated`.
 
 ---
 
@@ -550,7 +551,7 @@ src/Modules/Pricing/FreshFlow.Pricing.Domain/Entities/
 1. Migration creates `markets`, `products`, `market_products`, `price_snapshots` (partitioned), `system_config` tables matching `docs/03-database-schema.md` DDL.
 2. `INSERT INTO price_snapshots` with `recorded_at = NOW()` lands in the current month's partition, not the default partition.
 3. `idx_price_snapshots_market_product_recorded_at` index exists on the parent table.
-4. Seeded data: 3 markets (Hoc Mon, Binh Dien, Thu Duc) with coordinates; `significant_price_threshold_percent = 5.00` in `system_config`.
+4. Seeded data: 3 markets (Hoc Mon, Binh Dien, Thu Duc) with coordinates; `daily_order_cutoff_time = 22:00` and `price_band_tolerance_percent = 10.00` in `system_config`.
 
 ---
 
@@ -687,30 +688,6 @@ src/FreshFlow.API/Controllers/PricingController.cs  (add price-history action)
 
 ---
 
-### T025 — Implement significant price change detection + SignalR alert
-**Assignee**: BE/DevOps | **Estimated**: M (1 day) | **Story points**: 5
-
-**Files to create/modify**:
-```
-src/Modules/Pricing/FreshFlow.Pricing.Application/Services/SignificantChangeDetector.cs
-src/Modules/Pricing/FreshFlow.Pricing.Application/Commands/UpdatePrice/UpdatePriceCommandHandler.cs
-  (call SignificantChangeDetector after snapshot insert)
-src/Modules/Pricing/FreshFlow.Pricing.Application/DTOs/SignificantPriceAlertDto.cs
-src/FreshFlow.API/Controllers/PricingController.cs  (PATCH /admin/config/significant-price-threshold)
-```
-
-**Severity rules**: change ≥ 5% and < 15% → `MEDIUM`; ≥ 15% → `HIGH`.
-
-**Depends on**: T023
-
-**Acceptance criteria**:
-1. A price change of ≥ 5% triggers a `SignificantPriceAlert` SignalR event to `market:{marketId}` within 500 ms; payload includes `changePercent`, `previousPrice`, `newPrice`, `severity`.
-2. A change of exactly 5% is treated as significant (inclusive boundary).
-3. A quantity-only update (price unchanged) does NOT trigger `SignificantPriceAlert`.
-4. `PATCH /api/v1/admin/config/significant-price-threshold` by Admin updates the threshold; a non-Admin returns 403.
-
----
-
 ### T026 — Implement Angular pricing dashboard with live SignalR feed
 **Assignee**: FE1-Web | **Estimated**: M (1 day) | **Story points**: 5
 
@@ -724,15 +701,14 @@ freshflow-web/src/app/features/pricing/
   pricing.service.ts  (GET markets/{id}/products, subscribe to PricingHub)
 ```
 
-**Pattern**: `PricingService` connects to `/hubs/pricing`, joins `market:{marketId}` on market select, listens for `PriceUpdated` and `SignificantPriceAlert`. Uses `WritableSignal<MarketProductDto[]>` to update the table reactively.
+**Pattern**: `PricingService` connects to `/hubs/pricing`, joins `market:{marketId}` on market select, and listens only for `PriceUpdated`. Uses `WritableSignal<MarketProductDto[]>` to update the table reactively.
 
 **Depends on**: T021, T023, T013
 
 **Acceptance criteria**:
 1. On market select, the price table loads via `GET /markets/{id}/products`.
 2. When a kiosk staff updates a price, the relevant table row updates within 2 seconds — no refresh.
-3. A `SignificantPriceAlert` event highlights the row with a yellow/red badge and the change percent.
-4. All components use `OnPush`; no manual `.subscribe()` calls in component code; `async` pipe used in templates.
+3. All components use `OnPush`; no manual `.subscribe()` calls in component code; `async` pipe used in templates.
 
 ---
 
@@ -794,12 +770,12 @@ freshflow-mobile/src/services/pricing.service.ts
 - [ ] T032 [P] [US2] Implement order listing and detail endpoints
 - [ ] T033 [P] [US2] Implement order cancellation with soft-reservation release
 - [ ] T034 [US5] Implement order status transitions + OrderHub SignalR broadcast
-- [ ] T035 [P] [US6] Implement order grouping endpoints
+- [ ] T035 [P] [US6] Implement order grouping + Admin auto-batch trigger
 - [ ] T036 [US3] Implement scheduled recurring orders + background job
 - [ ] T037 [US2] [US5] Implement Angular order management UI (list, create, detail + live status)
 - [ ] T038 [P] [US2] [US5] Implement React Native order list + detail with real-time status
 
-**Checkpoint**: Restaurant places order, Admin advances status, restaurant sees live update. Scheduled order fires automatically within 60s.
+**Checkpoint**: Restaurant places order, Admin advances status, restaurant sees live update. Scheduled order fires automatically within 60s. Admin can dry-run or trigger auto-batching manually.
 
 ---
 
@@ -939,16 +915,22 @@ tests/Integration/FreshFlow.IntegrationTests/Orders/OrderStatusBroadcastTests.cs
 
 ---
 
-### T035 — Implement order grouping endpoints
-**Assignee**: BE/DevOps | **Estimated**: M (1 day) | **Story points**: 5
+### T035 — Implement order grouping + Admin auto-batch trigger
+**Assignee**: BE/DevOps | **Estimated**: L (2 days) | **Story points**: 8
 
 **Files to create/modify**:
 ```
 src/Modules/Orders/FreshFlow.Orders.Application/Commands/CreateOrderGroup/
   CreateOrderGroupCommand.cs, CreateOrderGroupCommandHandler.cs
+src/Modules/Orders/FreshFlow.Orders.Application/Commands/AutoBatchOrders/
+  AutoBatchOrdersCommand.cs, AutoBatchOrdersCommandHandler.cs
+src/Modules/Orders/FreshFlow.Orders.Application/Services/OrderBatchingService.cs
 src/Modules/Orders/FreshFlow.Orders.Application/DTOs/CreateOrderGroupRequestDto.cs, OrderGroupDto.cs
+src/Modules/Orders/FreshFlow.Orders.Application/DTOs/AutoBatchOrdersRequestDto.cs, AutoBatchOrdersResponseDto.cs
+src/Modules/Orders/FreshFlow.Orders.Application/BackgroundJobs/DailyOrderBatchingJob.cs  (22:00 Asia/Ho_Chi_Minh cutoff)
 src/Modules/Orders/FreshFlow.Orders.Infrastructure/Persistence/Repositories/OrderGroupRepository.cs
-src/FreshFlow.API/Controllers/AdminController.cs  (POST /admin/order-groups, GET /admin/order-groups/{id})
+src/FreshFlow.API/Controllers/AdminController.cs  (POST /api/v1/admin/order-groups, POST /api/v1/admin/order-groups/auto-batch, GET /api/v1/admin/order-groups/{id})
+tests/Integration/FreshFlow.IntegrationTests/Orders/AutoBatchOrdersTests.cs
 ```
 
 **Depends on**: T034
@@ -957,6 +939,10 @@ src/FreshFlow.API/Controllers/AdminController.cs  (POST /admin/order-groups, GET
 1. `POST /api/v1/admin/order-groups` with `confirmed` order IDs returns 201 with `orderGroupId`.
 2. Including a non-`confirmed` order returns 422.
 3. Adding an order already in an active group returns 409.
+4. `POST /api/v1/admin/order-groups/auto-batch` runs the same `OrderBatchingService` as the 22:00 job, grouping `confirmed` unbatched orders by `deliveryZone + sourceMarket`.
+5. `dryRun=true` returns a preview with batch/order counts and does not write `OrderGroup`, `ProcurementBatch`, or order status changes.
+6. Re-running the endpoint is idempotent: already batched orders are skipped and no duplicate group is created.
+7. Successful manual or scheduled batching moves eligible orders to `batched` and emits `OrderGrouped`.
 
 ---
 
@@ -1285,7 +1271,7 @@ freshflow-web/src/app/features/analytics/
 **Purpose**: Production readiness, coverage gates, integration test completeness.
 
 - [ ] T057 [P] Write integration test suite (auth + pricing + orders critical paths)
-- [ ] T058 [P] Write unit tests for VRP solver, pricing service, token service
+- [ ] T058 [P] Write unit tests for VRP solver, order batching service, token service
 - [ ] T059 [P] Production Nginx TLS config + docker-compose.prod.yml
 - [ ] T060 [P] CI/CD pipeline polish (coverage gate ≥ 70%, Docker push, staging deploy stage)
 
@@ -1310,20 +1296,20 @@ tests/Integration/FreshFlow.IntegrationTests/
 
 ---
 
-### T058 — Unit tests for VRP solver, pricing service, token service
+### T058 — Unit tests for VRP solver, order batching service, token service
 **Assignee**: BE/DevOps | **Estimated**: M (1 day) | **Story points**: 5
 
 **Files**:
 ```
 tests/Unit/FreshFlow.Logistics.UnitTests/Algorithms/VrpSolverTests.cs
   (3-stop optimal, 20-stop boundary, 21-stop exception, DISTANCE vs TIME vs COST)
-tests/Unit/FreshFlow.Pricing.UnitTests/Services/SignificantChangeDetectorTests.cs
-  (5% threshold, exactly 5%, < 5%, HIGH severity at 15%)
+tests/Unit/FreshFlow.Orders.UnitTests/Services/OrderBatchingServiceTests.cs
+  (groups by deliveryZone + sourceMarket, dry-run writes nothing, idempotent skip, emits OrderGrouped)
 tests/Unit/FreshFlow.Auth.UnitTests/Services/JwtTokenServiceTests.cs
   (claim presence, TTL, signature validation)
 ```
 
-**Depends on**: T041, T025, T006 | **AC**: 100% branch coverage on VrpSolver; significant change detector tests cover exact boundary values; all tests pass with `dotnet test --filter Category=Unit`.
+**Depends on**: T041, T035, T006 | **AC**: 100% branch coverage on VrpSolver; order batching tests cover dry-run/idempotency/grouping; all tests pass with `dotnet test --filter Category=Unit`.
 
 ---
 
@@ -1394,15 +1380,15 @@ Within Sprint 3 (after T029):
 | Sprint | Tasks | Team |
 |--------|-------|------|
 | Sprint 1 — Foundation & Auth | T001–T018 (18 tasks) | All 4 |
-| Sprint 2 — Real-time Pricing | T019–T028 (10 tasks) | All 4 |
+| Sprint 2 — Real-time Pricing | T019–T024, T026–T028 (9 tasks) | All 4 |
 | Sprint 3 — Order Management | T029–T038 (10 tasks) | BE + FE1 + FE3 |
 | Sprint 4 — Logistics + Hub | T039–T048 (10 tasks) | BE + FE1 |
 | Sprint 5 — Analytics + Notifications | T049–T056 (8 tasks, T052 deferred) | BE + FE1 |
 | Sprint 6 — Deployment + Testing | T057–T060 (4 tasks) | BE/DevOps |
-| **Total** | **60 tasks** | |
+| **Total** | **59 tasks** | |
 
-**MVP scope** (demo-ready after Sprint 2): T001–T028 — full live price feed with auth.
-**Full demo scope** (after Sprint 3): T001–T038 — price feed + orders + live status tracking.
+**MVP scope** (demo-ready after Sprint 2): T001–T024, T026–T028 — full live price feed with auth.
+**Full demo scope** (after Sprint 3): Sprint 1 through Sprint 3 tasks — price feed + orders + live status tracking.
 
 ---
 
@@ -1437,7 +1423,7 @@ Copy the following into Jira. Story points: S=2, M=3–5, L=8.
 | T009 | Implement POST /auth/login endpoint | BE/DevOps | 5 |
 | T010 | Implement POST /auth/refresh with token rotation | BE/DevOps | 5 |
 | T011 | Implement POST /auth/logout endpoint | BE/DevOps | 2 |
-| T012 | Implement POST /auth/register (Admin only) | BE/DevOps | 5 |
+| T012 | Implement POST /admin/users (Admin only) | BE/DevOps | 5 |
 | T013 | Scaffold Angular app with routing, auth guard, HTTP interceptor | FE1-Web | 8 |
 | T014 | Implement Angular login page and auth service | FE1-Web | 5 |
 | T015 | Set up Angular shared component library + kiosk module scaffold | FE2-Web | 5 |
@@ -1455,7 +1441,6 @@ Copy the following into Jira. Story points: S=2, M=3–5, L=8.
 | T022 | Implement price + quantity update endpoints + Redis write | BE/DevOps | 8 |
 | T023 | Implement PricingHub group management + broadcast ⚠ HIGH-RISK | BE/DevOps | 5 |
 | T024 | Implement price history endpoint (cursor pagination) | BE/DevOps | 2 |
-| T025 | Implement significant price change detection + alert | BE/DevOps | 5 |
 | T026 | Implement Angular pricing dashboard with live SignalR feed | FE1-Web | 5 |
 | T027 | Implement Angular kiosk product list + price update screens | FE2-Web | 5 |
 | T028 | Implement React Native kiosk price update screen | FE3-Mobile | 5 |
@@ -1470,7 +1455,7 @@ Copy the following into Jira. Story points: S=2, M=3–5, L=8.
 | T032 | Implement order listing and detail endpoints | BE/DevOps | 5 |
 | T033 | Implement order cancellation with reservation release | BE/DevOps | 2 |
 | T034 | Implement order status transitions + OrderHub broadcast | BE/DevOps | 5 |
-| T035 | Implement order grouping endpoints | BE/DevOps | 5 |
+| T035 | Implement order grouping + Admin auto-batch trigger | BE/DevOps | 8 |
 | T036 | Implement scheduled recurring orders + background job | BE/DevOps | 8 |
 | T037 | Implement Angular order management UI | FE1-Web | 8 |
 | T038 | Implement React Native order list + detail screens | FE3-Mobile | 5 |
@@ -1508,6 +1493,6 @@ Copy the following into Jira. Story points: S=2, M=3–5, L=8.
 | # | Title | Assignee | Points |
 |---|-------|----------|--------|
 | T057 | Integration test suite (Testcontainers + WebApplicationFactory) | BE/DevOps | 8 |
-| T058 | Unit tests for VRP solver, pricing service, token service | BE/DevOps | 5 |
+| T058 | Unit tests for VRP solver, order batching service, token service | BE/DevOps | 5 |
 | T059 | Production Nginx TLS config + docker-compose.prod.yml | BE/DevOps | 5 |
 | T060 | CI/CD pipeline polish (coverage gate, Docker push, staging deploy) | BE/DevOps | 5 |

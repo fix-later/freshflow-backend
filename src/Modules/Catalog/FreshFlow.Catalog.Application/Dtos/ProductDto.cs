@@ -1,0 +1,21 @@
+namespace FreshFlow.Catalog.Application.Dtos;
+
+public record ProductDto(
+    Guid Id,
+    string Name,
+    Guid? CategoryId,
+    string? CategoryName,
+    Guid UnitId,
+    string? UnitName,
+    Guid? PackingCodeId,
+    string? Description,
+    Guid? CreatedBy,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    bool IsDeleted,
+    string? ImageUrl = null,
+    int MinimumOrderQuantity = 1,
+    string? VatRate = null,
+    SellingUnitDto SellingUnit = null!);
+
+public sealed record SellingUnitDto(string UnitName, decimal? WeightKg);

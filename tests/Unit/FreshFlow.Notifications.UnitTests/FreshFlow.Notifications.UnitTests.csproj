@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Modules\Notifications\FreshFlow.Notifications.Application\FreshFlow.Notifications.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Notifications\FreshFlow.Notifications.Domain\FreshFlow.Notifications.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Notifications\FreshFlow.Notifications.Infrastructure\FreshFlow.Notifications.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\FreshFlow.Infrastructure.Persistence\FreshFlow.Infrastructure.Persistence.csproj" />
+    <ProjectReference Include="..\..\..\src\FreshFlow.API\FreshFlow.API.csproj" />
+  </ItemGroup>
+
+</Project>

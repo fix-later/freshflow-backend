@@ -1,0 +1,6 @@
+@FreshFlow.API_HostAddress = http://localhost:5110
+
+GET {{FreshFlow.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

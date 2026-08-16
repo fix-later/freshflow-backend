@@ -63,7 +63,7 @@ FreshFlow's backend is designed as a **Modular Monolith** — a single deployabl
 
 **React Native Mobile App (Kiosk Staff users):**
 - Communicates with the same ASP.NET Core API over HTTPS REST for price and quantity updates (`PATCH /api/markets/{marketId}/products/{productId}/price` and `/quantity`).
-- Establishes a SignalR WebSocket connection to `/hubs/pricing` upon login to receive broadcast confirmations and significant price alerts.
+- Establishes a SignalR WebSocket connection to `/hubs/pricing` upon login to receive price update broadcast confirmations.
 - Kiosk Staff join `kiosk:{marketId}` group and are restricted by server-side policy to their assigned market only.
 - On reconnect, the mobile app uses exponential backoff (initial: 1 s, max: 30 s) before re-establishing the connection and re-joining groups.
 - REST calls use the JWT access token in the `Authorization: Bearer` header; token refresh is handled automatically by an Axios/Fetch interceptor before the access token expires.
@@ -219,8 +219,8 @@ The ASP.NET Core application host wires all seven modules together. Each module'
 **Responsibility:** Manages all aspects of user identity — JWT issuance, refresh token lifecycle, role-based claims, and user account administration.
 
 **Internal Components:**
-- `AuthController` — endpoints: `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `POST /api/auth/register`
-- `AdminUsersController` — endpoints: `POST /api/admin/users`, `PATCH /api/admin/users/{id}/approve`
+- `AuthController` — endpoints: `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`
+- `AdminUsersController` — endpoints: `POST /api/v1/admin/users`, `PATCH /api/v1/admin/users/{id}/activate`, `PATCH /api/v1/admin/restaurants/{restaurantId}/approve`
 - `TokenService` — generates signed JWT access tokens and cryptographically random refresh tokens; enforces TTL (access: 15 min, refresh: 7 days)
 - `RefreshTokenRepository` — persists and queries the `refresh_tokens` table; implements token rotation and family invalidation logic
 - `PasswordService` — wraps BCrypt with work factor ≥ 12 for hashing and verification
@@ -249,23 +249,21 @@ The ASP.NET Core application host wires all seven modules together. Each module'
 **Internal Components:**
 - `ProductsController` — `GET /api/products`, `POST /api/admin/products`, `PATCH /api/admin/products/{id}`, `DELETE /api/admin/products/{id}`
 - `MarketPricingController` — `PATCH /api/markets/{marketId}/products/{productId}/price`, `PATCH /api/markets/{marketId}/products/{productId}/quantity`, `GET /api/markets/{marketId}/products`, `GET /api/markets/{marketId}/products/{productId}/price-history`
-- `SystemConfigController` — `PATCH /api/admin/config/significant-price-threshold`
-- `PricingService` — core business logic: validates price/quantity values, enforces market assignment, applies optimistic concurrency check (`If-Unmodified-Since`), writes price snapshot, updates Redis cache, evaluates significant-change threshold, triggers broadcast
+- `PricingService` — core business logic: validates price/quantity values, enforces market assignment, applies optimistic concurrency check (`If-Unmodified-Since`), writes price snapshot, updates Redis cache, triggers broadcast
 - `PriceSnapshotRepository` — append-only writes to `price_snapshots`; read with pagination for history queries
 - `ProductMarketPriceRepository` — manages the `product_market_prices` table (current price per product per market)
 - `ProductRepository` — manages the `products` catalog table
-- `SignificantChangeDetector` — reads configured threshold from `system_config`, computes percentage change, emits `SignificantPriceChangeDetected` domain event
 - `PricingCacheWriter` — encapsulates all Redis Hash writes for price and quantity; handles Redis failure gracefully (logs error, does not roll back PostgreSQL write for cache-only failures)
 
 **External Dependencies:**
-- **Notifications Module** (via `IPricingBroadcastService` interface) — to publish `PriceUpdated` and `SignificantPriceAlert` SignalR events after a successful database write
+- **Notifications Module** (via `IPricingBroadcastService` interface) — to publish `PriceUpdated` SignalR events after a successful database write
 
 **Data Owned:**
 - `products` — product catalog (name, unit, category, description, status)
 - `product_market_prices` — current price and quantity per `(product_id, market_id)` pair; includes `updated_at` for optimistic concurrency
 - `price_snapshots` — immutable append-only history of every price/quantity change event
 - `markets` — wholesale market definitions (name, location, active status)
-- `system_config` — key-value store for Admin-configurable parameters (e.g., `significant_price_threshold_percent`)
+- `system_config` — key-value store for Admin-configurable parameters (e.g., `daily_order_cutoff_time`, `price_band_tolerance_percent`)
 
 **Cross-Module Rules:**
 - The Pricing module must NOT read from order tables or logistics tables.
@@ -282,13 +280,14 @@ The ASP.NET Core application host wires all seven modules together. Each module'
 **Internal Components:**
 - `OrdersController` — `POST /api/orders`, `GET /api/orders/{orderId}`, `GET /api/orders`, `PATCH /api/orders/{orderId}/cancel`
 - `ScheduledOrdersController` — `POST /api/orders/scheduled`, `GET /api/orders/scheduled/{id}/instances`
-- `AdminOrderGroupsController` — `POST /api/admin/order-groups`, `GET /api/admin/order-groups/{id}`
+- `AdminOrderGroupsController` — `POST /api/v1/admin/order-groups`, `POST /api/v1/admin/order-groups/auto-batch`, `GET /api/v1/admin/order-groups/{id}`
 - `AdminOrdersController` — `GET /api/admin/orders`
 - `OrderService` — orchestrates order creation: validates line items against active products, checks and applies soft-reservations in Redis, writes order to PostgreSQL atomically, triggers `OrderCreated` domain event
 - `OrderStatusService` — transitions order status through the state machine (`PENDING → CONFIRMED → IN_TRANSIT → DELIVERED`, and `→ CANCELLED` from PENDING/CONFIRMED); triggers `OrderStatusChanged` domain event on each transition
 - `ScheduledOrderService` — manages `scheduled_orders` definitions; generates order instances on the correct cron tick; implements missed-execution recovery; enforces idempotency via a `last_executed_at` timestamp
 - `SoftReservationService` — Redis-backed: decrements available quantity key on order creation; rolls back on order failure; releases expired reservations (called by background job)
-- `OrderGroupService` — validates and creates `order_groups`; enforces single-group constraint per order
+- `OrderBatchingService` — shared by the 22:00 scheduled job and Admin manual trigger; groups eligible `CONFIRMED` orders by source market (delivery-zone grouping from FR-ORD-005 is not implemented — no restaurant-to-zone link); supports `dryRun`, `targetDate`, and idempotent skip behavior
+- `OrderGroupService` — validates manually adjusted `order_groups`; enforces single-group constraint per order
 - `OrderRepository` — full CRUD for `orders` and `order_line_items`
 - `ScheduledOrderRepository` — CRUD for `scheduled_orders` and `scheduled_order_instances`
 - `OrderGroupRepository` — manages `order_groups` and `order_group_members`
@@ -427,7 +426,7 @@ The ASP.NET Core application host wires all seven modules together. Each module'
 **Responsibility:** Owns and manages all three SignalR hubs, handles client group membership (join/leave), and provides the broadcast service interfaces that other modules call to push real-time events.
 
 **Internal Components:**
-- `PricingHub` — SignalR hub at `/hubs/pricing`; manages `market:{marketId}` and `kiosk:{marketId}` group membership; broadcasts `PriceUpdated` and `SignificantPriceAlert` events
+- `PricingHub` — SignalR hub at `/hubs/pricing`; manages `market:{marketId}` and `kiosk:{marketId}` group membership; broadcasts `PriceUpdated` events
 - `OrderHub` — SignalR hub at `/hubs/orders`; manages `restaurant:{restaurantId}` and `admin:all` group membership; broadcasts `OrderStatusChanged` and `OrderGrouped` events
 - `DeliveryHub` — SignalR hub at `/hubs/delivery`; manages `restaurant:{restaurantId}` group membership; broadcasts `DeliveryStatusChanged`, `DeliveryStarted`, `DeliveryCompleted`, and `RouteOptimized` events
 - `PricingBroadcastService` — implements `IPricingBroadcastService`; called by Pricing module; publishes to `IHubContext<PricingHub>`
@@ -461,7 +460,7 @@ All three hubs are authenticated — the negotiate endpoint requires a valid JWT
 | **Authentication** | Required. JWT validated on negotiate. |
 | **Restaurant group** | `market:{marketId}` — joined by Restaurant clients for each market they want to track. Server-side: `await Groups.AddToGroupAsync(connectionId, $"market:{marketId}")`. |
 | **Kiosk group** | `kiosk:{marketId}` — joined by Kiosk Staff clients for their assigned market. Server enforces that the `marketId` matches the user's assignment from `user_market_assignments`. |
-| **Broadcasts sent** | `PriceUpdated` → to `market:{marketId}` group. `SignificantPriceAlert` → to `market:{marketId}` group (additional event, same timing). |
+| **Broadcasts sent** | `PriceUpdated` → to `market:{marketId}` group. |
 | **Client methods invoked by server** | `PriceUpdated(productId, marketId, newPrice, newQuantity, updatedAt)` |
 | **Hub methods invoked by client** | `JoinMarketGroup(marketId)`, `LeaveMarketGroup(marketId)` |
 

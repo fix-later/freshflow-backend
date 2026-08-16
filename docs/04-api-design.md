@@ -1,27 +1,62 @@
 # FreshFlow (FFX) — API Design Document
 
-**Version:** 1.0  
-**Date:** 2026-05-09  
+**Version:** 1.1  
+**Date:** 2026-05-09 (design) · **Reconciled with code:** 2026-06-30  
 **Project:** FreshFlow – Intermediary Platform for Food Procurement and Logistics Optimization  
-**Status:** Approved for Implementation  
+**Status:** Partially implemented — see Sync Status below  
 **Based on:** Requirements Specification v1.0 + System Architecture v1.0 + Database Schema v1.0
+
+---
+
+## ⚙️ Sync Status (reviewed 2026-06-30)
+
+> **Physical source of truth:** the ASP.NET Core controllers under
+> `src/FreshFlow.API/Controllers/` and the SignalR hub mappings in
+> `src/FreshFlow.API/Program.cs`. This document is split into two parts, mirroring
+> `docs/database/03-database-schema.dbml`:
+>
+> - **[Part A — Implemented API Surface](#2-implemented-api-surface-part-a--authoritative)**
+>   is the authoritative inventory of every route that physically exists today
+>   (method, path, auth/roles). It matches the controllers 1:1.
+> - **Part B** is the remaining original v1.0 design detail (Sections 3–6 below).
+>   Sections/endpoints that are **not yet implemented** are marked `[PLANNED]`;
+>   request/response examples for implemented endpoints are illustrative — the
+>   binding contract is the code (and the generated Swagger/OpenAPI document).
+
+**Implemented modules:** Auth, Profile, Admin, Restaurant Profile, Restaurant Credit (B2B công nợ),
+Catalog (Categories, Units, Products, Markets/Market-Products), Pricing, Orders (+ Scheduled Orders),
+AI Assistant, and the `PricingHub` / `OrderHub` real-time hubs.
+
+**Not yet implemented (`[PLANNED]`):** Logistics (routes/vehicles), Hub operations,
+Analytics, `order-groups` + auto-batch, `system-config`, `DeliveryHub`, and the generic
+`PATCH /orders/{orderId}/status` (superseded by explicit lifecycle actions).
+
+**Key deltas vs the v1.0 design:**
+- The Payment/Billing gateway endpoints are superseded by a **B2B credit / công nợ** model
+  (`/restaurants/{id}/credit`, `/admin/.../credit/settle|limit`).
+- Catalog was normalized — new `/categories` and `/units` endpoints; `/products` and
+  `/markets` gained full CRUD beyond the original read-only design.
+- The order lifecycle is modeled with explicit actions (draft → items → confirm → receipt →
+  issues / reorder) instead of a single `PATCH .../status`.
+- `PATCH /admin/users/{id}/status` was implemented as `PATCH /admin/users/{id}/activate`.
 
 ---
 
 ## Table of Contents
 
 1. [API Conventions](#1-api-conventions)
-2. [Authentication Endpoints](#2-authentication-endpoints)
-3. [Domain Endpoints](#3-domain-endpoints)
-   - 3.1 [Pricing Domain](#31-pricing-domain)
-   - 3.2 [Orders Domain](#32-orders-domain)
-   - 3.3 [Logistics Domain](#33-logistics-domain)
-   - 3.4 [Hub Domain](#34-hub-domain)
-   - 3.5 [Analytics Domain](#35-analytics-domain)
-   - 3.6 [Admin Domain](#36-admin-domain)
-4. [SignalR Hubs](#4-signalr-hubs)
-5. [Validation Rules](#5-validation-rules)
-6. [API Security](#6-api-security)
+2. [Implemented API Surface (Part A — authoritative)](#2-implemented-api-surface-part-a--authoritative)
+3. [Authentication Endpoints](#3-authentication-endpoints)
+4. [Domain Endpoints](#4-domain-endpoints)
+   - 4.1 [Pricing Domain](#41-pricing-domain)
+   - 4.2 [Orders Domain](#42-orders-domain)
+   - 4.3 [Logistics Domain `[PLANNED]`](#43-logistics-domain-planned)
+   - 4.4 [Hub Domain `[PLANNED]`](#44-hub-domain-planned)
+   - 4.5 [Analytics Domain `[PLANNED]`](#45-analytics-domain-planned)
+   - 4.6 [Admin Domain](#46-admin-domain)
+5. [SignalR Hubs](#5-signalr-hubs)
+6. [Validation Rules](#6-validation-rules)
+7. [API Security](#7-api-security)
 
 ---
 
@@ -143,7 +178,7 @@ Soft-deleted resources (where `deleted_at IS NOT NULL`) are treated as non-exist
 
 ### 1.9 Authentication
 
-All endpoints except `/api/v1/auth/login`, `/api/v1/auth/refresh`, and `/api/v1/auth/register` (Admin-only) require a valid JWT Bearer token in the `Authorization` header:
+All endpoints require a valid JWT Bearer token in the `Authorization` header **except** the public auth endpoints: `/api/v1/auth/login`, `/api/v1/auth/refresh`, `/api/v1/auth/forgot-password`, `/api/v1/auth/reset-password`, `/api/v1/auth/verify/request`, `/api/v1/auth/verify`, and `/api/v1/auth/register`.
 
 ```
 Authorization: Bearer <accessToken>
@@ -151,28 +186,216 @@ Authorization: Bearer <accessToken>
 
 For SignalR connections, the token is passed as a query string parameter during the negotiate handshake: `?access_token=<accessToken>`.
 
+JWT access tokens are stateless and live for 15 minutes. Refresh tokens live for 7 days and are stored only as hashes in `refresh_tokens`.
+
+Role values exposed by the API are lowercase `roles.name` values. Seeded values are: `admin`, `operations_manager`, `market_agent`, `hub_staff`, `driver`, and `restaurant`. The legacy request value `kiosk_staff` is accepted only as an alias for `market_agent` during Admin user creation. Each user has exactly one global role through `users.role_id`.
+
+**Session expiry (FR-AUTH-008):** a request carrying an expired access token returns HTTP 401 with error code `TOKEN_EXPIRED`; a malformed or tampered token returns HTTP 401 with `UNAUTHORIZED`. While the refresh token is valid, the client obtains a new access token via `POST /api/v1/auth/refresh` (FR-AUTH-007). Once the refresh token is expired, revoked, or its token family is invalidated, the client must log in again.
+
+**Phone OTP scope:** v1 does not implement SMS delivery or phone OTP verification. Phone numbers may still be stored on user profiles and used as a login identifier when present. Password reset and verification flows use email only; `PHONE` is reserved for a future version and returns `CHANNEL_NOT_SUPPORTED` where a channel field is accepted.
+
 ---
 
-## 2. Authentication Endpoints
+## 2. Implemented API Surface (Part A — authoritative)
+
+This is the complete list of routes that exist in code today, grouped by controller.
+All paths are prefixed with the base URL (`/api/v1`). "Auth" = any authenticated user;
+otherwise the listed roles are required (`[Authorize(Roles = …)]`). Detailed
+request/response shapes for these routes live in Sections 3–4 (where present) and in the
+generated Swagger document.
+
+### A1. Authentication — `AuthController` (`/auth`)
+
+| Method | Path | Auth |
+|--------|------|------|
+| POST | `/auth/register` | Anonymous |
+| POST | `/auth/login` | Anonymous |
+| POST | `/auth/refresh` | Anonymous |
+| POST | `/auth/logout` | Auth |
+| POST | `/auth/forgot-password` | Anonymous |
+| POST | `/auth/reset-password` | Anonymous |
+| POST | `/auth/verify/request` | Anonymous |
+| POST | `/auth/verify` | Anonymous |
+| POST | `/auth/change-password` | Auth |
+
+### A2. Profile — `ProfileController` (`/profile`)
+
+| Method | Path | Auth |
+|--------|------|------|
+| GET | `/profile/me` | Auth |
+| PUT | `/profile/me` | Auth |
+
+### A3. Admin — `AdminController` (`/admin`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| POST | `/admin/users` | admin |
+| GET | `/admin/users` | admin |
+| PATCH | `/admin/users/{userId}/activate` | admin |
+| POST | `/admin/users/{userId}/unlock` | admin |
+| GET | `/admin/roles` | admin |
+| PATCH | `/admin/users/{userId}/role` | admin |
+| PATCH | `/admin/restaurants/{restaurantId}/approve` | admin |
+| POST | `/admin/restaurants/{restaurantId}/credit/settle` | admin |
+| PUT | `/admin/restaurants/{restaurantId}/credit/limit` | admin |
+| GET | `/admin/users/{userId}/market-assignments` | admin, operations_manager |
+| PUT | `/admin/users/{userId}/market-assignments` | admin, operations_manager |
+
+### A4. Restaurant Profile — `RestaurantProfileController` (`/restaurants`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/restaurants/me/approval-status` | restaurant |
+| GET | `/restaurants/me/profile` | restaurant |
+| PUT | `/restaurants/me/profile` | restaurant |
+| GET | `/restaurants/me/delivery-addresses` | restaurant |
+| POST | `/restaurants/me/delivery-addresses` | restaurant |
+| PUT | `/restaurants/me/delivery-addresses/{id}` | restaurant |
+| DELETE | `/restaurants/me/delivery-addresses/{id}` | restaurant |
+
+### A5. Restaurant Credit (B2B công nợ) — `RestaurantCreditController` (`/restaurants/{restaurantId}/credit`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/restaurants/{restaurantId}/credit` | admin, restaurant |
+| GET | `/restaurants/{restaurantId}/credit/transactions` | admin, restaurant |
+
+### A6. Catalog — Categories — `CategoriesController` (`/categories`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/categories` | Auth |
+| GET | `/categories/{id}` | Auth |
+| POST | `/categories` | admin |
+| PUT | `/categories/{id}` | admin |
+| PATCH | `/categories/{id}/deactivate` | admin |
+
+### A7. Catalog — Units — `UnitsController` (`/units`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/units` | Auth |
+| GET | `/units/{id}` | Auth |
+| POST | `/units` | admin |
+| PUT | `/units/{id}` | admin |
+| PATCH | `/units/{id}/deactivate` | admin |
+
+### A8. Catalog — Products — `ProductsController` (`/products`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/products` | admin, operations_manager, market_agent, hub_staff, restaurant |
+| GET | `/products/{id}` | admin, operations_manager, market_agent, hub_staff, restaurant |
+| POST | `/products` | admin |
+| PUT | `/products/{id}` | admin |
+| PATCH | `/products/{id}/deactivate` | admin |
+
+### A9. Markets & Market Products — `MarketsController` (`/markets`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/markets` | Auth |
+| GET | `/markets/{id}` | Auth |
+| POST | `/markets` | admin |
+| PUT | `/markets/{id}` | admin |
+| PATCH | `/markets/{id}/deactivate` | admin |
+| DELETE | `/markets/{id}` | admin |
+| GET | `/markets/{marketId}/products` | Auth |
+| POST | `/markets/{marketId}/products` | admin |
+| GET | `/markets/{marketId}/products/{productId}/price-history` | Auth |
+| PATCH | `/markets/{marketId}/products/{productId}/price` | market_agent |
+| PATCH | `/markets/{marketId}/products/{productId}/quantity` | market_agent |
+
+### A10. Pricing — `PricingController` (`/pricing`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/pricing/assigned-markets` | market_agent |
+
+### A11. Orders — `OrdersController` (`/orders`)
+
+Base roles for the controller: `admin, operations_manager, restaurant` (overridden per action).
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/orders` | admin, operations_manager, restaurant |
+| GET | `/orders/history` | admin, operations_manager, restaurant |
+| GET | `/orders/{orderId}` | admin, operations_manager, restaurant |
+| POST | `/orders` | restaurant |
+| POST | `/orders/{orderId}/items` | restaurant |
+| PUT | `/orders/{orderId}/items/{itemId}` | restaurant |
+| DELETE | `/orders/{orderId}/items/{itemId}` | restaurant |
+| GET | `/orders/{orderId}/confirm-preview` | restaurant |
+| POST | `/orders/{orderId}/confirm` | restaurant |
+| PATCH | `/orders/{orderId}/cancel` | admin, restaurant |
+| PATCH | `/orders/{orderId}/items/{itemId}/actual-quantity` | admin, operations_manager |
+| PATCH | `/orders/{orderId}/receipt` | restaurant |
+| POST | `/orders/{orderId}/issues` | restaurant |
+| POST | `/orders/{orderId}/reorder` | restaurant |
+
+### A12. Scheduled Orders — `OrdersController` (`/orders/scheduled`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| GET | `/orders/scheduled` | admin, restaurant |
+| GET | `/orders/scheduled/{scheduledOrderId}` | admin, restaurant |
+| GET | `/orders/scheduled/{scheduledOrderId}/instances` | admin, restaurant |
+| POST | `/orders/scheduled` | restaurant |
+| PATCH | `/orders/scheduled/{scheduledOrderId}` | admin, restaurant |
+| PATCH | `/orders/scheduled/{scheduledOrderId}/cancel` | admin, restaurant |
+
+### A13. AI Shopping Assistant — `AssistantController` (`/assistant`)
+
+| Method | Path | Roles |
+|--------|------|-------|
+| POST | `/assistant/chat` | restaurant |
+
+### A14. Real-time Hubs — `Program.cs`
+
+| Hub | Path | Notes |
+|-----|------|-------|
+| `PricingHub` | `/hubs/pricing` | JWT via `?access_token=` on negotiate |
+| `OrderHub` | `/hubs/orders` | JWT via `?access_token=` on negotiate |
+
+---
+
+## 3. Authentication Endpoints
+
+#### Endpoint Summary
+
+| UC | Method | Path | Role | Description |
+|----|--------|------|------|-------------|
+| UC-AUTH-01 | POST | `/api/v1/auth/login` | Public | Login with email/phone and password |
+| UC-AUTH-02 | POST | `/api/v1/auth/logout` | Authenticated | Revoke the current refresh token |
+| UC-AUTH-03 | POST | `/api/v1/auth/forgot-password` | Public | Request email password reset link |
+| UC-AUTH-04 | POST | `/api/v1/auth/reset-password` | Public | Set a new password using email reset token |
+| UC-AUTH-05 | POST | `/api/v1/auth/change-password` | Authenticated | Change own password |
+| UC-AUTH-06 | POST | `/api/v1/auth/verify/request` | Public | Request email verification code |
+| UC-AUTH-06 | POST | `/api/v1/auth/verify` | Public | Verify email code |
+| UC-AUTH-07 | POST | `/api/v1/auth/refresh` | Public | Rotate refresh token and issue new token pair |
+| UC-AUTH-08 | All protected endpoints | N/A | Middleware | Reject expired/invalid access token |
+| UC-AUTH-09 | POST | `/api/v1/admin/users/{userId}/unlock` | Admin | Clear temporary account lock |
+| UC-AUTH-10 | GET/PATCH | `/api/v1/admin/roles`, `/api/v1/admin/users/{userId}/role` | Admin | Manage global role assignment |
+| UC-AUTH-11 | POST | `/api/v1/auth/register` | Public | Restaurant self-registration (pending approval) |
 
 ### POST /api/v1/auth/login
 
 **Role:** Public (no authentication required)
 
-Authenticates a user with email and password. Returns a short-lived JWT access token and a long-lived refresh token on success.
+Authenticates a user with email or phone number and password. Returns a signed JWT access token and an opaque refresh token on success.
 
 **Request body:**
 
 ```json
 {
-  "email": "manager@phobaatu.vn",
+  "identifier": "manager@phobaatu.vn",
   "password": "MySecureP@ss1"
 }
 ```
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| `email` | string | Yes | Valid email format, max 255 characters |
+| `identifier` | string | Yes | Email address or phone number, max 255 characters |
 | `password` | string | Yes | Non-empty string |
 
 **Success response — 200 OK:**
@@ -181,13 +404,18 @@ Authenticates a user with email and password. Returns a short-lived JWT access t
 {
   "success": true,
   "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3ZjNhMWM0Mi1kNDkxLTQ1NjgtYjc5YS1mMWUzYzhlZjlhMmIiLCJlbWFpbCI6Im1hbmFnZXJAcGhvYmFhdHUudm4iLCJyb2xlIjoicmVzdGF1cmFudCIsImV4cCI6MTc0Njc2NTgwMH0.signature",
+    "accessToken": "jwt-access-token",
     "refreshToken": "a3f8d2c1e7b94f6a82d0c5e1f3b7a9d2",
     "expiresIn": 900,
     "user": {
       "id": "7f3a1c42-d491-4568-b79a-f1e3c8ef9a2b",
       "email": "manager@phobaatu.vn",
-      "role": "restaurant"
+      "phone": "+84901234567",
+      "fullName": "Nguyen Van A",
+      "role": "restaurant",
+      "status": "ACTIVE",
+      "emailVerified": true,
+      "phoneVerified": false
     }
   }
 }
@@ -195,19 +423,21 @@ Authenticates a user with email and password. Returns a short-lived JWT access t
 
 | Field | Description |
 |-------|-------------|
-| `accessToken` | Signed JWT. TTL 15 minutes (900 seconds). Contains `sub` (user ID), `email`, `role`, `iat`, and `exp` claims. |
-| `refreshToken` | Opaque random string. TTL 7 days. Stored hashed in the database. |
+| `accessToken` | Signed JWT. TTL 15 minutes. Contains `sub`, `email`, `role`, `iat`, and `exp` claims. |
+| `refreshToken` | Opaque random string. TTL 7 days. Stored as `refresh_tokens.token_hash`; raw token is never persisted. |
 | `expiresIn` | Access token TTL in seconds. Always `900`. |
-| `user.role` | One of: `admin`, `kiosk_staff`, `restaurant` |
+| `user.role` | The user's single global role from `roles.name`. |
 
 **Error responses:**
 
 | Status | Error Code | Condition |
 |--------|-----------|-----------|
-| 400 Bad Request | `VALIDATION_ERROR` | `email` or `password` field is missing or malformed |
-| 401 Unauthorized | `INVALID_CREDENTIALS` | Email not found or password is incorrect. Same error code for both cases to prevent user enumeration. |
-| 422 Unprocessable Entity | `ACCOUNT_INACTIVE` | Account exists but `is_active = false` or `deleted_at IS NOT NULL` |
-| 422 Unprocessable Entity | `ACCOUNT_PENDING_APPROVAL` | Restaurant account exists but `is_approved = false` (cannot log in until approved) |
+| 400 Bad Request | `VALIDATION_ERROR` | `identifier` or `password` field is missing or malformed |
+| 401 Unauthorized | `INVALID_CREDENTIALS` | Identifier not found or password is incorrect. Same error code for both cases to prevent user enumeration. |
+| 422 Unprocessable Entity | `ACCOUNT_INACTIVE` | `users.status` is `SUSPENDED` or `DELETED`, or `deleted_at IS NOT NULL` |
+| 423 Locked | `ACCOUNT_LOCKED` | `users.locked_until` is in the future |
+
+**Account lockout (FR-AUTH-009):** after 5 consecutive failed login attempts, `users.failed_login_count` reaches the threshold and `users.locked_until` is set to now + 15 minutes. A successful login resets `failed_login_count` to 0 and clears any expired lock. Admin can unlock manually through `POST /api/v1/admin/users/{userId}/unlock`.
 
 ---
 
@@ -235,29 +465,29 @@ Exchanges a valid refresh token for a new access token and a new refresh token. 
 {
   "success": true,
   "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3ZjNhMWM0Mi1kNDkxLTQ1NjgtYjc5YS1mMWUzYzhlZjlhMmIiLCJlbWFpbCI6Im1hbmFnZXJAcGhvYmFhdHUudm4iLCJyb2xlIjoicmVzdGF1cmFudCIsImV4cCI6MTc0Njc2NjcwMH0.newsignature",
+    "accessToken": "new-jwt-access-token",
     "refreshToken": "b9c7e4f2a1d38e5c91b6a4e2f8c0d7e3",
     "expiresIn": 900
   }
 }
 ```
 
-The old refresh token is invalidated immediately. The new refresh token has a fresh 7-day TTL from the time of issuance.
+The submitted token row is marked with `revoked_at`, and the new token row is created with the same `family_id`; the old row points to the new row through `replaced_by_token_id`. If a revoked token is submitted again, the entire `family_id` is revoked.
 
 **Error responses:**
 
 | Status | Error Code | Condition |
 |--------|-----------|-----------|
 | 400 Bad Request | `VALIDATION_ERROR` | `refreshToken` field is missing |
+| 401 Unauthorized | `REFRESH_TOKEN_INVALID` | Token hash is not found |
 | 401 Unauthorized | `REFRESH_TOKEN_EXPIRED` | Token is past its 7-day TTL |
-| 401 Unauthorized | `REFRESH_TOKEN_REVOKED` | Token was previously revoked (e.g., via logout) |
-| 409 Conflict | `REFRESH_TOKEN_REUSE` | Token has already been used once (rotation violation). The entire token family is immediately invalidated — all sessions for this user derived from the same login are terminated. The user must log in again. |
+| 409 Conflict | `REFRESH_TOKEN_REUSE` | Token was already revoked or replaced. The entire token family is invalidated. |
 
 ---
 
 ### POST /api/v1/auth/logout
 
-**Role:** Any authenticated user (Admin, Kiosk Staff, Restaurant)
+**Role:** Any authenticated user
 
 Revokes a specific refresh token. The access token associated with this session remains valid until its own TTL expires (maximum 15 minutes). Other concurrent sessions (other devices) are not affected.
 
@@ -289,66 +519,254 @@ Note: If the `refreshToken` in the body is already revoked or does not match the
 
 ---
 
-### POST /api/v1/auth/register
+### POST /api/v1/auth/forgot-password
 
-**Role:** Admin only
+**Role:** Public (no authentication required)
 
-Creates a new user account. Restaurant users may also self-register if the `autoApproveRestaurants` system config is relevant (see GA-009), but the register endpoint itself requires Admin authorization in v1. Self-registration flow is not exposed publicly.
-
-**Request header:** `Authorization: Bearer <adminAccessToken>`
+Initiates a password reset (FR-AUTH-003). The user submits their registered email address. If the email belongs to an active account, the system creates a single-use credential in `password_reset_tokens` and dispatches a reset link by email. SMS and phone OTP password reset are deferred in v1.
 
 **Request body:**
 
 ```json
 {
-  "email": "staff.hocmon@freshflow.vn",
-  "password": "TempP@ssw0rd!",
-  "role": "kiosk_staff",
-  "marketId": "b2c3d4e5-f6a7-8901-bcde-f01234567890",
-  "restaurantName": null
+  "identifier": "manager@phobaatu.vn"
 }
 ```
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| `email` | string | Yes | Valid email format, max 255 characters, must be unique |
-| `password` | string | Yes | Min 8 characters, at least 1 uppercase letter, 1 digit, 1 special character |
-| `role` | string | Yes | One of: `kiosk_staff`, `restaurant` |
-| `marketId` | UUID | Conditional | Required when `role = kiosk_staff`. Must be a valid, active market ID. |
-| `restaurantName` | string | Conditional | Required when `role = restaurant`. The name of the restaurant business. Max 200 characters. |
+| `identifier` | string | Yes | Registered email address |
 
-**Success response — 201 Created:**
+**Success response — 202 Accepted**
 
 ```json
 {
   "success": true,
-  "data": {
-    "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
-    "email": "staff.hocmon@freshflow.vn",
-    "role": "kiosk_staff",
-    "isActive": true,
-    "createdAt": "2026-05-09T10:30:00+07:00"
-  }
+  "data": null
 }
 ```
 
-For `role = restaurant`, the account is created with `is_approved = false` (pending Admin approval before ordering is allowed).
+The response is **always** 202, whether or not the identifier matches an account, to prevent user enumeration. If it matches, an email reset link is dispatched. The credential is single-use and expires after 15 minutes; issuing a new one invalidates any previously issued credential for that account.
 
 **Error responses:**
 
 | Status | Error Code | Condition |
 |--------|-----------|-----------|
-| 400 Bad Request | `VALIDATION_ERROR` | Any required field is missing or fails format validation |
-| 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid access token |
-| 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
-| 409 Conflict | `EMAIL_ALREADY_EXISTS` | An account with this email address already exists (active or soft-deleted) |
-| 422 Unprocessable Entity | `INVALID_MARKET` | `marketId` does not reference an active market (when `role = kiosk_staff`) |
+| 400 Bad Request | `VALIDATION_ERROR` | `identifier` field is missing or is not a valid email address |
+| 429 Too Many Requests | `RATE_LIMITED` | Too many reset requests for the same identifier/IP in a short window |
 
 ---
 
-## 3. Domain Endpoints
+### POST /api/v1/auth/reset-password
 
-### 3.1 Pricing Domain
+**Role:** Public (no authentication required — the reset credential is the proof of identity)
+
+Sets a new password using a valid email reset token from `forgot-password` (FR-AUTH-004).
+
+**Request body:**
+
+```json
+{
+  "token": "f1e3c8ef9a2b7f3a1c42d4914568b79a",
+  "newPassword": "MyNewSecureP@ss1"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `token` | string | Yes | The reset link token issued by `forgot-password` |
+| `newPassword` | string | Yes | Must satisfy the password strength policy |
+
+**Success response — 200 OK**
+
+```json
+{
+  "success": true,
+  "data": null
+}
+```
+
+On success, `users.password_hash` is updated, the reset credential is marked `used_at`, and all existing refresh-token families for the user are revoked to force re-login on every device.
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `RESET_TOKEN_INVALID` | Token does not match any pending reset |
+| 400 Bad Request | `RESET_TOKEN_EXPIRED` | Token has expired or was already used |
+| 400 Bad Request | `WEAK_PASSWORD` | `newPassword` fails the strength policy |
+
+---
+
+### POST /api/v1/auth/change-password
+
+**Role:** Any authenticated user
+
+Changes the authenticated user's own password (FR-AUTH-005). Requires the current password as a re-authentication step.
+
+**Request header:** `Authorization: Bearer <accessToken>`
+
+**Request body:**
+
+```json
+{
+  "currentPassword": "MySecureP@ss1",
+  "newPassword": "MyNewSecureP@ss1"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `currentPassword` | string | Yes | Non-empty string |
+| `newPassword` | string | Yes | Must satisfy the password strength policy; must differ from `currentPassword` |
+
+**Success response — 204 No Content**
+
+On success, all of the user's active refresh tokens are revoked. Existing stateless access tokens remain valid until their normal `exp`, but any subsequent refresh requires the user to log in again.
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `VALIDATION_ERROR` | Missing required field, weak `newPassword`, or `newPassword` equals `currentPassword` |
+| 401 Unauthorized | `INVALID_CURRENT_PASSWORD` | `currentPassword` is incorrect |
+| 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid access token |
+
+No email, SMS, or phone OTP is sent by this flow in v1.
+
+---
+
+### POST /api/v1/auth/verify/request
+
+**Role:** Public (no authentication required)
+
+Sends a verification code to a user's email (FR-AUTH-006). If the identifier belongs to a user, the system stores a hashed code in `verification_codes` with a short TTL. The response does not reveal whether the identifier exists. Phone verification by SMS/OTP is deferred in v1.
+
+**Request body:**
+
+```json
+{
+  "identifier": "manager@phobaatu.vn",
+  "channel": "EMAIL"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `identifier` | string | Yes | Email address to verify |
+| `channel` | string | Yes | Must be `EMAIL` in v1. `PHONE` is reserved for future SMS/OTP support. |
+
+**Success response — 202 Accepted** — a verification code is dispatched. Returns 202 regardless of account existence (no enumeration).
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `VALIDATION_ERROR` | `identifier` or `channel` is missing/invalid |
+| 422 Unprocessable Entity | `CHANNEL_NOT_SUPPORTED` | `channel = PHONE` because SMS/phone OTP is not implemented in v1 |
+| 429 Too Many Requests | `RATE_LIMITED` | Too many code requests in a short window |
+
+---
+
+### POST /api/v1/auth/verify
+
+**Role:** Public (no authentication required — the code is the proof)
+
+Confirms ownership of an email by submitting the verification code (FR-AUTH-006). Phone verification by SMS/OTP is deferred in v1.
+
+**Request body:**
+
+```json
+{
+  "identifier": "manager@phobaatu.vn",
+  "channel": "EMAIL",
+  "code": "482915"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `identifier` | string | Yes | Email address being verified |
+| `channel` | string | Yes | Must be `EMAIL` in v1. `PHONE` is reserved for future SMS/OTP support. |
+| `code` | string | Yes | The verification code that was sent |
+
+**Success response — 200 OK** — the email channel is marked verified (`email_verified_at` set). Re-verifying an already-verified email is idempotent and also returns 200.
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `OTP_INVALID` | Code is incorrect, expired, or already used |
+| 422 Unprocessable Entity | `CHANNEL_NOT_SUPPORTED` | `channel = PHONE` because SMS/phone OTP is not implemented in v1 |
+
+---
+
+### POST /api/v1/auth/register
+
+**Role:** Public (no authentication required)
+
+Allows a restaurant owner to self-register an account (UC-AUTH-11). The system creates a `User` with role `restaurant` and a linked `Restaurant` profile with `is_approved = false`. The account is active immediately but cannot place orders until an Admin approves it via `PATCH /api/v1/admin/restaurants/{restaurantId}/approve`.
+
+**Request body:**
+
+```json
+{
+  "email": "owner@phobaatu.vn",
+  "password": "MySecureP@ss1",
+  "restaurantName": "Phở Bà Tú",
+  "phone": "+84901234567"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `email` | string | Yes | Valid email format; must not already exist |
+| `password` | string | Yes | Must satisfy the password strength policy (min 8 chars, uppercase, digit, special char) |
+| `restaurantName` | string | Yes | Non-empty, max 200 characters |
+| `phone` | string | No | Optional; `^\+?[0-9]{7,15}$` (7–15 digits, optional leading `+`), max 20 chars |
+
+**Success response — 201 Created**
+
+```json
+{
+  "success": true,
+  "data": {
+    "userId": "uuid",
+    "restaurantId": "uuid",
+    "email": "owner@phobaatu.vn",
+    "restaurantName": "Phở Bà Tú",
+    "isApproved": false
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 409 Conflict | `EMAIL_ALREADY_EXISTS` | Email is already registered |
+| 400 Bad Request | `VALIDATION_ERROR` | Missing required field or invalid format |
+| 400 Bad Request | `WEAK_PASSWORD` | `password` fails the strength policy |
+
+---
+
+Admin-managed user creation, role assignment, account status, and account unlock are documented under the Admin Domain.
+
+---
+
+## 4. Domain Endpoints
+
+> **Reconciliation note:** the sections below are the original v1.0 design detail (Part B).
+> For the authoritative list of what is actually deployed, see [Part A](#2-implemented-api-surface-part-a--authoritative).
+> **Pricing (4.1), Orders (4.2), and Admin (4.6)** are implemented but have evolved — the
+> live routes, paths, and roles are those in Part A; individual endpoints here that were
+> dropped or changed are tagged `[PLANNED]`, `[SUPERSEDED]`, or `[CHANGED]`.
+> **Logistics (4.3), Hub (4.4), and Analytics (4.5)** are entirely `[PLANNED]` (no controllers
+> exist yet). Catalog endpoints (`/categories`, `/units`, `/products`, `/markets`),
+> Profile, Restaurant Profile, Restaurant Credit, and the AI Assistant are implemented but
+> were added after v1.0 — they are catalogued in Part A (detailed bodies live in Swagger).
+
+### 4.1 Pricing Domain
 
 #### Endpoint Summary
 
@@ -357,15 +775,15 @@ For `role = restaurant`, the account is created with `is_approved = false` (pend
 | GET | `/api/v1/markets` | Any authenticated | List all active markets |
 | GET | `/api/v1/markets/{marketId}/products` | Any authenticated | List products at a market with current price/quantity |
 | GET | `/api/v1/markets/{marketId}/products/{productId}/price-history` | Any authenticated | Get price history for a market product |
-| PATCH | `/api/v1/markets/{marketId}/products/{productId}/price` | Kiosk Staff | Update price and/or quantity for a market product |
-| GET | `/api/v1/products` | Admin, Kiosk Staff | List all products in the system catalog |
+| PATCH | `/api/v1/markets/{marketId}/products/{productId}/price` | Market Agent | Update price and/or quantity for a market product |
+| GET | `/api/v1/products` | Admin, Market Agent | List all products in the system catalog |
 | POST | `/api/v1/products` | Admin | Create a new product in the catalog |
 
 ---
 
 #### GET /api/v1/markets
 
-**Role:** Any authenticated user (Admin, Kiosk Staff, Restaurant)
+**Role:** Any authenticated user
 
 Returns all active markets. Soft-deleted or inactive markets are excluded.
 
@@ -418,7 +836,7 @@ Returns all active markets. Soft-deleted or inactive markets are excluded.
 
 #### GET /api/v1/markets/{marketId}/products
 
-**Role:** Any authenticated user (Admin, Kiosk Staff, Restaurant)
+**Role:** Any authenticated user
 
 Returns all active products at a specific market, including current price and available quantity. Cursor-paginated.
 
@@ -463,7 +881,7 @@ Returns all active products at a specific market, including current price and av
 }
 ```
 
-`availableQuantity` = `currentQuantity` minus soft-reserved quantity (from Redis). `updatedBy` is the user ID of the last Kiosk Staff member who updated this record.
+`availableQuantity` = `currentQuantity` minus soft-reserved quantity (from Redis). `updatedBy` is the user ID of the last Market Agent who updated this record.
 
 **Error responses:**
 
@@ -476,7 +894,7 @@ Returns all active products at a specific market, including current price and av
 
 #### GET /api/v1/markets/{marketId}/products/{productId}/price-history
 
-**Role:** Any authenticated user (Admin, Kiosk Staff, Restaurant)
+**Role:** Any authenticated user
 
 Returns the immutable price snapshot history for a specific product at a specific market, sorted descending by `recordedAt`. Cursor-paginated. Supports date range filtering.
 
@@ -539,11 +957,9 @@ Returns the immutable price snapshot history for a specific product at a specifi
 
 #### PATCH /api/v1/markets/{marketId}/products/{productId}/price
 
-**Role:** Kiosk Staff only
+**Role:** Market Agent only
 
-Updates the current price and/or available quantity of a product at a market. The kiosk staff member must be assigned to this specific market in `user_market_assignments`. On success, a new `price_snapshot` record is created, the `market_products` row is updated, the Redis cache is refreshed, and a `PriceUpdated` SignalR event is broadcast to all clients subscribed to `market:{marketId}`.
-
-If the price change meets or exceeds the configured significant-price threshold (default 5%), an additional `SignificantPriceChange` SignalR event is also broadcast.
+Updates the current price and/or available quantity of a product at a market. The Market Agent must be assigned to this specific market in `user_market_assignments`. On success, a new `price_snapshot` record is created, the `market_products` row is updated, the Redis cache is refreshed, and a `PriceUpdated` SignalR event is broadcast to all clients subscribed to `market:{marketId}`.
 
 **Path parameters:**
 
@@ -581,8 +997,6 @@ If the price change meets or exceeds the configured significant-price threshold 
     "currentPrice": 135000.00,
     "currentQuantity": 420,
     "changePercent": 8.00,
-    "isSignificantChange": true,
-    "severity": "warning",
     "updatedAt": "2026-05-09T04:10:00+07:00",
     "updatedBy": "f6a7b8c9-d0e1-2345-fabc-345678901234",
     "snapshotId": "b9c0d1e2-f3a4-5678-cdef-678901234567"
@@ -590,15 +1004,13 @@ If the price change meets or exceeds the configured significant-price threshold 
 }
 ```
 
-`severity` is returned only when `isSignificantChange = true`. Values: `"warning"` (5%–15% change), `"critical"` (> 15% change).
-
 **Error responses:**
 
 | Status | Error Code | Condition |
 |--------|-----------|-----------|
 | 400 Bad Request | `VALIDATION_ERROR` | Request body is missing or malformed |
 | 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid JWT |
-| 403 Forbidden | `MARKET_ACCESS_DENIED` | The authenticated kiosk staff member is not assigned to this `marketId` |
+| 403 Forbidden | `MARKET_ACCESS_DENIED` | The authenticated Market Agent is not assigned to this `marketId` |
 | 404 Not Found | `MARKET_NOT_FOUND` | `marketId` does not match an active market |
 | 404 Not Found | `PRODUCT_NOT_FOUND` | `productId` is not listed at this market |
 | 409 Conflict | `OPTIMISTIC_CONCURRENCY_CONFLICT` | `expectedVersion` was provided and does not match current `updatedAt`. Client must re-fetch and retry. |
@@ -609,7 +1021,7 @@ If the price change meets or exceeds the configured significant-price threshold 
 
 #### GET /api/v1/products
 
-**Role:** Admin, Kiosk Staff
+**Role:** Admin, Market Agent
 
 Lists all products in the system-wide catalog. By default returns only active (non-soft-deleted) products.
 
@@ -652,7 +1064,7 @@ Lists all products in the system-wide catalog. By default returns only active (n
 | Status | Error Code | Condition |
 |--------|-----------|-----------|
 | 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid JWT |
-| 403 Forbidden | `FORBIDDEN` | Authenticated user is a Restaurant (not permitted) |
+| 403 Forbidden | `FORBIDDEN` | Authenticated user does not have Admin or Market Agent access |
 
 ---
 
@@ -708,7 +1120,7 @@ Creates a new product in the system-wide catalog. The product is then available 
 
 ---
 
-### 3.2 Orders Domain
+### 4.2 Orders Domain
 
 #### Endpoint Summary
 
@@ -716,20 +1128,21 @@ Creates a new product in the system-wide catalog. The product is then available 
 |--------|------|------|-------------|
 | POST | `/api/v1/orders` | Restaurant | Create a bulk order |
 | GET | `/api/v1/orders` | Restaurant, Admin | List orders |
-| GET | `/api/v1/orders/{orderId}` | Restaurant (own), Admin | Get order detail |
-| PATCH | `/api/v1/orders/{orderId}/cancel` | Restaurant (own, pending/confirmed only), Admin | Cancel an order |
+| GET | `/api/v1/orders/{orderId}` | Restaurant Manager/Staff (member restaurant), Admin | Get order detail |
+| PATCH | `/api/v1/orders/{orderId}/cancel` | Restaurant Manager/Staff (member restaurant), Admin | Cancel an order |
 | PATCH | `/api/v1/orders/{orderId}/status` | Admin | Update order status |
 | GET | `/api/v1/order-groups` | Admin | List order groups |
 | POST | `/api/v1/order-groups` | Admin | Create/lock an order group |
+| POST | `/api/v1/admin/order-groups/auto-batch` | Admin | Trigger the same auto-batching service used by the 22:00 cutoff job |
 | GET | `/api/v1/orders/scheduled` | Restaurant | List scheduled orders |
 
 ---
 
 #### POST /api/v1/orders
 
-**Role:** Restaurant only
+**Role:** Restaurant Manager/Staff only
 
-Creates a new bulk order. The restaurant must be approved (`is_approved = true`). Each line item references a `marketProductId` and specifies a quantity. Stock is validated against available quantity (current minus soft-reserved) in Redis before the order is created. On success, soft-reservations are applied in Redis.
+Creates a new bulk order. The restaurant must have `restaurants.status = ACTIVE`. Each line item references a `marketProductId` and specifies a quantity. Stock is validated against available quantity (current minus soft-reserved) in Redis before the order is created. On success, soft-reservations are applied in Redis.
 
 **Request body:**
 
@@ -825,7 +1238,7 @@ Creates a new bulk order. The restaurant must be approved (`is_approved = true`)
 
 #### GET /api/v1/orders
 
-**Role:** Restaurant (own orders only), Admin (all orders)
+**Role:** Restaurant Manager/Staff (member restaurant orders only), Admin (all orders)
 
 Returns a paginated list of orders. Restaurant users see only their own orders. Admin users see all orders across all restaurants.
 
@@ -876,7 +1289,7 @@ Returns a paginated list of orders. Restaurant users see only their own orders. 
 
 #### GET /api/v1/orders/{orderId}
 
-**Role:** Restaurant (own orders only), Admin (any order)
+**Role:** Restaurant Manager/Staff (member restaurant orders only), Admin (any order)
 
 Returns the full detail of a single order, including all line items.
 
@@ -932,7 +1345,7 @@ Returns the full detail of a single order, including all line items.
 
 #### PATCH /api/v1/orders/{orderId}/cancel
 
-**Role:** Restaurant (own orders, status must be `pending` or `confirmed`), Admin (any order in any cancellable status)
+**Role:** Restaurant Manager/Staff (member restaurant order, cancellable status only), Admin (any order in any cancellable status)
 
 Cancels an order. Transitions status to `cancelled` and releases soft-reservations for all line items in Redis.
 
@@ -979,7 +1392,11 @@ Cancels an order. Transitions status to `cancelled` and releases soft-reservatio
 
 ---
 
-#### PATCH /api/v1/orders/{orderId}/status
+#### PATCH /api/v1/orders/{orderId}/status `[SUPERSEDED]`
+
+> `[SUPERSEDED]` Not implemented as a generic status patch. The lifecycle uses explicit
+> actions instead: `POST .../confirm`, `PATCH .../cancel`, `PATCH .../receipt`, and
+> `PATCH .../items/{itemId}/actual-quantity` (see Part A §A11).
 
 **Role:** Admin only
 
@@ -1029,7 +1446,7 @@ Advances or updates the status of an order according to the order state machine.
 
 ---
 
-#### GET /api/v1/order-groups
+#### GET /api/v1/order-groups `[PLANNED]`
 
 **Role:** Admin only
 
@@ -1075,7 +1492,7 @@ Returns a paginated list of all order groups with summary information.
 
 ---
 
-#### POST /api/v1/order-groups
+#### POST /api/v1/order-groups `[PLANNED]`
 
 **Role:** Admin only
 
@@ -1132,9 +1549,76 @@ Creates a new order group and associates the specified orders with it. All order
 
 ---
 
+#### POST /api/v1/admin/order-groups/auto-batch `[PLANNED]`
+
+**Role:** Admin only
+
+Triggers the same batching service that normally runs at the 22:00 cutoff. The service finds eligible `CONFIRMED` orders that are not already assigned to an active batch, groups them by source market (grouping by delivery zone is not implemented — no restaurant-to-zone link exists), creates `OrderGroup`/Procurement Batch records, transitions included orders to `BATCHED`, and emits `OrderGrouped` events. The operation is idempotent.
+
+**Request body:**
+
+```json
+{
+  "targetDate": "2026-05-31",
+  "dryRun": false,
+  "force": false
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `targetDate` | date (`YYYY-MM-DD`) | No | Defaults to current date in `Asia/Ho_Chi_Minh` |
+| `dryRun` | boolean | No | Defaults to `false`; when `true`, returns a preview and does not write to PostgreSQL |
+| `force` | boolean | No | Defaults to `false`; reserved for Admin recovery workflows and must not create duplicate active batches |
+
+**Success response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "targetDate": "2026-05-31",
+    "dryRun": false,
+    "createdBatchCount": 2,
+    "batchedOrderCount": 12,
+    "skippedOrderCount": 3,
+    "batches": [
+      {
+        "orderGroupId": "l2m3n4o5-p6q7-8901-rstu-234567890123",
+        "sourceMarketId": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+        "orderIds": [
+          "i9j0k1l2-m3n4-5678-opqr-901234567890"
+        ]
+      }
+    ],
+    "skippedOrders": [
+      {
+        "orderId": "m3n4o5p6-q7r8-9012-stuv-345678901234",
+        "reason": "ALREADY_BATCHED"
+      }
+    ],
+    "triggeredBy": "admin-user-uuid",
+    "triggeredAt": "2026-05-31T21:45:00+07:00"
+  }
+}
+```
+
+When `dryRun=true`, `createdBatchCount` and `batchedOrderCount` describe what would be created, while all `orderGroupId` values are `null`.
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `VALIDATION_ERROR` | `targetDate` is not a valid date |
+| 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid JWT |
+| 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
+| 409 Conflict | `AUTO_BATCH_ALREADY_RUNNING` | Another scheduled or manual auto-batch run is currently processing |
+
+---
+
 #### GET /api/v1/orders/scheduled
 
-**Role:** Restaurant only
+**Role:** Restaurant Manager/Staff only
 
 Returns the list of active scheduled orders (recurring order templates) for the authenticated restaurant.
 
@@ -1179,7 +1663,7 @@ Returns the list of active scheduled orders (recurring order templates) for the 
 
 ---
 
-### 3.3 Logistics Domain
+### 4.3 Logistics Domain `[PLANNED]`
 
 #### Endpoint Summary
 
@@ -1187,7 +1671,7 @@ Returns the list of active scheduled orders (recurring order templates) for the 
 |--------|------|------|-------------|
 | POST | `/api/v1/routes/calculate` | Admin | Calculate an optimal delivery route |
 | GET | `/api/v1/routes` | Admin | List all delivery routes |
-| GET | `/api/v1/routes/{routeId}` | Admin, Restaurant (own deliveries only) | Get route detail |
+| GET | `/api/v1/routes/{routeId}` | Admin, Restaurant Manager/Staff (own deliveries only) | Get route detail |
 | POST | `/api/v1/vehicles` | Admin | Register a vehicle |
 | GET | `/api/v1/vehicles` | Admin | List all vehicles |
 
@@ -1335,7 +1819,7 @@ Returns a paginated list of all calculated delivery routes.
 
 #### GET /api/v1/routes/{routeId}
 
-**Role:** Admin (any route), Restaurant (only routes serving their own orders)
+**Role:** Admin (any route), Restaurant Manager/Staff (only routes serving their member restaurants' orders)
 
 Returns the full detail of a specific delivery route, including all stops.
 
@@ -1456,7 +1940,7 @@ Returns a paginated list of all registered vehicles.
 
 ---
 
-### 3.4 Hub Domain
+### 4.4 Hub Domain `[PLANNED]`
 
 #### Endpoint Summary
 
@@ -1769,7 +2253,7 @@ Returns the current inventory state for a specific hub — all products with the
 
 ---
 
-### 3.5 Analytics Domain
+### 4.5 Analytics Domain `[PLANNED]`
 
 #### Endpoint Summary
 
@@ -1785,7 +2269,7 @@ Returns the current inventory state for a specific hub — all products with the
 
 #### GET /api/v1/analytics/price-trends
 
-**Role:** Admin, Restaurant
+**Role:** Admin, Restaurant Manager/Staff
 
 Returns a price trend time-series for one or more products at one or more markets. Served from pre-aggregated cache (15-minute TTL). Supports `hourly` and `daily` intervals.
 
@@ -1846,7 +2330,7 @@ Returns a price trend time-series for one or more products at one or more market
 |--------|-----------|-----------|
 | 400 Bad Request | `VALIDATION_ERROR` | `from` or `to` is missing or invalid; more than 10 `marketProductId` values provided |
 | 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid JWT |
-| 403 Forbidden | `FORBIDDEN` | Authenticated user is a Kiosk Staff |
+| 403 Forbidden | `FORBIDDEN` | Authenticated user is a Market Agent / Hub Staff / Driver |
 
 ---
 
@@ -2039,17 +2523,124 @@ Polls the status of an async export job. When `status` is `ready`, a `downloadUr
 
 ---
 
-### 3.6 Admin Domain
+### 4.6 Admin Domain
 
 #### Endpoint Summary
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| GET | `/api/v1/admin/users` | Admin | List all users |
-| PATCH | `/api/v1/admin/users/{userId}/activate` | Admin | Activate or deactivate a user account |
-| PATCH | `/api/v1/admin/restaurants/{restaurantId}/approve` | Admin | Approve a restaurant registration |
+| GET | `/api/v1/admin/roles` | Admin | List seeded global roles |
+| POST | `/api/v1/admin/users` | Admin | Create a user account and optional role-specific assignment |
+| GET | `/api/v1/admin/users` | Admin | List users |
+| PATCH | `/api/v1/admin/users/{userId}/status` | Admin | Suspend/reactivate/delete a user account |
+| PATCH | `/api/v1/admin/users/{userId}/role` | Admin | Change one user's global role |
+| POST | `/api/v1/admin/users/{userId}/unlock` | Admin | Clear temporary account lock after failed logins |
+| PUT | `/api/v1/admin/users/{userId}/market-assignments` | Admin | Replace Market Agent market assignments |
+| PATCH | `/api/v1/admin/restaurants/{restaurantId}/approve` | Admin | Approve a restaurant profile |
 | GET | `/api/v1/admin/system-config` | Admin | View system configuration |
 | PATCH | `/api/v1/admin/system-config` | Admin | Update system configuration |
+
+---
+
+#### GET /api/v1/admin/roles
+
+**Role:** Admin only
+
+Returns all active roles from the `roles` table. Roles are seeded during deployment; v1 does not expose role creation or permission editing because endpoint-to-role policies are code-defined and documented in the RBAC matrix.
+
+**Success response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "admin",
+      "description": "System administrator",
+      "isActive": true
+    },
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "market_agent",
+      "description": "Updates prices, procures goods, and hands off to hub",
+      "isActive": true
+    }
+  ]
+}
+```
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid JWT |
+| 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
+
+---
+
+#### POST /api/v1/admin/users
+
+**Role:** Admin only
+
+Creates a user account with exactly one global role. Restaurant owners may self-register via `POST /api/v1/auth/register` (UC-AUTH-11); all other roles (`market_agent`, `hub_staff`, `driver`) are Admin-managed. The endpoint can also create role-specific associations:
+
+- For `market_agent` / legacy request alias `kiosk_staff`, `marketId` creates a row in `user_market_assignments`.
+- For `driver`, the system creates a row in `driver_profiles`.
+- For `restaurant`, `restaurantName` creates a pending restaurant profile.
+
+**Request header:** `Authorization: Bearer <adminAccessToken>`
+
+**Request body:**
+
+```json
+{
+  "email": "staff.hocmon@freshflow.vn",
+  "password": "TempP@ssw0rd!",
+  "role": "market_agent",
+  "marketId": "b2c3d4e5-f6a7-8901-bcde-f01234567890",
+  "restaurantName": null,
+  "phone": "+84901234567"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `email` | string | Yes | Valid email format, max 255 characters, must be unique |
+| `password` | string | Yes | Must satisfy password strength policy |
+| `role` | string | Yes | One seeded lowercase `roles.name` value; `kiosk_staff` is accepted as an alias for `market_agent` |
+| `marketId` | UUID | Conditional | Required for `market_agent` / `kiosk_staff` |
+| `restaurantName` | string | Conditional | Required for `restaurant` |
+| `phone` | string | No | 7-15 digits with optional leading `+`; must be unique when provided |
+
+**Success response — 201 Created:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
+    "email": "staff.hocmon@freshflow.vn",
+    "role": "market_agent",
+    "isActive": true,
+    "createdAt": "2026-05-09T10:30:00+07:00"
+  }
+}
+```
+
+When a `restaurant` user is created, its restaurant profile starts unapproved; restaurant users can log in but cannot place orders until the restaurant is approved.
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `VALIDATION_ERROR` | Any required field is missing or fails format validation |
+| 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid access token |
+| 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
+| 409 Conflict | `EMAIL_ALREADY_EXISTS` | An account with this email address already exists |
+| 409 Conflict | `PHONE_ALREADY_EXISTS` | An account with this phone number already exists |
+| 422 Unprocessable Entity | `INVALID_ROLE` | `role` does not reference an active seeded role |
+| 422 Unprocessable Entity | `INVALID_MARKET` | `marketId` does not reference an active market |
 
 ---
 
@@ -2063,9 +2654,9 @@ Returns a paginated list of all user accounts (active and inactive, all roles).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `role` | string | No | Filter by role: `admin`, `kiosk_staff`, `restaurant` |
-| `isActive` | boolean | No | Filter by active status |
-| `search` | string | No | Filter by email (case-insensitive partial match) |
+| `role` | string | No | Filter by lowercase role name, e.g. `market_agent` |
+| `isActive` | boolean | No | Filter by active/deactivated account state |
+| `search` | string | No | Filter by email or phone |
 | `page` | integer | No | Default: 1 |
 | `pageSize` | integer | No | Default: 20. Max: 100. |
 
@@ -2075,18 +2666,13 @@ Returns a paginated list of all user accounts (active and inactive, all roles).
 {
   "success": true,
   "data": [
-    {
+	    {
       "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
       "email": "staff.hocmon@freshflow.vn",
-      "role": "kiosk_staff",
+      "role": "market_agent",
       "isActive": true,
-      "createdAt": "2026-05-09T10:30:00+07:00",
-      "marketAssignments": [
-        {
-          "marketId": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
-          "marketName": "Chợ đầu mối Hóc Môn"
-        }
-      ]
+      "isApproved": null,
+      "createdAt": "2026-05-09T10:30:00+07:00"
     },
     {
       "id": "j0k1l2m3-n4o5-6789-pqrs-012345678901",
@@ -2094,8 +2680,7 @@ Returns a paginated list of all user accounts (active and inactive, all roles).
       "role": "restaurant",
       "isActive": true,
       "isApproved": false,
-      "createdAt": "2026-05-08T14:00:00+07:00",
-      "marketAssignments": []
+      "createdAt": "2026-05-08T14:00:00+07:00"
     }
   ],
   "meta": {
@@ -2106,7 +2691,7 @@ Returns a paginated list of all user accounts (active and inactive, all roles).
 }
 ```
 
-`marketAssignments` is populated only for `kiosk_staff` users. `isApproved` is included only for `restaurant` users.
+`isApproved` is populated only for restaurant users.
 
 **Error responses:**
 
@@ -2117,11 +2702,13 @@ Returns a paginated list of all user accounts (active and inactive, all roles).
 
 ---
 
-#### PATCH /api/v1/admin/users/{userId}/activate
+#### PATCH /api/v1/admin/users/{userId}/status `[CHANGED]`
+
+> `[CHANGED]` Implemented as `PATCH /api/v1/admin/users/{userId}/activate` (see Part A §A3).
 
 **Role:** Admin only
 
-Activates or deactivates a user account. Deactivating a user prevents future logins but does not revoke existing sessions immediately (access tokens remain valid until their TTL, which is 15 minutes maximum).
+Updates `users.status`. Setting status to `SUSPENDED` or `DELETED` prevents new login and revokes all refresh tokens for the user. Existing access tokens remain valid only until their 15-minute TTL expires.
 
 **Path parameters:**
 
@@ -2133,13 +2720,13 @@ Activates or deactivates a user account. Deactivating a user prevents future log
 
 ```json
 {
-  "isActive": false
+  "status": "SUSPENDED"
 }
 ```
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| `isActive` | boolean | Yes | `true` to activate, `false` to deactivate |
+| `status` | string | Yes | One of `ACTIVE`, `SUSPENDED`, `DELETED` |
 
 **Success response — 200 OK:**
 
@@ -2149,8 +2736,8 @@ Activates or deactivates a user account. Deactivating a user prevents future log
   "data": {
     "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
     "email": "staff.hocmon@freshflow.vn",
-    "role": "kiosk_staff",
-    "isActive": false,
+    "role": "market_agent",
+    "status": "SUSPENDED",
     "updatedAt": "2026-05-09T14:00:00+07:00"
   }
 }
@@ -2160,11 +2747,133 @@ Activates or deactivates a user account. Deactivating a user prevents future log
 
 | Status | Error Code | Condition |
 |--------|-----------|-----------|
-| 400 Bad Request | `VALIDATION_ERROR` | `isActive` field is missing |
+| 400 Bad Request | `VALIDATION_ERROR` | `status` field is missing or invalid |
 | 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid JWT |
 | 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
 | 404 Not Found | `USER_NOT_FOUND` | `userId` does not exist |
-| 422 Unprocessable Entity | `CANNOT_DEACTIVATE_SELF` | Admin attempting to deactivate their own account |
+| 422 Unprocessable Entity | `CANNOT_DISABLE_SELF` | Admin attempting to suspend/delete their own account |
+
+---
+
+#### PATCH /api/v1/admin/users/{userId}/role
+
+**Role:** Admin only
+
+Changes one user's global role by updating `users.role_id`. This is the RBAC administration endpoint for UC-AUTH-10. The system revokes all refresh tokens for the user after a role change so the next login/refresh receives JWT claims for the new role.
+
+**Request body:**
+
+```json
+{
+  "roleName": "hub_staff"
+}
+```
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `roleName` | string | Yes | Must match an active lowercase row in `roles.name` |
+
+**Success response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
+    "email": "staff.hocmon@freshflow.vn",
+    "role": "hub_staff",
+    "updatedAt": "2026-05-09T14:15:00+07:00"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `VALIDATION_ERROR` | `roleName` is missing |
+| 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid JWT |
+| 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
+| 404 Not Found | `USER_NOT_FOUND` | `userId` does not exist |
+| 422 Unprocessable Entity | `INVALID_ROLE` | Role does not exist or is inactive |
+| 422 Unprocessable Entity | `CANNOT_CHANGE_OWN_ROLE` | Admin attempting to change their own role |
+
+---
+
+#### POST /api/v1/admin/users/{userId}/unlock
+
+**Role:** Admin only
+
+Clears a temporary account lock after failed logins by setting `users.failed_login_count = 0` and `users.locked_until = null`.
+
+**Success response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "c4d5e6f7-a8b9-0123-cdef-012345678901",
+    "failedLoginCount": 0,
+    "lockedUntil": null,
+    "updatedAt": "2026-05-09T14:20:00+07:00"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid JWT |
+| 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
+| 404 Not Found | `USER_NOT_FOUND` | `userId` does not exist |
+
+---
+
+#### PUT /api/v1/admin/users/{userId}/market-assignments
+
+**Role:** Admin only
+
+Replaces a Market Agent user's market assignments in `user_market_assignments`. This endpoint is required for market-level authorization on pricing updates.
+
+**Request body:**
+
+```json
+{
+  "marketIds": [
+    "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+    "b2c3d4e5-f6a7-8901-bcde-f01234567890"
+  ]
+}
+```
+
+**Success response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "userId": "c4d5e6f7-a8b9-0123-cdef-012345678901",
+    "marketAssignments": [
+      {
+        "marketId": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+        "marketName": "Cho dau moi Hoc Mon"
+      }
+    ]
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Error Code | Condition |
+|--------|-----------|-----------|
+| 400 Bad Request | `VALIDATION_ERROR` | `marketIds` is missing or empty |
+| 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid JWT |
+| 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
+| 404 Not Found | `USER_NOT_FOUND` | `userId` does not exist |
+| 422 Unprocessable Entity | `INVALID_ROLE` | User is not a `market_agent` or legacy alias `kiosk_staff` |
+| 422 Unprocessable Entity | `INVALID_MARKET` | One or more market IDs are invalid/inactive |
 
 ---
 
@@ -2172,7 +2881,7 @@ Activates or deactivates a user account. Deactivating a user prevents future log
 
 **Role:** Admin only
 
-Approves a restaurant account, allowing it to place orders. Once approved, the `is_approved` flag cannot be reverted to `false` through this endpoint (use `/activate` to deactivate the account instead).
+Approves a restaurant profile by changing `restaurants.status` from `PENDING_APPROVAL` to `ACTIVE`, allowing active restaurant members to place orders.
 
 **Path parameters:**
 
@@ -2190,7 +2899,7 @@ Approves a restaurant account, allowing it to place orders. Once approved, the `
   "data": {
     "restaurantId": "j0k1l2m3-n4o5-6789-pqrs-012345678901",
     "restaurantName": "Nhà hàng Phở Bà Tư",
-    "isApproved": true,
+    "status": "ACTIVE",
     "approvedAt": "2026-05-09T14:30:00+07:00",
     "approvedBy": "admin-user-uuid"
   }
@@ -2204,11 +2913,11 @@ Approves a restaurant account, allowing it to place orders. Once approved, the `
 | 401 Unauthorized | `UNAUTHORIZED` | Missing or invalid JWT |
 | 403 Forbidden | `FORBIDDEN` | Authenticated user is not an Admin |
 | 404 Not Found | `RESTAURANT_NOT_FOUND` | `restaurantId` does not exist |
-| 409 Conflict | `ALREADY_APPROVED` | The restaurant is already approved |
+| 409 Conflict | `ALREADY_APPROVED` | The restaurant status is already `ACTIVE` |
 
 ---
 
-#### GET /api/v1/admin/system-config
+#### GET /api/v1/admin/system-config `[PLANNED]`
 
 **Role:** Admin only
 
@@ -2220,8 +2929,8 @@ Returns all system-wide configurable parameters.
 {
   "success": true,
   "data": {
-    "significantPriceThresholdPercent": 5.00,
-    "autoApproveRestaurants": false,
+    "dailyOrderCutoffTime": "22:00",
+    "priceBandTolerancePercent": 10.00,
     "softReservationWindowMinutes": 30,
     "updatedAt": "2026-05-09T07:00:00+07:00",
     "updatedBy": "admin-user-uuid"
@@ -2238,7 +2947,7 @@ Returns all system-wide configurable parameters.
 
 ---
 
-#### PATCH /api/v1/admin/system-config
+#### PATCH /api/v1/admin/system-config `[PLANNED]`
 
 **Role:** Admin only
 
@@ -2248,15 +2957,15 @@ Updates one or more system configuration values. Only the provided fields are up
 
 ```json
 {
-  "significantPriceThresholdPercent": 7.50,
-  "autoApproveRestaurants": false
+  "dailyOrderCutoffTime": "22:00",
+  "priceBandTolerancePercent": 10.00
 }
 ```
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| `significantPriceThresholdPercent` | number | No | Must be between 1.00 and 50.00 (inclusive) |
-| `autoApproveRestaurants` | boolean | No | `true` or `false` |
+| `dailyOrderCutoffTime` | string (`HH:mm`) | No | Local time in `Asia/Ho_Chi_Minh`; default `22:00` |
+| `priceBandTolerancePercent` | number | No | Must be between 0.00 and 50.00 (inclusive); default `10.00` |
 | `softReservationWindowMinutes` | integer | No | Must be between 5 and 120 (inclusive) |
 
 **Success response — 200 OK:**
@@ -2265,8 +2974,8 @@ Updates one or more system configuration values. Only the provided fields are up
 {
   "success": true,
   "data": {
-    "significantPriceThresholdPercent": 7.50,
-    "autoApproveRestaurants": false,
+    "dailyOrderCutoffTime": "22:00",
+    "priceBandTolerancePercent": 10.00,
     "softReservationWindowMinutes": 30,
     "updatedAt": "2026-05-09T15:00:00+07:00",
     "updatedBy": "admin-user-uuid"
@@ -2284,9 +2993,9 @@ Updates one or more system configuration values. Only the provided fields are up
 
 ---
 
-## 4. SignalR Hubs
+## 5. SignalR Hubs
 
-### 4.1 Overview and Authentication
+### 5.1 Overview and Authentication
 
 All three SignalR hubs require JWT authentication. Because the HTTP `Authorization` header is not accessible during the WebSocket upgrade handshake in browsers, the JWT is passed as a query string parameter during the SignalR negotiate request:
 
@@ -2302,7 +3011,7 @@ The server validates the JWT at the negotiate step. If the token is invalid or e
 
 ---
 
-### 4.2 PricingHub
+### 5.2 PricingHub
 
 **Route:** `/hubs/pricing`
 
@@ -2312,23 +3021,23 @@ The server validates the JWT at the negotiate step. If the token is invalid or e
 
 | Group Name Pattern | Who Joins | How |
 |-------------------|-----------|-----|
-| `market:{marketId}` | Restaurant clients, for each market they want to monitor | Client calls `SubscribeToMarket(marketId)` after connecting |
-| `kiosk:{marketId}` | Kiosk Staff, automatically scoped to their assigned market | Server joins on connect, validated against `user_market_assignments` |
+| `market:{marketId}` | Restaurant and Admin clients, for each market they want to monitor | Client calls `SubscribeToMarket(marketId)` after connecting |
+| `agent:{marketId}` | Market Agent clients, automatically scoped to assigned markets | Server joins on connect, validated against `user_market_assignments` |
 
-Kiosk Staff are server-side restricted: the `SubscribeToMarket` and `UnsubscribeFromMarket` methods are callable by Restaurant clients only. A Kiosk Staff calling `SubscribeToMarket` for a market they are not assigned to receives an error response from the hub method.
+Market Agents are server-side restricted. They may update or listen only for markets in `user_market_assignments`. A Market Agent calling `SubscribeToMarket` for an unassigned market receives an error response from the hub method.
 
 #### Client → Server Methods
 
 | Method | Parameters | Description |
 |--------|------------|-------------|
-| `SubscribeToMarket` | `marketId: string` | Adds the client connection to the `market:{marketId}` group. Must be called after connection is established. Restaurant and Admin roles only. |
+| `SubscribeToMarket` | `marketId: string` | Adds the client connection to the `market:{marketId}` group. Must be called after connection is established. Restaurant, Admin, Operations Manager, and assigned Market Agent roles only. |
 | `UnsubscribeFromMarket` | `marketId: string` | Removes the client connection from the `market:{marketId}` group. |
 
 #### Server → Client Events
 
 **`PriceUpdated`**
 
-Broadcast to the `market:{marketId}` group after any price or quantity update by a Kiosk Staff member.
+Broadcast to the `market:{marketId}` group after any price or quantity update by a Market Agent.
 
 ```json
 {
@@ -2339,48 +3048,24 @@ Broadcast to the `market:{marketId}` group after any price or quantity update by
   "newQuantity": 420,
   "previousPrice": 125000.00,
   "changePercent": 8.00,
-  "severity": "info",
   "updatedAt": "2026-05-09T04:10:00+07:00"
 }
 ```
 
-`severity` values:
-- `"info"` — price change below the configured threshold (non-significant)
-- `"warning"` — significant change of 5%–15%
-- `"critical"` — significant change exceeding 15%
-
-**`SignificantPriceChange`**
-
-Broadcast additionally to the `market:{marketId}` group when the price change meets or exceeds the configured significance threshold (default ≥ 5%). Payload is identical to `PriceUpdated`.
-
-```json
-{
-  "marketId": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
-  "productId": "e5f6a7b8-c9d0-1234-efab-234567890123",
-  "marketProductId": "d4e5f6a7-b8c9-0123-defa-123456789012",
-  "newPrice": 135000.00,
-  "newQuantity": 420,
-  "previousPrice": 125000.00,
-  "changePercent": 8.00,
-  "severity": "warning",
-  "updatedAt": "2026-05-09T04:10:00+07:00"
-}
-```
-
-Both `PriceUpdated` and `SignificantPriceChange` are sent within 500 ms of the database write completing.
+`PriceUpdated` is sent within 500 ms of the database write completing.
 
 #### Connection Lifecycle
 
 | Event | Server Behavior | Client Responsibility |
 |-------|----------------|----------------------|
-| Connect | JWT validated. `connectionId` recorded. Kiosk Staff automatically joined to `kiosk:{assignedMarketId}`. | Call `SubscribeToMarket(marketId)` for each market to monitor. |
+| Connect | JWT validated. `connectionId` recorded. Market Agents are automatically joined to `agent:{assignedMarketId}` for each assignment. | Call `SubscribeToMarket(marketId)` for each market to monitor. |
 | `SubscribeToMarket` called | Server calls `Groups.AddToGroupAsync(connectionId, "market:{marketId}")`. | Await confirmation before considering subscription active. |
 | `UnsubscribeFromMarket` called | Server calls `Groups.RemoveFromGroupAsync(connectionId, "market:{marketId}")`. | Update local subscription state. |
 | Disconnect (clean or network drop) | SignalR removes `connectionId` from all groups automatically. | Reconnect with exponential backoff. Re-subscribe to all markets. Re-fetch current state via `GET /api/v1/markets/{marketId}/products`. |
 
 ---
 
-### 4.3 OrderHub
+### 5.3 OrderHub
 
 **Route:** `/hubs/orders`
 
@@ -2390,8 +3075,8 @@ Both `PriceUpdated` and `SignificantPriceChange` are sent within 500 ms of the d
 
 | Group Name Pattern | Who Joins | How |
 |-------------------|-----------|-----|
-| `restaurant:{restaurantId}` | Restaurant clients | Automatically on connect — `restaurantId` extracted from JWT `sub` claim |
-| `admin:orders` | Admin clients | Automatically on connect — validated from JWT `role` claim |
+| `restaurant:{restaurantId}` | Restaurant clients | Automatically on connect for each active `restaurant_members` row belonging to the user |
+| `admin:orders` | Admin and Operations Manager clients | Automatically on connect — validated from JWT `role` claim |
 
 Group join is fully automatic based on JWT claims. Clients do not need to invoke any hub methods to join their group.
 
@@ -2433,12 +3118,12 @@ Broadcast to `restaurant:{restaurantId}` when one of the restaurant's orders is 
 
 | Event | Server Behavior | Client Responsibility |
 |-------|----------------|----------------------|
-| Connect | JWT validated. `connectionId` recorded. Server auto-joins: Restaurant → `restaurant:{restaurantId}`; Admin → `admin:orders`. | No manual group join required. |
+| Connect | JWT validated. `connectionId` recorded. Server auto-joins restaurant users to each active restaurant membership and Admin/Operations Manager users to `admin:orders`. | No manual group join required. |
 | Disconnect | SignalR removes from all groups automatically. | Reconnect with exponential backoff. Re-fetch order status via `GET /api/v1/orders/{orderId}`. |
 
 ---
 
-### 4.4 DeliveryHub
+### 5.4 DeliveryHub `[PLANNED]`
 
 **Route:** `/hubs/delivery`
 
@@ -2448,8 +3133,8 @@ Broadcast to `restaurant:{restaurantId}` when one of the restaurant's orders is 
 
 | Group Name Pattern | Who Joins | How |
 |-------------------|-----------|-----|
-| `restaurant:{restaurantId}` | Restaurant clients | Automatically on connect |
-| `admin:delivery` | Admin clients | Automatically on connect |
+| `restaurant:{restaurantId}` | Restaurant clients | Automatically on connect for each active `restaurant_members` row belonging to the user |
+| `admin:delivery` | Admin and Operations Manager clients | Automatically on connect |
 
 #### Client → Server Methods
 
@@ -2493,23 +3178,45 @@ Broadcast to the `admin:delivery` group when a new route is calculated and persi
 
 | Event | Server Behavior | Client Responsibility |
 |-------|----------------|----------------------|
-| Connect | JWT validated. Auto-joins: Restaurant → `restaurant:{restaurantId}`; Admin → `admin:delivery`. | No manual group join required. |
+| Connect | JWT validated. Auto-joins restaurant users to each active restaurant membership and Admin/Operations Manager users to `admin:delivery`. | No manual group join required. |
 | Disconnect | SignalR removes from all groups automatically. | Reconnect with exponential backoff. Re-fetch delivery state via `GET /api/v1/routes/{routeId}`. |
 
 ---
 
-## 5. Validation Rules
+## 6. Validation Rules
 
-The following table defines all validation rules enforced by the API. Validation errors return HTTP 400 or HTTP 422 with the specified error code and field-level details.
+The following table defines validation rules enforced by the API. Validation errors return HTTP 400 (or 422 for business-rule violations) with the specified error code and field-level details. **All rules are enforced server-side (FluentValidation); mirror them client-side so the front end can block invalid input before submitting.**
+
+#### Password strength policy
+
+Applies to **every** password field: `POST /auth/register`, admin `POST /admin/users`, `POST /auth/reset-password` (`newPassword`), and `POST /auth/change-password` (`newPassword`).
+
+- Minimum **8** characters — **no maximum length**.
+- At least **1 uppercase** letter (`A–Z`).
+- At least **1 digit** (`0–9`).
+- At least **1 special character** — any character that is not a letter or a digit (`[^A-Za-z0-9]`; e.g. `@ # ! $ %`).
+- Lowercase letters are **not** required.
+- `change-password` only: `newPassword` must **differ** from `currentPassword`.
+
+Ready-to-use client-side regex (all four character rules + minimum length):
+
+```regex
+^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$
+```
 
 | Field | Rule | HTTP Status | Error Code | Error Message |
 |-------|------|-------------|-----------|---------------|
 | `email` | Must be a valid email format | 400 | `VALIDATION_ERROR` | "Must be a valid email address" |
 | `email` | Maximum 255 characters | 400 | `VALIDATION_ERROR` | "Must not exceed 255 characters" |
-| `password` (registration) | Minimum 8 characters | 400 | `VALIDATION_ERROR` | "Must be at least 8 characters" |
-| `password` (registration) | At least 1 uppercase letter | 400 | `VALIDATION_ERROR` | "Must contain at least one uppercase letter" |
-| `password` (registration) | At least 1 digit | 400 | `VALIDATION_ERROR` | "Must contain at least one number" |
-| `password` (registration) | At least 1 special character | 400 | `VALIDATION_ERROR` | "Must contain at least one special character" |
+| `password` | Minimum 8 characters | 400 | `VALIDATION_ERROR` | "Must be at least 8 characters" |
+| `password` | At least 1 uppercase letter | 400 | `VALIDATION_ERROR` | "Must contain at least one uppercase letter" |
+| `password` | At least 1 digit | 400 | `VALIDATION_ERROR` | "Must contain at least one number" |
+| `password` | At least 1 special character | 400 | `VALIDATION_ERROR` | "Must contain at least one special character" |
+| `newPassword` (change-password) | Must differ from `currentPassword` | 400 | `VALIDATION_ERROR` | "New password must be different from current password" |
+| `identifier` (login) | Non-empty; a valid email **or** phone; max 255 characters | 400 | `VALIDATION_ERROR` | "Identifier must be a valid email address or phone number" |
+| `phone` | Optional; if present must match `^\+?[0-9]{7,15}$` (7–15 digits, optional leading `+`), max 20 characters | 400 | `VALIDATION_ERROR` | "Must be a valid phone number (7–15 digits, optional leading +)" |
+| `restaurantName` | Non-empty; max 200 characters | 400 | `VALIDATION_ERROR` | "Must not exceed 200 characters" |
+| `role` (admin create user) | One of `market_agent`, `hub_staff`, `driver`, `restaurant` (`kiosk_staff` accepted as an alias of `market_agent`) | 400 | `VALIDATION_ERROR` | "Role must be one of the accepted values" |
 | `price` | Must be a numeric value greater than 0 | 422 | `VALIDATION_ERROR` | "Price must be greater than 0" |
 | `price` | Maximum 2 decimal places | 422 | `VALIDATION_ERROR` | "Price must have at most 2 decimal places" |
 | `quantity` (kiosk update) | Must be an integer | 422 | `VALIDATION_ERROR` | "Quantity must be a whole number" |
@@ -2522,9 +3229,9 @@ The following table defines all validation rules enforced by the API. Validation
 | Order cancellation | Order status must be `pending` or `confirmed` | 409 | `BUSINESS_RULE_ERROR` | "Order cannot be cancelled in its current status" |
 | Kiosk market assignment | Staff member must be assigned to the target market | 403 | `AUTHORIZATION_ERROR` | "You are not authorized to update prices at this market" |
 | Restaurant approval | Unapproved restaurant attempting to place an order | 422 | `BUSINESS_RULE_ERROR` | "Your restaurant account is pending Admin approval" |
-| `significantPriceThresholdPercent` | Must be between 1.00 and 50.00 | 400 | `VALIDATION_ERROR` | "Threshold must be between 1% and 50%" |
 | `orderIds` (order group) | All orders must have status `confirmed` | 422 | `BUSINESS_RULE_ERROR` | "All orders must be confirmed before grouping" |
 | `orderIds` (order group) | Orders must not already belong to an active group | 409 | `BUSINESS_RULE_ERROR` | "One or more orders are already in an active order group" |
+| Auto-batch trigger | Another auto-batch run must not be active for the same target date | 409 | `BUSINESS_RULE_ERROR` | "Auto-batch is already running" |
 | `items[].quantityKg` (hub outbound) | Must not exceed available hub stock | 422 | `BUSINESS_RULE_ERROR` | "Requested quantity exceeds available hub stock" |
 | Export `to` date | Must not be before `from` date | 400 | `VALIDATION_ERROR` | "End date must be on or after start date" |
 | `capacityKg` (vehicle/hub) | Must be > 0 | 400 | `VALIDATION_ERROR` | "Capacity must be greater than 0" |
@@ -2533,64 +3240,73 @@ The following table defines all validation rules enforced by the API. Validation
 
 ---
 
-## 6. API Security
+## 7. API Security
 
-### 6.1 RBAC Matrix
+### 7.1 RBAC Matrix
 
-The following table shows which roles can access each endpoint group. A checkmark (✓) means the role has access; a cross (✗) means access is denied with HTTP 403.
+The following table shows which roles can access each endpoint group. A checkmark (✓) means the role has access; a cross (✗) means access is denied with HTTP 403. The legacy request value `kiosk_staff` is treated as an alias of `market_agent` wherever Market Agent access is listed.
 
-| Endpoint Group | Admin | Kiosk Staff | Restaurant | Public |
-|---------------|-------|-------------|------------|--------|
-| `POST /auth/login` | ✓ | ✓ | ✓ | ✓ |
-| `POST /auth/refresh` | ✓ | ✓ | ✓ | ✓ |
-| `POST /auth/logout` | ✓ | ✓ | ✓ | ✗ |
-| `POST /auth/register` | ✓ | ✗ | ✗ | ✗ |
-| `GET /markets` | ✓ | ✓ | ✓ | ✗ |
-| `GET /markets/{id}/products` | ✓ | ✓ | ✓ | ✗ |
-| `GET /markets/{id}/products/{id}/price-history` | ✓ | ✓ | ✓ | ✗ |
-| `PATCH /markets/{id}/products/{id}/price` | ✗ | ✓ (own market only) | ✗ | ✗ |
-| `GET /products` | ✓ | ✓ | ✗ | ✗ |
-| `POST /products` | ✓ | ✗ | ✗ | ✗ |
-| `POST /orders` | ✗ | ✗ | ✓ | ✗ |
-| `GET /orders` | ✓ (all) | ✗ | ✓ (own only) | ✗ |
-| `GET /orders/{id}` | ✓ | ✗ | ✓ (own only) | ✗ |
-| `PATCH /orders/{id}/cancel` | ✓ | ✗ | ✓ (own, pending/confirmed only) | ✗ |
-| `PATCH /orders/{id}/status` | ✓ | ✗ | ✗ | ✗ |
-| `GET /order-groups` | ✓ | ✗ | ✗ | ✗ |
-| `POST /order-groups` | ✓ | ✗ | ✗ | ✗ |
-| `GET /orders/scheduled` | ✗ | ✗ | ✓ | ✗ |
-| `POST /routes/calculate` | ✓ | ✗ | ✗ | ✗ |
-| `GET /routes` | ✓ | ✗ | ✗ | ✗ |
-| `GET /routes/{id}` | ✓ | ✗ | ✓ (own deliveries only) | ✗ |
-| `POST /vehicles` | ✓ | ✗ | ✗ | ✗ |
-| `GET /vehicles` | ✓ | ✗ | ✗ | ✗ |
-| `GET /hubs` | ✓ | ✗ | ✗ | ✗ |
-| `POST /hubs` | ✓ | ✗ | ✗ | ✗ |
-| `POST /hubs/{id}/inbound` | ✓ | ✗ | ✗ | ✗ |
-| `POST /hubs/{id}/outbound` | ✓ | ✗ | ✗ | ✗ |
-| `GET /hubs/{id}/inventory` | ✓ | ✗ | ✗ | ✗ |
-| `GET /analytics/price-trends` | ✓ | ✗ | ✓ | ✗ |
-| `GET /analytics/demand-heatmap` | ✓ | ✗ | ✗ | ✗ |
-| `GET /analytics/delivery-performance` | ✓ | ✗ | ✗ | ✗ |
-| `POST /analytics/export` | ✓ | ✗ | ✗ | ✗ |
-| `GET /analytics/export/{id}/status` | ✓ | ✗ | ✗ | ✗ |
-| `GET /admin/users` | ✓ | ✗ | ✗ | ✗ |
-| `PATCH /admin/users/{id}/activate` | ✓ | ✗ | ✗ | ✗ |
-| `PATCH /admin/restaurants/{id}/approve` | ✓ | ✗ | ✗ | ✗ |
-| `GET /admin/system-config` | ✓ | ✗ | ✗ | ✗ |
-| `PATCH /admin/system-config` | ✓ | ✗ | ✗ | ✗ |
-| SignalR `/hubs/pricing` | ✓ | ✓ | ✓ | ✗ |
-| SignalR `/hubs/orders` | ✓ | ✗ | ✓ | ✗ |
-| SignalR `/hubs/delivery` | ✓ | ✗ | ✓ | ✗ |
+Role columns: `Admin` = `admin`, `Ops` = `operations_manager`, `Agent` = `market_agent`/`kiosk_staff`, `Hub` = `hub_staff`, `Driver` = `driver`, `Restaurant` = `restaurant`.
 
-### 6.2 Rate Limiting Rules
+| Endpoint Group | Admin | Ops | Agent | Hub | Driver | RMgr | RStaff | Public |
+|---------------|-------|-----|-------|-----|--------|------|--------|--------|
+| `POST /auth/login` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `POST /auth/refresh` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `POST /auth/logout` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ |
+| `POST /auth/change-password` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ |
+| `POST /auth/forgot-password` / `reset-password` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `POST /auth/verify/request` / `verify` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `GET /admin/roles` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `POST /admin/users` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `GET /admin/users` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `PATCH /admin/users/{id}/status` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `PATCH /admin/users/{id}/role` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `POST /admin/users/{id}/unlock` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `PUT /admin/users/{id}/market-assignments` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `PATCH /admin/restaurants/{id}/approve` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `GET/PATCH /admin/system-config` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `GET /markets` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ |
+| `GET /markets/{id}/products` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ |
+| `GET /markets/{id}/products/{id}/price-history` | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✓ | ✗ |
+| `PATCH /markets/{id}/products/{id}/price` | ✗ | ✗ | ✓ (assigned market only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `GET /products` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ |
+| `POST /products` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `POST /orders` | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ (member restaurant) | ✓ (member restaurant) | ✗ |
+| `GET /orders` | ✓ (all) | ✓ (all) | ✗ | ✗ | ✗ | ✓ (member restaurant) | ✓ (member restaurant) | ✗ |
+| `GET /orders/{id}` | ✓ | ✓ | ✗ | ✓ (assigned hub flow) | ✓ (assigned delivery) | ✓ (member restaurant) | ✓ (member restaurant) | ✗ |
+| `PATCH /orders/{id}/cancel` | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ (member restaurant) | ✓ (member restaurant) | ✗ |
+| `PATCH /orders/{id}/status` | ✓ | ✓ | ✗ | ✓ (hub transitions only) | ✓ (delivery transitions only) | ✗ | ✗ | ✗ |
+| `GET /order-groups` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `POST /order-groups` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `POST /admin/order-groups/auto-batch` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `GET/POST /orders/scheduled` | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ (member restaurant) | ✓ (member restaurant) | ✗ |
+| `POST /routes/calculate` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `GET /routes` | ✓ | ✓ | ✗ | ✗ | ✓ (assigned routes) | ✗ | ✗ | ✗ |
+| `GET /routes/{id}` | ✓ | ✓ | ✗ | ✗ | ✓ (assigned route) | ✓ (own deliveries) | ✓ (own deliveries) | ✗ |
+| `POST /vehicles` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `GET /vehicles` | ✓ | ✓ | ✗ | ✗ | ✓ (own/current vehicle) | ✗ | ✗ | ✗ |
+| `GET /hubs` | ✓ | ✓ | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| `POST /hubs` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `POST /hubs/{id}/inbound` | ✓ | ✓ | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| `POST /hubs/{id}/outbound` | ✓ | ✓ | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| `GET /hubs/{id}/inventory` | ✓ | ✓ | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| `GET /analytics/price-trends` | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ |
+| `GET /analytics/demand-heatmap` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `GET /analytics/delivery-performance` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `POST /analytics/export` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `GET /analytics/export/{id}/status` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| SignalR `/hubs/pricing` | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✓ | ✗ |
+| SignalR `/hubs/orders` | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ |
+| SignalR `/hubs/delivery` | ✓ | ✓ | ✗ | ✗ | ✓ | ✓ | ✓ | ✗ |
+
+### 7.2 Rate Limiting Rules
 
 All rate limits are enforced via Redis counters (`rate_limit:{userId}:{endpoint}` for authenticated endpoints, `rate_limit:ip:{hashedIp}:{endpoint}` for unauthenticated endpoints). When a limit is exceeded, the server returns **HTTP 429 Too Many Requests** with a `Retry-After` header indicating the number of seconds until the window resets.
 
 | Endpoint | Limit | Scope | Notes |
 |----------|-------|-------|-------|
-| `PATCH /markets/*/products/*/price` | 10 requests/second | Per Kiosk Staff user | Price updates are frequent during market opening hours (02:00–06:00 HCM). High limit reflects operational reality. |
-| `POST /orders` | 5 requests/minute | Per Restaurant user | Prevents accidental duplicate order submission. |
+| `PATCH /markets/*/products/*/price` | 10 requests/second | Per Market Agent user | Price updates are frequent during market opening hours (02:00–06:00 HCM). High limit reflects operational reality. |
+| `POST /orders` | 5 requests/minute | Per Restaurant Manager/Staff user | Prevents accidental duplicate order submission. |
 | `POST /routes/calculate` | 2 requests/minute | Per Admin user | Route calculation invokes the VRP solver; computationally expensive. |
 | All read endpoints (GET) | 100 requests/second | Per authenticated user | Broad rate to protect against scraping while allowing dashboard polling. |
 | `POST /auth/login` | 10 requests/minute | Per IP address | Brute force protection on the login endpoint. |
@@ -2620,19 +3336,19 @@ X-RateLimit-Remaining: 0
 X-RateLimit-Reset: 1746768000
 ```
 
-### 6.3 Resource-Level Authorization
+### 7.3 Resource-Level Authorization
 
 Resource-level authorization is enforced in the application service layer, not solely at the controller level.
 
-**Restaurant isolation:** Restaurant users can only read and modify their own orders. The `restaurant_id` on every order is compared against the `sub` claim of the authenticated JWT. A restaurant attempting to access or cancel another restaurant's order receives HTTP 403, not 404 (to prevent resource enumeration via error code distinction). This check is implemented in `OrderService` before any database write is performed.
+**Restaurant isolation:** Restaurant Manager/Staff users can only read and modify data for restaurants where they have an active `restaurant_members` row. The JWT `sub` claim is the user ID, not the restaurant ID. For every restaurant-scoped operation, the service resolves active restaurant memberships for `users.id = sub` and checks the target `restaurant_id` against that set. Access to another restaurant returns HTTP 403.
 
-**Kiosk Staff market scope:** Kiosk Staff can only update prices and quantities for market products belonging to markets in their `user_market_assignments`. The market assignment check is performed by `PricingService` on every `PATCH /markets/{marketId}/products/{productId}/price` request by looking up the authenticated user's ID in the `user_market_assignments` table for the requested `marketId`. A staff member not assigned to the market receives HTTP 403 with error code `MARKET_ACCESS_DENIED`.
+**Market Agent market scope:** Market Agents can only update prices and quantities for markets in `user_market_assignments`. The market assignment check is performed by `PricingService` on every `PATCH /markets/{marketId}/products/{productId}/price` request by looking up the authenticated user's ID in `user_market_assignments` for the requested `marketId`. A user not assigned to the market receives HTTP 403 with error code `MARKET_ACCESS_DENIED`.
 
-**Admin access:** Admin users bypass resource-level ownership checks and can access all orders, all routes, all hubs, and all user accounts. Admin access is enforced at the policy level via the `[Authorize(Roles = "admin")]` attribute.
+**Admin and Operations Manager access:** Admin users bypass resource-level ownership checks and can access all orders, routes, hubs, and user accounts. Operations Manager users can access operational order/logistics/hub views where listed in the RBAC matrix, but cannot manage users, roles, or system configuration. Policy names use lowercase role names from `roles.name`, e.g. `[Authorize(Roles = "admin")]`.
 
-**Restaurant cross-data isolation:** A Restaurant user cannot access any data belonging to other restaurants. This includes: other restaurants' orders, other restaurants' scheduled orders, other restaurants' delivery details. The isolation is enforced at the query level — all queries scoped to a restaurant include a `WHERE restaurant_id = @authenticatedRestaurantId` predicate in the EF Core query.
+**Restaurant cross-data isolation:** A Restaurant Manager/Staff user cannot access any data belonging to restaurants outside their membership set. This includes orders, scheduled orders, invoices, delivery details, and SignalR groups. Query handlers must include membership-derived restaurant IDs in their predicates, e.g. `WHERE restaurant_id = ANY(@authorizedRestaurantIds)`.
 
-**SignalR group authorization:** The `HubAuthorizationFilter` validates group membership at the SignalR hub level. A Restaurant client calling `SubscribeToMarket` may join any `market:{marketId}` group (market price data is not secret). A Kiosk Staff client is automatically joined to `kiosk:{marketId}` only for their assigned market — the server rejects subscriptions to markets not in their assignment. Restaurant clients cannot join other restaurants' personal notification groups; group membership is derived solely from JWT claims and enforced server-side.
+**SignalR group authorization:** The `HubAuthorizationFilter` validates group membership at the SignalR hub level. Restaurant clients are joined only to `restaurant:{restaurantId}` groups from active `restaurant_members` rows. Market Agent clients are joined only to `agent:{marketId}` groups from `user_market_assignments`. Clients cannot join another restaurant's personal notification group or an unassigned market agent group.
 
 ---
 

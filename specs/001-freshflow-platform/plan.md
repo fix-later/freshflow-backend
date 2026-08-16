@@ -293,29 +293,28 @@ The `updated_at` field ensures the `market_products` row is always consistent.
 
 ### Sprint 1 (Weeks 1–2): Foundation + Auth — DELIVERABLE
 **Goal**: Full auth flow end-to-end: API + Angular login + React Native login.
-**Tasks**: T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 → T010 → T011 → T012
-         + T045 (Angular scaffold + auth) + T048 (React Native scaffold + auth)
+**Tasks**: T001 → T018
 **Demo**: User logs in from Angular, token refreshes automatically, user logs out.
           Same from React Native. Health check returns Healthy.
 
 ### Sprint 2 (Weeks 3–5): Real-Time Price Feed — CORE VALUE PROP
 **Goal**: Kiosk staff updates a price → restaurant sees it within 2 seconds.
-**Tasks**: T013 → T014 → T015 → T016 → T017 → T046 (Angular pricing dashboard) → T049 (kiosk mobile)
+**Tasks**: T019 → T024, T026 → T028
 **Demo**: Live price board. Kiosk staff types a new price → Angular dashboard highlights the update.
 
 ### Sprint 3 (Weeks 6–8): Orders + Status Tracking
-**Goal**: Restaurant places an order; Admin transitions status; restaurant sees update live.
-**Tasks**: T018 → T019 → T020 → T021 → T022 → T023 → T024 → T025 → T026 → T047 → T050
-**Demo**: Restaurant places an order; Admin marks it IN_TRANSIT; restaurant's order detail updates.
+**Goal**: Restaurant places an order; Admin transitions status; Admin can trigger order auto-batching; restaurant sees updates live.
+**Tasks**: T029 → T038, including T035 for manual and scheduled order batching
+**Demo**: Restaurant places an order; Admin marks it IN_TRANSIT; restaurant's order detail updates. Admin dry-runs and triggers `POST /api/v1/admin/order-groups/auto-batch`, using the same service as the 22:00 scheduled job.
 
 ### Sprint 4 (Weeks 9–10): Logistics + Hub
 **Goal**: Admin calculates a route, assigns a vehicle, creates a schedule; delivery broadcasts.
-**Tasks**: T027 → T028 → T029 → T030 → T031 → T032 → T033 → T034 → T035 → T036 → T037 → T038
+**Tasks**: T039 → T048
 **Demo**: Admin groups 2 orders, calculates a route, assigns vehicle, marks delivered.
 
 ### Sprint 5 (Weeks 11–12): Analytics + Notifications + Polish
 **Goal**: Price trend dashboard, delivery KPIs, notification persistence and read endpoints.
-**Tasks**: T039 → T040 → T041 → T042 → T043 → T044
+**Tasks**: T049 → T056
 **Demo**: Price trend chart for last 30 days. Admin views delivery performance KPIs.
 
 ---
@@ -323,8 +322,8 @@ The `updated_at` field ensures the `market_products` row is always consistent.
 ## Critical Path
 
 ```
-T001 → T002 → T003 → T004 → T009 → T010 → T013 → T015 → T016 → T017
-     → T022 → T025 → T030 → T031 → T032
+T001 → T002 → T006 → T009 → T010 → T019 → T021 → T022 → T023
+     → T031 → T034 → T035 → T041 → T042 → T043
 ```
 
 Absolute blockers (delay cascades to everything):
@@ -333,7 +332,9 @@ Absolute blockers (delay cascades to everything):
 - **T004** — No authentication without JWT middleware
 - **T009** — No end-to-end user flow without login
 
-MVP scope: **T001–T017 + T020–T025** (fully working price feed + order placement + status tracking)
+MVP scope: **T001–T024 + T026–T028** (fully working auth and real-time price feed).
+Full demo adds **T029–T038** for order placement, live status tracking, scheduled orders,
+and Admin auto-batch trigger.
 
 ---
 

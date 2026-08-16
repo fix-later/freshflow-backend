@@ -1,0 +1,21 @@
+Summary,Issue Type,Epic Link,Labels,Description
+"[Tầng 2][T1] LLM client abstraction + ZenMux GLM client",Task,SCRUM-234,ai-assistant tier2,"Định nghĩa IAssistantChatClient (provider-agnostic) + impl ZenMuxChatClient qua Microsoft.Extensions.AI, base_url https://zenmux.ai/api/v1, model z-ai/glm-5.2-free. ZenMuxOptions (BaseUrl, Model, ApiKey, TimeoutSeconds, MaxToolHops).
+Acceptance: CompleteAsync trả text hoặc tool_call; ApiKey nạp từ ENV Assistant__ZenMux__ApiKey, fail-fast khi rỗng; retry/backoff cho 5xx/timeout/429.
+Folder: src/FreshFlow.API/Assistant/Abstractions + Assistant/Llm. Deps: none. Ref: docs/TASKS-2026-06-22-ai-assistant-tier2-orchestration.md T1."
+"[Tầng 2][T2] Tool registry + 5 MVP tool definitions",Task,SCRUM-234,ai-assistant tier2,"AssistantTool + AssistantToolRegistry.InvokeAsync(name,args,ctx) validate args, dựng record (inject UserId/MarketId), ISender.Send, map Result<T> về JSON. 5 MVP tool: search_products, create_draft_order, get_order, preview_confirmation, confirm_order.
+Acceptance: LLM không điền được UserId/MarketId; Result.Failure -> {error,message}; loại field nhạy cảm (RemainingCreditAfter) khỏi payload gửi LLM.
+Folder: Assistant/Tools. Deps: T1. Ref: TASKS T2."
+"[Tầng 2][T3] DB-backed conversation store + migration",Task,SCRUM-234,ai-assistant tier2,"IConversationStore + DbConversationStore (EF Core trên shared AppDbContext). Entity AssistantConversation (id, session_id unique, user_id, market_id?, state JSONB, created_at, updated_at, expires_at) + EF config trong FreshFlow.Infrastructure.Persistence; migration AddAssistantConversations. Lazy-expire khi đọc; hard-delete (không deleted_at).
+Acceptance: round-trip qua Postgres; expires_at +30'/ghi; state lưu jsonb; migration apply sạch.
+Deps: none. Note: Redis store = giai đoạn sau (drop-in). Ref: TASKS T3."
+"[Tầng 2][T4] Two-phase confirmation safety gate",Task,SCRUM-234,ai-assistant tier2,"ConfirmationGate chặn confirm_order trừ khi request mang cờ tường minh confirmOrderId (từ nút UI) khớp orderId; thiếu cờ -> chạy preview_confirmation, trả pendingConfirmation thay vì confirm.
+Acceptance: thiếu cờ -> KHÔNG gọi ConfirmOrderCommand; lệch cờ -> chặn; khớp -> cho qua. Test chứng minh ISender không nhận ConfirmOrderCommand khi bị chặn.
+Folder: Assistant/Safety. Deps: T2. Ref: TASKS T4."
+"[Tầng 2][T5] Orchestrator loop + chat endpoint + wiring",Task,SCRUM-234,ai-assistant tier2,"POST /api/v1/assistant/chat (auth JWT -> UserId; load state; append msg). Orchestrator loop: IAssistantChatClient -> tool_call (qua gate nếu confirm) -> registry -> append result -> lặp <= MaxToolHops -> text cuối. DTOs AssistantChatRequest(sessionId,message,marketId,confirmOrderId?) / AssistantChatResponse(reply,sessionId,pendingConfirmation?,draftOrderId?). System prompt tiếng Việt. AddAssistant(config) chain vào Program.cs. NON-STREAMING.
+Acceptance: end-to-end search->draft->preview->confirm(cờ); MaxToolHops chặn loop; lỗi LLM -> reply lịch sự không lộ chi tiết.
+Deps: T1-T4. Ref: TASKS T5."
+"[Tầng 2][T6] Assistant rate-limit + config validation",Task,SCRUM-234,ai-assistant tier2,"Policy rate-limit 'assistant' (tái dùng pattern RateLimiting:Auth/Orders) gắn lên AssistantController. Section Assistant trong appsettings (ApiKey rỗng, nạp ENV). Validate config startup.
+Acceptance: vượt PermitLimit/WindowMinutes -> 429; thiếu ApiKey lúc startup -> fail-fast.
+Folder: Assistant/DependencyInjection.cs + Program.cs. Deps: T5. Ref: TASKS T6."
+"[Tầng 2][T7] Integration tests + coverage for tier-2 orchestrator",Task,SCRUM-234,ai-assistant tier2,"Hoàn thiện unit + integration (fake IAssistantChatClient, KHÔNG gọi GLM thật trong CI); coverage >= 80% orchestrator/registry/gate; dotnet format FreshFlow.slnx --verify-no-changes PASS; regression Tầng 1 nguyên vẹn.
+Deps: T1-T6. Ref: TASKS T7."

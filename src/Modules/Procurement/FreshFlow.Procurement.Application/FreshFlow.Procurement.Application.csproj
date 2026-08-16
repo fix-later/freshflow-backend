@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="MediatR" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FreshFlow.Procurement.Domain\FreshFlow.Procurement.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Shared\FreshFlow.Contracts\FreshFlow.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\Shared\FreshFlow.SharedKernel\FreshFlow.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>
+

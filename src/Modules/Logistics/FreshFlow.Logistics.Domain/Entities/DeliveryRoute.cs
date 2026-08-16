@@ -1,0 +1,291 @@
+using FreshFlow.Logistics.Domain.Enums;
+using FreshFlow.Logistics.Domain.ValueObjects;
+
+namespace FreshFlow.Logistics.Domain.Entities;
+
+public sealed class DeliveryRoute
+{
+    private DeliveryRoute()
+    {
+        Stops = [];
+    }
+
+    private DeliveryRoute(
+        DateOnly serviceDate,
+        IReadOnlyList<RouteStop> stops,
+        Guid? createdBy,
+        Guid? hubId = null,
+        RouteType routeType = RouteType.direct,
+        Guid marketSessionId = default)
+    {
+        Id = Guid.NewGuid();
+        HubId = hubId;
+        MarketSessionId = marketSessionId;
+        RouteType = routeType;
+        Status = RouteStatus.planned;
+        ServiceDate = serviceDate;
+        Stops = stops.ToList().AsReadOnly();
+        CreatedBy = createdBy;
+        CreatedAt = DateTime.UtcNow;
+        UpdatedAt = CreatedAt;
+    }
+
+    public Guid Id { get; private set; }
+    public Guid? HubId { get; private set; }
+    // ponytail: Guid.Empty supports the legacy manual hub-route endpoint until it becomes session-centered.
+    public Guid MarketSessionId { get; private set; }
+    public RouteType RouteType { get; private set; }
+    public RouteStatus Status { get; private set; }
+    public DateOnly ServiceDate { get; private set; }
+    public IReadOnlyList<RouteStop> Stops { get; private set; }
+    public decimal? TotalDistanceKm { get; private set; }
+    public int? EstimatedDurationMinutes { get; private set; }
+    public decimal? EstimatedCost { get; private set; }
+    public OptimizationCriteria? OptimizationCriteria { get; private set; }
+    public Guid? VehicleId { get; private set; }
+    public Guid? RoutePlanId { get; private set; }
+    public Guid? SuggestedVehicleId { get; private set; }
+    public decimal? PlannedLoadKg { get; private set; }
+    public string? RoutingProfile { get; private set; }
+    public DateTime? EstimatedReturnAt { get; private set; }
+    public Guid? DriverUserId { get; private set; }
+    public Guid? OrderGroupId { get; private set; }
+    public Guid? CreatedBy { get; private set; }
+    public DateTime CreatedAt { get; private set; }
+    public DateTime UpdatedAt { get; private set; }
+    public DateTime? DeletedAt { get; private set; }
+
+    public static DeliveryRoute CreateDirect(
+        DateOnly serviceDate,
+        IReadOnlyList<RouteStop> stops,
+        Guid? createdBy)
+    {
+        ArgumentNullException.ThrowIfNull(stops);
+
+        if (stops.Count > 20)
+            throw new ArgumentException("A delivery route cannot contain more than 20 stops.", nameof(stops));
+
+        if (!stops.Any(stop => stop.EntityType == StopEntityType.market))
+            throw new ArgumentException("A direct delivery route requires at least one market stop.", nameof(stops));
+
+        if (!stops.Any(stop => stop.EntityType == StopEntityType.restaurant))
+            throw new ArgumentException("A direct delivery route requires at least one restaurant stop.", nameof(stops));
+
+        return new DeliveryRoute(serviceDate, stops, createdBy);
+    }
+
+    public static DeliveryRoute CreateHubRoute(
+        Guid hubId,
+        DateOnly serviceDate,
+        IReadOnlyList<RouteStop> stops,
+        Guid? createdBy,
+        Guid marketSessionId = default)
+    {
+        ArgumentNullException.ThrowIfNull(stops);
+
+        if (hubId == Guid.Empty)
+            throw new ArgumentException("HubId is required.", nameof(hubId));
+
+        if (stops.Count > 20)
+            throw new ArgumentException("A delivery route cannot contain more than 20 stops.", nameof(stops));
+
+        if (stops.Count(stop => stop.EntityType == StopEntityType.hub && stop.EntityId == hubId) != 1)
+            throw new ArgumentException("A hub route requires exactly one matching hub stop.", nameof(stops));
+
+        if (!stops.Any(stop => stop.EntityType == StopEntityType.restaurant))
+            throw new ArgumentException("A hub route requires at least one restaurant stop.", nameof(stops));
+
+        return new DeliveryRoute(serviceDate, stops, createdBy, hubId, RouteType.hub_relay, marketSessionId);
+    }
+
+    public void Select()
+    {
+        if (Status != RouteStatus.planned)
+            throw new InvalidOperationException("Only planned routes can be selected.");
+
+        Status = RouteStatus.selected;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ApplyOptimization(
+        IReadOnlyList<RouteStop> optimizedStops,
+        decimal totalDistanceKm,
+        int estimatedDurationMinutes,
+        decimal estimatedCost,
+        OptimizationCriteria criteria)
+    {
+        if (Status != RouteStatus.planned && Status != RouteStatus.selected)
+            throw new InvalidOperationException("Only planned or selected routes can be optimized.");
+
+        ArgumentNullException.ThrowIfNull(optimizedStops);
+
+        Stops = optimizedStops.ToList().AsReadOnly();
+        TotalDistanceKm = totalDistanceKm;
+        EstimatedDurationMinutes = estimatedDurationMinutes;
+        EstimatedCost = estimatedCost;
+        OptimizationCriteria = criteria;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void AttachToPlan(
+        Guid routePlanId, Guid suggestedVehicleId, decimal plannedLoadKg,
+        string routingProfile, DateTime estimatedReturnAt)
+    {
+        if (Status != RouteStatus.planned)
+            throw new InvalidOperationException("Only planned routes can be attached to a route plan.");
+        if (routePlanId == Guid.Empty || suggestedVehicleId == Guid.Empty)
+            throw new ArgumentException("Route plan and suggested vehicle are required.");
+        if (plannedLoadKg < 0)
+            throw new ArgumentOutOfRangeException(nameof(plannedLoadKg));
+
+        RoutePlanId = routePlanId;
+        SuggestedVehicleId = suggestedVehicleId;
+        PlannedLoadKg = plannedLoadKg;
+        RoutingProfile = routingProfile;
+        EstimatedReturnAt = estimatedReturnAt;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ReserveSuggestedVehicle()
+    {
+        if (Status != RouteStatus.planned || RoutePlanId is null || SuggestedVehicleId is null)
+            throw new InvalidOperationException("Only a proposed plan route can reserve its suggested vehicle.");
+        VehicleId = SuggestedVehicleId;
+        Status = RouteStatus.reviewed;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void CancelPlanProposal()
+    {
+        if (Status != RouteStatus.planned || RoutePlanId is null)
+            throw new InvalidOperationException("Only a planned proposal route can be cancelled.");
+        Status = RouteStatus.cancelled;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void AdjustStopOrder(IReadOnlyList<Guid> orderedEntityIds)
+    {
+        if (Status != RouteStatus.selected)
+            throw new InvalidOperationException("Only selected routes can have their stop order adjusted.");
+
+        Stops = BuildReorderedStops(orderedEntityIds);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ReorderStopsByDriver(IReadOnlyList<Guid> orderedEntityIds)
+    {
+        if (Status != RouteStatus.assigned)
+            throw new InvalidOperationException("Only assigned routes can be reordered by the driver.");
+
+        Stops = BuildReorderedStops(orderedEntityIds);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ApplyDriverRecalculation(
+        IReadOnlyList<RouteStop> stops,
+        decimal totalDistanceKm,
+        int estimatedDurationMinutes,
+        decimal estimatedCost)
+    {
+        if (Status != RouteStatus.assigned)
+            throw new InvalidOperationException("Only assigned routes can be recalculated by the driver.");
+
+        ArgumentNullException.ThrowIfNull(stops);
+
+        Stops = stops.ToList().AsReadOnly();
+        TotalDistanceKm = totalDistanceKm;
+        EstimatedDurationMinutes = estimatedDurationMinutes;
+        EstimatedCost = estimatedCost;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void MarkReviewed()
+    {
+        if (Status != RouteStatus.selected)
+            throw new InvalidOperationException("Only selected routes can be reviewed.");
+
+        if (OptimizationCriteria is null)
+            throw new InvalidOperationException("Route must be optimized before it can be reviewed.");
+
+        Status = RouteStatus.reviewed;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Assign(Guid vehicleId, Guid driverUserId)
+    {
+        if (driverUserId == Guid.Empty)
+            throw new ArgumentException("DriverUserId is required.", nameof(driverUserId));
+
+        if (Status == RouteStatus.assigned)
+        {
+            if (VehicleId == vehicleId && DriverUserId == driverUserId)
+                return;
+
+            throw new InvalidOperationException(
+                "Route is already assigned to a different vehicle or driver.");
+        }
+
+        if (Status != RouteStatus.reviewed)
+            throw new InvalidOperationException("Only reviewed routes can be assigned a vehicle.");
+
+        VehicleId = vehicleId;
+        DriverUserId = driverUserId;
+        Status = RouteStatus.assigned;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Start()
+    {
+        if (Status != RouteStatus.assigned)
+            throw new InvalidOperationException("Only assigned routes can be started.");
+
+        Status = RouteStatus.in_progress;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Complete()
+    {
+        if (Status != RouteStatus.in_progress)
+            throw new InvalidOperationException("Only in-progress routes can be completed.");
+
+        Status = RouteStatus.completed;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    private IReadOnlyList<RouteStop> BuildReorderedStops(IReadOnlyList<Guid> orderedEntityIds)
+    {
+        ArgumentNullException.ThrowIfNull(orderedEntityIds);
+
+        var currentIds = Stops.Select(stop => stop.EntityId).ToHashSet();
+        var newIds = orderedEntityIds.ToHashSet();
+
+        if (orderedEntityIds.Count != Stops.Count || !currentIds.SetEquals(newIds))
+        {
+            throw new ArgumentException(
+                "StopOrder must be a permutation of the route's existing stop entity ids.",
+                nameof(orderedEntityIds));
+        }
+
+        var byEntityId = Stops.ToDictionary(stop => stop.EntityId);
+        var reordered = orderedEntityIds
+            .Select((id, index) => byEntityId[id] with { StopOrder = index })
+            .ToList();
+
+        var seenRestaurantStop = false;
+        foreach (var stop in reordered)
+        {
+            if (stop.EntityType == StopEntityType.restaurant)
+            {
+                seenRestaurantStop = true;
+            }
+            else if (seenRestaurantStop)
+            {
+                throw new ArgumentException(
+                    "Pickup stops must precede restaurant (dropoff) stops.",
+                    nameof(orderedEntityIds));
+            }
+        }
+
+        return reordered.AsReadOnly();
+    }
+}

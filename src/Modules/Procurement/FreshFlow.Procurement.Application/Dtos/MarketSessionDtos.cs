@@ -1,0 +1,25 @@
+namespace FreshFlow.Procurement.Application.Dtos;
+
+public sealed record MarketSessionDto(
+    Guid Id,
+    Guid MarketId,
+    string? MarketName,
+    Guid? HubId,
+    DateOnly ServiceDate,
+    string Status,
+    DateTime ClosesAt,
+    DateTime? ClosedAt,
+    Guid? ClosedBy,
+    string? CloseReason,
+    DateTime? BatchingCompletedAt,
+    int EligibleAgentCount,
+    int AvailableVehicleCount,
+    decimal HubVehicleCapacityKg,
+    decimal ReferenceVehicleCapacityKg,
+    decimal? PlannedCapacityKg,
+    IReadOnlyList<Guid> VehicleIds,
+    IReadOnlyList<Guid> AgentUserIds,
+    string Readiness,
+    IReadOnlyList<string> Warnings,
+    DateTime CreatedAt,
+    DateTime UpdatedAt);

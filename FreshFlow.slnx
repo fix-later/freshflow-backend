@@ -1,0 +1,81 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FreshFlow.API/FreshFlow.API.csproj" />
+    <Project Path="src/FreshFlow.Infrastructure.Media/FreshFlow.Infrastructure.Media.csproj" />
+    <Project Path="src/FreshFlow.Infrastructure.Persistence/FreshFlow.Infrastructure.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Catalog/">
+    <Project Path="src/Modules/Catalog/FreshFlow.Catalog.Application/FreshFlow.Catalog.Application.csproj" />
+    <Project Path="src/Modules/Catalog/FreshFlow.Catalog.Domain/FreshFlow.Catalog.Domain.csproj" />
+    <Project Path="src/Modules/Catalog/FreshFlow.Catalog.Infrastructure/FreshFlow.Catalog.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Analytics/">
+    <Project Path="src/Modules/Analytics/FreshFlow.Analytics.Application/FreshFlow.Analytics.Application.csproj" />
+    <Project Path="src/Modules/Analytics/FreshFlow.Analytics.Domain/FreshFlow.Analytics.Domain.csproj" />
+    <Project Path="src/Modules/Analytics/FreshFlow.Analytics.Infrastructure/FreshFlow.Analytics.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Auth/">
+    <Project Path="src/Modules/Auth/FreshFlow.Auth.Application/FreshFlow.Auth.Application.csproj" />
+    <Project Path="src/Modules/Auth/FreshFlow.Auth.Domain/FreshFlow.Auth.Domain.csproj" />
+    <Project Path="src/Modules/Auth/FreshFlow.Auth.Infrastructure/FreshFlow.Auth.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Hub/">
+    <Project Path="src/Modules/Hub/FreshFlow.Hub.Application/FreshFlow.Hub.Application.csproj" />
+    <Project Path="src/Modules/Hub/FreshFlow.Hub.Domain/FreshFlow.Hub.Domain.csproj" />
+    <Project Path="src/Modules/Hub/FreshFlow.Hub.Infrastructure/FreshFlow.Hub.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Logistics/">
+    <Project Path="src/Modules/Logistics/FreshFlow.Logistics.Application/FreshFlow.Logistics.Application.csproj" />
+    <Project Path="src/Modules/Logistics/FreshFlow.Logistics.Domain/FreshFlow.Logistics.Domain.csproj" />
+    <Project Path="src/Modules/Logistics/FreshFlow.Logistics.Infrastructure/FreshFlow.Logistics.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Notifications/">
+    <Project Path="src/Modules/Notifications/FreshFlow.Notifications.Application/FreshFlow.Notifications.Application.csproj" />
+    <Project Path="src/Modules/Notifications/FreshFlow.Notifications.Domain/FreshFlow.Notifications.Domain.csproj" />
+    <Project Path="src/Modules/Notifications/FreshFlow.Notifications.Infrastructure/FreshFlow.Notifications.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Invoicing/">
+    <Project Path="src/Modules/Invoicing/FreshFlow.Invoicing.Application/FreshFlow.Invoicing.Application.csproj" />
+    <Project Path="src/Modules/Invoicing/FreshFlow.Invoicing.Domain/FreshFlow.Invoicing.Domain.csproj" />
+    <Project Path="src/Modules/Invoicing/FreshFlow.Invoicing.Infrastructure/FreshFlow.Invoicing.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Orders/">
+    <Project Path="src/Modules/Orders/FreshFlow.Orders.Application/FreshFlow.Orders.Application.csproj" />
+    <Project Path="src/Modules/Orders/FreshFlow.Orders.Domain/FreshFlow.Orders.Domain.csproj" />
+    <Project Path="src/Modules/Orders/FreshFlow.Orders.Infrastructure/FreshFlow.Orders.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Pricing/">
+    <Project Path="src/Modules/Pricing/FreshFlow.Pricing.Application/FreshFlow.Pricing.Application.csproj" />
+    <Project Path="src/Modules/Pricing/FreshFlow.Pricing.Domain/FreshFlow.Pricing.Domain.csproj" />
+    <Project Path="src/Modules/Pricing/FreshFlow.Pricing.Infrastructure/FreshFlow.Pricing.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Procurement/">
+    <Project Path="src/Modules/Procurement/FreshFlow.Procurement.Application/FreshFlow.Procurement.Application.csproj" />
+    <Project Path="src/Modules/Procurement/FreshFlow.Procurement.Domain/FreshFlow.Procurement.Domain.csproj" />
+    <Project Path="src/Modules/Procurement/FreshFlow.Procurement.Infrastructure/FreshFlow.Procurement.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Shared/">
+    <Project Path="src/Shared/FreshFlow.Contracts/FreshFlow.Contracts.csproj" />
+    <Project Path="src/Shared/FreshFlow.SharedKernel/FreshFlow.SharedKernel.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/Integration/">
+    <Project Path="tests/Integration/FreshFlow.IntegrationTests/FreshFlow.IntegrationTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Unit/">
+    <Project Path="tests/Unit/FreshFlow.Analytics.UnitTests/FreshFlow.Analytics.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Assistant.UnitTests/FreshFlow.Assistant.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Auth.UnitTests/FreshFlow.Auth.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Catalog.UnitTests/FreshFlow.Catalog.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Hub.UnitTests/FreshFlow.Hub.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Infrastructure.Media.UnitTests/FreshFlow.Infrastructure.Media.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Infrastructure.Persistence.UnitTests/FreshFlow.Infrastructure.Persistence.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Invoicing.UnitTests/FreshFlow.Invoicing.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Logistics.UnitTests/FreshFlow.Logistics.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Notifications.UnitTests/FreshFlow.Notifications.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Orders.UnitTests/FreshFlow.Orders.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Pricing.UnitTests/FreshFlow.Pricing.UnitTests.csproj" />
+    <Project Path="tests/Unit/FreshFlow.Procurement.UnitTests/FreshFlow.Procurement.UnitTests.csproj" />
+  </Folder>
+</Solution>

@@ -13,10 +13,24 @@
 |---|---|---|---|---|
 | 01 | [01-requirements-spec.md](./01-requirements-spec.md) | Functional & non-functional requirements, gaps, glossary | 283 | Complete |
 | 02 | [02-system-architecture.md](./02-system-architecture.md) | Architecture pattern, component diagrams, module breakdown, caching, deployment | 713 | Complete |
-| 03 | [03-database-schema.md](./03-database-schema.md) | PostgreSQL DDL, index strategy, Redis key design, migration strategy | 1,260 | Complete |
-| 04 | [04-api-design.md](./04-api-design.md) | REST endpoints, SignalR hubs, validation rules, RBAC matrix | 2,641 | Complete |
+| 02A | [02A-system-overview-diagrams.md](./diagrams/02A-system-overview-diagrams.md) | Current backend system overview diagrams, runtime wiring, flows, deployment view, Draw.io source | — | Current |
+| 02B | [02B-state-machine-diagrams.md](./diagrams/02B-state-machine-diagrams.md) | State machine cho các entity chính (Order, Restaurant, User, RefreshToken...); Draw.io source | — | Current |
+| 02C | [02C-activity-diagrams.md](./diagrams/02C-activity-diagrams.md) | Activity/flowchart các luồng nghiệp vụ chính (có Actor, swimlane); Draw.io source | — | Current |
+| 02D | [02D-package-diagram.md](./diagrams/02D-package-diagram.md) | Package/dependency diagram for current backend projects | — | Current |
+| 02E | [02E-class-diagrams.md](./diagrams/02E-class-diagrams.md) | Detailed class diagrams for implemented features | — | Current |
+| 03 | [03-database-schema.md](./03-database-schema.md) | PostgreSQL DDL, index strategy, Redis key design, migration strategy (reconciled w/ code 2026-06-29) | — | Current |
+| 03A | [03-database-schema.dbml](./database/03-database-schema.dbml) | Physical DBML for dbdiagram.io: Part A implemented + Part B planned; archives tables removed by DEC-002/003 (reconciled 2026-07-03) | — | Current |
+| 03A' | [03-database-schema.conceptual.md](./database/03-database-schema.conceptual.md) + [.conceptual.dbml](./database/03-database-schema.conceptual.dbml) | Conceptual model: business entities + relationships only (mermaid + dbdiagram) | — | Current |
+| 03A" | [03-database-schema.logical.dbml](./database/03-database-schema.logical.dbml) | Logical ERD: attributes, keys, every meaningful relationship, tech-agnostic (reconciled 2026-07-03) | — | Current |
+| 03B | [03B-database-erd.md](./database/03B-database-erd.md) | Mermaid ERD for implemented tables only, compact crow's-foot view | — | Current |
+| 03C | [03C-table-descriptions.md](./database/03C-table-descriptions.md) | Chức năng nghiệp vụ của từng bảng (Part A + Part B + danh sách đã loại bỏ theo DEC) | — | Current |
+| 04 | [04-api-design.md](./04-api-design.md) | REST endpoints, SignalR hubs, validation rules, RBAC matrix; Part A implemented surface + Part B planned (reconciled w/ code 2026-06-30) | — | Current |
 | 05 | [05-implementation-plan.md](./05-implementation-plan.md) | 50-task breakdown, critical path, MVP scope, folder structure, coding standards | 912 | Complete |
 | — | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | Cross-reference gaps, inconsistencies, readiness assessment | — | Complete |
+
+> **Feature working docs** (survey/audit/context/design/tasks per feature) sống ở [`features/`](./features/README.md) — tách khỏi bộ spec core này để dễ tracking.
+>
+> **Supporting assets:** diagram docs và Draw.io sources ở [`diagrams/`](./diagrams/README.md); DBML/ERD/schema companion docs ở [`database/`](./database/README.md).
 
 ---
 
@@ -115,7 +129,7 @@ Route calculation uses a custom nearest-neighbor heuristic with 2-opt improvemen
 | # | Risk | Severity | Mitigation |
 |---|---|---|---|
 | R-001 | Redis unavailability breaks SignalR backplane and price caching simultaneously | High | Redis AOF persistence enabled; Docker healthcheck restarts Redis on failure; API degrades gracefully (reads from PostgreSQL if Redis miss) |
-| R-002 | `price_snapshots` table grows unboundedly (high-frequency writes from kiosk staff) | High | Monthly range partitioning on `recorded_at`; background job creates next month's partition on the 25th; old partitions can be archived or dropped per retention policy |
+| R-002 | `price_snapshots` table grows unboundedly (high-frequency writes from kiosk staff) | High | **Target design (not implemented):** monthly range partitioning on `recorded_at` with a maintenance job creating the next partition, plus archive/drop per retention policy. Current table is a plain append-only table with ordinary indexes — no partitioning or maintenance job exists yet. |
 | R-003 | Concurrent price updates from two kiosk staff members at the same market cause lost updates | Medium | Last-write-wins with `updated_at` timestamp comparison; HTTP 409 on detected conflict; flagged in GA-004 — optimistic concurrency to be implemented in `PricingService` |
 | R-004 | Route calculation exceeds 3-second SLA as order volumes grow (more stops per route) | Medium | Hard limit of 20 stops per route (FR-LOG-006); route results cached in Redis with SHA-256 key; OR-Tools as upgrade path if heuristic becomes bottleneck |
 | R-005 | Restaurant approval flow (GA-009) not fully specified — could block restaurant onboarding | Low | Assumption: Admin manually approves restaurants via `PATCH /api/v1/admin/restaurants/{id}/approve`; default behavior is unapproved (cannot place orders) until Admin approves |
@@ -126,14 +140,14 @@ Route calculation uses a custom nearest-neighbor heuristic with 2-opt improvemen
 
 | Domain | FRs | Must | Should | Could | Tables | Endpoints | Tasks |
 |---|---|---|---|---|---|---|---|
-| Auth | 5 | 5 | 0 | 0 | 2 | 4 | 4 |
-| Pricing | 6 | 4 | 1 | 0 | 4 | 6 | 7 |
-| Orders | 7 | 6 | 1 | 0 | 4 | 8 | 8 |
+| Auth | 11 | 11 | 0 | 0 | 2 | 9 | 4 |
+| Pricing | 5 | 5 | 0 | 0 | 4 | 5 | 6 |
+| Orders | 7 | 6 | 1 | 0 | 4 | 9 | 9 |
 | Logistics | 6 | 6 | 0 | 0 | 3 | 5 | 6 |
 | Hub | 5 | 4 | 1 | 1 | 4 | 5 | 5 |
 | Analytics | 4 | 1 | 2 | 1 | 1 | 5 | 4 |
 | Notifications | 3 | 3 | 0 | 0 | 1 | 2 | 2 |
-| **Total** | **36** | **29** | **5** | **2** | **19** | **35** | **36** |
+| **Total** | **41** | **36** | **4** | **2** | **19** | **40** | **36** |
 
 > Infrastructure tasks (T001–T008) and frontend tasks (T045–T050) are not counted in the domain task column above.
 

@@ -74,7 +74,7 @@ docker compose ps   # postgres and redis should show "healthy"
 
 ```bash
 # Build
-dotnet build FreshFlow.sln
+dotnet build FreshFlow.slnx
 
 # Run (migrations apply automatically on first start)
 dotnet run --project src/FreshFlow.API
@@ -123,13 +123,13 @@ Expected: HTTP 200 with `accessToken` in the response body.
 
 ```bash
 # Unit tests only (no Docker required)
-dotnet test FreshFlow.sln --filter "Category=Unit"
+dotnet test FreshFlow.slnx --filter "Category=Unit"
 
 # Integration tests (requires Docker — containers spun up automatically by Testcontainers)
-dotnet test FreshFlow.sln --filter "Category=Integration"
+dotnet test FreshFlow.slnx --filter "Category=Integration"
 
 # All tests
-dotnet test FreshFlow.sln
+dotnet test FreshFlow.slnx
 ```
 
 ---
@@ -180,8 +180,21 @@ dotnet ef database update \
 ### Check code formatting (CI gate)
 
 ```bash
-dotnet format FreshFlow.sln --verify-no-changes
+dotnet format FreshFlow.slnx --verify-no-changes
 ```
+
+### Preview and trigger Admin auto-batching
+
+```bash
+# Set TOKEN to an Admin access token from POST /api/v1/auth/login first.
+curl -X POST http://localhost:5000/api/v1/admin/order-groups/auto-batch \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"targetDate":"2026-05-31","dryRun":true,"force":false}'
+```
+
+Use `"dryRun": false` to run the same order batching logic as the daily 22:00
+job. Re-running the command skips already batched orders.
 
 ### Wipe the local database
 

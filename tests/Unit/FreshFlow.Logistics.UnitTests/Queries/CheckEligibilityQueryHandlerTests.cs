@@ -1,0 +1,380 @@
+using System.Reflection;
+using FluentAssertions;
+using FreshFlow.Logistics.Application.Abstractions;
+using FreshFlow.Logistics.Application.Dtos;
+using FreshFlow.Logistics.Application.Queries.CheckEligibility;
+using FreshFlow.Logistics.Domain.Entities;
+using FreshFlow.Logistics.Domain.Enums;
+using FreshFlow.Logistics.Domain.ValueObjects;
+using FreshFlow.Logistics.UnitTests.TestDoubles;
+using NSubstitute;
+
+namespace FreshFlow.Logistics.UnitTests.Queries;
+
+[Trait("Category", "Unit")]
+public sealed class CheckEligibilityQueryHandlerTests
+{
+    [Fact]
+    public async Task Handle_RouteMissing_ReturnsNotFoundAsync()
+    {
+        var routes = new InMemoryDeliveryRouteRepository();
+        var vehicles = new InMemoryVehicleRepository();
+        var drivers = Substitute.For<IDriverReader>();
+        var sut = CreateSut(routes, vehicles, drivers);
+        var routeId = Guid.NewGuid();
+
+        var result = await sut.Handle(new CheckEligibilityQuery(routeId, Guid.NewGuid(), null), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("DELIVERY_ROUTE_NOT_FOUND");
+    }
+
+    [Fact]
+    public async Task Handle_VehicleMissing_ReturnsVehicleNotFoundAsync()
+    {
+        var routes = new InMemoryDeliveryRouteRepository();
+        var route = CreateRoute(stopCount: 3);
+        await routes.AddAsync(route, default);
+        var missingVehicleId = Guid.NewGuid();
+        var otherRoute = CreateRoute(stopCount: 2);
+        SetVehicle(otherRoute, missingVehicleId);
+        await routes.AddAsync(otherRoute, default);
+        var vehicles = new InMemoryVehicleRepository();
+        var drivers = Substitute.For<IDriverReader>();
+        var sut = CreateSut(routes, vehicles, drivers, maxStopsPerVehicle: 1);
+
+        var result = await sut.Handle(new CheckEligibilityQuery(route.Id, missingVehicleId, null), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.Reasons.Should().Contain("VEHICLE_NOT_FOUND");
+    }
+
+    [Fact]
+    public async Task Handle_InactiveVehicle_ReturnsVehicleInactiveAsync()
+    {
+        var route = CreateRoute();
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
+        vehicle.Deactivate();
+        var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle);
+
+        var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, null), default);
+
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.Reasons.Should().Contain("VEHICLE_INACTIVE");
+    }
+
+    [Fact]
+    public async Task Handle_UnavailableVehicle_ReturnsVehicleUnavailableAsync()
+    {
+        var route = CreateRoute();
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
+        vehicle.MarkUnavailable();
+        var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle);
+
+        var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, null), default);
+
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.Reasons.Should().Contain("VEHICLE_UNAVAILABLE");
+    }
+
+    [Theory]
+    [InlineData(2, 2, false)]
+    [InlineData(3, 2, true)]
+    public async Task Handle_CapacityCheck_ComparesAgainstPolicyMaxStopsAsync(
+        int stopCount,
+        int maxStopsPerVehicle,
+        bool expectCapacityExceeded)
+    {
+        var route = CreateRoute(stopCount);
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
+        var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(
+            route,
+            vehicle,
+            maxStopsPerVehicle);
+
+        var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, null), default);
+
+        result.Value.Reasons.Contains("VEHICLE_CAPACITY_EXCEEDED").Should().Be(expectCapacityExceeded);
+    }
+
+    [Fact]
+    public async Task Handle_RouteLoadExceedsVehicleCapacity_ReturnsWeightReasonAsync()
+    {
+        var route = CreateRoute();
+        var vehicle = new Vehicle("51A-12345", 100m, VehicleType.truck, null);
+        var orders = new InMemoryOrderStatusReader();
+        var orderId = Guid.NewGuid();
+        orders.Add(orderId, "AtHub", route.Stops[1].EntityId);
+        var packing = Substitute.For<IOrderPackingReader>();
+        packing.GetLinesByOrdersAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns([
+                new OrderPackingLines(
+                    orderId,
+                    [new OrderPackingLine(orderId, Guid.NewGuid(), "Fish", 91, 10m, Guid.NewGuid())])
+            ]);
+        var routes = new InMemoryDeliveryRouteRepository();
+        await routes.AddAsync(route, default);
+        var vehicles = new InMemoryVehicleRepository();
+        await vehicles.AddAsync(vehicle, default);
+        var sut = CreateSut(
+            routes, vehicles, Substitute.For<IDriverReader>(), orders: orders, packing: packing);
+
+        var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, null), default);
+
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.Reasons.Should().Contain("VEHICLE_WEIGHT_CAPACITY_EXCEEDED");
+        result.Value.RouteLoadKg.Should().Be(111m);
+        result.Value.VehicleCapacityKg.Should().Be(100m);
+        result.Value.IsWeightComplete.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Handle_AtHubOrderWithoutPackingWeight_ReturnsWeightIncompleteAsync()
+    {
+        var route = CreateRoute();
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
+        var orders = new InMemoryOrderStatusReader();
+        orders.Add(Guid.NewGuid(), "AtHub", route.Stops[1].EntityId);
+        var routes = new InMemoryDeliveryRouteRepository();
+        await routes.AddAsync(route, default);
+        var vehicles = new InMemoryVehicleRepository();
+        await vehicles.AddAsync(vehicle, default);
+        var driverUserId = Guid.NewGuid();
+        var drivers = Substitute.For<IDriverReader>();
+        drivers.FindByUserIdAsync(driverUserId, Arg.Any<CancellationToken>())
+            .Returns(new DriverDto(driverUserId, null, "driver@test.freshflow", "driver", true));
+        var sut = CreateSut(routes, vehicles, drivers, orders: orders);
+
+        var result = await sut.Handle(
+            new CheckEligibilityQuery(route.Id, vehicle.Id, driverUserId), default);
+
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.IsWeightComplete.Should().BeFalse();
+        result.Value.Reasons.Should().Contain("ROUTE_WEIGHT_INCOMPLETE");
+    }
+
+    [Theory]
+    [InlineData(RouteStatus.assigned, 0, true)]
+    [InlineData(RouteStatus.cancelled, 0, false)]
+    [InlineData(RouteStatus.assigned, 1, false)]
+    public async Task Handle_DoubleBookRules_RespectStatusAndServiceDateAsync(
+        RouteStatus otherRouteStatus,
+        int otherRouteDateOffset,
+        bool expectDoubleBooked)
+    {
+        var routes = new InMemoryDeliveryRouteRepository();
+        var route = CreateRoute();
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
+        await routes.AddAsync(route, default);
+        var otherRoute = CreateRoute(serviceDate: route.ServiceDate.AddDays(otherRouteDateOffset));
+        SetVehicle(otherRoute, vehicle.Id);
+        SetStatus(otherRoute, otherRouteStatus);
+        await routes.AddAsync(otherRoute, default);
+        var vehicles = new InMemoryVehicleRepository();
+        await vehicles.AddAsync(vehicle, default);
+        var drivers = Substitute.For<IDriverReader>();
+        var sut = CreateSut(routes, vehicles, drivers);
+
+        var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, null), default);
+
+        result.Value.Reasons.Contains("VEHICLE_DOUBLE_BOOKED").Should().Be(expectDoubleBooked);
+    }
+
+    [Fact]
+    public async Task Handle_NullDriverUserId_ReturnsDriverRequiredAsync()
+    {
+        var route = CreateRoute();
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
+        var drivers = Substitute.For<IDriverReader>();
+        var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle, drivers: drivers);
+
+        var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, null), default);
+
+        result.Value.Reasons.Should().Contain("DRIVER_REQUIRED");
+        _ = drivers.DidNotReceiveWithAnyArgs().FindByUserIdAsync(default, default);
+    }
+
+    [Fact]
+    public async Task Handle_DriverMissing_ReturnsDriverNotFoundAsync()
+    {
+        var route = CreateRoute();
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
+        var driverUserId = Guid.NewGuid();
+        var drivers = Substitute.For<IDriverReader>();
+        var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle, drivers: drivers);
+
+        var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, driverUserId), default);
+
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.Reasons.Should().Contain("DRIVER_NOT_FOUND");
+    }
+
+    [Fact]
+    public async Task Handle_DriverWrongRole_ReturnsDriverNotDriverRoleAsync()
+    {
+        var route = CreateRoute();
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
+        var driverUserId = Guid.NewGuid();
+        var drivers = Substitute.For<IDriverReader>();
+        drivers.FindByUserIdAsync(driverUserId, Arg.Any<CancellationToken>())
+            .Returns(new DriverDto(driverUserId, null, "admin@test.freshflow", "admin", true));
+        var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle, drivers: drivers);
+
+        var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, driverUserId), default);
+
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.Reasons.Should().Contain("DRIVER_NOT_DRIVER_ROLE");
+    }
+
+    [Fact]
+    public async Task Handle_InactiveDriver_ReturnsDriverInactiveAsync()
+    {
+        var route = CreateRoute();
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
+        var driverUserId = Guid.NewGuid();
+        var drivers = Substitute.For<IDriverReader>();
+        drivers.FindByUserIdAsync(driverUserId, Arg.Any<CancellationToken>())
+            .Returns(new DriverDto(driverUserId, null, "driver@test.freshflow", "driver", false));
+        var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle, drivers: drivers);
+
+        var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, driverUserId), default);
+
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.Reasons.Should().Contain("DRIVER_INACTIVE");
+    }
+
+    [Fact]
+    public async Task Handle_HappyPath_ReturnsEligibleAsync()
+    {
+        var route = CreateRoute();
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, null);
+        var driverUserId = Guid.NewGuid();
+        var drivers = Substitute.For<IDriverReader>();
+        drivers.FindByUserIdAsync(driverUserId, Arg.Any<CancellationToken>())
+            .Returns(new DriverDto(driverUserId, null, "driver@test.freshflow", "driver", true));
+
+        var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle, drivers: drivers);
+
+        var result = await sut.Handle(new CheckEligibilityQuery(route.Id, vehicle.Id, driverUserId), default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.IsEligible.Should().BeTrue();
+        result.Value.Reasons.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_DriverAssignedToAnotherHub_ReturnsSpecificReasonAsync()
+    {
+        var hubId = Guid.NewGuid();
+        var route = CreateHubRoute(hubId);
+        var vehicle = new Vehicle("51A-12345", 1000m, VehicleType.truck, hubId);
+        var driverUserId = Guid.NewGuid();
+        var drivers = Substitute.For<IDriverReader>();
+        drivers.FindByUserIdAsync(driverUserId, Arg.Any<CancellationToken>())
+            .Returns(new DriverDto(
+                driverUserId, "Driver One", "driver@test.freshflow", "driver", true));
+        drivers.IsAssignedToHubAsync(driverUserId, hubId, Arg.Any<CancellationToken>())
+            .Returns(false);
+        var (sut, _) = await CreateHandlerWithRouteAndVehicleAsync(route, vehicle, drivers: drivers);
+
+        var result = await sut.Handle(
+            new CheckEligibilityQuery(route.Id, vehicle.Id, driverUserId), default);
+
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.Reasons.Should().ContainSingle("DRIVER_NOT_ASSIGNED_TO_HUB");
+    }
+
+    private static CheckEligibilityQueryHandler CreateSut(
+        InMemoryDeliveryRouteRepository routes,
+        InMemoryVehicleRepository vehicles,
+        IDriverReader drivers,
+        int maxStopsPerVehicle = 20,
+        IOrderStatusReader? orders = null,
+        IOrderPackingReader? packing = null)
+    {
+        var capacityPolicy = Substitute.For<IVehicleCapacityPolicy>();
+        capacityPolicy.MaxStopsPerVehicle.Returns(maxStopsPerVehicle);
+        capacityPolicy.BoxTareKg.Returns(2m);
+        capacityPolicy.CapacityUtilizationPercent.Returns(90m);
+
+        return new CheckEligibilityQueryHandler(
+            routes,
+            vehicles,
+            drivers,
+            capacityPolicy,
+            orders ?? new InMemoryOrderStatusReader(),
+            packing ?? Substitute.For<IOrderPackingReader>());
+    }
+
+    private static async Task<(CheckEligibilityQueryHandler Handler, IDriverReader Drivers)> CreateHandlerWithRouteAndVehicleAsync(
+        DeliveryRoute route,
+        Vehicle vehicle,
+        int maxStopsPerVehicle = 20)
+    {
+        var drivers = Substitute.For<IDriverReader>();
+        return await CreateHandlerWithRouteAndVehicleAsync(route, vehicle, drivers, maxStopsPerVehicle);
+    }
+
+    private static async Task<(CheckEligibilityQueryHandler Handler, IDriverReader Drivers)> CreateHandlerWithRouteAndVehicleAsync(
+        DeliveryRoute route,
+        Vehicle vehicle,
+        IDriverReader drivers,
+        int maxStopsPerVehicle = 20)
+    {
+        var routes = new InMemoryDeliveryRouteRepository();
+        await routes.AddAsync(route, default);
+        var vehicles = new InMemoryVehicleRepository();
+        await vehicles.AddAsync(vehicle, default);
+
+        return (CreateSut(routes, vehicles, drivers, maxStopsPerVehicle), drivers);
+    }
+
+    private static DeliveryRoute CreateRoute(int stopCount = 2, DateOnly? serviceDate = null)
+    {
+        var stops = new List<RouteStop>
+        {
+            new(0, StopEntityType.market, Guid.NewGuid(), "Market", 10.1m, 106.1m, null, null)
+        };
+
+        for (var i = 1; i < stopCount; i++)
+        {
+            stops.Add(new RouteStop(
+                i,
+                StopEntityType.restaurant,
+                Guid.NewGuid(),
+                $"Restaurant {i}",
+                10.1m + i / 100m,
+                106.1m + i / 100m,
+                null,
+                null));
+        }
+
+        return DeliveryRoute.CreateDirect(serviceDate ?? new DateOnly(2026, 7, 9), stops, null);
+    }
+
+    private static DeliveryRoute CreateHubRoute(Guid hubId) => DeliveryRoute.CreateHubRoute(
+        hubId,
+        new DateOnly(2026, 7, 9),
+        [
+            new RouteStop(0, StopEntityType.hub, hubId, "Hub", 10.1m, 106.1m, null, null),
+            new RouteStop(1, StopEntityType.restaurant, Guid.NewGuid(), "Restaurant", 10.2m, 106.2m, null, null)
+        ],
+        null);
+
+    private static void SetVehicle(DeliveryRoute route, Guid vehicleId)
+    {
+        var field = typeof(DeliveryRoute).GetField(
+            $"<{nameof(DeliveryRoute.VehicleId)}>k__BackingField",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        field!.SetValue(route, vehicleId);
+    }
+
+    private static void SetStatus(DeliveryRoute route, RouteStatus status)
+    {
+        var field = typeof(DeliveryRoute).GetField(
+            $"<{nameof(DeliveryRoute.Status)}>k__BackingField",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        field!.SetValue(route, status);
+    }
+}

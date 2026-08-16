@@ -141,7 +141,8 @@ Immutable append-only price history. **Partitioned by month** on `recorded_at`.
 Key-value store for Admin-configurable runtime parameters.
 
 Key values used at runtime:
-- `significant_price_threshold_percent` (default: `"5.00"`)
+- `daily_order_cutoff_time` (default: `"22:00"`)
+- `price_band_tolerance_percent` (default: `"10.00"`)
 
 ---
 
@@ -183,7 +184,7 @@ Aggregate root of the order lifecycle.
 | `restaurant_id` | UUID FK → restaurants.id | ON DELETE RESTRICT |
 | `order_group_id` | UUID FK → order_groups.id | NULL = not grouped; ON DELETE SET NULL |
 | `scheduled_order_id` | UUID FK → scheduled_orders.id | NULL = one-off order |
-| `status` | order_status ENUM | `pending`, `confirmed`, `processing`, `ready_for_pickup`, `in_transit`, `delivered`, `cancelled` |
+| `status` | order_status ENUM | `pending`, `confirmed`, `batched`, `processing`, `ready_for_pickup`, `in_transit`, `delivered`, `cancelled` |
 | `total_amount` | NUMERIC(15,2) | Denormalized; maintained by app on line-item add |
 | `notes` | TEXT | Optional restaurant notes |
 | `cancelled_at` | TIMESTAMPTZ | Set when status → cancelled |
@@ -191,7 +192,7 @@ Aggregate root of the order lifecycle.
 | `deleted_at` | TIMESTAMPTZ | |
 
 **State transitions allowed**:
-- `pending → confirmed → processing → ready_for_pickup → in_transit → delivered`
+- `pending → confirmed → batched → processing → ready_for_pickup → in_transit → delivered`
 - `pending → cancelled` or `confirmed → cancelled`
 - All other transitions are invalid (HTTP 422)
 
