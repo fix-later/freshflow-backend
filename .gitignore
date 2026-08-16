@@ -486,3 +486,11 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Handover bundle (local only — contains real secrets)
+FreshFlow-Handover/
+LOCAL_SETUP_PRIVATE.md
+
+# Local-only docs
+/docs/Report6_Software User Guides.docx
+/docs/database/03A-conceptual-erd-chen-core.drawio
