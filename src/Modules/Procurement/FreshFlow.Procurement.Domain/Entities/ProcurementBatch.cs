@@ -437,6 +437,8 @@ public sealed class ProcurementBatch : AggregateRoot
         RaiseDomainEvent(new ProcurementPurchaseConfirmedDomainEvent(
             Id,
             MarketId,
+            agentUserId,
+            lines.ToDictionary(line => line.Key, line => line.Value.ActualUnitPrice),
             capturedAtUtc));
 
         return Result.Success();
