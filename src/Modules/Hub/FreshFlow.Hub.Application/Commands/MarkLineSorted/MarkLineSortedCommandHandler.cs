@@ -9,7 +9,9 @@ namespace FreshFlow.Hub.Application.Commands.MarkLineSorted;
 
 internal sealed class MarkLineSortedCommandHandler(
     IHubRepository hubs,
-    IHubSortingProgressRepository progress)
+    IHubSortingProgressRepository progress,
+    IOrderLookupReader orders,
+    IHubRestaurantOrderReader hubOrders)
     : IRequestHandler<MarkLineSortedCommand, Result<HubSortingProgressDto>>
 {
     public async Task<Result<HubSortingProgressDto>> Handle(MarkLineSortedCommand request, CancellationToken ct)
@@ -18,8 +20,26 @@ internal sealed class MarkLineSortedCommandHandler(
         if (hub is null)
             return Result<HubSortingProgressDto>.Failure(Error.NotFound("HUB", request.HubId));
 
-        // Upsert on (HubId, ServiceDate, OrderItemId): a second POST for the same line overwrites the
-        // sorted quantity/who/when instead of creating a second row.
+        var order = await orders.FindByOrderItemIdAsync(request.OrderItemId, ct);
+        if (order is null)
+            return Result<HubSortingProgressDto>.Failure(Error.NotFound("ORDER_ITEM", request.OrderItemId));
+
+        var belongsToHub = (await hubOrders.ListByHubAndServiceDateAsync(
+                request.HubId, ["AtHub"], request.ServiceDate, ct))
+            .Any(item => item.OrderId == order.OrderId);
+        if (!belongsToHub)
+            return Result<HubSortingProgressDto>.Failure(Error.Validation(
+                "ORDER_NOT_AT_HUB", "Order item does not belong to this Hub and service date."));
+
+        var requiredQuantityKg = order.ActualQuantity ?? order.Quantity;
+        if (requiredQuantityKg <= 0m || request.SortedQuantityKg > requiredQuantityKg)
+        {
+            return Result<HubSortingProgressDto>.Failure(Error.Validation(
+                "INVALID_SORTED_QUANTITY",
+                $"SortedQuantityKg must be greater than zero and at most {requiredQuantityKg}."));
+        }
+
+
         var line = await progress.FindByHubDateAndOrderItemAsync(
             request.HubId, request.ServiceDate, request.OrderItemId, ct);
         if (line is null)
@@ -28,10 +48,18 @@ internal sealed class MarkLineSortedCommandHandler(
             await progress.AddAsync(line, ct);
         }
 
-        line.MarkSorted(request.SortedQuantityKg, request.ActorUserId, DateTime.UtcNow);
+        if (request.SortedQuantityKg < line.SortedQuantityKg)
+        {
+            return Result<HubSortingProgressDto>.Failure(Error.Validation(
+                "INVALID_SORTED_QUANTITY",
+                $"SortedQuantityKg must be between {line.SortedQuantityKg} and {requiredQuantityKg}."));
+        }
+
+        line.UpdateSortedQuantity(
+            request.SortedQuantityKg, requiredQuantityKg, request.ActorUserId, DateTime.UtcNow);
 
         await progress.SaveChangesAsync(ct);
 
-        return Result<HubSortingProgressDto>.Success(line.ToDto());
+        return Result<HubSortingProgressDto>.Success(line.ToDto(order));
     }
 }

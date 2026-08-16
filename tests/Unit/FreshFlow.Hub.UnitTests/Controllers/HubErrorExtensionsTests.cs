@@ -50,6 +50,7 @@ public sealed class HubErrorExtensionsTests
     [InlineData("HUB_CAPACITY_BELOW_OCCUPIED")]
     [InlineData("ORDER_ITEM_NOT_IN_INBOUND")]
     [InlineData("PACKING_CODE_MISSING")]
+    [InlineData("INVALID_SORTED_QUANTITY")]
     public void ToActionResult_HubDispatchValidationErrors_Return422(string code)
     {
         var result = Error.Validation(code, "dispatch").ToActionResult();

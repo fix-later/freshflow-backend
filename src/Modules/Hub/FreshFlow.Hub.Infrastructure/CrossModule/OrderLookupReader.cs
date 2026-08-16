@@ -21,4 +21,24 @@ internal sealed class OrderLookupReader(AppDbContext db) : IOrderLookupReader
                 row.Quantity,
                 row.ActualQuantity);
     }
+
+
+    public async Task<IReadOnlyList<OrderLookupDto>> FindByOrderItemIdsAsync(
+        IReadOnlyCollection<Guid> orderItemIds,
+        CancellationToken ct)
+    {
+        if (orderItemIds.Count == 0)
+            return [];
+
+        return await db.Set<OrderLookupRow>()
+            .AsNoTracking()
+            .Where(row => orderItemIds.Contains(row.OrderItemId))
+            .Select(row => new OrderLookupDto(
+                row.OrderItemId,
+                row.OrderId,
+                row.MarketProductId,
+                row.Quantity,
+                row.ActualQuantity))
+            .ToListAsync(ct);
+    }
 }

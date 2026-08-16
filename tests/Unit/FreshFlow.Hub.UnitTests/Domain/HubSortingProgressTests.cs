@@ -24,13 +24,13 @@ public sealed class HubSortingProgressTests
     }
 
     [Fact]
-    public void MarkSorted_ValidQuantity_TransitionsToSorted()
+    public void UpdateSortedQuantity_FullQuantity_TransitionsToSorted()
     {
         var line = HubSortingProgress.Create(Guid.NewGuid(), new DateOnly(2026, 7, 29), Guid.NewGuid());
         var userId = Guid.NewGuid();
         var at = DateTime.UtcNow;
 
-        line.MarkSorted(5.5m, userId, at);
+        line.UpdateSortedQuantity(5.5m, 5.5m, userId, at);
 
         line.Status.Should().Be(HubSortingProgress.StatusSorted);
         line.SortedQuantityKg.Should().Be(5.5m);
@@ -39,14 +39,14 @@ public sealed class HubSortingProgressTests
     }
 
     [Fact]
-    public void MarkSorted_CalledAgain_OverwritesInsteadOfThrowing()
+    public void UpdateSortedQuantity_CalledAgain_StaysPendingUntilRequiredQuantity()
     {
         var line = HubSortingProgress.Create(Guid.NewGuid(), new DateOnly(2026, 7, 29), Guid.NewGuid());
-        line.MarkSorted(3m, Guid.NewGuid(), DateTime.UtcNow);
+        line.UpdateSortedQuantity(3m, 7m, Guid.NewGuid(), DateTime.UtcNow);
         var secondUserId = Guid.NewGuid();
         var secondAt = DateTime.UtcNow.AddMinutes(1);
 
-        line.MarkSorted(7m, secondUserId, secondAt);
+        line.UpdateSortedQuantity(7m, 7m, secondUserId, secondAt);
 
         line.Status.Should().Be(HubSortingProgress.StatusSorted);
         line.SortedQuantityKg.Should().Be(7m);
@@ -57,11 +57,11 @@ public sealed class HubSortingProgressTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void MarkSorted_InvalidQuantity_Throws(decimal quantity)
+    public void UpdateSortedQuantity_InvalidQuantity_Throws(decimal quantity)
     {
         var line = HubSortingProgress.Create(Guid.NewGuid(), new DateOnly(2026, 7, 29), Guid.NewGuid());
 
-        var act = () => line.MarkSorted(quantity, Guid.NewGuid(), DateTime.UtcNow);
+        var act = () => line.UpdateSortedQuantity(quantity, 1m, Guid.NewGuid(), DateTime.UtcNow);
 
         act.Should().Throw<ArgumentOutOfRangeException>();
     }

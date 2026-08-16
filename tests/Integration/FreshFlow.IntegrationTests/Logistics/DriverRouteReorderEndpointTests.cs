@@ -99,7 +99,7 @@ public sealed class DriverRouteReorderEndpointTests(AuthWebAppFactory factory)
         await db.SaveChangesAsync();
         var sorting = FreshFlow.Hub.Domain.Entities.HubSortingProgress.Create(
             hub.Id, ServiceDate, Guid.NewGuid());
-        sorting.MarkSorted(1m, Guid.NewGuid(), DateTime.UtcNow);
+        sorting.UpdateSortedQuantity(1m, 1m, Guid.NewGuid(), DateTime.UtcNow);
         db.Add(sorting);
         await db.SaveChangesAsync();
     }

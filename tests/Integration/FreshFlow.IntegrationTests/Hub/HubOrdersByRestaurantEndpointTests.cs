@@ -42,23 +42,30 @@ public sealed class HubOrdersByRestaurantEndpointTests(AuthWebAppFactory factory
         var first = body.Data.Restaurants.Single(group => group.RestaurantId == firstRestaurantId);
         first.RestaurantName.Should().Be("Nhà hàng A");
         first.OrderCount.Should().Be(1);
-        first.Lines.Should().ContainSingle(line =>
-            line.OrderId == seed.FirstAtHubOrderId &&
-            line.ProductName == "Hub fish" &&
-            line.OrderedQuantity == 2 &&
-            line.MarketProductId == seed.MarketProductId &&
-            line.ProductId == seed.ProductId &&
-            line.Unit == seed.Unit &&
-            line.CapacityKg == 12m);
+        var firstOrder = first.Orders.Should().ContainSingle().Which;
+        firstOrder.OrderId.Should().Be(seed.FirstAtHubOrderId);
+        firstOrder.Status.Should().Be("PENDING");
+        var firstItem = firstOrder.Items.Should().ContainSingle().Which;
+        firstItem.ProductName.Should().Be("Hub fish");
+        firstItem.OrderedQuantity.Should().Be(2);
+        firstItem.RequiredQuantity.Should().Be(2m);
+        firstItem.MarketProductId.Should().Be(seed.MarketProductId);
+        firstItem.ProductId.Should().Be(seed.ProductId);
+        firstItem.Unit.Should().Be(seed.Unit);
+        firstItem.PackingCapacityKg.Should().Be(12m);
+        firstItem.PackageCount.Should().Be(1);
+        firstItem.SortedQuantityKg.Should().Be(0m);
+        firstItem.RemainingQuantityKg.Should().Be(2m);
 
         var second = body.Data.Restaurants.Single(group => group.RestaurantId == secondRestaurantId);
         second.RestaurantName.Should().Be("Nhà hàng B");
         second.OrderCount.Should().Be(1);
-        second.Lines.Should().ContainSingle(line =>
-            line.OrderId == seed.SecondAtHubOrderId &&
-            line.OrderedQuantity == 3);
+        var secondOrder = second.Orders.Should().ContainSingle().Which;
+        secondOrder.OrderId.Should().Be(seed.SecondAtHubOrderId);
+        secondOrder.Items.Should().ContainSingle()
+            .Which.OrderedQuantity.Should().Be(3);
 
-        body.Data.Restaurants.SelectMany(group => group.Lines).Select(line => line.OrderId)
+        body.Data.Restaurants.SelectMany(group => group.Orders).Select(order => order.OrderId)
             .Should().NotContain([
                 seed.BatchedOrderId,
                 seed.DraftOrderId,
@@ -72,7 +79,7 @@ public sealed class HubOrdersByRestaurantEndpointTests(AuthWebAppFactory factory
         var includedFirst = included!.Data!.Restaurants
             .Single(group => group.RestaurantId == firstRestaurantId);
         includedFirst.OrderCount.Should().Be(2);
-        includedFirst.Lines.Select(line => line.OrderId)
+        includedFirst.Orders.Select(order => order.OrderId)
             .Should().BeEquivalentTo(new[] { seed.FirstAtHubOrderId, seed.BatchedOrderId });
     }
 

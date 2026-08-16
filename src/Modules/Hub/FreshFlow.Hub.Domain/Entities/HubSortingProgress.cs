@@ -39,20 +39,29 @@ public sealed class HubSortingProgress : BaseEntity
         };
     }
 
-    // Idempotent by design: calling this again for the same hub/date/item row overwrites the
-    // quantity/who/when instead of throwing.
-    public void MarkSorted(decimal sortedQuantityKg, Guid sortedByUserId, DateTime at)
+    public void UpdateSortedQuantity(
+        decimal sortedQuantityKg,
+        decimal requiredQuantityKg,
+        Guid sortedByUserId,
+        DateTime at)
     {
         if (sortedQuantityKg <= 0m)
             throw new ArgumentOutOfRangeException(
                 nameof(sortedQuantityKg), sortedQuantityKg, "Sorted quantity must be greater than zero.");
+        if (requiredQuantityKg <= 0m)
+            throw new ArgumentOutOfRangeException(
+                nameof(requiredQuantityKg), requiredQuantityKg, "Required quantity must be greater than zero.");
+        if (sortedQuantityKg < SortedQuantityKg || sortedQuantityKg > requiredQuantityKg)
+            throw new ArgumentOutOfRangeException(
+                nameof(sortedQuantityKg), sortedQuantityKg,
+                "Sorted quantity cannot decrease or exceed the required quantity.");
         if (sortedByUserId == Guid.Empty)
             throw new ArgumentException("Sorted-by user id is required.", nameof(sortedByUserId));
 
         SortedQuantityKg = sortedQuantityKg;
-        Status = StatusSorted;
+        Status = sortedQuantityKg == requiredQuantityKg ? StatusSorted : StatusPending;
         SortedByUserId = sortedByUserId;
-        SortedAt = at;
+        SortedAt = Status == StatusSorted ? at : null;
         UpdatedAt = at;
     }
 }

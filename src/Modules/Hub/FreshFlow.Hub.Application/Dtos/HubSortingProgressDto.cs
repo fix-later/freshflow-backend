@@ -8,4 +8,7 @@ public sealed record HubSortingProgressDto(
     decimal SortedQuantityKg,
     string Status,
     Guid? SortedByUserId,
-    DateTime? SortedAt);
+    DateTime? SortedAt,
+    Guid? OrderId = null,
+    decimal? RequiredQuantityKg = null,
+    decimal? RemainingQuantityKg = null);

@@ -16,4 +16,10 @@ internal sealed class InMemoryOrderLookupReader : IOrderLookupReader
 
     public Task<OrderLookupDto?> FindByOrderItemIdAsync(Guid orderItemId, CancellationToken ct) =>
         Task.FromResult(_orders.GetValueOrDefault(orderItemId));
+
+    public Task<IReadOnlyList<OrderLookupDto>> FindByOrderItemIdsAsync(
+        IReadOnlyCollection<Guid> orderItemIds,
+        CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<OrderLookupDto>>(
+            orderItemIds.Where(_orders.ContainsKey).Select(id => _orders[id]).ToList());
 }

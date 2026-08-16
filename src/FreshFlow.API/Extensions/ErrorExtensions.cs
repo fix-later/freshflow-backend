@@ -105,6 +105,7 @@ public static class ErrorExtensions
                         or "HUB_CAPACITY_BELOW_OCCUPIED"
                         or "INSUFFICIENT_HUB_STOCK" or "INBOUND_NOT_ARRIVED"
                         or "ORDER_ITEM_NOT_IN_INBOUND"
+                        or "INVALID_SORTED_QUANTITY"
                         or "OUTBOUND_ROUTE_INVALID" or "ROUTE_HAS_NO_DRIVER"
                         or "DRIVER_REQUIRED" or "DRIVER_ROUTE_MISMATCH"
                         or "ROUTE_HUB_MISMATCH" or "PICKUP_ORDERS_INCOMPLETE"
