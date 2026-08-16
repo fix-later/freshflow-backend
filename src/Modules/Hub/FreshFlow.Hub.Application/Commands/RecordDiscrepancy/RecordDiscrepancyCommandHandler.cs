@@ -34,7 +34,9 @@ internal sealed class RecordDiscrepancyCommandHandler(
         if (order is null)
             return Result<HubDiscrepancyDto>.Failure(Error.NotFound("ORDER_ITEM", request.OrderItemId));
 
-        if (!inbound.Items.Any(item => item.MarketProductId == order.MarketProductId))
+        if (inbound.DeliveryScheduleId is not { } batchId ||
+            !await orders.IsOrderInProcurementBatchAsync(batchId, order.OrderId, ct) ||
+            !inbound.Items.Any(item => item.MarketProductId == order.MarketProductId))
         {
             return Result<HubDiscrepancyDto>.Failure(
                 Error.Validation("ORDER_ITEM_NOT_IN_INBOUND", "Order item does not match any product in this inbound event."));

@@ -4,6 +4,11 @@ public interface IOrderLookupReader
 {
     public Task<OrderLookupDto?> FindByOrderItemIdAsync(Guid orderItemId, CancellationToken ct);
 
+    public Task<bool> IsOrderInProcurementBatchAsync(
+        Guid procurementBatchId,
+        Guid orderId,
+        CancellationToken ct);
+
     public Task<IReadOnlyList<OrderLookupDto>> FindByOrderItemIdsAsync(
         IReadOnlyCollection<Guid> orderItemIds,
         CancellationToken ct);

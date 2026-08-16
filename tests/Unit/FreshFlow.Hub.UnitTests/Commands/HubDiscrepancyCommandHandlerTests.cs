@@ -29,7 +29,11 @@ public sealed class HubDiscrepancyCommandHandlerTests
         var orderId = Guid.NewGuid();
         await hubs.AddAsync(hub, default);
         await inbounds.AddAsync(inbound, default);
-        orders.Add(orderItemId, orderId, inbound.Items.Single().MarketProductId);
+        orders.Add(
+            orderItemId,
+            orderId,
+            inbound.Items.Single().MarketProductId,
+            procurementBatchId: inbound.DeliveryScheduleId);
         const string proofUrl = "https://res.cloudinary.com/demo/image/upload/hub-proof.jpg";
         var sut = new RecordDiscrepancyCommandHandler(hubs, inbounds, discrepancies, orders);
 
@@ -68,7 +72,11 @@ public sealed class HubDiscrepancyCommandHandlerTests
         var orderItemId = Guid.NewGuid();
         await hubs.AddAsync(hub, default);
         await inbounds.AddAsync(inbound, default);
-        orders.Add(orderItemId, Guid.NewGuid(), inbound.Items.Single().MarketProductId);
+        orders.Add(
+            orderItemId,
+            Guid.NewGuid(),
+            inbound.Items.Single().MarketProductId,
+            procurementBatchId: inbound.DeliveryScheduleId);
         var sut = new RecordDiscrepancyCommandHandler(hubs, inbounds, discrepancies, orders);
 
         var result = await sut.Handle(
@@ -130,7 +138,46 @@ public sealed class HubDiscrepancyCommandHandlerTests
         var orderItemId = Guid.NewGuid();
         await hubs.AddAsync(hub, default);
         await inbounds.AddAsync(inbound, default);
-        orders.Add(orderItemId, Guid.NewGuid(), Guid.NewGuid());
+        orders.Add(
+            orderItemId,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            procurementBatchId: inbound.DeliveryScheduleId);
+        var sut = new RecordDiscrepancyCommandHandler(hubs, inbounds, discrepancies, orders);
+
+        var result = await sut.Handle(
+            new RecordDiscrepancyCommand(
+                hub.Id,
+                inbound.Id,
+                orderItemId,
+                1m,
+                HubDiscrepancy.ConditionMissing,
+                null),
+            default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_ITEM_NOT_IN_INBOUND");
+        discrepancies.SaveChangesCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RecordDiscrepancy_OrderFromDifferentBatch_ReturnsValidationAsync()
+    {
+        var hubs = new InMemoryHubRepository();
+        var inbounds = new InMemoryHubInboundRepository();
+        var orders = new InMemoryOrderLookupReader();
+        var discrepancies = new InMemoryHubDiscrepancyRepository();
+        var hub = HubEntity.Create("Main Hub", null, null, null, 1000, null);
+        var inbound = CreateInbound(hub.Id);
+        inbound.ConfirmArrival();
+        var orderItemId = Guid.NewGuid();
+        await hubs.AddAsync(hub, default);
+        await inbounds.AddAsync(inbound, default);
+        orders.Add(
+            orderItemId,
+            Guid.NewGuid(),
+            inbound.Items.Single().MarketProductId,
+            procurementBatchId: Guid.NewGuid());
         var sut = new RecordDiscrepancyCommandHandler(hubs, inbounds, discrepancies, orders);
 
         var result = await sut.Handle(
@@ -217,7 +264,12 @@ public sealed class HubDiscrepancyCommandHandlerTests
         var orderItemId = Guid.NewGuid();
         await hubs.AddAsync(hub, default);
         await inbounds.AddAsync(inbound, default);
-        orders.Add(orderItemId, Guid.NewGuid(), inbound.Items.Single().MarketProductId, quantity: 2m);
+        orders.Add(
+            orderItemId,
+            Guid.NewGuid(),
+            inbound.Items.Single().MarketProductId,
+            quantity: 2m,
+            procurementBatchId: inbound.DeliveryScheduleId);
         var sut = new RecordDiscrepancyCommandHandler(
             hubs,
             inbounds,
@@ -365,7 +417,7 @@ public sealed class HubDiscrepancyCommandHandlerTests
             hubId,
             null,
             null,
-            null,
+            Guid.NewGuid(),
             [new HubInboundItem(Guid.NewGuid(), null, 1m)],
             DateTime.UtcNow);
 

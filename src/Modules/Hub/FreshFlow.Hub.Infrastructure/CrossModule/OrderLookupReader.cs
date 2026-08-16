@@ -22,6 +22,16 @@ internal sealed class OrderLookupReader(AppDbContext db) : IOrderLookupReader
                 row.ActualQuantity);
     }
 
+    public Task<bool> IsOrderInProcurementBatchAsync(
+        Guid procurementBatchId,
+        Guid orderId,
+        CancellationToken ct) =>
+        db.Set<HubProcurementOrderRow>()
+            .AsNoTracking()
+            .AnyAsync(row =>
+                row.ProcurementBatchId == procurementBatchId &&
+                row.OrderId == orderId,
+                ct);
 
     public async Task<IReadOnlyList<OrderLookupDto>> FindByOrderItemIdsAsync(
         IReadOnlyCollection<Guid> orderItemIds,
