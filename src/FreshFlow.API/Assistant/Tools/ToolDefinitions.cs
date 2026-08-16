@@ -45,7 +45,7 @@ public static class ToolDefinitions
 
     private static AssistantTool SearchProducts(ISender sender) => new(
         Name: "search_products",
-        Description: "Tìm sản phẩm trong chợ theo tên hoặc danh mục. Trả về giá hiện tại và số lượng còn lại.",
+        Description: "Tìm sản phẩm trong chợ theo tên hoặc danh mục. Trả về giá, số lượng còn lại và sellingUnit.weightKg dùng làm bước số lượng đặt.",
         ParametersSchema: ToolArgsSchema.Object(
             properties: new
             {
@@ -225,7 +225,7 @@ public static class ToolDefinitions
 
     private static AssistantTool CreateDraftOrder(ISender sender) => new(
         Name: "create_draft_order",
-        Description: "Tạo đơn hàng nháp (draft) với danh sách sản phẩm và số lượng đã chọn.",
+        Description: "Tạo đơn hàng nháp với số lượng người dùng đã xác nhận; nếu search_products trả sellingUnit.weightKg thì quantity phải là bội số của giá trị đó.",
         ParametersSchema: ToolArgsSchema.Object(
             properties: new
             {
@@ -239,7 +239,7 @@ public static class ToolDefinitions
                         properties = new
                         {
                             marketProductId = new { type = "string", description = "Id sản phẩm trong chợ (UUID)." },
-                            quantity = new { type = "integer", description = "Số lượng." }
+                            quantity = new { type = "integer", description = "Tổng số lượng; phải là bội số dương của sellingUnit.weightKg khi sản phẩm có giá trị này." }
                         },
                         required = new[] { "marketProductId", "quantity" }
                     }

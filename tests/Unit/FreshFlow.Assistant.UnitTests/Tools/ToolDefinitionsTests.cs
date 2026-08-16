@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FluentAssertions;
+using FreshFlow.API.Assistant;
 using FreshFlow.API.Assistant.Tools;
 using FreshFlow.Auth.Application.Abstractions;
 using FreshFlow.Auth.Application.Queries.GetDeliveryAddresses;
@@ -56,6 +57,25 @@ public sealed class ToolDefinitionsTests
             "preview_confirmation",
             "confirm_order");
         Tools.Should().HaveCount(11);
+    }
+
+    [Fact]
+    public void Packing_quantity_rule_is_exposed_to_the_LLM()
+    {
+        AssistantSystemPrompt.Text.Should().Contain("sellingUnit.weightKg").And.Contain("bội số");
+        Tools["search_products"].Description.Should().Contain("sellingUnit.weightKg");
+
+        var createDraft = Tools["create_draft_order"];
+        createDraft.Description.Should().Contain("sellingUnit.weightKg").And.Contain("bội số");
+        createDraft.ParametersSchema
+            .GetProperty("properties")
+            .GetProperty("items")
+            .GetProperty("items")
+            .GetProperty("properties")
+            .GetProperty("quantity")
+            .GetProperty("description")
+            .GetString()
+            .Should().Contain("sellingUnit.weightKg").And.Contain("bội số");
     }
 
     [Fact]
