@@ -131,6 +131,11 @@ public sealed class OperationalProofEndpointTests(AuthWebAppFactory factory)
             .ReadFromJsonAsync<Envelope<ProcurementBatchListDto>>();
         body!.Data!.Batches.SelectMany(batch => batch.Exceptions)
             .Should().Contain(exception => exception.ProofImageUrl == proofUrl);
+        var batchId = body.Data.Batches.Single(batch =>
+            batch.Exceptions.Any(exception => exception.ProofImageUrl == proofUrl)).Id;
+        var detail = await _client.GetFromJsonAsync<Envelope<ProcurementBatchDto>>(
+            $"/api/v1/admin/order-groups/{batchId}");
+        detail!.Data!.Exceptions.Should().Contain(exception => exception.ProofImageUrl == proofUrl);
 
         var write = await _client.PostAsJsonAsync(
             "/api/v1/admin/order-groups/auto-batch",
@@ -144,6 +149,8 @@ public sealed class OperationalProofEndpointTests(AuthWebAppFactory factory)
 
         Authenticate(await LoginAsync("admin@test.freshflow", "AdminP@ss1"));
         (await _client.GetAsync("/api/v1/admin/order-groups?pageSize=100"))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        (await _client.GetAsync($"/api/v1/admin/order-groups/{batchId}"))
             .StatusCode.Should().Be(HttpStatusCode.OK);
     }
 

@@ -32,6 +32,7 @@ using FreshFlow.Procurement.Application.Queries.GetMarketSession;
 using FreshFlow.Procurement.Application.Queries.GetMarketSessionResourceOptions;
 using FreshFlow.Procurement.Application.Queries.GetMarketSessions;
 using FreshFlow.Procurement.Application.Queries.GetMarketSessionTracking;
+using FreshFlow.Procurement.Application.Queries.GetProcurementBatch;
 using FreshFlow.Procurement.Application.Queries.GetProcurementBatches;
 using FreshFlow.Procurement.Application.Queries.GetProcurementProgress;
 using MediatR;
@@ -343,6 +344,14 @@ public sealed class AdminController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new GetProcurementBatchesQuery(page, pageSize, date, marketId),
             ct);
+        return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
+    }
+
+    [HttpGet("order-groups/{batchId:guid}")]
+    [Authorize(Roles = "admin,operations_manager")]
+    public async Task<IActionResult> GetOrderGroupAsync(Guid batchId, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetProcurementBatchQuery(batchId), ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
 
