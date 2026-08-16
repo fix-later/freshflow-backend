@@ -10,5 +10,6 @@ internal sealed class FileClaimCommandValidator : AbstractValidator<FileClaimCom
         RuleFor(command => command.OrderId).NotEmpty();
         RuleFor(command => command.Amount).GreaterThan(0m);
         RuleFor(command => command.Reason).NotEmpty().MaximumLength(500);
+        RuleFor(command => command.ProofImageUrl).MaximumLength(2_000);
     }
 }

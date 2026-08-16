@@ -43,7 +43,8 @@ internal sealed class FileClaimCommandHandler(
             request.Amount,
             request.Reason,
             request.UserId,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            request.ProofImageUrl);
 
         await claims.AddAsync(claim, cancellationToken);
         await claims.SaveChangesAsync(cancellationToken);

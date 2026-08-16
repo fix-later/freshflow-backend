@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using FreshFlow.API.Extensions;
 using FreshFlow.Orders.Application.Commands.ApproveClaim;
+using FreshFlow.Orders.Application.Commands.CreateClaimProofUploadSignature;
 using FreshFlow.Orders.Application.Commands.FileClaim;
 using FreshFlow.Orders.Application.Commands.RejectClaim;
 using FreshFlow.Orders.Application.Queries.GetClaimById;
@@ -24,11 +25,24 @@ public sealed class ClaimsController(ISender sender) : ControllerBase
         CancellationToken ct)
     {
         var result = await sender.Send(
-            new FileClaimCommand(ResolveUserId(), orderId, body.Amount, body.Reason),
+            new FileClaimCommand(ResolveUserId(), orderId, body.Amount, body.Reason, body.ProofImageUrl),
             ct);
 
         return result.IsSuccess
             ? CreatedAtAction(nameof(GetAsync), new { claimId = result.Value.ClaimId }, ApiResponse.Ok(result.Value))
+            : result.Error.ToActionResult();
+    }
+
+    [HttpPost("/api/v1/orders/{orderId:guid}/claims/upload-signature")]
+    [Authorize(Roles = "restaurant")]
+    public async Task<IActionResult> CreateUploadSignatureAsync(Guid orderId, CancellationToken ct)
+    {
+        var result = await sender.Send(
+            new CreateClaimProofUploadSignatureCommand(ResolveUserId(), orderId),
+            ct);
+
+        return result.IsSuccess
+            ? Ok(ApiResponse.Ok(result.Value))
             : result.Error.ToActionResult();
     }
 
@@ -111,6 +125,6 @@ public sealed class ClaimsController(ISender sender) : ControllerBase
     }
 }
 
-public sealed record FileClaimRequest(decimal Amount, string Reason);
+public sealed record FileClaimRequest(decimal Amount, string Reason, string? ProofImageUrl = null);
 public sealed record ApproveClaimRequest(string? DecisionNote);
 public sealed record RejectClaimRequest(string DecisionNote);

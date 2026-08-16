@@ -11,6 +11,7 @@ internal static class OrderClaimDtoMapper
             claim.RestaurantId,
             claim.Amount,
             claim.Reason,
+            claim.ProofImageUrl,
             claim.Status.ToString().ToLowerInvariant(),
             claim.CreatedBy,
             claim.CreatedAt,

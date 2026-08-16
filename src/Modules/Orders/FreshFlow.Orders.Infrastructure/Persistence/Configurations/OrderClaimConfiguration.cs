@@ -22,6 +22,8 @@ internal sealed class OrderClaimConfiguration : IEntityTypeConfiguration<OrderCl
         builder.Property(claim => claim.Reason)
             .HasMaxLength(500)
             .IsRequired();
+        builder.Property(claim => claim.ProofImageUrl)
+            .HasMaxLength(2_000);
         builder.Property(claim => claim.Status)
             .HasConversion<string>()
             .HasMaxLength(20)

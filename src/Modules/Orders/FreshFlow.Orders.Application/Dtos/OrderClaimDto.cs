@@ -6,6 +6,7 @@ public sealed record OrderClaimDto(
     Guid RestaurantId,
     decimal Amount,
     string Reason,
+    string? ProofImageUrl,
     string Status,
     Guid CreatedBy,
     DateTime CreatedAt,

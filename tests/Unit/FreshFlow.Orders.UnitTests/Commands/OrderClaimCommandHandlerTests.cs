@@ -58,6 +58,25 @@ public sealed class OrderClaimCommandHandlerTests
     }
 
     [Fact]
+    public async Task FileClaim_WithProofImageUrl_PersistsItOnTheClaimAsync()
+    {
+        var order = NewAtHubOrder(RestaurantId);
+        _orders.FindByIdAsync(order.Id, Arg.Any<CancellationToken>()).Returns(order);
+        var sut = new FileClaimCommandHandler(_orders, _claims, _restaurants);
+
+        var result = await sut.Handle(
+            new FileClaimCommand(
+                UserId, order.Id, 50_000m, "Damaged produce", "https://res.cloudinary.com/proof.jpg"),
+            default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.ProofImageUrl.Should().Be("https://res.cloudinary.com/proof.jpg");
+        await _claims.Received(1).AddAsync(
+            Arg.Is<OrderClaim>(claim => claim.ProofImageUrl == "https://res.cloudinary.com/proof.jpg"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task FileClaim_OtherRestaurantsOrder_ReturnsForbiddenAsync()
     {
         var order = NewAtHubOrder(Guid.NewGuid());

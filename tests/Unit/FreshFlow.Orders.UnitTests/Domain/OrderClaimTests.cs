@@ -27,6 +27,21 @@ public sealed class OrderClaimTests
         claim.ReviewedBy.Should().BeNull();
         claim.ReviewedAt.Should().BeNull();
         claim.RefundTransactionId.Should().BeNull();
+        claim.ProofImageUrl.Should().BeNull();
+    }
+
+    [Fact]
+    public void Constructor_TrimsProofImageUrl_BlankBecomesNull()
+    {
+        var withProof = new OrderClaim(
+            OrderId, RestaurantId, 50_000m, "Damaged produce", CreatorId, SubmittedAt,
+            proofImageUrl: " https://res.cloudinary.com/proof.jpg ");
+        var withBlankProof = new OrderClaim(
+            OrderId, RestaurantId, 50_000m, "Damaged produce", CreatorId, SubmittedAt,
+            proofImageUrl: "   ");
+
+        withProof.ProofImageUrl.Should().Be("https://res.cloudinary.com/proof.jpg");
+        withBlankProof.ProofImageUrl.Should().BeNull();
     }
 
     [Fact]

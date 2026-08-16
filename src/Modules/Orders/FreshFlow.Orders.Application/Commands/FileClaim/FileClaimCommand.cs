@@ -7,4 +7,5 @@ public sealed record FileClaimCommand(
     Guid UserId,
     Guid OrderId,
     decimal Amount,
-    string Reason) : ICommand<OrderClaimDto>;
+    string Reason,
+    string? ProofImageUrl = null) : ICommand<OrderClaimDto>;

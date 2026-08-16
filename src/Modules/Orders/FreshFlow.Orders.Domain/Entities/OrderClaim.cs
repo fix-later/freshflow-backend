@@ -14,7 +14,8 @@ public sealed class OrderClaim : AggregateRoot
         decimal amount,
         string reason,
         Guid createdBy,
-        DateTime createdAt)
+        DateTime createdAt,
+        string? proofImageUrl = null)
     {
         if (orderId == Guid.Empty)
             throw new ArgumentException("Order id is required.", nameof(orderId));
@@ -31,6 +32,7 @@ public sealed class OrderClaim : AggregateRoot
         RestaurantId = restaurantId;
         Amount = amount;
         Reason = reason.Trim();
+        ProofImageUrl = string.IsNullOrWhiteSpace(proofImageUrl) ? null : proofImageUrl.Trim();
         Status = OrderClaimStatus.Submitted;
         CreatedBy = createdBy;
         CreatedAt = createdAt;
@@ -41,6 +43,7 @@ public sealed class OrderClaim : AggregateRoot
     public Guid RestaurantId { get; private set; }
     public decimal Amount { get; private set; }
     public string Reason { get; private set; } = string.Empty;
+    public string? ProofImageUrl { get; private set; }
     public OrderClaimStatus Status { get; private set; }
     public Guid CreatedBy { get; private set; }
     public Guid? ReviewedBy { get; private set; }
