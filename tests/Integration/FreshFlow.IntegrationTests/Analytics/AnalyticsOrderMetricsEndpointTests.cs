@@ -54,21 +54,22 @@ public sealed class AnalyticsOrderMetricsEndpointTests(AuthWebAppFactory factory
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<Envelope<OrderMetricsDto>>();
-        body!.Data!.Summary.TotalOrders.Should().Be(3);
+        body!.Data!.Summary.TotalOrders.Should().Be(2);
         body.Data.Summary.TotalRevenueVND.Should().Be(300m);
-        body.Data.Summary.AvgOrderValueVND.Should().Be(100m);
+        body.Data.Summary.AvgOrderValueVND.Should().Be(150m);
         body.Data.Summary.CancelledCount.Should().Be(1);
-        body.Data.Summary.CancellationRatePercent.Should().Be(33.33m);
+        body.Data.Summary.CancellationRatePercent.Should().Be(50m);
         body.Data.Summary.DeliveredCount.Should().Be(1);
         body.Data.Summary.StatusCounts.Should().HaveCount(8);
-        body.Data.Summary.StatusCounts["Draft"].Should().Be(1);
+        // The draft order is a cart, not a placed order: the seam filters it out entirely.
+        body.Data.Summary.StatusCounts["Draft"].Should().Be(0);
         body.Data.Summary.StatusCounts["Confirmed"].Should().Be(0);
         body.Data.Summary.StatusCounts["Delivered"].Should().Be(1);
         body.Data.Summary.StatusCounts["Cancelled"].Should().Be(1);
         body.Data.Buckets.Should().ContainSingle().Which.Should().BeEquivalentTo(new
         {
             Date = new DateOnly(2026, 7, 16),
-            OrderCount = 3,
+            OrderCount = 2,
             RevenueVND = 300m
         });
 

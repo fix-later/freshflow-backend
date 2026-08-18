@@ -18,7 +18,7 @@ public sealed class AnalyticsOverviewEndpointTests(AuthWebAppFactory factory)
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
-    public async Task Overview_ExecutesSeamSql_UsesVietnamDay_ExcludesSoftDeleted_AndDraftRevenueAsync()
+    public async Task Overview_ExecutesSeamSql_UsesVietnamDay_ExcludesSoftDeleted_AndDraftsAsync()
     {
         await AuthenticateAsAdminAsync();
         var restaurant = await CreateRestaurantAsync();
@@ -38,7 +38,7 @@ public sealed class AnalyticsOverviewEndpointTests(AuthWebAppFactory factory)
             var at0030NextVietnamDay = new DateTime(2026, 7, 16, 17, 30, 0, DateTimeKind.Utc);
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"UPDATE orders SET \"CreatedAt\" = {at2330Vietnam}, \"TotalAmount\" = {100m}, \"Status\" = 'Confirmed' WHERE \"Id\" = {included.Id}");
-            // Draft revenue is excluded, but the order still counts toward orders/pending.
+            // Drafts are carts: excluded from orders, revenue and pending alike.
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"UPDATE orders SET \"CreatedAt\" = {at2330Vietnam}, \"TotalAmount\" = {500m} WHERE \"Id\" = {draftInRange.Id}");
             await db.Database.ExecuteSqlInterpolatedAsync(
@@ -53,9 +53,9 @@ public sealed class AnalyticsOverviewEndpointTests(AuthWebAppFactory factory)
         var body = await response.Content.ReadFromJsonAsync<Envelope<DashboardOverviewDto>>();
         body.Should().NotBeNull();
         body!.Data.Should().NotBeNull();
-        body.Data!.OrdersToday.Should().Be(2);
+        body.Data!.OrdersToday.Should().Be(1);
         body.Data.RevenueToday.Should().Be(100m);
-        body.Data.PendingOrders.Should().Be(2);
+        body.Data.PendingOrders.Should().Be(1);
         body.Data.CancelledToday.Should().Be(0);
         body.Data.ActiveProcurementBatches.Should().Be(0);
         body.Data.DeliveriesToday.Should().Be(0);

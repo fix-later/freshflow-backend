@@ -8,6 +8,8 @@ internal sealed class OrderSummaryRowConfiguration : IEntityTypeConfiguration<Or
     public void Configure(EntityTypeBuilder<OrderSummaryRow> builder)
     {
         builder.HasNoKey();
+        // Draft orders are shopping carts, not placed orders: they would inflate order counts,
+        // dilute the average order value and skew the cancellation-rate denominator.
         builder.ToSqlQuery(
             """
             SELECT
@@ -19,6 +21,7 @@ internal sealed class OrderSummaryRowConfiguration : IEntityTypeConfiguration<Or
                 "CancelledAt" AS "CancelledAt"
             FROM orders
             WHERE "deleted_at" IS NULL
+              AND "Status" <> 'Draft'
             """);
     }
 }

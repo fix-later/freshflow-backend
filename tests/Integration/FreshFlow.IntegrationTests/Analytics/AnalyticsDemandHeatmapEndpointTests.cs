@@ -118,7 +118,7 @@ public sealed class AnalyticsDemandHeatmapEndpointTests(AuthWebAppFactory factor
         point.RestaurantName.Should().Be(primary.RestaurantName);
         point.Latitude.Should().Be(10.75m);
         point.Longitude.Should().Be(106.67m);
-        point.TotalOrderCount.Should().Be(4);
+        point.TotalOrderCount.Should().Be(3);
         point.TotalOrderValueVND.Should().Be(130m);
         point.DominantProductCategory.Should().Be(catalog.VegetableCategoryName);
         heatmapBody.Data.Should().NotContain(row =>
@@ -137,7 +137,7 @@ public sealed class AnalyticsDemandHeatmapEndpointTests(AuthWebAppFactory factor
         vietnamDayOfWeek.Should().Be(4);
         timeBody.Data.Should().ContainSingle(cell =>
             cell.DayOfWeek == vietnamDayOfWeek && cell.HourOfDay == 23)
-            .Which.OrderCount.Should().Be(7);
+            .Which.OrderCount.Should().Be(6);
         timeBody.Data.Should().NotContain(cell => cell.HourOfDay == 16);
     }
 
