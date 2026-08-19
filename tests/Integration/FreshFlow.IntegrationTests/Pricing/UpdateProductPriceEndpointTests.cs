@@ -40,20 +40,28 @@ public sealed class UpdateProductPriceEndpointTests(AuthWebAppFactory factory)
     }
 
     [Fact]
-    public async Task PatchPrice_AsAdmin_Returns403Async()
+    public async Task PatchPrice_AsAdminWithoutAssignment_Returns200Async()
     {
-        // Arrange — admin does not have market_agent role
-        var token = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
+        // Arrange — admin holds no market assignment yet may update any market
+        var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
         _client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", token);
+            new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var marketId = await CreateMarketAsync($"IT-MA-{Guid.NewGuid():N}");
+        var unitId = await GetOrCreateUnitAsync("kg");
+        var productId = await CreateProductAsync($"Tôm sú {Guid.NewGuid():N}", unitId);
+        await SeedMarketProductAsync(marketId, productId, 100_000m, 500);
 
         // Act
         var response = await _client.PatchAsJsonAsync(
-            Endpoint(Guid.NewGuid(), Guid.NewGuid()),
-            new { price = 100_000m });
+            Endpoint(marketId, productId),
+            new { price = 150_000m });
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var env = await response.Content
+            .ReadFromJsonAsync<Envelope<UpdatePriceResultBody>>();
+        env!.Data!.CurrentPrice.Should().Be(150_000m);
     }
 
     // ── Market assignment guard ───────────────────────────────────────────────

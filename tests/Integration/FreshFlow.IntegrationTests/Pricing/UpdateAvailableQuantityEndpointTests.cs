@@ -37,18 +37,28 @@ public sealed class UpdateAvailableQuantityEndpointTests(AuthWebAppFactory facto
     }
 
     [Fact]
-    public async Task PatchQuantity_AsAdmin_Returns403Async()
+    public async Task PatchQuantity_AsAdminWithoutAssignment_Returns200Async()
     {
-        // Arrange — admin role does not have market_agent permission
-        var token = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
+        // Arrange — admin holds no market assignment yet may update any market
+        var adminToken = await LoginAsync("admin@test.freshflow", "AdminP@ss1");
         _client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", token);
+            new AuthenticationHeaderValue("Bearer", adminToken);
 
+        var marketId = await CreateMarketAsync($"IT-QMA-{Guid.NewGuid():N}");
+        var unitId = await GetOrCreateUnitAsync("kg");
+        var productId = await CreateProductAsync($"Ghẹ xanh {Guid.NewGuid():N}", unitId);
+        await SeedMarketProductAsync(marketId, productId, 80_000m, 100);
+
+        // Act
         var response = await _client.PatchAsJsonAsync(
-            Endpoint(Guid.NewGuid(), Guid.NewGuid()),
-            new { quantity = 100 });
+            Endpoint(marketId, productId),
+            new { quantity = 250 });
 
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var env = await response.Content
+            .ReadFromJsonAsync<Envelope<UpdateQuantityResultBody>>();
+        env!.Data!.CurrentQuantity.Should().Be(250);
     }
 
     // ── Market assignment guard ───────────────────────────────────────────────
