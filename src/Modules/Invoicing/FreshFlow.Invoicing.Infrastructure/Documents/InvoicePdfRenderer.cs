@@ -71,6 +71,9 @@ public sealed class InvoicePdfRenderer
                         buyer.Item().Text($"Email nhận hóa đơn: {invoice.BuyerEmail}");
                 });
 
+                var charges = invoice.Lines.Where(IsCharge).ToList();
+                var goods = invoice.Lines.Where(line => !IsCharge(line)).ToList();
+
                 column.Item().Table(table =>
                 {
                     table.ColumnsDefinition(columns =>
@@ -103,17 +106,15 @@ public sealed class InvoicePdfRenderer
                             header.Cell().Element(HeaderCell).AlignCenter().Text(legend).FontSize(7);
                     });
 
-                    foreach (var (line, index) in invoice.Lines.Select((line, index) => (line, index)))
+                    var ordinal = 0;
+                    foreach (var line in goods)
+                        LineRow(table, line, ++ordinal);
+
+                    if (charges.Count > 0)
                     {
-                        Cell(table, (index + 1).ToString(Vietnamese), Align.Center);
-                        Cell(table, line.ProductName);
-                        Cell(table, line.Unit ?? string.Empty, Align.Center);
-                        Cell(table, Number(line.Quantity), Align.Right);
-                        Cell(table, Money(line.UnitPrice), Align.Right);
-                        Cell(table, Money(line.LineSubtotal), Align.Right);
-                        Cell(table, RateText(line), Align.Center);
-                        Cell(table, VatAmountText(line), Align.Right);
-                        Cell(table, Money(line.LineTotal), Align.Right);
+                        SectionRow(table, "Chi phí khác (Other charges)");
+                        foreach (var line in charges)
+                            LineRow(table, line, ++ordinal);
                     }
                 });
 
@@ -209,6 +210,28 @@ public sealed class InvoicePdfRenderer
         if (bold)
             span.Bold();
     }
+
+    private static void LineRow(TableDescriptor table, InvoiceLineDto line, int ordinal)
+    {
+        Cell(table, ordinal.ToString(Vietnamese), Align.Center);
+        Cell(table, line.ProductName);
+        Cell(table, line.Unit ?? string.Empty, Align.Center);
+        Cell(table, Number(line.Quantity), Align.Right);
+        Cell(table, Money(line.UnitPrice), Align.Right);
+        Cell(table, Money(line.LineSubtotal), Align.Right);
+        Cell(table, RateText(line), Align.Center);
+        Cell(table, VatAmountText(line), Align.Right);
+        Cell(table, Money(line.LineTotal), Align.Right);
+    }
+
+    /// <summary>Full-width band that separates the goods rows from the service charges.</summary>
+    private static void SectionRow(TableDescriptor table, string label) =>
+        table.Cell().ColumnSpan(9).Background(Colors.Grey.Lighten3)
+            .BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(3)
+            .Text(label).Bold();
+
+    /// <summary>Non-goods lines appended at issuance (delivery fee); grouped apart in the PDF.</summary>
+    private static bool IsCharge(InvoiceLineDto line) => line.ProductName == InvoiceLineNames.DeliveryFee;
 
     private static DateTime IssueDate(InvoiceDto invoice) => TimeZoneInfo.ConvertTimeFromUtc(
         DateTime.SpecifyKind(invoice.IssuedAt ?? invoice.CreatedAt, DateTimeKind.Utc), VietnamTimeZone);

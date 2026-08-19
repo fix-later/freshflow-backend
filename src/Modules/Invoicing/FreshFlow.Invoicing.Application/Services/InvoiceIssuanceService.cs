@@ -51,7 +51,9 @@ public sealed class InvoiceIssuanceService(
         }).ToList();
 
         if (order.DeliveryFee > 0m)
-            lines.Add(new InvoiceLine("Phí giao hàng", "lần", 1m, order.DeliveryFee, VatRateResolver.CodeKct, 0m));
+            lines.Add(new InvoiceLine(
+                InvoiceLineNames.DeliveryFee, InvoiceLineNames.DeliveryFeeUnit,
+                1m, order.DeliveryFee, VatRateResolver.CodeKct, 0m));
 
         var invoice = new Invoice(
             order.OrderId,
