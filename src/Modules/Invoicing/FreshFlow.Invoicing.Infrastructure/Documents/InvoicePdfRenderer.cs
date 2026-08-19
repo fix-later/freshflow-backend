@@ -34,10 +34,7 @@ public sealed class InvoicePdfRenderer
 
             page.Header().Column(column =>
             {
-                column.Item().Background(Colors.Red.Lighten4).Padding(6).AlignCenter()
-                    .Text("BẢN NHÁP / DEMO - KHÔNG CÓ GIÁ TRỊ THUẾ")
-                    .FontColor(Colors.Red.Darken3).Bold();
-                column.Item().PaddingTop(10).AlignCenter().Text("HÓA ĐƠN GIÁ TRỊ GIA TĂNG")
+                column.Item().AlignCenter().Text("HÓA ĐƠN GIÁ TRỊ GIA TĂNG")
                     .FontSize(16).Bold();
                 column.Item().AlignCenter().Text("(VAT INVOICE)").FontSize(9).Italic();
             });
@@ -79,13 +76,13 @@ public sealed class InvoicePdfRenderer
                     table.ColumnsDefinition(columns =>
                     {
                         columns.ConstantColumn(24);   // 1  Stt
-                        columns.RelativeColumn(4.2f); // 2  Tên hàng hóa, dịch vụ
-                        columns.RelativeColumn(0.9f); // 3  Đvt
-                        columns.RelativeColumn(1.0f); // 4  Số lượng
-                        columns.RelativeColumn(1.3f); // 5  Đơn giá
-                        columns.RelativeColumn(1.5f); // 6  Thành tiền trước thuế
-                        columns.RelativeColumn(1.1f); // 7  Thuế suất GTGT
-                        columns.RelativeColumn(1.3f); // 8  Tiền thuế GTGT
+                        columns.RelativeColumn(4.0f); // 2  Tên hàng hóa, dịch vụ
+                        columns.RelativeColumn(1.4f); // 3  Đvt — wide enough for spelled-out units
+                        columns.RelativeColumn(1.1f); // 4  Số lượng
+                        columns.RelativeColumn(1.2f); // 5  Đơn giá
+                        columns.RelativeColumn(1.4f); // 6  Thành tiền trước thuế
+                        columns.RelativeColumn(1.0f); // 7  Thuế suất GTGT
+                        columns.RelativeColumn(1.2f); // 8  Tiền thuế GTGT
                         columns.RelativeColumn(1.6f); // 9  Thành tiền sau thuế
                     });
 
