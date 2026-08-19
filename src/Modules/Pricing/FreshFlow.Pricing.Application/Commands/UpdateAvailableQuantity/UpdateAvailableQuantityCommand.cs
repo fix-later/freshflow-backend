@@ -16,9 +16,11 @@ namespace FreshFlow.Pricing.Application.Commands.UpdateAvailableQuantity;
 ///   Optional optimistic-concurrency token.
 ///   Must match the current <c>UpdatedAt</c> of the market_products row.
 /// </param>
+/// <param name="IsAdmin">True when the caller holds the admin role; bypasses the market-assignment guard.</param>
 public sealed record UpdateAvailableQuantityCommand(
     Guid MarketId,
     Guid ProductId,
     Guid AgentUserId,
     int Quantity,
-    DateTime? ExpectedVersion) : ICommand<UpdateAvailableQuantityResultDto>;
+    DateTime? ExpectedVersion,
+    bool IsAdmin = false) : ICommand<UpdateAvailableQuantityResultDto>;

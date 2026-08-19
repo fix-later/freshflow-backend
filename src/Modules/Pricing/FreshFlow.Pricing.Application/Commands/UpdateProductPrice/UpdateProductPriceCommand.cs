@@ -17,10 +17,12 @@ namespace FreshFlow.Pricing.Application.Commands.UpdateProductPrice;
 ///   Optional optimistic-concurrency token.
 ///   Must match the current <c>UpdatedAt</c> of the market_products row.
 /// </param>
+/// <param name="IsAdmin">True when the caller holds the admin role; bypasses the market-assignment guard.</param>
 public sealed record UpdateProductPriceCommand(
     Guid MarketId,
     Guid ProductId,
     Guid AgentUserId,
     decimal? Price,
     int? Quantity,
-    DateTime? ExpectedVersion) : ICommand<UpdateProductPriceResultDto>;
+    DateTime? ExpectedVersion,
+    bool IsAdmin = false) : ICommand<UpdateProductPriceResultDto>;

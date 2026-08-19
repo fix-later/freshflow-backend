@@ -12,7 +12,7 @@ namespace FreshFlow.Pricing.Application.Commands.UpdateAvailableQuantity;
 /// Error precedence (cheapest/most authoritative first):
 /// 422 business-rule  → quantity &lt; 0
 /// 404 market missing → market does not exist / inactive
-/// 403 access denied  → agent not assigned to this market
+/// 403 access denied  → agent not assigned to this market (admins bypass)
 /// 404 product missing → market_product row not found
 /// 409 concurrency    → expectedVersion mismatch
 /// 200 success        → raises PriceUpdatedDomainEvent for downstream handlers
@@ -40,8 +40,8 @@ internal sealed class UpdateAvailableQuantityCommandHandler(
             return Result<UpdateAvailableQuantityResultDto>.Failure(
                 Error.NotFound("MARKET", request.MarketId));
 
-        // ── 3. Agent assignment guard (403) ───────────────────────────────────
-        var isAssigned = await assignedMarketReader.HasAssignmentAsync(
+        // ── 3. Agent assignment guard (403) — admins are not assigned to markets ──
+        var isAssigned = request.IsAdmin || await assignedMarketReader.HasAssignmentAsync(
             request.AgentUserId, request.MarketId, cancellationToken);
 
         if (!isAssigned)

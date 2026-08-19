@@ -42,8 +42,9 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
 
     private static UpdateAvailableQuantityCommand Cmd(
         int quantity = 300,
-        DateTime? expectedVersion = null) =>
-        new(MarketId, ProductId, AgentId, quantity, expectedVersion);
+        DateTime? expectedVersion = null,
+        bool isAdmin = false) =>
+        new(MarketId, ProductId, AgentId, quantity, expectedVersion, isAdmin);
 
     private static MarketProduct MakeProduct(
         decimal initialPrice = 100_000m, int initialQty = 200) =>
@@ -105,6 +106,21 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
         result.Error.Code.Should().Be("MARKET_ACCESS_DENIED");
         await _mpRepo.DidNotReceive().FindByMarketAndProductAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_AdminWithoutAssignment_BypassesGuardAsync()
+    {
+        // Arrange — admins hold no market assignment rows
+        _reader.HasAssignmentAsync(AgentId, MarketId, default).Returns(false);
+        _mpRepo.FindByMarketAndProductAsync(MarketId, ProductId, default)
+            .Returns(MakeProduct());
+
+        // Act
+        var result = await _sut.Handle(Cmd(isAdmin: true), default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
     }
 
     // ── 404 Product not found ─────────────────────────────────────────────────

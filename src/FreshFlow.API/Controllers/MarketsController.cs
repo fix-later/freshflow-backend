@@ -251,10 +251,10 @@ public sealed class MarketsController(ISender sender) : ControllerBase
     /// <summary>
     /// PATCH /api/v1/markets/{marketId}/products/{productId}/price
     /// Updates the price and/or available quantity of a product at a market.
-    /// Market Agent must be assigned to this market.
+    /// Market Agent must be assigned to this market; Admin may update any market.
     /// </summary>
     [HttpPatch("{marketId:guid}/products/{productId:guid}/price")]
-    [Authorize(Roles = "market_agent")]
+    [Authorize(Roles = "admin,market_agent")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -272,7 +272,8 @@ public sealed class MarketsController(ISender sender) : ControllerBase
             return Unauthorized(ApiResponse.Err("UNAUTHORIZED", "User ID claim is missing."));
 
         var command = new UpdateProductPriceCommand(
-            marketId, productId, agentId, body.Price, body.Quantity, body.ExpectedVersion);
+            marketId, productId, agentId, body.Price, body.Quantity, body.ExpectedVersion,
+            User.IsInRole("admin"));
 
         var result = await sender.Send(command, ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
@@ -282,10 +283,10 @@ public sealed class MarketsController(ISender sender) : ControllerBase
     /// PATCH /api/v1/markets/{marketId}/products/{productId}/quantity
     /// Sets the available procurement quantity of a product at a market.
     /// quantity=0 is valid (marks product OUT_OF_STOCK but keeps it listed).
-    /// Market Agent must be assigned to this market.
+    /// Market Agent must be assigned to this market; Admin may update any market.
     /// </summary>
     [HttpPatch("{marketId:guid}/products/{productId:guid}/quantity")]
-    [Authorize(Roles = "market_agent")]
+    [Authorize(Roles = "admin,market_agent")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -303,7 +304,8 @@ public sealed class MarketsController(ISender sender) : ControllerBase
             return Unauthorized(ApiResponse.Err("UNAUTHORIZED", "User ID claim is missing."));
 
         var command = new UpdateAvailableQuantityCommand(
-            marketId, productId, agentId, body.Quantity, body.ExpectedVersion);
+            marketId, productId, agentId, body.Quantity, body.ExpectedVersion,
+            User.IsInRole("admin"));
 
         var result = await sender.Send(command, ct);
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
