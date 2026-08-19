@@ -58,10 +58,13 @@ jobs:
 
       - name: Run unit tests
         run: |
-          dotnet test tests/Unit/FreshFlow.Auth.UnitTests/ \
-            --no-build --configuration Release \
-            --logger "trx;LogFileName=results.trx" \
-            --results-directory ./TestResults
+          for proj in tests/Unit/*/; do
+            name="$(basename "$proj")"
+            dotnet test "$proj" \
+              --no-build --configuration Release \
+              --logger "trx;LogFileName=$name.trx" \
+              --results-directory ./TestResults
+          done
 
       - name: Upload results
         uses: actions/upload-artifact@v4

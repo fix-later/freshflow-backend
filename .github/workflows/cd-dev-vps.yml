@@ -1,8 +1,10 @@
 name: CD Dev VPS
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
     branches: [dev]
+    types: [completed]
   workflow_dispatch:
 
 concurrency:
@@ -12,6 +14,10 @@ concurrency:
 jobs:
   deploy:
     name: Deploy to Dev VPS
+    # Never deploy a red build. workflow_dispatch stays a manual override.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: dev-vps
 
