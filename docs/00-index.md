@@ -26,6 +26,8 @@
 | 03C | [03C-table-descriptions.md](./database/03C-table-descriptions.md) | Chức năng nghiệp vụ của từng bảng (Part A + Part B + danh sách đã loại bỏ theo DEC) | — | Current |
 | 04 | [04-api-design.md](./04-api-design.md) | REST endpoints, SignalR hubs, validation rules, RBAC matrix; Part A implemented surface + Part B planned (reconciled w/ code 2026-06-30) | — | Current |
 | 05 | [05-implementation-plan.md](./05-implementation-plan.md) | 50-task breakdown, critical path, MVP scope, folder structure, coding standards | 912 | Complete |
+| 06 | [06-context-decisions.md](./06-context-decisions.md) | Context decisions log | — | Current |
+| 07 | [07-business-rules.md](./07-business-rules.md) | Business rules catalogue — 119 luật nghiệp vụ rà soát trực tiếp từ code, kèm điểm enforce + mã lỗi, ma trận RBAC, máy trạng thái, tham số cấu hình, khoảng trống (2026-08-18) | — | Current |
 | — | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | Cross-reference gaps, inconsistencies, readiness assessment | — | Complete |
 
 > **Feature working docs** (survey/audit/context/design/tasks per feature) sống ở [`features/`](./features/README.md) — tách khỏi bộ spec core này để dễ tracking.
