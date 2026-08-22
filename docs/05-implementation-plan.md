@@ -1,5 +1,15 @@
 # FreshFlow (FFX) — Implementation Plan
 
+> ## 📜 Historical document
+>
+> This is the **original 50-task build plan** (2026-05-09). It is kept for traceability; the
+> build it describes is finished and has been extended well past it — ten modules, 97
+> migrations, 223 endpoints. Task IDs (`T001`…) are not used any more; work is tracked in Jira
+> (`SCRUM-xxx`) with per-epic working docs in [`features/`](./features/README.md).
+>
+> For the shape of the system as built, read [`02-system-architecture.md`](./02-system-architecture.md).
+
+
 **Version:** 1.0
 **Date:** 2026-05-09
 **Project:** FreshFlow – Intermediary Platform for Food Procurement and Logistics Optimization

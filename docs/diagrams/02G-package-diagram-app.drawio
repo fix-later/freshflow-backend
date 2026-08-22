@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-08-20T00:00:00.000Z" agent="Claude" version="24.7.17" type="device" pages="1">
+  <diagram id="pkg-app" name="APP (React Native)">
+    <mxGraphModel dx="1400" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="760" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="t" value="FreshFlow App — Package Diagram (React Native + Expo)" style="text;html=1;fontSize=16;fontStyle=1;fontColor=#000000;align=left;" vertex="1" parent="1"><mxGeometry x="30" y="18" width="700" height="30" as="geometry"/></mxCell>
+        <mxCell id="t2" value="Mũi tên nét đứt = phụ thuộc (import)." style="text;html=1;fontSize=11;fontColor=#000000;align=left;" vertex="1" parent="1"><mxGeometry x="30" y="42" width="700" height="20" as="geometry"/></mxCell>
+
+        <mxCell id="entry" value="index.ts · App.tsx&#10;(entry)" style="shape=folder;tabWidth=70;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="390" y="75" width="220" height="50" as="geometry"/></mxCell>
+        <mxCell id="prov" value="providers" style="shape=folder;tabWidth=70;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="390" y="150" width="220" height="45" as="geometry"/></mxCell>
+        <mxCell id="nav" value="navigation&#10;AuthStack · RestaurantTabs · MarketAgentStack · HubStack · DriverStack" style="shape=folder;tabWidth=70;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="330" y="220" width="340" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="feat" value="features ×16 — auth · orders · pricing · procurement · hub · logistics · delivery · inventory&#10;invoices · credit · claims · analytics · notifications · profile · restaurant · assistant" style="rounded=1;arcSize=6;html=1;whiteSpace=wrap;dashed=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;align=center;verticalAlign=top;spacingTop=6;" vertex="1" parent="1"><mxGeometry x="60" y="310" width="880" height="160" as="geometry"/></mxCell>
+        <mxCell id="f_scr" value="screens" style="shape=folder;tabWidth=50;tabHeight=14;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="90" y="370" width="180" height="60" as="geometry"/></mxCell>
+        <mxCell id="f_cmp" value="components" style="shape=folder;tabWidth=50;tabHeight=14;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="300" y="370" width="180" height="60" as="geometry"/></mxCell>
+        <mxCell id="f_api" value="api&#10;(hooks gọi REST)" style="shape=folder;tabWidth=50;tabHeight=14;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="510" y="370" width="180" height="60" as="geometry"/></mxCell>
+        <mxCell id="f_rt" value="realtime&#10;(SignalR)" style="shape=folder;tabWidth=50;tabHeight=14;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="720" y="370" width="180" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="cmp" value="components&#10;ui · layout · map" style="shape=folder;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="60" y="510" width="190" height="60" as="geometry"/></mxCell>
+        <mxCell id="store" value="store&#10;auth · cart · favorites" style="shape=folder;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="290" y="510" width="190" height="60" as="geometry"/></mxCell>
+        <mxCell id="svc" value="services&#10;axios client · errors · cloudinary · goong · tax" style="shape=folder;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="520" y="510" width="190" height="60" as="geometry"/></mxCell>
+        <mxCell id="base" value="config · constants&#10;types · utils" style="shape=folder;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="750" y="510" width="190" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="be" value="FreshFlow.API — REST /api" style="rounded=0;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;dashed=1;" vertex="1" parent="1"><mxGeometry x="440" y="660" width="220" height="50" as="geometry"/></mxCell>
+        <mxCell id="hub" value="SignalR hubs&#10;/hubs/pricing · orders · delivery" style="rounded=0;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;dashed=1;" vertex="1" parent="1"><mxGeometry x="720" y="660" width="220" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="a1" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="entry" target="prov"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a2" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="prov" target="nav"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a3" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="nav" target="feat"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a4" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="f_scr" target="cmp"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a5" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="f_cmp" target="store"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a6" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="f_api" target="svc"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a7" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="f_rt" target="base"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a8" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="svc" target="be"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="a9" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=1;exitY=0.5;entryX=0.5;entryY=0;" edge="1" parent="1" source="f_rt" target="hub"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="970" y="400"/><mxPoint x="970" y="630"/><mxPoint x="830" y="630"/></Array></mxGeometry></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

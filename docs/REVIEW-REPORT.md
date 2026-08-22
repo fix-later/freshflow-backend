@@ -1,5 +1,15 @@
 # FreshFlow Pre-Implementation Review Report
 
+> ## 📜 Historical document
+>
+> This is the **pre-implementation cross-reference review** (2026-05-09), written before any
+> code existed. It is kept for traceability. Its gap list, readiness verdict and open questions
+> have all been overtaken by the implementation.
+>
+> Current known gaps are in [`00-index.md`](./00-index.md) § *Known gaps*; current enforced
+> behaviour is in [`07-business-rules.md`](./07-business-rules.md).
+
+
 **Date:** 2026-05-09  
 **Reviewer:** FreshFlow Master Architect Agent (Phase 6 Cross-Reference)  
 **Documents Reviewed:** 01-requirements-spec.md, 02-system-architecture.md, 03-database-schema.md, 04-api-design.md, 05-implementation-plan.md
