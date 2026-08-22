@@ -1,386 +1,589 @@
-// FreshFlow CONCEPTUAL data model — for dbdiagram.io
-//
-// The highest-level, most abstract view: business entities + relationships only.
-// Companion to:
-//   - 03-database-schema.conceptual.md   (mermaid + glossary, source of truth for this view)
-//   - 03-database-schema.logical.dbml    (attributes, keys, every meaningful relationship)
-//   - 03-database-schema.dbml            (physical PostgreSQL: types, indexes, partitioning)
-//
-// WHY THIS LOOKS SLIGHTLY DIFFERENT FROM A "PURE" CONCEPTUAL MODEL
-//   dbdiagram.io is inherently table/column based and can only draw a relationship
-//   between actual columns. So each entity below carries ONLY:
-//     - an identity  (id)                         → to be a drawable box
-//     - the reference key(s) it needs             → to draw its relationships
-//   NO business attributes, data types, indexes, or audit/soft-delete columns are shown
-//   (those live in the logical/physical files). The `key` pseudo-type is used everywhere
-//   as a reminder that these are identities, not real attributes.
-//
-// CARDINALITY:  > many-to-one   - one-to-one   <> many-to-many
-//
-// MAPPING TO THE LOGICAL MODEL (deliberate conceptual folds)
-//   - HubInboundEvent  = logical hub_receivings + hub_receiving_items (one concept).
-//   - Delivery         = logical route_stops + deliveries (one concept).
-//   - order_status_history is modelled as OrderStatusHistory (business-meaningful audit
-//     trail of an Order's lifecycle).
-//
-// REMOVED BY DECISION (see docs/06-context-decisions.md) — deliberately ABSENT
-// from the conceptual and logical models; archived in the physical file only:
-//   - invoices / invoice_orders / payments / refunds — superseded by the B2B credit
-//     model: RestaurantCredit + CreditLedgerEntry (DEC-002).
-//   - restaurant_members — single Restaurant actor, 1:1 with a User (DEC-003).
-//
-// Reviewed against implementation on 2026-07-03.
+// FreshFlow CONCEPTUAL data model for dbdiagram.io
+// Reconciled with the implemented EF model on 2026-08-16.
+// One box per current persisted concept; only identities and relationship keys are shown.
 
-// =====================================================================
-//  IMPLEMENTED DOMAIN
-// =====================================================================
-
-Table Role {
-  id key [pk]
-  Note: 'Global capability a user holds (admin, ops_manager, market_agent, hub_staff, driver, restaurant).'
+Project FreshFlow_Conceptual {
+  database_type: 'Conceptual'
+  Note: '59 implemented persistence concepts. Attributes, indexes, defaults, and planned entities are omitted.'
 }
 
-Table User {
-  id key [pk]
-  role_id key
-  Note: 'An account. Exactly one Role. Owns its own security credentials (tokens/codes, hidden here).'
+Table assistant_conversations {
+  id                               key [pk]
+  market_id                        key
+  user_id                          key
 }
 
-Table Restaurant {
-  id key [pk]
-  user_id key
-  Note: 'Buyer business profile, 1:1 with a User. Approval lifecycle Pending -> Active.'
+Table audit_logs {
+  id                               key [pk]
+  actor_id                         key
+  entity_id                        key
 }
 
-Table Driver {
-  id key [pk]
-  user_id key
-  Note: 'Driver profile, 1:1 with a User.'
+Table credit_statement_lines {
+  id                               key [pk]
+  credit_statement_id              key
+  order_id                         key
+  transaction_id                   key
 }
 
-Table DeliveryAddress {
-  id key [pk]
-  restaurant_id key
-  Note: 'A place a Restaurant receives goods.'
+Table credit_statements {
+  id                               key [pk]
+  restaurant_id                    key
 }
 
-Table Market {
-  id key [pk]
-  Note: 'A wholesale market where products are sold.'
+Table credit_transactions {
+  id                               key [pk]
+  order_id                         key
+  recorded_by_user_id              key
+  restaurant_id                    key
 }
 
-Table ProductCategory {
-  id key [pk]
-  Note: 'Normalised product category lookup.'
+Table cross_dock_transfers {
+  id                               key [pk]
+  hub_id                           key
+  inbound_event_id                 key
+  outbound_route_id                key
 }
 
-Table UnitOfMeasure {
-  id key [pk]
-  Note: 'Normalised unit-of-measurement lookup.'
+Table deliveries {
+  id                               key [pk]
+  delivery_route_id                key
+  order_id                         key
 }
 
-Table Product {
-  id key [pk]
-  category_id key
-  unit_id key
-  Note: 'System-wide catalog item.'
+Table delivery_addresses {
+  id                               key [pk]
+  restaurant_id                    key
 }
 
-Table MarketProduct {
-  id key [pk]
-  market_id key
-  product_id key
-  Note: 'Current price & available quantity of a Product at a Market — the live price board.'
+Table delivery_issues {
+  id                               key [pk]
+  delivery_id                      key
+  reported_by                      key
 }
 
-Table PriceHistory {
-  id key [pk]
-  market_product_id key
-  Note: 'Immutable record of every price/quantity change of a MarketProduct.'
+Table delivery_routes {
+  id                               key [pk]
+  created_by                       key
+  driver_user_id                   key
+  hub_id                           key
+  market_session_id                key
+  order_group_id                   key
+  route_plan_id                    key
+  suggested_vehicle_id             key
+  vehicle_id                       key
 }
 
-Table Order {
-  id key [pk]
-  restaurant_id key
-  scheduled_order_id key
-  order_group_id key
-  Note: 'A restaurant purchase; Draft -> Confirmed -> ... -> Delivered.'
+Table driver_profiles {
+  id                               key [pk]
+  user_id                          key
 }
 
-Table OrderItem {
-  id key [pk]
-  order_id key
-  market_product_id key
-  Note: 'A line on an Order; price locked at confirmation.'
+Table hub_discrepancies {
+  id                               key [pk]
+  acknowledged_by                  key
+  hub_id                           key
+  inbound_event_id                 key
+  order_id                         key
+  order_item_id                    key
 }
 
-Table ScheduledOrder {
-  id key [pk]
-  restaurant_id key
-  Note: 'Recurring (daily/weekly) template that auto-generates Orders.'
+Table hub_driver_assignments {
+  hub_id                           key [pk]
+  user_id                          key [pk]
 }
 
-Table OrderIssue {
-  id key [pk]
-  order_id key
-  order_item_id key
-  reported_by key
-  Note: 'Post-delivery discrepancy report (missing/wrong/damaged).'
+Table hub_handover_events {
+  id                               key [pk]
+  delivery_route_id                key
+  driver_user_id                   key
+  handed_over_by                   key
+  hub_id                           key
+  outbound_event_id                key
 }
 
-Table RestaurantCredit {
-  id key [pk]
-  restaurant_id key
-  Note: 'B2B credit account (limit + outstanding balance / cong no) of a Restaurant.'
+Table hub_inbound_events {
+  id                               key [pk]
+  delivery_route_id                key
+  delivery_schedule_id             key
+  hub_id                           key
+  hub_staff_user_id                key
+  recorded_by                      key
+  source_market_id                 key
 }
 
-Table CreditLedgerEntry {
-  id key [pk]
-  restaurant_id key
-  order_id key
-  Note: 'Immutable credit movement (charge / settlement / refund / adjustment).'
+Table hub_inventory {
+  id                               key [pk]
+  hub_id                           key
+  market_product_id                key
 }
 
-Table AssistantConversation {
-  id key [pk]
-  user_id key
-  market_id key
-  Note: 'Stored AI-assistant chat session for a User, optionally scoped to a Market.'
+Table hub_outbound_events {
+  id                               key [pk]
+  destination_route_id             key
+  hub_id                           key
+  recorded_by                      key
 }
 
-// ---- implemented relationships ----
-Ref classifies:        User.role_id > Role.id
-Ref is_restaurant:     Restaurant.user_id - User.id
-Ref is_driver:         Driver.user_id - User.id
-Ref ships_to:          DeliveryAddress.restaurant_id > Restaurant.id
-Ref agent_assignment:  User.id <> Market.id
-Ref product_category:  Product.category_id > ProductCategory.id
-Ref product_unit:      Product.unit_id > UnitOfMeasure.id
-Ref offered_at:        MarketProduct.market_id > Market.id
-Ref priced_as:         MarketProduct.product_id > Product.id
-Ref price_records:     PriceHistory.market_product_id > MarketProduct.id
-Ref places:            Order.restaurant_id > Restaurant.id
-Ref generated_by:      Order.scheduled_order_id > ScheduledOrder.id
-Ref schedules:         ScheduledOrder.restaurant_id > Restaurant.id
-Ref contains:          OrderItem.order_id > Order.id
-Ref ordered_as:        OrderItem.market_product_id > MarketProduct.id
-Ref issue_of_order:    OrderIssue.order_id > Order.id
-Ref issue_of_item:     OrderIssue.order_item_id > OrderItem.id
-Ref reported_by:       OrderIssue.reported_by > User.id
-Ref credit_account:    RestaurantCredit.restaurant_id - Restaurant.id
-Ref ledger_of:         CreditLedgerEntry.restaurant_id > Restaurant.id
-Ref charges:           CreditLedgerEntry.order_id > Order.id
-Ref chats:             AssistantConversation.user_id > User.id
-Ref chat_scope:        AssistantConversation.market_id > Market.id
-
-TableGroup "Auth & Identity" {
-  Role
-  User
-  Restaurant
-  Driver
-  DeliveryAddress
-}
-TableGroup "Catalog & Pricing" {
-  Market
-  ProductCategory
-  UnitOfMeasure
-  Product
-  MarketProduct
-  PriceHistory
-}
-TableGroup "Orders & Credit" {
-  Order
-  OrderItem
-  ScheduledOrder
-  OrderIssue
-  RestaurantCredit
-  CreditLedgerEntry
-}
-TableGroup "AI Assistant" {
-  AssistantConversation
+Table hub_sorting_progress {
+  id                               key [pk]
+  hub_id                           key
+  order_item_id                    key
+  route_id                         key
+  sorted_by_user_id                key
 }
 
-// =====================================================================
-//  PLANNED / ROADMAP DOMAIN  (not yet implemented — see Sync Status)
-// =====================================================================
-
-Table PriceAlertSubscription {
-  id key [pk]
-  restaurant_id key
-  product_id key
-  Note: '[PLANNED] A Restaurant subscribing to price-change alerts for a Product.'
+Table hub_staff_assignments {
+  hub_id                           key [pk]
+  user_id                          key [pk]
 }
 
-Table OrderGroup {
-  id key [pk]
-  Note: '[PLANNED] Batch of confirmed Orders dispatched together.'
+Table hubs {
+  id                               key [pk]
+  managed_by                       key
+  market_id                        key
 }
 
-Table OrderStatusHistory {
-  id key [pk]
-  order_id key
-  Note: '[PLANNED] Audit trail of Order status transitions.'
+Table invoice_lines {
+  id                               key [pk]
+  invoice_id                       key
 }
 
-Table ProcurementBatch {
-  id key [pk]
-  order_group_id key
-  Note: '[PLANNED] One market-buying run, sourced from an OrderGroup.'
+Table invoices {
+  id                               key [pk]
+  order_id                         key
+  restaurant_id                    key
 }
 
-Table ProcurementOrder {
-  id key [pk]
-  batch_id key
-  market_id key
-  agent_user_id key
-  Note: '[PLANNED] Shopping assignment of one agent at one Market within a batch.'
+Table market_product_tags {
+  market_product_id                key [pk]
+  tag_id                           key [pk]
 }
 
-Table ProcurementItem {
-  id key [pk]
-  procurement_order_id key
-  market_product_id key
-  Note: '[PLANNED] A line to buy: target vs actual quantity of a MarketProduct.'
+Table market_products {
+  id                               key [pk]
+  market_id                        key
+  product_id                       key
+  updated_by                       key
 }
 
-Table Hub {
-  id key [pk]
-  Note: '[PLANNED] Distribution hub (cross-dock point).'
+Table market_session_agents {
+  session_id                       key [pk]
+  user_id                          key [pk]
+  assigned_by                      key
 }
 
-Table HubInventory {
-  id key [pk]
-  hub_id key
-  market_product_id key
-  Note: '[PLANNED] Running stock balance of a MarketProduct at a Hub.'
+Table market_session_vehicles {
+  session_id                       key [pk]
+  vehicle_id                       key [pk]
+  assigned_by                      key
 }
 
-Table HubInboundEvent {
-  id key [pk]
-  hub_id key
-  procurement_order_id key
-  Note: '[PLANNED] Goods movement into a Hub (= logical hub_receivings + hub_receiving_items), receiving a ProcurementOrder.'
+Table market_sessions {
+  id                               key [pk]
+  closed_by                        key
+  hub_id                           key
+  market_id                        key
 }
 
-Table HubOutboundEvent {
-  id key [pk]
-  hub_id key
-  Note: '[PLANNED] Goods movement out of a Hub.'
+Table markets {
+  id                               key [pk]
 }
 
-Table CrossDockTransfer {
-  id key [pk]
-  hub_id key
-  inbound_event_id key
-  outbound_route_id key
-  Note: '[PLANNED] Direct inbound -> outbound transfer at a Hub.'
+Table notification_devices {
+  id                               key [pk]
+  user_id                          key
 }
 
-Table Vehicle {
-  id key [pk]
-  Note: '[PLANNED] Delivery vehicle in the fleet.'
+Table notifications {
+  id                               key [pk]
+  user_id                          key
 }
 
-Table DeliveryRoute {
-  id key [pk]
-  vehicle_id key
-  order_group_id key
-  procurement_batch_id key
-  Note: '[PLANNED] Planned route with an ordered list of stops.'
+Table operational_settings {
+  id                               key [pk]
 }
 
-Table Delivery {
-  id key [pk]
-  route_id key
-  order_id key
-  Note: '[PLANNED] One delivery stop for one Order on a route (= logical route_stops + deliveries).'
+Table order_claims {
+  id                               key [pk]
+  created_by                       key
+  order_id                         key
+  refund_transaction_id            key
+  restaurant_id                    key
+  reviewed_by                      key
 }
 
-Table Notification {
-  id key [pk]
-  user_id key
-  Note: '[PLANNED] Per-user notification record.'
+Table order_issues {
+  id                               key [pk]
+  order_id                         key
+  order_item_id                    key
+  reported_by                      key
 }
 
-Table NotificationTemplate {
-  id key [pk]
-  Note: '[PLANNED] Reusable message template per event type and channel.'
+Table order_items {
+  id                               key [pk]
+  market_product_id                key
+  order_id                         key
 }
 
-Table SystemConfig {
-  id key [pk]
-  Note: '[PLANNED] Admin-tunable parameters (cutoff time, price-band tolerance).'
+Table orders {
+  id                               key [pk]
+  delivery_address_id              key
+  market_id                        key
+  market_session_id                key
+  order_group_id                   key
+  restaurant_id                    key
+  scheduled_order_id               key
 }
 
-Table AnalyticsAggregation {
-  id key [pk]
-  Note: '[PLANNED] Pre-computed reporting metric.'
+Table packing_codes {
+  id                               key [pk]
 }
 
-Table ExportJob {
-  id key [pk]
-  Note: '[PLANNED] Async CSV export request and its status.'
+Table password_reset_tokens {
+  id                               key [pk]
+  user_id                          key
 }
 
-// ---- planned relationships ----
-Ref alerts_for:        PriceAlertSubscription.restaurant_id > Restaurant.id
-Ref alerts_on:         PriceAlertSubscription.product_id > Product.id
-
-Ref batched_into:      Order.order_group_id > OrderGroup.id
-Ref audits:            OrderStatusHistory.order_id > Order.id
-
-Ref sourced_from:      ProcurementBatch.order_group_id > OrderGroup.id
-Ref in_batch:          ProcurementOrder.batch_id > ProcurementBatch.id
-Ref buys_at:           ProcurementOrder.market_id > Market.id
-Ref assigned_agent:    ProcurementOrder.agent_user_id > User.id
-Ref procures:          ProcurementItem.procurement_order_id > ProcurementOrder.id
-Ref procured_as:       ProcurementItem.market_product_id > MarketProduct.id
-
-Ref dispatched_by:     DeliveryRoute.order_group_id > OrderGroup.id
-Ref ships_batch:       DeliveryRoute.procurement_batch_id > ProcurementBatch.id
-Ref uses_vehicle:      DeliveryRoute.vehicle_id > Vehicle.id
-Ref route_stop:        Delivery.route_id > DeliveryRoute.id
-Ref delivers_order:    Delivery.order_id > Order.id
-
-Ref hub_stock:         HubInventory.hub_id > Hub.id
-Ref stock_of_product:  HubInventory.market_product_id > MarketProduct.id
-Ref inbound_at:        HubInboundEvent.hub_id > Hub.id
-Ref receives_po:       HubInboundEvent.procurement_order_id > ProcurementOrder.id
-Ref outbound_at:       HubOutboundEvent.hub_id > Hub.id
-Ref xdock_hub:         CrossDockTransfer.hub_id > Hub.id
-Ref xdock_in:          CrossDockTransfer.inbound_event_id > HubInboundEvent.id
-Ref xdock_out:         CrossDockTransfer.outbound_route_id > DeliveryRoute.id
-
-Ref notifies:          Notification.user_id > User.id
-
-TableGroup "Restaurant & Catalog (planned)" {
-  PriceAlertSubscription
-  SystemConfig
+Table price_snapshots {
+  id                               key [pk]
+  market_product_id                key
+  recorded_by                      key
 }
-TableGroup "Orders (planned)" {
-  OrderGroup
-  OrderStatusHistory
+
+Table procurement_batch_items {
+  id                               key [pk]
+  assigned_agent_user_id           key
+  market_product_id                key
+  procurement_batch_id             key
 }
-TableGroup "Procurement (planned)" {
-  ProcurementBatch
-  ProcurementOrder
-  ProcurementItem
+
+Table procurement_batch_orders {
+  id                               key [pk]
+  order_id                         key
+  procurement_batch_id             key
 }
-TableGroup "Hub (planned)" {
-  Hub
-  HubInventory
-  HubInboundEvent
-  HubOutboundEvent
-  CrossDockTransfer
+
+Table procurement_batches {
+  id                               key [pk]
+  assigned_agent_user_id           key
+  hub_id                           key
+  market_id                        key
+  market_session_id                key
 }
-TableGroup "Logistics (planned)" {
-  Vehicle
-  DeliveryRoute
-  Delivery
+
+Table procurement_exceptions {
+  id                               key [pk]
+  market_product_id                key
+  procurement_batch_id             key
+  reported_by_user_id              key
 }
-TableGroup "Notifications & Analytics (planned)" {
-  Notification
-  NotificationTemplate
-  AnalyticsAggregation
-  ExportJob
+
+Table product_categories {
+  id                               key [pk]
+  parent_id                        key
+}
+
+Table products {
+  id                               key [pk]
+  category_id                      key
+  created_by                       key
+  packing_code_id                  key
+  unit_id                          key
+}
+
+Table refresh_tokens {
+  id                               key [pk]
+  family_id                        key
+  replaced_by_token_id             key
+  user_id                          key
+}
+
+Table restaurant_credit {
+  restaurant_id                    key [pk]
+}
+
+Table restaurant_favorites {
+  id                               key [pk]
+  market_product_id                key
+  restaurant_id                    key
+}
+
+Table restaurants {
+  id                               key [pk]
+  user_id                          key
+}
+
+Table roles {
+  id                               key [pk]
+}
+
+Table route_matrix_cache {
+  pair_key                         key [pk]
+}
+
+Table route_plans {
+  id                               key [pk]
+  hub_id                           key
+  market_session_id                key
+}
+
+Table scheduled_order_items {
+  id                               key [pk]
+  market_product_id                key
+  scheduled_order_id               key
+}
+
+Table scheduled_orders {
+  id                               key [pk]
+  delivery_address_id              key
+  market_id                        key
+  restaurant_id                    key
+}
+
+Table tags {
+  id                               key [pk]
+  updated_by                       key
+}
+
+Table units_of_measurement {
+  id                               key [pk]
+}
+
+Table user_market_assignments {
+  id                               key [pk]
+  assigned_by                      key
+  market_id                        key
+  user_id                          key
+}
+
+Table users {
+  id                               key [pk]
+  role_id                          key
+}
+
+Table vehicles {
+  id                               key [pk]
+  hub_id                           key
+  registered_by                    key
+}
+
+Table verification_codes {
+  id                               key [pk]
+  user_id                          key
+}
+
+// Enforced relationships
+Ref: credit_statement_lines.credit_statement_id > credit_statements.id
+Ref: cross_dock_transfers.hub_id > hubs.id
+Ref: cross_dock_transfers.inbound_event_id > hub_inbound_events.id
+Ref: deliveries.delivery_route_id > delivery_routes.id
+Ref: delivery_addresses.restaurant_id > restaurants.id
+Ref: delivery_issues.delivery_id > deliveries.id
+Ref: delivery_routes.route_plan_id > route_plans.id
+Ref: hub_discrepancies.hub_id > hubs.id
+Ref: hub_discrepancies.inbound_event_id > hub_inbound_events.id
+Ref: hub_driver_assignments.hub_id > hubs.id
+Ref: hub_handover_events.hub_id > hubs.id
+Ref: hub_handover_events.outbound_event_id > hub_outbound_events.id
+Ref: hub_inbound_events.hub_id > hubs.id
+Ref: hub_inventory.hub_id > hubs.id
+Ref: hub_outbound_events.hub_id > hubs.id
+Ref: hub_staff_assignments.hub_id > hubs.id
+Ref: invoice_lines.invoice_id > invoices.id
+Ref: market_product_tags.market_product_id > market_products.id
+Ref: market_product_tags.tag_id > tags.id
+Ref: market_session_agents.session_id > market_sessions.id
+Ref: market_session_vehicles.session_id > market_sessions.id
+Ref: order_claims.order_id > orders.id
+Ref: order_claims.refund_transaction_id > credit_transactions.id
+Ref: order_issues.order_id > orders.id
+Ref: order_issues.order_item_id > order_items.id
+Ref: order_items.order_id > orders.id
+Ref: password_reset_tokens.user_id > users.id
+Ref: price_snapshots.market_product_id > market_products.id
+Ref: procurement_batch_items.procurement_batch_id > procurement_batches.id
+Ref: procurement_batch_orders.procurement_batch_id > procurement_batches.id
+Ref: procurement_batches.market_session_id > market_sessions.id
+Ref: procurement_exceptions.procurement_batch_id > procurement_batches.id
+Ref: product_categories.parent_id > product_categories.id
+Ref: products.packing_code_id > packing_codes.id
+Ref: products.category_id > product_categories.id
+Ref: products.unit_id > units_of_measurement.id
+Ref: refresh_tokens.replaced_by_token_id > refresh_tokens.id
+Ref: refresh_tokens.user_id > users.id
+Ref: scheduled_order_items.scheduled_order_id > scheduled_orders.id
+Ref: user_market_assignments.user_id > users.id
+Ref: users.role_id > roles.id
+Ref: verification_codes.user_id > users.id
+
+// Cross-module/application relationships
+Ref: assistant_conversations.user_id > users.id [color: #9e9e9e]
+Ref: assistant_conversations.market_id > markets.id [color: #9e9e9e]
+Ref: audit_logs.actor_id > users.id [color: #9e9e9e]
+Ref: credit_statement_lines.order_id > orders.id [color: #9e9e9e]
+Ref: credit_statement_lines.transaction_id > credit_transactions.id [color: #9e9e9e]
+Ref: credit_statements.restaurant_id > restaurants.id [color: #9e9e9e]
+Ref: credit_transactions.order_id > orders.id [color: #9e9e9e]
+Ref: credit_transactions.recorded_by_user_id > users.id [color: #9e9e9e]
+Ref: credit_transactions.restaurant_id > restaurants.id [color: #9e9e9e]
+Ref: cross_dock_transfers.outbound_route_id > delivery_routes.id [color: #9e9e9e]
+Ref: deliveries.order_id - orders.id [color: #9e9e9e]
+Ref: delivery_issues.reported_by > users.id [color: #9e9e9e]
+Ref: delivery_routes.created_by > users.id [color: #9e9e9e]
+Ref: delivery_routes.driver_user_id > users.id [color: #9e9e9e]
+Ref: delivery_routes.hub_id > hubs.id [color: #9e9e9e]
+Ref: delivery_routes.market_session_id > market_sessions.id [color: #9e9e9e]
+Ref: delivery_routes.suggested_vehicle_id > vehicles.id [color: #9e9e9e]
+Ref: delivery_routes.vehicle_id > vehicles.id [color: #9e9e9e]
+Ref: driver_profiles.user_id - users.id [color: #9e9e9e]
+Ref: hub_discrepancies.acknowledged_by > users.id [color: #9e9e9e]
+Ref: hub_discrepancies.order_id > orders.id [color: #9e9e9e]
+Ref: hub_discrepancies.order_item_id > order_items.id [color: #9e9e9e]
+Ref: hub_driver_assignments.user_id > users.id [color: #9e9e9e]
+Ref: hub_handover_events.delivery_route_id > delivery_routes.id [color: #9e9e9e]
+Ref: hub_handover_events.driver_user_id > users.id [color: #9e9e9e]
+Ref: hub_handover_events.handed_over_by > users.id [color: #9e9e9e]
+Ref: hub_inbound_events.delivery_route_id > delivery_routes.id [color: #9e9e9e]
+Ref: hub_inbound_events.hub_staff_user_id > users.id [color: #9e9e9e]
+Ref: hub_inbound_events.recorded_by > users.id [color: #9e9e9e]
+Ref: hub_inbound_events.source_market_id > markets.id [color: #9e9e9e]
+Ref: hub_inventory.market_product_id > market_products.id [color: #9e9e9e]
+Ref: hub_outbound_events.destination_route_id > delivery_routes.id [color: #9e9e9e]
+Ref: hub_outbound_events.recorded_by > users.id [color: #9e9e9e]
+Ref: hub_sorting_progress.hub_id > hubs.id [color: #9e9e9e]
+Ref: hub_sorting_progress.order_item_id > order_items.id [color: #9e9e9e]
+Ref: hub_sorting_progress.route_id > delivery_routes.id [color: #9e9e9e]
+Ref: hub_sorting_progress.sorted_by_user_id > users.id [color: #9e9e9e]
+Ref: hub_staff_assignments.user_id > users.id [color: #9e9e9e]
+Ref: hubs.managed_by > users.id [color: #9e9e9e]
+Ref: hubs.market_id > markets.id [color: #9e9e9e]
+Ref: invoices.order_id - orders.id [color: #9e9e9e]
+Ref: invoices.restaurant_id > restaurants.id [color: #9e9e9e]
+Ref: market_products.market_id > markets.id [color: #9e9e9e]
+Ref: market_products.product_id > products.id [color: #9e9e9e]
+Ref: market_products.updated_by > users.id [color: #9e9e9e]
+Ref: market_session_agents.assigned_by > users.id [color: #9e9e9e]
+Ref: market_session_agents.user_id > users.id [color: #9e9e9e]
+Ref: market_session_vehicles.assigned_by > users.id [color: #9e9e9e]
+Ref: market_session_vehicles.vehicle_id > vehicles.id [color: #9e9e9e]
+Ref: market_sessions.closed_by > users.id [color: #9e9e9e]
+Ref: market_sessions.hub_id > hubs.id [color: #9e9e9e]
+Ref: market_sessions.market_id > markets.id [color: #9e9e9e]
+Ref: notification_devices.user_id > users.id [color: #9e9e9e]
+Ref: notifications.user_id > users.id [color: #9e9e9e]
+Ref: order_claims.created_by > users.id [color: #9e9e9e]
+Ref: order_claims.restaurant_id > restaurants.id [color: #9e9e9e]
+Ref: order_claims.reviewed_by > users.id [color: #9e9e9e]
+Ref: order_issues.reported_by > users.id [color: #9e9e9e]
+Ref: order_items.market_product_id > market_products.id [color: #9e9e9e]
+Ref: orders.delivery_address_id > delivery_addresses.id [color: #9e9e9e]
+Ref: orders.market_id > markets.id [color: #9e9e9e]
+Ref: orders.market_session_id > market_sessions.id [color: #9e9e9e]
+Ref: orders.restaurant_id > restaurants.id [color: #9e9e9e]
+Ref: orders.scheduled_order_id > scheduled_orders.id [color: #9e9e9e]
+Ref: price_snapshots.recorded_by > users.id [color: #9e9e9e]
+Ref: procurement_batch_items.assigned_agent_user_id > users.id [color: #9e9e9e]
+Ref: procurement_batch_items.market_product_id > market_products.id [color: #9e9e9e]
+Ref: procurement_batch_orders.order_id - orders.id [color: #9e9e9e]
+Ref: procurement_batches.assigned_agent_user_id > users.id [color: #9e9e9e]
+Ref: procurement_batches.hub_id > hubs.id [color: #9e9e9e]
+Ref: procurement_batches.market_id > markets.id [color: #9e9e9e]
+Ref: procurement_exceptions.market_product_id > market_products.id [color: #9e9e9e]
+Ref: procurement_exceptions.reported_by_user_id > users.id [color: #9e9e9e]
+Ref: products.created_by > users.id [color: #9e9e9e]
+Ref: restaurant_credit.restaurant_id - restaurants.id [color: #9e9e9e]
+Ref: restaurant_favorites.market_product_id > market_products.id [color: #9e9e9e]
+Ref: restaurant_favorites.restaurant_id > restaurants.id [color: #9e9e9e]
+Ref: restaurants.user_id - users.id [color: #9e9e9e]
+Ref: route_plans.hub_id > hubs.id [color: #9e9e9e]
+Ref: route_plans.market_session_id > market_sessions.id [color: #9e9e9e]
+Ref: scheduled_order_items.market_product_id > market_products.id [color: #9e9e9e]
+Ref: scheduled_orders.delivery_address_id > delivery_addresses.id [color: #9e9e9e]
+Ref: scheduled_orders.market_id > markets.id [color: #9e9e9e]
+Ref: scheduled_orders.restaurant_id > restaurants.id [color: #9e9e9e]
+Ref: tags.updated_by > users.id [color: #9e9e9e]
+Ref: user_market_assignments.assigned_by > users.id [color: #9e9e9e]
+Ref: user_market_assignments.market_id > markets.id [color: #9e9e9e]
+Ref: vehicles.hub_id > hubs.id [color: #9e9e9e]
+Ref: vehicles.registered_by > users.id [color: #9e9e9e]
+
+TableGroup "Auth" {
+  delivery_addresses
+  driver_profiles
+  password_reset_tokens
+  refresh_tokens
+  restaurants
+  roles
+  user_market_assignments
+  users
+  verification_codes
+}
+TableGroup "Catalog" {
+  markets
+  packing_codes
+  product_categories
+  products
+  units_of_measurement
+}
+TableGroup "Hub" {
+  cross_dock_transfers
+  hub_discrepancies
+  hub_driver_assignments
+  hub_handover_events
+  hub_inbound_events
+  hub_inventory
+  hub_outbound_events
+  hub_sorting_progress
+  hub_staff_assignments
+  hubs
+}
+TableGroup "Invoicing" {
+  invoice_lines
+  invoices
+}
+TableGroup "Logistics" {
+  deliveries
+  delivery_issues
+  delivery_routes
+  route_matrix_cache
+  route_plans
+  vehicles
+}
+TableGroup "Notifications" {
+  notification_devices
+  notifications
+}
+TableGroup "Orders" {
+  credit_statement_lines
+  credit_statements
+  credit_transactions
+  operational_settings
+  order_claims
+  order_issues
+  order_items
+  orders
+  restaurant_credit
+  restaurant_favorites
+  scheduled_order_items
+  scheduled_orders
+}
+TableGroup "Platform" {
+  assistant_conversations
+  audit_logs
+}
+TableGroup "Pricing" {
+  market_product_tags
+  market_products
+  price_snapshots
+  tags
+}
+TableGroup "Procurement" {
+  market_session_agents
+  market_session_vehicles
+  market_sessions
+  procurement_batch_items
+  procurement_batch_orders
+  procurement_batches
+  procurement_exceptions
 }
