@@ -26,6 +26,7 @@ labelled as such.
 | 07 | [07-business-rules.md](./07-business-rules.md) | 119 business rules read out of the code, with enforcement point and error code | ✅ As-built |
 | — | [enums.md](./enums.md) | Every enum/status string the API exposes | ✅ As-built |
 | — | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | Pre-implementation cross-reference review | 📜 Historical |
+| — | [AUDIT-2026-08-23-business-flow-audit.md](./AUDIT-2026-08-23-business-flow-audit.md) | Whole-system business-flow audit — 6 CRITICAL / 5 HIGH / 7 MEDIUM findings, with fix order | ⚠️ Open findings |
 | — | [api-response-envelope-migration.md](./api-response-envelope-migration.md) | Envelope migration notes | Reference |
 
 ### Database companions — [`database/`](./database/README.md)
