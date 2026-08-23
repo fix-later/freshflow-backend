@@ -22,4 +22,4 @@ public sealed record PlannedRouteStopDto(
 
 public sealed record UnassignedRouteDemandDto(
     Guid RestaurantId, string RestaurantName, IReadOnlyList<Guid> OrderIds,
-    decimal LoadKg, string Reason);
+    decimal LoadKg, string Reason, bool ExcludedForIncompleteData = false);

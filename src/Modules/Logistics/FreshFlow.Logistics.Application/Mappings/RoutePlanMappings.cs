@@ -1,11 +1,20 @@
 using FreshFlow.Logistics.Application.Abstractions;
 using FreshFlow.Logistics.Application.Dtos;
 using FreshFlow.Logistics.Domain.Entities;
+using FreshFlow.Logistics.Domain.ValueObjects;
 
 namespace FreshFlow.Logistics.Application.Mappings;
 
 public static class RoutePlanMappings
 {
+    /// <summary>
+    /// Shared so the "nothing could be planned" branch of PlanRoutes can report its excluded
+    /// orders in the same shape as a persisted plan's — without a RoutePlan row to map from.
+    /// </summary>
+    public static UnassignedRouteDemandDto ToDto(this RoutePlanUnassigned unassigned) =>
+        new(unassigned.RestaurantId, unassigned.RestaurantName, unassigned.OrderIds,
+            unassigned.LoadKg, unassigned.Reason, unassigned.ExcludedForIncompleteData);
+
     public static RoutePlanDto ToDto(
         this RoutePlan plan,
         IReadOnlyList<DeliveryRoute> routes,
@@ -35,8 +44,7 @@ public static class RoutePlanMappings
             plan.IsEstimated, plan.InputRevision, plan.VehiclesUsed, plan.TotalLoadKg,
             plan.TotalDistanceKm, plan.EstimatedDurationMinutes, plan.EstimatedCost,
             plannedRoutes,
-            plan.Unassigned.Select(x => new UnassignedRouteDemandDto(
-                x.RestaurantId, x.RestaurantName, x.OrderIds, x.LoadKg, x.Reason)).ToList(),
+            plan.Unassigned.Select(x => x.ToDto()).ToList(),
             plan.IsEstimated ? ["Routing uses estimated Haversine road distances."] : [],
             plan.CreatedAt);
     }

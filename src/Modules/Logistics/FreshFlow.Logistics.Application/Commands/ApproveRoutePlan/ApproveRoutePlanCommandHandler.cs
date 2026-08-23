@@ -43,7 +43,9 @@ internal sealed class ApproveRoutePlanCommandHandler(
             return Result<RoutePlanDto>.Failure(Error.Conflict(
                 "PLAN_STALE", "Orders, coordinates, fleet, or routing settings changed after planning."));
         }
-        if (plan.Unassigned.Count > 0)
+        // M7: only solver-produced unassigned entries (didn't fit) block approval; entries
+        // excluded for incomplete data are reported but must not block the rest of the plan.
+        if (plan.Unassigned.Any(u => !u.ExcludedForIncompleteData))
             return Result<RoutePlanDto>.Failure(Error.Conflict(
                 "PLAN_HAS_UNASSIGNED_ORDERS", "Resolve all unassigned orders before approval."));
 
