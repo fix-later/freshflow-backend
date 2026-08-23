@@ -414,6 +414,26 @@ public sealed class Order : AggregateRoot
         {
             var item = _items.Single(candidate => candidate.Id == itemId);
             item.RecordProcurementActuals(actual.Quantity, actual.UnitPrice);
+
+            // C1: the restaurant was charged at confirm time for the ordered quantity; if the
+            // agent bought less, refund the shortfall (goods + its proportional VAT) via the
+            // credit ledger. TotalAmount/SubtotalAmount/VatAmount stay the immutable confirmation
+            // snapshot the VAT invoice is issued from — do not rewrite them here.
+            if (actual.Quantity < item.Quantity && item.LockedUnitPrice.HasValue)
+            {
+                var shortfallQuantity = item.Quantity - actual.Quantity;
+                var goods = shortfallQuantity * item.LockedUnitPrice.Value;
+                var vat = decimal.Round(
+                    goods * (item.VatRatePercent ?? 0m) / 100m, 2, MidpointRounding.AwayFromZero);
+                var refundAmount = goods + vat;
+
+                if (refundAmount > 0m)
+                {
+                    RaiseDomainEvent(new OrderProcurementShortfallDomainEvent(
+                        Id, RestaurantId, item.Id, item.ProductNameSnapshot,
+                        shortfallQuantity, refundAmount, DateTime.UtcNow));
+                }
+            }
         }
 
         return Result.Success();

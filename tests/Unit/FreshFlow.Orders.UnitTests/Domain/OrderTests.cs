@@ -674,6 +674,125 @@ public sealed class OrderTests
         result.Error.Code.Should().Be("INVALID_ACTUAL_QUANTITY");
     }
 
+    // ── ApplyProcurementActuals (C1 shortfall refund) ───────────────────────
+
+    /// <summary>Confirms with a 10% VAT rate and advances to Batched, ready for actuals.</summary>
+    private static (Order Order, Guid ItemId) MakeBatchedOrderWithVat(
+        decimal quantity = 10m, decimal unitPrice = 20_000m, decimal vatPercent = 10m)
+    {
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", (int)quantity, unitPrice);
+        order.ApplyConfirmationPricing(
+            new Dictionary<Guid, OrderItemTaxSnapshot> { [MarketProductId] = new("10", vatPercent) },
+            0m, 0m);
+        order.Confirm();
+        order.AdvanceStatus(OrderStatus.Batched);
+        return (order, order.Items.Single().Id);
+    }
+
+    [Fact]
+    public void ApplyProcurementActuals_Shortfall_RaisesOneEventWithGoodsPlusVat()
+    {
+        // Arrange — ordered 10 @ 20,000 with 10% VAT; agent only bought 6
+        var (order, itemId) = MakeBatchedOrderWithVat();
+        order.ClearDomainEvents();
+
+        // Act
+        var result = order.ApplyProcurementActuals(new Dictionary<Guid, OrderItemProcurementActual>
+        {
+            [itemId] = new(6m, 20_000m)
+        });
+
+        // Assert — shortfall 4 * 20,000 = 80,000 goods + 10% VAT (8,000) = 88,000
+        result.IsSuccess.Should().BeTrue();
+        var evt = order.DomainEvents.OfType<OrderProcurementShortfallDomainEvent>().Should().ContainSingle().Which;
+        evt.OrderId.Should().Be(order.Id);
+        evt.RestaurantId.Should().Be(RestaurantId);
+        evt.OrderItemId.Should().Be(itemId);
+        evt.ShortfallQuantity.Should().Be(4m);
+        evt.RefundAmount.Should().Be(88_000m);
+    }
+
+    [Fact]
+    public void ApplyProcurementActuals_FullDelivery_RaisesNoShortfallEvent()
+    {
+        // Arrange
+        var (order, itemId) = MakeBatchedOrderWithVat();
+        order.ClearDomainEvents();
+
+        // Act
+        var result = order.ApplyProcurementActuals(new Dictionary<Guid, OrderItemProcurementActual>
+        {
+            [itemId] = new(10m, 20_000m)
+        });
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        order.DomainEvents.OfType<OrderProcurementShortfallDomainEvent>().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ApplyProcurementActuals_ZeroActualQuantity_RaisesEventForWholeLine()
+    {
+        // Arrange — agent bought nothing at all for this line
+        var (order, itemId) = MakeBatchedOrderWithVat(quantity: 5m, unitPrice: 20_000m, vatPercent: 0m);
+        order.ClearDomainEvents();
+
+        // Act
+        var result = order.ApplyProcurementActuals(new Dictionary<Guid, OrderItemProcurementActual>
+        {
+            [itemId] = new(0m, null)
+        });
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        var evt = order.DomainEvents.OfType<OrderProcurementShortfallDomainEvent>().Should().ContainSingle().Which;
+        evt.ShortfallQuantity.Should().Be(5m);
+        evt.RefundAmount.Should().Be(100_000m); // 5 * 20,000, 0% VAT
+    }
+
+    [Fact]
+    public void ApplyProcurementActuals_Shortfall_DoesNotMutateOrderTotals()
+    {
+        // Arrange — TotalAmount/SubtotalAmount/VatAmount are the immutable confirmation snapshot
+        var (order, itemId) = MakeBatchedOrderWithVat();
+        var totalBefore = order.TotalAmount;
+        var subtotalBefore = order.SubtotalAmount;
+        var vatBefore = order.VatAmount;
+
+        // Act
+        order.ApplyProcurementActuals(new Dictionary<Guid, OrderItemProcurementActual>
+        {
+            [itemId] = new(6m, 20_000m)
+        });
+
+        // Assert
+        order.TotalAmount.Should().Be(totalBefore);
+        order.SubtotalAmount.Should().Be(subtotalBefore);
+        order.VatAmount.Should().Be(vatBefore);
+    }
+
+    [Fact]
+    public void ApplyProcurementActuals_ItemWithNoLockedUnitPrice_RaisesNoEvent()
+    {
+        // Arrange — LockedUnitPrice is unreachably null via the public API (Confirm() always
+        // locks pricing); reflection simulates the defence-in-depth guard's edge case directly.
+        var (order, itemId) = MakeBatchedOrderWithVat();
+        var item = order.Items.Single();
+        typeof(OrderItem).GetProperty(nameof(OrderItem.LockedUnitPrice))!.SetValue(item, null);
+        order.ClearDomainEvents();
+
+        // Act
+        var result = order.ApplyProcurementActuals(new Dictionary<Guid, OrderItemProcurementActual>
+        {
+            [itemId] = new(6m, 20_000m)
+        });
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        order.DomainEvents.OfType<OrderProcurementShortfallDomainEvent>().Should().BeEmpty();
+    }
+
     // ── AdvanceStatus (logistics state machine) ─────────────────────────────
 
     [Theory]
