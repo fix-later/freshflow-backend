@@ -533,6 +533,44 @@ public sealed class OrderTests
     }
 
     [Fact]
+    public void CancelForFailedDelivery_FromDelivering_CancelsAndWaivesDebt()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 1, unitPrice: 20_000m);
+        SetStatusForTest(order, OrderStatus.Delivering);
+
+        // Act
+        var result = order.CancelForFailedDelivery("Giao hàng thất bại");
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        order.Status.Should().Be(OrderStatus.Cancelled);
+        order.CancelledAt.Should().NotBeNull();
+        order.PaymentStatus.Should().Be(OrderPaymentStatus.Waived);
+        order.DomainEvents.OfType<OrderCancelledDomainEvent>().Should().ContainSingle();
+    }
+
+    [Theory]
+    [InlineData(OrderStatus.Confirmed)]
+    [InlineData(OrderStatus.AtHub)]
+    [InlineData(OrderStatus.Delivered)]
+    public void CancelForFailedDelivery_FromNonDelivering_ReturnsOrderNotCancellable(OrderStatus status)
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 1, unitPrice: 20_000m);
+        SetStatusForTest(order, status);
+
+        // Act
+        var result = order.CancelForFailedDelivery("test");
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_NOT_CANCELLABLE");
+    }
+
+    [Fact]
     public void AdvanceStatus_ToCancelled_ReturnsInvalidTransition()
     {
         // Arrange — cancelling must go through Cancel so the debt waiver is not skipped.

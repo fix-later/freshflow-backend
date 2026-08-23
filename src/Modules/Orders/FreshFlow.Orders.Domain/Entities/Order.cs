@@ -334,6 +334,22 @@ public sealed class Order : AggregateRoot
         return CancelInternal(reason);
     }
 
+    /// <summary>
+    /// Cancels the order because the driver marked its delivery as failed. Allowed only from
+    /// Delivering. One failure is final — no retry, no re-delivery path back to a routable status.
+    /// Deliberately NOT added to <see cref="AllowedTransitions"/>: that dictionary also gates the
+    /// restaurant-facing <see cref="Cancel"/>, and a restaurant must never be able to cancel an
+    /// order that is already on the truck. Same reasoning as <see cref="CancelWithSession"/>.
+    /// </summary>
+    public Result CancelForFailedDelivery(string? reason)
+    {
+        if (Status != OrderStatus.Delivering)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_CANCELLABLE", $"An order in status '{Status}' cannot be cancelled."));
+
+        return CancelInternal(reason);
+    }
+
     private Result CancelInternal(string? reason)
     {
         TransitionTo(OrderStatus.Cancelled);

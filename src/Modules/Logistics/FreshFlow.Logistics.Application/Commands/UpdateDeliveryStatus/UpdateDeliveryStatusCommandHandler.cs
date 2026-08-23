@@ -66,7 +66,6 @@ internal sealed class UpdateDeliveryStatusCommandHandler(
                 delivery.MarkDelivered(DateTime.UtcNow);
                 break;
             case RequestedFailed:
-                // ponytail: Orders has no failed-delivery state; ops follow-up keeps the order in Delivering.
                 delivery.MarkFailed(request.FailureReason!);
                 break;
         }
@@ -83,6 +82,18 @@ internal sealed class UpdateDeliveryStatusCommandHandler(
                     delivery.OrderId,
                     route.Id,
                     delivery.ActualArrival!.Value,
+                    DateTime.UtcNow),
+                CancellationToken.None);
+        }
+
+        if (request.Status == RequestedFailed)
+        {
+            await publisher.Publish(
+                new DeliveryFailedIntegrationEvent(
+                    delivery.OrderId,
+                    route.Id,
+                    delivery.Id,
+                    delivery.FailureReason!,
                     DateTime.UtcNow),
                 CancellationToken.None);
         }
