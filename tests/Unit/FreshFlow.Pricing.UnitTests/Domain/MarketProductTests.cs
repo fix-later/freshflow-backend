@@ -262,6 +262,59 @@ public sealed class MarketProductTests
         mp.DomainEvents.Should().BeEmpty();
     }
 
+    // ── ApplyUpdate: reserved-stock guard ─────────────────────────────────────
+
+    [Fact]
+    public void ApplyUpdate_QuantityBelowReserved_ThrowsInvalidOperationException()
+    {
+        // Arrange — 30 units already reserved by confirmed orders
+        var mp = WithReserved(new MarketProduct(MarketId, ProductId, 100m, 50, ActorId), 30);
+
+        // Act
+        var act = () => mp.ApplyUpdate(newPrice: null, newQuantity: 20, actor: ActorId);
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>().WithMessage("*30*");
+        mp.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ApplyUpdate_QuantityEqualsReserved_Succeeds()
+    {
+        // Arrange
+        var mp = WithReserved(new MarketProduct(MarketId, ProductId, 100m, 50, ActorId), 30);
+
+        // Act
+        mp.ApplyUpdate(newPrice: null, newQuantity: 30, actor: ActorId);
+
+        // Assert
+        mp.CurrentQuantity.Should().Be(30);
+    }
+
+    [Fact]
+    public void ApplyUpdate_QuantityAboveReserved_Succeeds()
+    {
+        // Arrange
+        var mp = WithReserved(new MarketProduct(MarketId, ProductId, 100m, 50, ActorId), 30);
+
+        // Act
+        mp.ApplyUpdate(newPrice: null, newQuantity: 40, actor: ActorId);
+
+        // Assert
+        mp.CurrentQuantity.Should().Be(40);
+    }
+
+    /// <summary>
+    /// ReservedQuantity is only ever mutated by Orders' cross-module SQL (never through the
+    /// domain), so tests reach it via reflection on the private-set property.
+    /// </summary>
+    private static MarketProduct WithReserved(MarketProduct mp, int reserved)
+    {
+        typeof(MarketProduct).GetProperty(nameof(MarketProduct.ReservedQuantity))!
+            .SetValue(mp, reserved);
+        return mp;
+    }
+
     // ── Fix #6: no-op guard ──────────────────────────────────────────────────
 
     [Fact]

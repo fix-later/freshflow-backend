@@ -104,7 +104,9 @@ public sealed class MarketProduct : AggregateRoot
     /// needed by downstream handlers (SignalR broadcast, Redis sync, price history).
     ///
     /// The handler (UC-PRI-03) pre-validates business rules before calling this method.
-    /// Domain-level guards are retained as a defence-in-depth layer.
+    /// Domain-level guards are retained as a defence-in-depth layer — including that
+    /// <paramref name="newQuantity"/> may never drop below <see cref="ReservedQuantity"/>,
+    /// since confirmed orders have already reserved that stock.
     /// </summary>
     public void ApplyUpdate(decimal? newPrice, int? newQuantity, Guid? actor)
     {
@@ -113,19 +115,28 @@ public sealed class MarketProduct : AggregateRoot
         if (!newPrice.HasValue && !newQuantity.HasValue)
             return;
 
-        var previousPrice = CurrentPrice;
-
+        // Validate EVERYTHING before mutating ANYTHING. Interleaving the two would let a valid
+        // price be applied and then a bad quantity throw, leaving a half-updated aggregate that
+        // the caller still has tracked — the next SaveChanges would persist the price change
+        // from an operation that failed.
         if (newPrice.HasValue)
-        {
             ValidatePrice(newPrice.Value);
-            CurrentPrice = newPrice.Value;
-        }
 
         if (newQuantity.HasValue)
         {
             ValidateQuantity(newQuantity.Value);
-            CurrentQuantity = newQuantity.Value;
+            if (newQuantity.Value < ReservedQuantity)
+                throw new InvalidOperationException(
+                    $"Quantity cannot be set below the {ReservedQuantity} already reserved by confirmed orders.");
         }
+
+        var previousPrice = CurrentPrice;
+
+        if (newPrice.HasValue)
+            CurrentPrice = newPrice.Value;
+
+        if (newQuantity.HasValue)
+            CurrentQuantity = newQuantity.Value;
 
         UpdatedBy = actor;
         UpdatedAt = DateTime.UtcNow;

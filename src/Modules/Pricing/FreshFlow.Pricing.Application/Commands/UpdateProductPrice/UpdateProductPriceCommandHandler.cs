@@ -15,6 +15,7 @@ namespace FreshFlow.Pricing.Application.Commands.UpdateProductPrice;
 /// 403 access denied  → agent not assigned to this market (admins bypass)
 /// 404 product missing → market_product row not found
 /// 409 concurrency    → expectedVersion mismatch
+/// 422 business-rule  → quantity below already-reserved stock
 /// 200 success
 /// </summary>
 internal sealed class UpdateProductPriceCommandHandler(
@@ -69,17 +70,23 @@ internal sealed class UpdateProductPriceCommandHandler(
                     "OPTIMISTIC_CONCURRENCY_CONFLICT",
                     "The record was updated by another user. Please refresh and retry."));
 
-        // ── 6. Apply domain update (raises PriceUpdatedDomainEvent) ───────────
+        // ── 6. Reserved-stock guard (422) — cannot drop below confirmed orders' reservation ──
+        if (request.Quantity.HasValue && request.Quantity.Value < mp.ReservedQuantity)
+            return Result<UpdateProductPriceResultDto>.Failure(
+                Error.Validation("QUANTITY_BELOW_RESERVED",
+                    $"Quantity {request.Quantity.Value} is below the {mp.ReservedQuantity} already reserved by confirmed orders."));
+
+        // ── 7. Apply domain update (raises PriceUpdatedDomainEvent) ───────────
         var previousPrice = mp.CurrentPrice;
         marketProductRepository.Track(mp);
         mp.ApplyUpdate(request.Price, request.Quantity, request.AgentUserId);
 
-        // ── 7. Create immutable price snapshot (FR-PRI-004) ───────────────────
+        // ── 8. Create immutable price snapshot (FR-PRI-004) ───────────────────
         // PriceSnapshot.For is the single source of truth for snapshot construction.
         var snapshot = PriceSnapshot.For(mp, request.AgentUserId);
         await snapshotRepository.AddAsync(snapshot, cancellationToken);
 
-        // ── 8. Persist (single unit-of-work; same AppDbContext) ───────────────
+        // ── 9. Persist (single unit-of-work; same AppDbContext) ───────────────
         try
         {
             await marketProductRepository.SaveChangesAsync(cancellationToken);
@@ -92,7 +99,7 @@ internal sealed class UpdateProductPriceCommandHandler(
                     "The record was updated by another user. Please refresh and retry."));
         }
 
-        // ── 9. Build result ───────────────────────────────────────────────────
+        // ── 10. Build result ───────────────────────────────────────────────────
         var changePercent = CalculateChangePercent(previousPrice, mp.CurrentPrice);
 
         return Result<UpdateProductPriceResultDto>.Success(new UpdateProductPriceResultDto(

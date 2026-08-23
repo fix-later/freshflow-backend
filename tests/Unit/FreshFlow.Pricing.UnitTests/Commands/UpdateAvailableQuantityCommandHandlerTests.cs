@@ -175,6 +175,51 @@ public sealed class UpdateAvailableQuantityCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
     }
 
+    // ── 422 Reserved-stock guard ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Handle_QuantityBelowReserved_ReturnsQuantityBelowReservedAsync()
+    {
+        // Arrange — 100 units already reserved by confirmed orders
+        var mp = WithReserved(MakeProduct(initialQty: 200), 100);
+        _reader.HasAssignmentAsync(AgentId, MarketId, default).Returns(true);
+        _mpRepo.FindByMarketAndProductAsync(MarketId, ProductId, default).Returns(mp);
+
+        // Act
+        var result = await _sut.Handle(Cmd(quantity: 50), default);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("QUANTITY_BELOW_RESERVED");
+        await _mpRepo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_QuantityAboveReserved_SucceedsAsync()
+    {
+        // Arrange
+        var mp = WithReserved(MakeProduct(initialQty: 200), 100);
+        _reader.HasAssignmentAsync(AgentId, MarketId, default).Returns(true);
+        _mpRepo.FindByMarketAndProductAsync(MarketId, ProductId, default).Returns(mp);
+
+        // Act
+        var result = await _sut.Handle(Cmd(quantity: 150), default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// ReservedQuantity is only ever mutated by Orders' cross-module SQL (never through the
+    /// domain), so tests reach it via reflection on the private-set property.
+    /// </summary>
+    private static MarketProduct WithReserved(MarketProduct mp, int reserved)
+    {
+        typeof(MarketProduct).GetProperty(nameof(MarketProduct.ReservedQuantity))!
+            .SetValue(mp, reserved);
+        return mp;
+    }
+
     // ── 200 Quantity update ───────────────────────────────────────────────────
 
     [Fact]

@@ -10,11 +10,15 @@ namespace FreshFlow.Catalog.UnitTests.Products;
 public sealed class DeactivateProductCommandHandlerTests
 {
     private readonly IProductRepository _products = Substitute.For<IProductRepository>();
+    private readonly IMarketListingReader _listings = Substitute.For<IMarketListingReader>();
     private readonly DeactivateProductCommandHandler _sut;
 
     public DeactivateProductCommandHandlerTests()
     {
-        _sut = new DeactivateProductCommandHandler(_products);
+        _sut = new DeactivateProductCommandHandler(_products, _listings);
+
+        // Default: no active listings — override per test when needed
+        _listings.CountActiveListingsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(0);
     }
 
     [Fact]
@@ -31,6 +35,38 @@ public sealed class DeactivateProductCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Id.Should().Be(product.Id);
         await _products.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Handle_ProductHasActiveListings_ReturnsProductHasActiveListings()
+    {
+        // Arrange
+        var product = new Product("Cà rốt", Guid.NewGuid(), null, null, null);
+        _products.FindByIdAsync(product.Id, default).Returns(product);
+        _listings.CountActiveListingsAsync(product.Id, default).Returns(2);
+
+        // Act
+        var result = await _sut.Handle(new DeactivateProductCommand(product.Id), default);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("PRODUCT_HAS_ACTIVE_LISTINGS");
+        await _products.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ProductHasNoActiveListings_SucceedsAsync()
+    {
+        // Arrange
+        var product = new Product("Cà rốt", Guid.NewGuid(), null, null, null);
+        _products.FindByIdAsync(product.Id, default).Returns(product);
+        _listings.CountActiveListingsAsync(product.Id, default).Returns(0);
+
+        // Act
+        var result = await _sut.Handle(new DeactivateProductCommand(product.Id), default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
     }
 
     [Fact]

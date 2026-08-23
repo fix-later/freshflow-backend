@@ -94,6 +94,7 @@
 | BR-CAT-003 | Không vô hiệu hóa danh mục còn **danh mục con đang active**. | `DeactivateCategoryCommandHandler` | `CATEGORY_HAS_ACTIVE_CHILDREN` |
 | BR-CAT-004 | Sản phẩm phải trỏ tới đơn vị / danh mục / packing code **tồn tại và active**. | `CreateProductCommandHandler` | `INVALID_UNIT`, `INVALID_CATEGORY`, `INVALID_PACKING_CODE` |
 | BR-CAT-005 | Packing code: mã `^[A-Z]+$` ≤ **8 ký tự**, `CapacityKg` **> 0, số nguyên, ≤ `Logistics:Box:MaxLoadKg` (25 kg)**. Độ dài: mô tả sản phẩm ≤2000, danh mục ≤1000, packing ≤500, `ImageUrl` ≤512, `Abbreviation` ≤20. `products.VatRate` là nguồn tạo **snapshot thuế** khi Orders chốt giá; Invoicing đọc snapshot này từ `order_items`. | `CreatePackingCodeCommandValidator`, các validator, `OrderPricingCalculator`, `OrderInvoiceRowConfiguration` | `VALIDATION_ERROR` |
+| BR-CAT-006 | Không vô hiệu hóa sản phẩm còn **niêm yết đang active** ở bất kỳ chợ nào (tránh mồ côi reservation ở Pricing). | `DeactivateProductCommandHandler`, `IMarketListingReader` | `PRODUCT_HAS_ACTIVE_LISTINGS` |
 
 ---
 
@@ -108,6 +109,7 @@
 | BR-PRC-005 | Mỗi lần đổi giá ghi một dòng **`price_snapshots`** — append-only, không soft-delete, **không partition**. Lịch sử theo `marketProductId` trả tối đa **100** bản ghi. | `PriceSnapshotRepository` | — |
 | BR-PRC-006 | Bảng giá cache Redis **TTL 5 phút**; đổi giá invalidate cache và broadcast SignalR tới group `market:{marketId}`. | `RedisPriceBoardCache.Ttl`, `PricingHub` | — |
 | BR-PRC-007 | Cập nhật giá/tồn dùng optimistic concurrency. Giá tham chiếu trên bảng giá được **đồng bộ từ lô mua đã xác nhận**. | `UpdateAvailableQuantityCommandHandler`, `ProcurementPurchaseConfirmedIntegrationEventHandler` | `OPTIMISTIC_CONCURRENCY_CONFLICT` |
+| BR-PRC-008 | Không thể hạ `CurrentQuantity` xuống dưới `ReservedQuantity` đã giữ cho đơn hàng đã xác nhận; không thể xóa niêm yết còn `ReservedQuantity` **> 0**. | `MarketProduct.ApplyUpdate`, `UpdateAvailableQuantityCommandHandler`, `UpdateProductPriceCommandHandler`, `DeleteMarketProductCommandHandler` | `QUANTITY_BELOW_RESERVED`, `MARKET_PRODUCT_HAS_RESERVED_STOCK` |
 
 ---
 
