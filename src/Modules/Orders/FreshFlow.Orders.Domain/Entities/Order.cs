@@ -167,6 +167,20 @@ public sealed class Order : AggregateRoot
         return Result.Success();
     }
 
+    /// <summary>
+    /// Updates the order-level notes while the order is still a draft (cart).
+    /// </summary>
+    public Result UpdateNotes(string? notes)
+    {
+        if (Status != OrderStatus.Draft)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_DRAFT", "Notes can only be updated while the order is in draft status."));
+
+        Notes = notes;
+
+        return Result.Success();
+    }
+
     public Result AssignMarket(Guid marketId)
     {
         if (marketId == Guid.Empty)

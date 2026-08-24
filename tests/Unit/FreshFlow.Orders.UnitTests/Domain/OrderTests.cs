@@ -236,6 +236,53 @@ public sealed class OrderTests
         act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("quantity");
     }
 
+    // ── UpdateNotes ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void UpdateNotes_DraftOrder_UpdatesNotes()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: "old notes");
+
+        // Act
+        var result = order.UpdateNotes("new notes");
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        order.Notes.Should().Be("new notes");
+    }
+
+    [Fact]
+    public void UpdateNotes_NullNotes_ClearsNotes()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: "old notes");
+
+        // Act
+        var result = order.UpdateNotes(null);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        order.Notes.Should().BeNull();
+    }
+
+    [Fact]
+    public void UpdateNotes_WhenOrderNotDraft_ReturnsFailure()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: null, notes: "old notes");
+        order.AddItem(MarketProductId, "Cà chua", quantity: 5, unitPrice: 20_000m);
+        order.Confirm();
+
+        // Act
+        var result = order.UpdateNotes("new notes");
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_NOT_DRAFT");
+        order.Notes.Should().Be("old notes");
+    }
+
     // ── RemoveItem ───────────────────────────────────────────────────────────
 
     [Fact]
