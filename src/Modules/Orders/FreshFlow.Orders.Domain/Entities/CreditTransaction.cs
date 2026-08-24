@@ -23,8 +23,8 @@ public sealed class CreditTransaction
         if (amount <= 0m)
             throw new ArgumentOutOfRangeException(nameof(amount), amount, "Amount must be greater than zero.");
 
-        if (balanceAfter < 0m)
-            throw new ArgumentOutOfRangeException(nameof(balanceAfter), balanceAfter, "Balance after must be non-negative.");
+        // AUDIT-2026-08-23 C3: BalanceAfter may be negative when the account is in credit
+        // (FreshFlow owes the restaurant) — no lower-bound guard here.
 
         // paymentMethod/reference record HOW a debt payment was made — meaningless (and
         // therefore disallowed) outside a Settlement row.

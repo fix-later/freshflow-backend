@@ -12,6 +12,11 @@ namespace FreshFlow.Orders.Domain.Entities;
 /// <see cref="Settle"/>/<see cref="Refund"/> re-arm it (lower it, never raise it) when
 /// utilization drops back below it, without raising an event themselves.
 /// </summary>
+/// <remarks>
+/// AUDIT-2026-08-23 C3: <see cref="OutstandingBalance"/> may go negative. A negative balance
+/// means FreshFlow owes the restaurant (e.g. a refund issued after the account was already
+/// settled to zero); it is carried forward and offset against future charges.
+/// </remarks>
 public sealed class RestaurantCredit : AggregateRoot
 {
     private const decimal WarningUtilization = 0.8m;
@@ -59,6 +64,9 @@ public sealed class RestaurantCredit : AggregateRoot
     {
         EnsurePositive(amount);
 
+        // ponytail: ceiling is intentional — you can't record a payment against an account
+        // already in credit (OutstandingBalance <= 0). A restaurant in credit that stops
+        // ordering must be refunded out of band (bank transfer); there is no cash-out path in v1.
         if (amount > OutstandingBalance)
             throw new InvalidOperationException("Settlement amount cannot exceed outstanding balance.");
 
@@ -71,9 +79,9 @@ public sealed class RestaurantCredit : AggregateRoot
     {
         EnsurePositive(amount);
 
-        if (amount > OutstandingBalance)
-            throw new InvalidOperationException("Refund amount cannot exceed outstanding balance.");
-
+        // AUDIT-2026-08-23 C3: no ceiling here — a refund may exceed the currently outstanding
+        // balance (e.g. account already settled to zero). OutstandingBalance goes negative,
+        // meaning FreshFlow owes the restaurant.
         OutstandingBalance -= amount;
         Touch();
         RearmAlertIfBelowThreshold();

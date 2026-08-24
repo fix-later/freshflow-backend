@@ -95,7 +95,7 @@ public static class ErrorExtensions
                         or "INVALID_SETTLEMENT_DETAILS"
                         or "INVALID_CLAIM_AMOUNT" or "INVALID_CLAIM_DECISION_NOTE"
                         or "CREDIT_REFUND_EXCEEDS_ORDER_CHARGE"
-                        or "CREDIT_SETTLEMENT_EXCEEDS_BALANCE" or "CREDIT_REFUND_EXCEEDS_BALANCE"
+                        or "CREDIT_SETTLEMENT_EXCEEDS_BALANCE"
                         or "INVALID_CREDIT_LIMIT" or "CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE"
                         or "DELIVERY_DATE_OUT_OF_WINDOW" or "INVALID_ACTUAL_QUANTITY"
                         or "SCHEDULED_ORDER_FIRST_RUN_IN_PAST" or "INVALID_ISSUE_QUANTITY"

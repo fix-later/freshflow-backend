@@ -39,9 +39,11 @@ public sealed class CreditTransactionTests
     }
 
     [Fact]
-    public void Constructor_WithNegativeBalanceAfter_Throws()
+    public void Constructor_WithNegativeBalanceAfter_Succeeds()
     {
-        var act = () => new CreditTransaction(
+        // AUDIT-2026-08-23 C3: a negative balance means FreshFlow owes the restaurant — no
+        // longer rejected.
+        var transaction = new CreditTransaction(
             Guid.NewGuid(),
             Guid.NewGuid(),
             CreditTransactionType.Refund,
@@ -49,7 +51,7 @@ public sealed class CreditTransactionTests
             balanceAfter: -1m,
             note: null);
 
-        act.Should().Throw<ArgumentOutOfRangeException>();
+        transaction.BalanceAfter.Should().Be(-1m);
     }
 
     [Fact]
