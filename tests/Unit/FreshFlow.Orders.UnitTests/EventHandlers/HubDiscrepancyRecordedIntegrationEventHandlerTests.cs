@@ -2,11 +2,8 @@ using System.Reflection;
 using FluentAssertions;
 using FreshFlow.Contracts;
 using FreshFlow.Orders.Application.Abstractions;
-using FreshFlow.Orders.Application.Dtos;
 using FreshFlow.Orders.Application.EventHandlers;
 using FreshFlow.Orders.Domain.Entities;
-using FreshFlow.SharedKernel.Application;
-using MediatR;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 
@@ -16,34 +13,22 @@ namespace FreshFlow.Orders.UnitTests.EventHandlers;
 public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
 {
     private readonly IOrderRepository _orders = Substitute.For<IOrderRepository>();
-    private readonly ICreditService _creditService = Substitute.For<ICreditService>();
-    private readonly IPublisher _publisher = Substitute.For<IPublisher>();
 
     private static readonly Guid RestaurantId = Guid.NewGuid();
     private static readonly Guid MarketProductId = Guid.NewGuid();
 
     [Fact]
-    public async Task Handle_LockedPrice_RefundsFullDesiredAmountAndPublishesEventAsync()
+    public async Task Handle_ValidDiscrepancy_RecordsQuantityAsOrderedMinusAffectedAndSavesAsync()
     {
-        // AUDIT-2026-08-23 C3: no more clamping to the account's current balance — the full
-        // desired refund (quantity * locked price) is always requested; RefundAsync's
-        // per-order cap is the only ceiling now.
-        var order = ConfirmedOrderWithItem(out var itemId);
-        var discrepancyId = Guid.NewGuid();
+        // AUDIT-2026-08-23 C4: the handler no longer refunds directly — it records the actual
+        // quantity via Order.RecordActualQuantity, which raises OrderProcurementShortfallDomainEvent
+        // (refund + invoice quantity move together from a single source of truth).
+        var order = ConfirmedOrderWithItem(out var itemId); // ordered 5
         _orders.FindByIdAsync(order.Id, default).Returns(order);
-        _creditService.RefundAsync(
-                RestaurantId,
-                order.Id,
-                60_000m,
-                Arg.Any<string?>(),
-                default)
-            .Returns(Result<CreditRefundDto>.Success(new CreditRefundDto(
-                Guid.NewGuid(),
-                new RestaurantCreditDto(RestaurantId, 1_000_000m, 0m, 1_000_000m, DateTime.UtcNow))));
         var sut = CreateSut();
 
         await sut.Handle(new HubDiscrepancyRecordedIntegrationEvent(
-            discrepancyId,
+            Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
             order.Id,
@@ -52,25 +37,42 @@ public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
             "MISSING",
             DateTime.UtcNow), default);
 
-        await _creditService.Received(1).RefundAsync(
-            RestaurantId,
-            order.Id,
-            60_000m,
-            Arg.Is<string>(note => note.Contains(discrepancyId.ToString(), StringComparison.Ordinal)),
-            default);
-        await _publisher.Received(1).Publish(
-            Arg.Is<RestaurantRefundIssuedIntegrationEvent>(evt =>
-                evt.RestaurantId == RestaurantId &&
-                evt.OrderId == order.Id &&
-                evt.OrderItemName == "Cà chua" &&
-                evt.AffectedQuantity == 3m &&
-                evt.RefundAmount == 60_000m),
-            default);
+        order.Items.Single().ActualQuantity.Should().Be(2m); // 5 ordered - 3 affected
+        _orders.Received(1).Track(order);
+        await _orders.Received(1).SaveChangesAsync(default);
     }
 
     [Fact]
-    public async Task Handle_LockedPriceNull_SkipsRefundAndPublishAsync()
+    public async Task Handle_SecondDiscrepancyOnSameLine_MeasuresFromPreviousActualAsync()
     {
+        // A second hub discrepancy on the same line must subtract from the previous actual, not
+        // the ordered quantity — Order.RecordActualQuantity already guarantees this; this test
+        // proves the handler feeds it the right baseline.
+        var order = ConfirmedOrderWithItem(out var itemId); // ordered 5
+        order.RecordActualQuantity(itemId, 4m); // first discrepancy already recorded: 5 -> 4
+        order.ClearDomainEvents();
+        _orders.FindByIdAsync(order.Id, default).Returns(order);
+        var sut = CreateSut();
+
+        await sut.Handle(new HubDiscrepancyRecordedIntegrationEvent(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            order.Id,
+            itemId,
+            1m,
+            "DAMAGED",
+            DateTime.UtcNow), default);
+
+        order.Items.Single().ActualQuantity.Should().Be(3m); // 4 previous actual - 1 affected
+        await _orders.Received(1).SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Handle_RecordActualQuantityFails_LogsAndDoesNotSaveAsync()
+    {
+        // A draft order can't be adjusted (ORDER_CANNOT_ADJUST) — the failure must be logged,
+        // not thrown, and nothing gets persisted.
         var order = DraftOrderWithItem(out var itemId);
         _orders.FindByIdAsync(order.Id, default).Returns(order);
         var sut = CreateSut();
@@ -85,33 +87,35 @@ public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
             "DAMAGED",
             DateTime.UtcNow), default);
 
-        await _creditService.DidNotReceive().RefundAsync(
-            Arg.Any<Guid>(),
-            Arg.Any<Guid>(),
-            Arg.Any<decimal>(),
-            Arg.Any<string?>(),
-            Arg.Any<CancellationToken>());
-        await _publisher.DidNotReceive().Publish(
-            Arg.Any<RestaurantRefundIssuedIntegrationEvent>(),
-            Arg.Any<CancellationToken>());
+        _orders.DidNotReceive().Track(Arg.Any<Order>());
+        await _orders.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Handle_NoOutstandingBalance_StillRefundsInFullAsync()
+    public async Task Handle_OrderNotFound_DoesNotSaveAsync()
     {
-        // AUDIT-2026-08-23 C3: a zero (or already-settled) balance no longer suppresses the
-        // refund — it drives OutstandingBalance negative (FreshFlow owes the restaurant).
-        var order = ConfirmedOrderWithItem(out var itemId);
+        var orderId = Guid.NewGuid();
+        _orders.FindByIdAsync(orderId, default).Returns((Order?)null);
+        var sut = CreateSut();
+
+        await sut.Handle(new HubDiscrepancyRecordedIntegrationEvent(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            orderId,
+            Guid.NewGuid(),
+            1m,
+            "MISSING",
+            DateTime.UtcNow), default);
+
+        await _orders.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_OrderItemNotFound_DoesNotSaveAsync()
+    {
+        var order = ConfirmedOrderWithItem(out _);
         _orders.FindByIdAsync(order.Id, default).Returns(order);
-        _creditService.RefundAsync(
-                RestaurantId,
-                order.Id,
-                20_000m,
-                Arg.Any<string?>(),
-                default)
-            .Returns(Result<CreditRefundDto>.Success(new CreditRefundDto(
-                Guid.NewGuid(),
-                new RestaurantCreditDto(RestaurantId, 1_000_000m, -20_000m, 1_020_000m, DateTime.UtcNow))));
         var sut = CreateSut();
 
         await sut.Handle(new HubDiscrepancyRecordedIntegrationEvent(
@@ -119,20 +123,12 @@ public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
             Guid.NewGuid(),
             Guid.NewGuid(),
             order.Id,
-            itemId,
+            Guid.NewGuid(),
             1m,
-            "PARTIAL",
+            "MISSING",
             DateTime.UtcNow), default);
 
-        await _creditService.Received(1).RefundAsync(
-            RestaurantId,
-            order.Id,
-            20_000m,
-            Arg.Any<string?>(),
-            default);
-        await _publisher.Received(1).Publish(
-            Arg.Is<RestaurantRefundIssuedIntegrationEvent>(evt => evt.RefundAmount == 20_000m),
-            default);
+        await _orders.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -146,14 +142,14 @@ public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
 
         parameterNames.Should().NotContain(name =>
             name.Contains("Payment", StringComparison.OrdinalIgnoreCase) ||
-            name.Contains("Gateway", StringComparison.OrdinalIgnoreCase));
+            name.Contains("Gateway", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Credit", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Publisher", StringComparison.OrdinalIgnoreCase));
     }
 
     private HubDiscrepancyRecordedIntegrationEventHandler CreateSut() =>
         new(
             _orders,
-            _creditService,
-            _publisher,
             Substitute.For<ILogger<HubDiscrepancyRecordedIntegrationEventHandler>>());
 
     private static Order ConfirmedOrderWithItem(out Guid itemId)

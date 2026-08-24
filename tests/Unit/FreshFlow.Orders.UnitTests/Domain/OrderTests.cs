@@ -721,6 +721,47 @@ public sealed class OrderTests
         result.Error.Code.Should().Be("INVALID_ACTUAL_QUANTITY");
     }
 
+    [Fact]
+    public void RecordActualQuantity_Shortfall_RaisesShortfallEvent()
+    {
+        // Arrange — ordered 10 @ 20,000 with 10% VAT; hub/admin records only 6 delivered
+        var (order, itemId) = MakeBatchedOrderWithVat();
+        order.ClearDomainEvents();
+
+        // Act
+        var result = order.RecordActualQuantity(itemId, 6m);
+
+        // Assert — shortfall 4 * 20,000 = 80,000 goods + 10% VAT (8,000) = 88,000
+        result.IsSuccess.Should().BeTrue();
+        var evt = order.DomainEvents.OfType<OrderProcurementShortfallDomainEvent>().Should().ContainSingle().Which;
+        evt.OrderItemId.Should().Be(itemId);
+        evt.ShortfallQuantity.Should().Be(4m);
+        evt.RefundAmount.Should().Be(88_000m);
+    }
+
+    [Fact]
+    public void RecordActualQuantity_AfterApplyProcurementActuals_MeasuresDeltaFromPreviousActual()
+    {
+        // Arrange — ordered 10, procurement actuals already dropped it to 8 (refunding 2); a
+        // later hub discrepancy / admin correction then drops it further to 5.
+        var (order, itemId) = MakeBatchedOrderWithVat();
+        order.ApplyProcurementActuals(new Dictionary<Guid, OrderItemProcurementActual>
+        {
+            [itemId] = new(8m, 20_000m)
+        });
+        order.ClearDomainEvents();
+
+        // Act
+        var result = order.RecordActualQuantity(itemId, 5m);
+
+        // Assert — the second event measures 8 → 5 (shortfall 3), not 10 → 5 (shortfall 5),
+        // so the first 2-unit shortfall isn't refunded twice.
+        result.IsSuccess.Should().BeTrue();
+        var evt = order.DomainEvents.OfType<OrderProcurementShortfallDomainEvent>().Should().ContainSingle().Which;
+        evt.ShortfallQuantity.Should().Be(3m);
+        evt.RefundAmount.Should().Be(66_000m); // 3 * 20,000 goods + 10% VAT (6,000)
+    }
+
     // ── ApplyProcurementActuals (C1 shortfall refund) ───────────────────────
 
     /// <summary>Confirms with a 10% VAT rate and advances to Batched, ready for actuals.</summary>

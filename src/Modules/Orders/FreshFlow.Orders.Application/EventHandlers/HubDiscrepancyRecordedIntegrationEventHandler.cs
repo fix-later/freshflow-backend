@@ -5,10 +5,16 @@ using Microsoft.Extensions.Logging;
 
 namespace FreshFlow.Orders.Application.EventHandlers;
 
+/// <summary>
+/// AUDIT-2026-08-23 C4: routes a hub-flagged discrepancy through
+/// <see cref="Orders.Domain.Entities.Order.RecordActualQuantity"/> instead of refunding directly,
+/// so the refund and the fulfilled-quantity the VAT invoice reads (<c>ActualQuantity</c>) move
+/// together. The refund itself happens via <see cref="Orders.Domain.Events.OrderProcurementShortfallDomainEvent"/>
+/// → <see cref="OrderProcurementShortfallDomainEventHandler"/>, which already refunds goods + VAT
+/// and publishes <see cref="RestaurantRefundIssuedIntegrationEvent"/>.
+/// </summary>
 internal sealed class HubDiscrepancyRecordedIntegrationEventHandler(
     IOrderRepository orders,
-    ICreditService creditService,
-    IPublisher publisher,
     ILogger<HubDiscrepancyRecordedIntegrationEventHandler> logger)
     : INotificationHandler<HubDiscrepancyRecordedIntegrationEvent>
 {
@@ -22,7 +28,7 @@ internal sealed class HubDiscrepancyRecordedIntegrationEventHandler(
             if (order is null)
             {
                 logger.LogWarning(
-                    "Skipping hub discrepancy refund because OrderId={OrderId} was not found.",
+                    "Skipping hub discrepancy adjustment because OrderId={OrderId} was not found.",
                     notification.OrderId);
                 return;
             }
@@ -31,56 +37,31 @@ internal sealed class HubDiscrepancyRecordedIntegrationEventHandler(
             if (item is null)
             {
                 logger.LogWarning(
-                    "Skipping hub discrepancy refund because OrderItemId={OrderItemId} was not found.",
+                    "Skipping hub discrepancy adjustment because OrderItemId={OrderItemId} was not found.",
                     notification.OrderItemId);
                 return;
             }
 
-            if (item.LockedUnitPrice is null)
+            // ponytail: no dedupe table in MVP; DiscrepancyId is the trace key if retries become real.
+            var newActual = (item.ActualQuantity ?? item.Quantity) - notification.AffectedQuantity;
+            var adjustment = order.RecordActualQuantity(notification.OrderItemId, newActual);
+            if (adjustment.IsFailure)
             {
                 logger.LogWarning(
-                    "Skipping hub discrepancy refund because OrderItemId={OrderItemId} has no locked unit price.",
-                    notification.OrderItemId);
-                return;
-            }
-
-            // AUDIT-2026-08-23 C3: no more clamp to the account's current balance — refunding
-            // past zero is now valid (OutstandingBalance goes negative; FreshFlow owes the
-            // restaurant). The per-order refundable-amount cap inside RefundAsync is the guard.
-            var desiredRefund = notification.AffectedQuantity * item.LockedUnitPrice.Value;
-
-            // ponytail: no dedupe table in MVP; DiscrepancyId in the credit note is the trace key if retries become real.
-            var refund = await creditService.RefundAsync(
-                order.RestaurantId,
-                order.Id,
-                desiredRefund,
-                $"Hub discrepancy {notification.DiscrepancyId} refund for order item {notification.OrderItemId}.",
-                cancellationToken);
-
-            if (refund.IsFailure)
-            {
-                logger.LogWarning(
-                    "Hub discrepancy refund failed for DiscrepancyId={DiscrepancyId} with {ErrorCode}.",
+                    "Hub discrepancy adjustment failed for DiscrepancyId={DiscrepancyId} with {ErrorCode}.",
                     notification.DiscrepancyId,
-                    refund.Error.Code);
+                    adjustment.Error.Code);
                 return;
             }
 
-            await publisher.Publish(
-                new RestaurantRefundIssuedIntegrationEvent(
-                    order.RestaurantId,
-                    order.Id,
-                    item.ProductNameSnapshot,
-                    notification.AffectedQuantity,
-                    desiredRefund,
-                    DateTime.UtcNow),
-                cancellationToken);
+            orders.Track(order);
+            await orders.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(
                 ex,
-                "Failed to handle hub discrepancy refund for DiscrepancyId={DiscrepancyId}.",
+                "Failed to handle hub discrepancy adjustment for DiscrepancyId={DiscrepancyId}.",
                 notification.DiscrepancyId);
         }
     }

@@ -7,8 +7,11 @@ internal sealed class OrderInvoiceRowConfiguration : IEntityTypeConfiguration<Or
 {
     public void Configure(EntityTypeBuilder<OrderInvoiceRow> builder)
     {
-        // Read-only projection over Orders' immutable confirmation snapshots.
-        // Procurement actuals are internal costs; buyer invoices use terms locked at confirmation.
+        // Read-only projection over Orders' data. Quantity is the DELIVERED quantity
+        // (AUDIT-2026-08-23 C4: falls back to the ordered quantity for lines procurement never
+        // touched, e.g. line-level actuals were never recorded). Unit price, VAT rate and
+        // delivery fee remain the immutable confirmation snapshot — LockedUnitPrice is what the
+        // buyer agreed to pay, never ActualUnitPrice, which is FreshFlow's internal market cost.
         // Column casing is mixed by table and verified against each *Configuration.cs — do not guess.
         builder.HasNoKey();
         builder.ToSqlQuery(
@@ -19,7 +22,7 @@ internal sealed class OrderInvoiceRowConfiguration : IEntityTypeConfiguration<Or
                 o.delivery_fee AS "DeliveryFee",
                 oi."ProductNameSnapshot" AS "ProductName",
                 COALESCE(u."Name", p.unit) AS "Unit",
-                oi."Quantity" AS "Quantity",
+                COALESCE(oi."ActualQuantity", oi."Quantity") AS "Quantity",
                 COALESCE(oi."LockedUnitPrice", oi."UnitPrice") AS "UnitPrice",
                 oi.vat_rate_code AS "VatRateCode"
             FROM orders o
@@ -29,6 +32,7 @@ internal sealed class OrderInvoiceRowConfiguration : IEntityTypeConfiguration<Or
             LEFT JOIN units_of_measurement u ON u."Id" = p."UnitId"
             WHERE o.deleted_at IS NULL
               AND o."Status" = 'Delivered'
+              AND COALESCE(oi."ActualQuantity", oi."Quantity") > 0
             """);
 
         builder.Property(r => r.OrderId);
