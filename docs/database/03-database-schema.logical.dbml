@@ -1,888 +1,905 @@
-// FreshFlow LOGICAL ERD for dbdiagram.io
-//
-// Companion to the PHYSICAL model in 03-database-schema.dbml.
-// Reviewed against implementation on 2026-07-03.
-//
-// PURPOSE
-//   A technology-agnostic view of the domain: entities, business attributes,
-//   keys, and relationships. It answers "what data exists and how does it
-//   relate", NOT "how is it stored". Use the physical .dbml for column types,
-//   indexes, partitioning, DB defaults, and enforced FK delete rules.
-//
-// WHAT IS DELIBERATELY OMITTED (see physical model for these):
-//   - Physical data types / precision (varchar(n), decimal(p,s), jsonb, uuid[]).
-//     This file uses logical domains only: uuid, string, text, int, decimal,
-//     money, boolean, datetime, date, time, enum, json.
-//   - Index blocks, table partitioning, storage/concurrency notes.
-//   - DB-level defaults (gen_random_uuid(), now()) and FK ON DELETE actions.
-//   - Standard audit / soft-delete metadata. EVERY implemented entity carries
-//     created_at / updated_at (and deleted_at where soft-deletable). These are
-//     dropped from the logical view; only timestamps with domain meaning are
-//     kept (e.g. expires_at, cancelled_at, resolved_at, first_run_at).
-//   - Security material (password_hash, token_hash, code_hash) is reduced to
-//     the entity that owns it.
-//
-// LOGICAL vs PHYSICAL RELATIONSHIPS
-//   Unlike the physical file (which only draws relationships backed by a real
-//   DB foreign key), this logical model draws EVERY meaningful relationship,
-//   including ones the running database does not enforce. Non-enforced logical
-//   links are drawn in GRAY ([color: #9e9e9e]) with a trailing "// logical only"
-//   comment. (DBML does not allow [note:] on Ref lines — color is the
-//   dbdiagram-visible marker.)
-//
-// A/B SPLIT mirrors the physical model:
-//   PART A = implemented domain (Auth, Catalog, Pricing, Orders, Assistant).
-//   PART B = planned design, not yet in the database.
-//
-// REMOVED BY DECISION (see docs/06-context-decisions.md) — deliberately NOT
-// part of this model; archived in the physical file only:
-//   - invoices / invoice_orders / payments / refunds — superseded by the
-//     B2B credit model: restaurant_credit + credit_transactions (DEC-002).
-//   - restaurant_members — single Restaurant actor, 1:1 with a User (DEC-003).
+// FreshFlow LOGICAL data model for dbdiagram.io
+// Reconciled with the implemented EF model on 2026-08-16.
+// Includes 59 current tables; physical storage details and planned entities are omitted.
 
 Project FreshFlow_Logical {
   database_type: 'Logical'
-  Note: 'FreshFlow logical ERD. Domain entities and relationships independent of storage. Part A = implemented, Part B = planned. See 03-database-schema.dbml for the physical model.'
+  Note: 'Technology-neutral attributes, keys, enforced relationships, and cross-module logical links.'
 }
 
-// ============================================================
-// LOGICAL ENUMS — PART A (stored as strings in the physical DB)
-// ============================================================
-
-Enum restaurant_status {
-  pending
-  active
-  suspended
+Table assistant_conversations {
+  id                               uuid [pk, not null]
+  expires_at                       datetime [not null]
+  market_id                        uuid
+  session_id                       string [not null, unique]
+  state_json                       json [not null]
+  user_id                          uuid [not null]
 }
 
-Enum order_status {
-  Draft
-  Confirmed
-  Batched
-  PickedUp
-  AtHub
-  Delivering
-  Delivered
-  Cancelled
+Table audit_logs {
+  id                               uuid [pk, not null]
+  action                           string [not null]
+  actor_id                         uuid
+  details                          json
+  entity_id                        uuid [not null]
+  entity_type                      string [not null]
+  occurred_at                      datetime [not null]
 }
 
-Enum order_payment_status {
-  NotApplicable
-  Outstanding
-  Settled
-  Waived
+Table credit_statement_lines {
+  id                               uuid [pk, not null]
+  amount                           decimal [not null]
+  balance_after                    decimal [not null]
+  credit_statement_id              uuid [not null]
+  note                             string
+  occurred_at                      datetime [not null]
+  order_id                         uuid
+  payment_method                   string
+  reference                        string
+  transaction_id                   uuid [not null]
+  type                             string [not null]
 }
 
-Enum recurrence_type {
-  Daily
-  Weekly
-}
-
-Enum credit_transaction_type {
-  charge
-  settlement
-  refund
-  adjustment
-}
-
-Enum order_issue_type {
-  missing
-  wrong
-  damaged
-}
-
-Enum order_issue_status {
-  open
-  resolved
-}
-
-Enum verification_channel {
-  email
-  phone
-}
-
-// ============================================================
-// PART A — IMPLEMENTED ENTITIES (logical)
-// ============================================================
-
-// ---------- Identity & Access ----------
-
-Table roles {
-  id          uuid    [pk]
-  name        string  [unique, not null]
-  description string  [not null]
-
-  Note: 'Global role lookup. One role per user.'
-}
-
-Table users {
-  id                uuid                [pk]
-  email             string              [unique, not null]
-  phone             string              [unique, note: 'Optional second login identifier.']
-  full_name         string
-  avatar_url        string
-  role_id           uuid                [not null]
-  is_active         boolean             [not null]
-  email_verified_at datetime
-
-  Note: 'Root user account. Account state is modeled by is_active + soft-delete, not a status enum.'
-}
-
-Table refresh_tokens {
-  id                   uuid       [pk]
-  user_id              uuid       [not null]
-  replaced_by_token_id uuid       [note: 'Rotation lineage (self-reference).']
-  family_id            uuid       [not null, note: 'Token family — revoked as a unit on reuse detection.']
-  expires_at           datetime   [not null]
-  revoked_at           datetime
-
-  Note: 'Rotating refresh token with reuse detection.'
-}
-
-Table password_reset_tokens {
-  id         uuid      [pk]
-  user_id    uuid      [not null]
-  expires_at datetime  [not null]
-  used_at    datetime
-}
-
-Table verification_codes {
-  id         uuid                 [pk]
-  user_id    uuid                 [not null]
-  channel    verification_channel [not null]
-  expires_at datetime             [not null]
-  used_at    datetime
-}
-
-Table user_market_assignments {
-  id          uuid  [pk]
-  user_id     uuid  [not null]
-  market_id   uuid  [not null]
-  assigned_by uuid  [note: 'User who made the assignment.']
-
-  Note: 'Which markets a staff user is assigned to (many-to-many bridge users <-> markets). Unique per (user, market).'
-}
-
-Table driver_profiles {
-  id            uuid    [pk]
-  user_id       uuid    [unique, not null]
-  license_plate string
-  phone_number  string
-
-  Note: 'Extended profile for driver-role users. 1:1 with users.'
-}
-
-// ---------- Restaurant Profile ----------
-
-Table restaurants {
-  id             uuid              [pk]
-  user_id        uuid              [unique, not null]
-  name           string            [not null]
-  address        string
-  contact_person string
-  pickup_start   time
-  pickup_end     time
-  status         restaurant_status [not null]
-
-  Note: '1:1 with a user account (owner).'
-}
-
-Table delivery_addresses {
-  id            uuid     [pk]
-  restaurant_id uuid     [not null]
-  recipient_name string
-  phone         string
-  address_line  text     [not null]
-  latitude      decimal
-  longitude     decimal
-  is_default    boolean  [not null]
-
-  Note: 'Per-restaurant delivery addresses.'
-}
-
-// ---------- Catalog ----------
-
-Table product_categories {
-  id        uuid    [pk]
-  name      string  [unique, not null]
-  is_active boolean [not null]
-}
-
-Table units_of_measurement {
-  id           uuid    [pk]
-  name         string  [unique, not null]
-  abbreviation string
-  is_active    boolean [not null]
-
-  Note: 'Unit of measure for products (kg, bó, thùng, ...).'
-}
-
-Table products {
-  id          uuid    [pk]
-  category_id uuid    [note: 'Optional category.']
-  unit_id     uuid    [not null]
-  name        string  [not null]
-  description text
-  created_by  uuid    [note: 'User who created the product.']
-
-  Note: 'Master product catalog.'
-}
-
-// ---------- Market & Pricing ----------
-
-Table markets {
-  id        uuid    [pk]
-  name      string  [not null]
-  location  string
-  address   string
-  latitude  decimal
-  longitude decimal
-  is_active boolean [not null]
-
-  Note: 'Wholesale market / sourcing point.'
-}
-
-Table market_products {
-  id                uuid     [pk]
-  market_id         uuid     [not null]
-  product_id        uuid     [not null]
-  current_price     money    [not null]
-  current_quantity  int      [not null]
-  reserved_quantity int      [not null]
-  updated_by        uuid     [note: 'Market agent who last updated price/stock.']
-
-  Note: 'A product offered at a market with its live price and stock. Unique per (market, product).'
-}
-
-Table price_snapshots {
-  id                uuid     [pk]
-  market_product_id uuid     [not null]
-  price             money    [not null]
-  quantity          int      [not null]
-  recorded_by       uuid     [note: 'Market agent who recorded the snapshot.']
-  recorded_at       datetime [not null]
-
-  Note: 'Append-only price/stock history for a market product.'
-}
-
-// ---------- Orders ----------
-
-Table orders {
-  id                   uuid                 [pk]
-  restaurant_id        uuid                 [not null]
-  order_group_id       uuid                 [note: 'Optional grouping (planned order_groups).']
-  scheduled_order_id   uuid                 [note: 'Optional origin recurring order.']
-  status               order_status         [not null]
-  payment_status       order_payment_status [not null]
-  scheduled_for        datetime
-  confirmed_receipt_at datetime
-  total_amount         money                [not null]
-  notes                text
-  cancelled_at         datetime
-  cancellation_reason  text
-
-  Note: 'A restaurant purchase order.'
-}
-
-Table order_items {
-  id                    uuid    [pk]
-  order_id              uuid    [not null]
-  market_product_id     uuid    [not null]
-  product_name_snapshot string  [not null]
-  quantity              int     [not null]
-  unit_price            money   [not null]
-  locked_unit_price     money   [note: 'Price locked at confirmation.']
-  locked_total          money
-  actual_quantity       decimal [note: 'Quantity actually fulfilled.']
-
-  Note: 'Line item of an order.'
-}
-
-Table scheduled_orders {
-  id               uuid           [pk]
-  restaurant_id    uuid           [not null]
-  recurrence_type  recurrence_type [not null]
-  first_run_at     datetime       [not null]
-  last_executed_at datetime
-  cancelled_at     datetime
-  notes            text
-
-  Note: 'Recurring order template that generates orders.'
-}
-
-// ---------- B2B Credit / Công nợ ----------
-
-Table restaurant_credit {
-  restaurant_id       uuid  [pk]
-  credit_limit        money [not null]
-  outstanding_balance money [not null]
-
-  Note: '1:1 credit account per restaurant (B2B công nợ).'
+Table credit_statements {
+  id                               uuid [pk, not null]
+  closing_balance                  decimal [not null]
+  generated_at                     datetime [not null]
+  opening_balance                  decimal [not null]
+  period_end                       datetime [not null]
+  period_start                     datetime [not null]
+  restaurant_id                    uuid [not null]
+  total_charges                    decimal [not null]
+  total_refunds                    decimal [not null]
+  total_settlements                decimal [not null]
 }
 
 Table credit_transactions {
-  id            uuid                    [pk]
-  restaurant_id uuid                    [not null]
-  order_id      uuid                    [note: 'Optional related order.']
-  type          credit_transaction_type [not null]
-  amount        money                   [not null]
-  balance_after money                   [not null]
-  note          string
-  created_at    datetime                [not null, note: 'Ledger event time (business-significant).']
-
-  Note: 'Append-only ledger of credit movements.'
-}
-
-Table order_issues {
-  id                uuid               [pk]
-  order_id          uuid               [not null]
-  order_item_id     uuid               [note: 'Optional specific line item.']
-  issue_type        order_issue_type   [not null]
-  affected_quantity decimal            [not null]
-  description       text               [not null]
-  status            order_issue_status [not null]
-  reported_by       uuid               [not null]
-  resolved_at       datetime
-
-  Note: 'Receipt / discrepancy report against a delivered order.'
-}
-
-// ---------- AI Shopping Assistant ----------
-
-Table assistant_conversations {
-  id         uuid     [pk]
-  user_id    uuid     [not null]
-  market_id  uuid     [note: 'Optional market context.']
-  session_id string   [unique, not null]
-  state      json     [not null]
-  expires_at datetime [not null]
-
-  Note: 'DB-backed AI assistant conversation with TTL (expires_at).'
-}
-
-// ======================
-// PART A — RELATIONSHIPS
-// ======================
-
-Ref: users.role_id > roles.id
-Ref: refresh_tokens.user_id > users.id
-Ref: refresh_tokens.replaced_by_token_id > refresh_tokens.id
-Ref: password_reset_tokens.user_id > users.id
-Ref: verification_codes.user_id > users.id
-Ref: user_market_assignments.user_id > users.id
-Ref: user_market_assignments.market_id > markets.id [color: #9e9e9e] // logical only (cross-module, no FK)
-Ref: user_market_assignments.assigned_by > users.id [color: #9e9e9e] // logical only
-Ref: driver_profiles.user_id - users.id [color: #9e9e9e] // logical only (unique index, no FK)
-Ref: restaurants.user_id - users.id [color: #9e9e9e] // logical only (unique index, no FK)
-
-Ref: delivery_addresses.restaurant_id > restaurants.id
-
-Ref: products.category_id > product_categories.id
-Ref: products.unit_id > units_of_measurement.id
-Ref: products.created_by > users.id [color: #9e9e9e] // logical only
-
-Ref: market_products.market_id > markets.id [color: #9e9e9e] // logical only (cross-module, no FK)
-Ref: market_products.product_id > products.id [color: #9e9e9e] // logical only (cross-module, no FK)
-Ref: market_products.updated_by > users.id [color: #9e9e9e] // logical only
-Ref: price_snapshots.market_product_id > market_products.id
-Ref: price_snapshots.recorded_by > users.id [color: #9e9e9e] // logical only
-
-Ref: orders.restaurant_id > restaurants.id
-Ref: orders.scheduled_order_id > scheduled_orders.id [color: #9e9e9e] // logical only
-Ref: order_items.order_id > orders.id
-Ref: order_items.market_product_id > market_products.id
-Ref: scheduled_orders.restaurant_id > restaurants.id
-
-Ref: restaurant_credit.restaurant_id - restaurants.id
-Ref: credit_transactions.restaurant_id > restaurants.id
-Ref: credit_transactions.order_id > orders.id
-
-Ref: order_issues.order_id > orders.id
-Ref: order_issues.order_item_id > order_items.id
-Ref: order_issues.reported_by > users.id
-
-Ref: assistant_conversations.user_id > users.id [color: #9e9e9e] // logical only
-Ref: assistant_conversations.market_id > markets.id [color: #9e9e9e] // logical only
-
-// ============================================================
-// LOGICAL ENUMS — PART B (planned)
-// ============================================================
-
-Enum order_group_status {
-  OPEN
-  LOCKED
-  DISPATCHED
-  COMPLETED
-  CANCELLED
-}
-
-Enum procurement_status {
-  PLANNING
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-}
-
-Enum proc_order_status {
-  ASSIGNED
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-}
-
-Enum hub_status {
-  ACTIVE
-  INACTIVE
-}
-
-Enum hub_receiving_status {
-  IN_PROGRESS
-  COMPLETED
-  HAS_DISCREPANCY
-}
-
-Enum item_condition {
-  OK
-  DAMAGED
-  MISSING
-  PARTIAL
-}
-
-Enum vehicle_status {
-  AVAILABLE
-  IN_USE
-  MAINTENANCE
-}
-
-Enum route_status {
-  PLANNED
-  DISPATCHED
-  COMPLETED
-  CANCELLED
-}
-
-Enum stop_status {
-  PENDING
-  ARRIVED
-  COMPLETED
-  FAILED
-}
-
-Enum delivery_status {
-  PENDING
-  IN_TRANSIT
-  DELIVERED
-  FAILED
-}
-
-Enum notification_channel {
-  PUSH
-  SMS
-  IN_APP
-  EMAIL
-}
-
-Enum notification_type {
-  PRICE_ALERT
-  ORDER_STATUS
-  DELIVERY_UPDATE
-  PAYMENT
-  HUB_DISCREPANCY
-  SYSTEM
-}
-
-Enum export_job_status {
-  PENDING
-  PROCESSING
-  READY
-  FAILED
-}
-
-// ============================================================
-// PART B — PLANNED ENTITIES (logical, design only)
-// ============================================================
-
-Table price_alert_subscriptions {
-  id                   uuid    [pk]
-  restaurant_id        uuid    [not null]
-  product_id           uuid    [not null]
-  threshold_percentage decimal [not null]
-  is_active            boolean [not null]
-
-  Note: '[PLANNED]'
-}
-
-Table system_config {
-  id          uuid   [pk]
-  key         string [unique, not null]
-  value       text   [not null]
-  description text
-  updated_by  uuid
-
-  Note: '[PLANNED]'
-}
-
-Table order_groups {
-  id           uuid               [pk]
-  name         string
-  status       order_group_status [not null]
-  grouped_by   uuid
-  total_orders int                [not null]
-
-  Note: '[PLANNED] orders.order_group_id is already reserved for this.'
-}
-
-Table order_status_history {
-  id                 uuid     [pk]
-  order_id           uuid     [not null]
-  from_status        string
-  to_status          string   [not null]
-  changed_by_user_id uuid
-  reason             text
-  changed_at         datetime [not null]
-
-  Note: '[PLANNED]'
-}
-
-Table procurement_batches {
-  id             uuid               [pk]
-  order_group_id uuid
-  batch_date     date               [not null]
-  status         procurement_status [not null]
-  total_orders   int                [not null]
-  completed_at   datetime
-
-  Note: '[PLANNED]'
-}
-
-Table procurement_orders {
-  id            uuid              [pk]
-  batch_id      uuid              [not null]
-  agent_user_id uuid              [not null]
-  market_id     uuid              [not null]
-  status        proc_order_status [not null]
-  started_at    datetime
-  completed_at  datetime
-
-  Note: '[PLANNED]'
-}
-
-Table procurement_items {
-  id                   uuid    [pk]
-  procurement_order_id uuid    [not null]
-  market_product_id    uuid    [not null]
-  target_quantity      decimal [not null]
-  actual_quantity      decimal
-  actual_unit_price    money
-  source_order_ids     json    [not null, note: 'Set of contributing order ids.']
-
-  Note: '[PLANNED]'
-}
-
-Table hubs {
-  id        uuid       [pk]
-  code      string     [unique, not null]
-  name      string     [not null]
-  address   string
-  latitude  decimal
-  longitude decimal
-  status    hub_status [not null]
-
-  Note: '[PLANNED]'
-}
-
-Table hub_inventory {
-  id                 uuid    [pk]
-  hub_id             uuid    [not null]
-  market_product_id  uuid    [not null]
-  quantity_in        decimal [not null]
-  quantity_out       decimal [not null]
-  quantity_available decimal [not null]
-
-  Note: '[PLANNED]'
-}
-
-Table hub_receivings {
-  id                   uuid                 [pk]
-  hub_id               uuid                 [not null]
-  procurement_order_id uuid                 [not null]
-  received_at          datetime             [not null]
-  hub_staff_user_id    uuid                 [not null]
-  status               hub_receiving_status [not null]
-
-  Note: '[PLANNED]'
-}
-
-Table hub_receiving_items {
-  id                uuid           [pk]
-  hub_receiving_id  uuid           [not null]
-  market_product_id uuid           [not null]
-  expected_quantity decimal        [not null]
-  received_quantity decimal        [not null]
-  condition_status  item_condition [not null]
-  notes             text
-
-  Note: '[PLANNED]'
-}
-
-Table hub_outbound_events {
-  id                   uuid     [pk]
-  hub_id               uuid     [not null]
-  destination_route_id uuid
-  items                json     [not null]
-  total_quantity_kg    decimal
-  dispatched_at        datetime [not null]
-  recorded_by          uuid
-
-  Note: '[PLANNED]'
+  id                               uuid [pk, not null]
+  amount                           decimal [not null]
+  balance_after                    decimal [not null]
+  note                             string
+  order_id                         uuid
+  payment_method                   string
+  recorded_by_user_id              uuid
+  reference                        string
+  restaurant_id                    uuid [not null]
+  type                             string [not null]
 }
 
 Table cross_dock_transfers {
-  id               uuid   [pk]
-  hub_id           uuid   [not null]
-  hub_receiving_id uuid   [not null]
-  outbound_route_id uuid  [not null]
-  status           string [not null]
-  notes            text
-
-  Note: '[PLANNED]'
-}
-
-Table vehicles {
-  id            uuid           [pk]
-  license_plate string         [unique, not null]
-  capacity_kg   decimal        [not null]
-  vehicle_type  string
-  status        vehicle_status [not null]
-  registered_by uuid
-
-  Note: '[PLANNED]'
-}
-
-Table delivery_routes {
-  id                        uuid         [pk]
-  procurement_batch_id      uuid
-  order_group_id            uuid
-  route_date                date         [not null]
-  driver_user_id            uuid
-  vehicle_id                uuid
-  total_stops               int          [not null]
-  estimated_duration_minutes int
-  estimated_distance_km     decimal
-  status                    route_status [not null]
-  dispatched_at             datetime
-  completed_at              datetime
-  created_by                uuid
-
-  Note: '[PLANNED]'
-}
-
-Table route_stops {
-  id                   uuid        [pk]
-  route_id             uuid        [not null]
-  sequence_number      int         [not null]
-  restaurant_id        uuid        [not null]
-  order_id             uuid        [not null]
-  estimated_arrival_at datetime
-  actual_arrival_at    datetime
-  status               stop_status [not null]
-
-  Note: '[PLANNED]'
+  id                               uuid [pk, not null]
+  hub_id                           uuid [not null]
+  inbound_event_id                 uuid [not null]
+  notes                            string
+  outbound_route_id                uuid [not null]
+  status                           string [not null]
 }
 
 Table deliveries {
-  id                      uuid            [pk]
-  route_stop_id           uuid            [unique, not null]
-  order_id                uuid            [unique, not null]
-  driver_user_id          uuid
-  status                  delivery_status [not null]
-  departed_at             datetime
-  arrived_at              datetime
-  delivered_at            datetime
-  restaurant_confirmed_at datetime
-  failure_reason          string
+  id                               uuid [pk, not null]
+  actual_arrival                   datetime
+  delivery_route_id                uuid [not null]
+  estimated_arrival                datetime
+  failure_reason                   string
+  order_id                         uuid [not null, unique]
+  proof_url                        string
+  sequence_number                  int [not null]
+  status                           string [not null]
+}
 
-  Note: '[PLANNED]'
+Table delivery_addresses {
+  id                               uuid [pk, not null]
+  address_line                     string [not null]
+  is_default                       boolean [not null]
+  latitude                         decimal
+  longitude                        decimal
+  phone                            string
+  recipient_name                   string
+  restaurant_id                    uuid [not null]
+}
+
+Table delivery_issues {
+  id                               uuid [pk, not null]
+  delivery_id                      uuid [not null]
+  description                      string [not null]
+  issue_type                       string [not null]
+  reported_by                      uuid [not null]
+  status                           string [not null]
+}
+
+Table delivery_routes {
+  id                               uuid [pk, not null]
+  created_by                       uuid
+  driver_user_id                   uuid
+  estimated_cost                   decimal
+  estimated_duration_minutes       int
+  estimated_return_at              datetime
+  hub_id                           uuid
+  market_session_id                uuid [not null]
+  optimization_criteria            string
+  order_group_id                   uuid
+  planned_load_kg                  decimal
+  route_plan_id                    uuid
+  route_type                       string [not null]
+  routing_profile                  string
+  service_date                     date [not null]
+  status                           string [not null]
+  stops                            json [not null]
+  suggested_vehicle_id             uuid
+  total_distance_km                decimal
+  vehicle_id                       uuid
+}
+
+Table driver_profiles {
+  id                               uuid [pk, not null]
+  license_plate                    string
+  phone_number                     string
+  user_id                          uuid [not null, unique]
+}
+
+Table hub_discrepancies {
+  id                               uuid [pk, not null]
+  acknowledged_at                  datetime
+  acknowledged_by                  uuid
+  affected_quantity                decimal [not null]
+  condition_status                 string [not null]
+  hub_id                           uuid [not null]
+  inbound_event_id                 uuid [not null]
+  notes                            string
+  order_id                         uuid [not null]
+  order_item_id                    uuid [not null]
+  proof_image_url                  string
+  status                           string [not null]
+}
+
+Table hub_driver_assignments {
+  hub_id                           uuid [pk, not null]
+  user_id                          uuid [pk, not null]
+}
+
+Table hub_handover_events {
+  id                               uuid [pk, not null]
+  delivery_route_id                uuid [not null]
+  driver_confirmed_at              datetime
+  driver_user_id                   uuid [not null]
+  handed_over_at                   datetime [not null]
+  handed_over_by                   uuid [not null]
+  hub_id                           uuid [not null]
+  notes                            string
+  outbound_event_id                uuid
+  status                           string [not null]
+}
+
+Table hub_inbound_events {
+  id                               uuid [pk, not null]
+  arrived_at                       datetime [not null]
+  condition_status                 string [not null]
+  delivery_route_id                uuid
+  delivery_schedule_id             uuid
+  discrepancy_notes                string
+  hub_id                           uuid [not null]
+  hub_staff_user_id                uuid
+  items                            json [not null]
+  recorded_by                      uuid
+  source_market_id                 uuid
+  status                           string [not null]
+  total_quantity_kg                decimal [not null]
+}
+
+Table hub_inventory {
+  id                               uuid [pk, not null]
+  hub_id                           uuid [not null]
+  market_product_id                uuid [not null]
+  quantity_available               decimal [not null]
+  quantity_in                      decimal [not null]
+  quantity_out                     decimal [not null]
+  recorded_at                      datetime [not null]
+}
+
+Table hub_outbound_events {
+  id                               uuid [pk, not null]
+  destination_route_id             uuid [not null]
+  dispatched_at                    datetime [not null]
+  hub_id                           uuid [not null]
+  items                            json [not null]
+  recorded_by                      uuid
+  total_quantity_kg                decimal [not null]
+}
+
+Table hub_sorting_progress {
+  id                               uuid [pk, not null]
+  hub_id                           uuid [not null]
+  order_item_id                    uuid [not null]
+  route_id                         uuid
+  service_date                     date [not null]
+  sorted_at                        datetime
+  sorted_by_user_id                uuid
+  sorted_quantity_kg               decimal [not null]
+  status                           string [not null]
+}
+
+Table hub_staff_assignments {
+  hub_id                           uuid [pk, not null]
+  user_id                          uuid [pk, not null]
+}
+
+Table hubs {
+  id                               uuid [pk, not null]
+  address                          string
+  capacity_kg                      decimal [not null]
+  is_active                        boolean [not null]
+  latitude                         decimal
+  longitude                        decimal
+  managed_by                       uuid
+  market_id                        uuid [unique]
+  name                             string [not null]
+  occupied_capacity_kg             decimal [not null]
+}
+
+Table invoice_lines {
+  id                               uuid [pk, not null]
+  invoice_id                       uuid [not null]
+  line_subtotal                    decimal [not null]
+  line_total                       decimal [not null]
+  line_vat_amount                  decimal [not null]
+  product_name                     string [not null]
+  quantity                         decimal [not null]
+  unit                             string
+  unit_price                       decimal [not null]
+  vat_rate_code                    string [not null]
+  vat_rate_percent                 decimal [not null]
+}
+
+Table invoices {
+  id                               uuid [pk, not null]
+  buyer_address                    string
+  buyer_email                      string
+  buyer_legal_name                 string [not null]
+  buyer_tax_code                   string [not null]
+  error_reason                     string
+  issued_at                        datetime
+  lookup_url                       string
+  number                           string
+  order_id                         uuid [not null, unique]
+  pdf_ref                          string
+  provider_name                    string
+  restaurant_id                    uuid [not null]
+  retry_count                      int [not null]
+  serial                           string
+  status                           string [not null]
+  sub_total                        decimal [not null]
+  tax_authority_code               string
+  total                            decimal [not null]
+  vat_amount                       decimal [not null]
+  xml_ref                          string
+}
+
+Table market_product_tags {
+  market_product_id                uuid [pk, not null]
+  tag_id                           uuid [pk, not null]
+}
+
+Table market_products {
+  id                               uuid [pk, not null]
+  current_price                    decimal [not null]
+  current_quantity                 int [not null]
+  market_id                        uuid [not null]
+  product_id                       uuid [not null]
+  reserved_quantity                int [not null]
+  updated_by                       uuid
+}
+
+Table market_session_agents {
+  session_id                       uuid [pk, not null]
+  user_id                          uuid [pk, not null]
+  assigned_at                      datetime [not null]
+  assigned_by                      uuid
+}
+
+Table market_session_vehicles {
+  session_id                       uuid [pk, not null]
+  vehicle_id                       uuid [pk, not null]
+  assigned_at                      datetime [not null]
+  assigned_by                      uuid
+}
+
+Table market_sessions {
+  id                               uuid [pk, not null]
+  batching_completed_at            datetime
+  close_reason                     string
+  closed_at                        datetime
+  closed_by                        uuid
+  closes_at                        datetime [not null]
+  created_source                   string [not null]
+  hub_id                           uuid
+  market_id                        uuid [not null]
+  planned_capacity_kg              decimal
+  service_date                     date [not null]
+  status                           string [not null]
+}
+
+Table markets {
+  id                               uuid [pk, not null]
+  address                          string
+  code                             string
+  description                      string
+  image_url                        string
+  is_active                        boolean [not null]
+  latitude                         decimal
+  location                         string
+  longitude                        decimal
+  name                             string [not null]
+}
+
+Table notification_devices {
+  id                               uuid [pk, not null]
+  device_id                        string [unique]
+  platform                         string [not null]
+  revoked_at                       datetime
+  token                            string [not null, unique]
+  user_id                          uuid [not null]
 }
 
 Table notifications {
-  id                  uuid                 [pk]
-  user_id             uuid                 [not null]
-  type                notification_type    [not null]
-  channel             notification_channel [not null]
-  title               string               [not null]
-  body                text                 [not null]
-  related_entity_type string
-  related_entity_id   uuid
-  sent_at             datetime
-  is_read             boolean              [not null]
-  read_at             datetime
-
-  Note: '[PLANNED]'
+  id                               uuid [pk, not null]
+  attempt_count                    int [not null]
+  body                             string [not null]
+  failed_reason                    string
+  is_read                          boolean [not null]
+  last_attempt_at                  datetime
+  payload                          json
+  read_at                          datetime
+  send_status                      string [not null]
+  title                            string [not null]
+  type                             string [not null]
+  user_id                          uuid [not null]
 }
 
-Table notification_templates {
-  id            uuid                 [pk]
-  event_type    string               [not null]
-  channel       notification_channel [not null]
-  template_text text                 [not null]
-  is_active     boolean              [not null]
-
-  Note: '[PLANNED]'
+Table operational_settings {
+  id                               uuid [pk, not null]
+  base_fee                         decimal [not null]
+  batching_enabled                 boolean [not null]
+  daily_cutoff_time                time [not null]
+  default_route_type               string [not null]
+  delivery_fee_per_km              decimal [not null]
+  delivery_window_days             int [not null]
+  minimum_fee                      decimal [not null]
+  rounding_unit                    decimal [not null]
 }
 
-Table analytics_aggregations {
-  id           uuid     [pk]
-  type         string   [not null]
-  period_start datetime [not null]
-  period_end   datetime [not null]
-  data_json    json     [not null]
-
-  Note: '[PLANNED]'
+Table order_claims {
+  id                               uuid [pk, not null]
+  amount                           decimal [not null]
+  created_by                       uuid [not null]
+  decision_note                    string
+  order_id                         uuid [not null]
+  reason                           string [not null]
+  refund_transaction_id            uuid [unique]
+  restaurant_id                    uuid [not null]
+  reviewed_at                      datetime
+  reviewed_by                      uuid
+  status                           string [not null]
 }
 
-Table export_jobs {
-  id           uuid              [pk]
-  requested_by uuid
-  export_type  string            [not null]
-  status       export_job_status [not null]
-  parameters   json
-  ready_at     datetime
-  expires_at   datetime
-
-  Note: '[PLANNED]'
+Table order_issues {
+  id                               uuid [pk, not null]
+  affected_quantity                decimal [not null]
+  description                      string [not null]
+  issue_type                       string [not null]
+  order_id                         uuid [not null]
+  order_item_id                    uuid
+  reported_by                      uuid [not null]
+  resolved_at                      datetime
+  status                           string [not null]
 }
 
-// ======================
-// PART B — RELATIONSHIPS (planned)
-// ======================
+Table order_items {
+  id                               uuid [pk, not null]
+  actual_quantity                  decimal
+  actual_unit_price                decimal
+  locked_total                     decimal
+  locked_unit_price                decimal
+  locked_vat_amount                decimal
+  market_product_id                uuid [not null]
+  order_id                         uuid [not null]
+  packing_code_snapshot            string
+  packing_weight_kg_snapshot       decimal
+  product_name_snapshot            string [not null]
+  quantity                         int [not null]
+  unit_price                       decimal [not null]
+  vat_rate_code                    string
+  vat_rate_percent                 decimal
+}
 
-Ref: orders.order_group_id > order_groups.id [color: #9e9e9e] // logical only
+Table orders {
+  id                               uuid [pk, not null]
+  cancellation_reason              string
+  cancelled_at                     datetime
+  confirmed_at                     datetime
+  confirmed_receipt_at             datetime
+  delivery_address_id              uuid
+  delivery_address_line            string
+  delivery_distance_km             decimal [not null]
+  delivery_distance_meters         int
+  delivery_duration_seconds        int
+  delivery_fee                     decimal [not null]
+  delivery_fee_calculated_at       datetime
+  delivery_latitude                decimal
+  delivery_longitude               decimal
+  delivery_origin_latitude         decimal
+  delivery_origin_longitude        decimal
+  delivery_phone                   string
+  delivery_recipient_name          string
+  market_id                        uuid
+  market_session_id                uuid
+  notes                            string
+  order_group_id                   uuid
+  payment_status                   string [not null]
+  restaurant_id                    uuid [not null]
+  routing_provider                 string
+  scheduled_for                    datetime
+  scheduled_order_id               uuid
+  status                           string [not null]
+  subtotal_amount                  decimal [not null]
+  total_amount                     decimal [not null]
+  vat_amount                       decimal [not null]
+}
 
-Ref: price_alert_subscriptions.restaurant_id > restaurants.id
-Ref: price_alert_subscriptions.product_id > products.id
-Ref: system_config.updated_by > users.id
+Table packing_codes {
+  id                               uuid [pk, not null]
+  capacity_kg                      decimal [not null]
+  code                             string [not null, unique]
+  description                      string
+  is_active                        boolean [not null]
+}
 
-Ref: order_groups.grouped_by > users.id
-Ref: order_status_history.order_id > orders.id
-Ref: order_status_history.changed_by_user_id > users.id [color: #9e9e9e] // logical only
+Table password_reset_tokens {
+  id                               uuid [pk, not null]
+  expires_at                       datetime [not null]
+  used_at                          datetime
+  user_id                          uuid [not null]
+}
 
-Ref: procurement_batches.order_group_id > order_groups.id
-Ref: procurement_orders.batch_id > procurement_batches.id
-Ref: procurement_orders.agent_user_id > users.id
-Ref: procurement_orders.market_id > markets.id
-Ref: procurement_items.procurement_order_id > procurement_orders.id
-Ref: procurement_items.market_product_id > market_products.id
+Table price_snapshots {
+  id                               uuid [pk, not null]
+  market_product_id                uuid [not null]
+  price                            decimal [not null]
+  quantity                         int [not null]
+  recorded_at                      datetime [not null]
+  recorded_by                      uuid
+}
 
-Ref: hub_inventory.hub_id > hubs.id
-Ref: hub_inventory.market_product_id > market_products.id
-Ref: hub_receivings.hub_id > hubs.id
-Ref: hub_receivings.procurement_order_id > procurement_orders.id
-Ref: hub_receivings.hub_staff_user_id > users.id
-Ref: hub_receiving_items.hub_receiving_id > hub_receivings.id
-Ref: hub_receiving_items.market_product_id > market_products.id
-Ref: hub_outbound_events.hub_id > hubs.id
-Ref: hub_outbound_events.destination_route_id > delivery_routes.id
-Ref: hub_outbound_events.recorded_by > users.id [color: #9e9e9e] // logical only
+Table procurement_batch_items {
+  id                               uuid [pk, not null]
+  actual_quantity                  int
+  actual_unit_price                decimal
+  assigned_agent_user_id           uuid
+  assigned_at                      datetime
+  market_product_id                uuid [not null]
+  procurement_batch_id             uuid [not null]
+  product_name_snapshot            string [not null]
+  purchased_at                     datetime
+  reference_unit_price             decimal
+  total_quantity                   int [not null]
+}
+
+Table procurement_batch_orders {
+  id                               uuid [pk, not null]
+  order_id                         uuid [not null, unique]
+  procurement_batch_id             uuid [not null]
+}
+
+Table procurement_batches {
+  id                               uuid [pk, not null]
+  assigned_agent_user_id           uuid
+  assigned_at                      datetime
+  batch_date                       date [not null]
+  cancellation_reason              string
+  cancelled_at                     datetime
+  code                             string [unique]
+  completed_at                     datetime
+  handed_off_at                    datetime
+  hub_id                           uuid
+  manifested_at                    datetime
+  market_id                        uuid [not null]
+  market_session_id                uuid [unique]
+  status                           string [not null]
+  total_item_count                 int [not null]
+}
+
+Table procurement_exceptions {
+  id                               uuid [pk, not null]
+  market_product_id                uuid [not null]
+  note                             string
+  procurement_batch_id             uuid [not null]
+  proof_image_url                  string
+  reported_at                      datetime [not null]
+  reported_by_user_id              uuid [not null]
+  reported_quantity                int [not null]
+  type                             string [not null]
+}
+
+Table product_categories {
+  id                               uuid [pk, not null]
+  image_url                        string
+  is_active                        boolean [not null]
+  name                             string [not null, unique]
+  parent_id                        uuid
+}
+
+Table products {
+  id                               uuid [pk, not null]
+  category_id                      uuid
+  created_by                       uuid
+  description                      string
+  image_url                        string
+  legacy_category                  string
+  legacy_unit                      string
+  minimum_order_quantity           int [not null]
+  name                             string [not null]
+  packing_code_id                  uuid
+  unit_id                          uuid [not null]
+  vat_rate                         string
+}
+
+Table refresh_tokens {
+  id                               uuid [pk, not null]
+  expires_at                       datetime [not null]
+  family_id                        uuid [not null]
+  replaced_by_token_id             uuid
+  revoked_at                       datetime
+  revoked_reason                   string
+  user_id                          uuid [not null]
+}
+
+Table restaurant_credit {
+  restaurant_id                    uuid [pk, not null]
+  credit_limit                     decimal [not null]
+  last_alerted_level               string [not null]
+  outstanding_balance              decimal [not null]
+}
+
+Table restaurant_favorites {
+  id                               uuid [pk, not null]
+  market_product_id                uuid [not null]
+  restaurant_id                    uuid [not null]
+}
+
+Table restaurants {
+  id                               uuid [pk, not null]
+  address                          string
+  business_license_url             string
+  contact_person                   string
+  invoice_address                  string
+  invoice_email                    string
+  invoice_legal_name               string
+  name                             string [not null]
+  pickup_end                       time
+  pickup_start                     time
+  status                           string [not null]
+  tax_code                         string
+  user_id                          uuid [not null, unique]
+}
+
+Table roles {
+  id                               uuid [pk, not null]
+  description                      string [not null]
+  name                             string [not null, unique]
+}
+
+Table route_matrix_cache {
+  pair_key                         string [pk, not null]
+  calculated_at                    datetime [not null]
+  distance_meters                  long [not null]
+  duration_seconds                 long [not null]
+  from_latitude                    decimal [not null]
+  from_longitude                   decimal [not null]
+  profile                          string [not null]
+  to_latitude                      decimal [not null]
+  to_longitude                     decimal [not null]
+}
+
+Table route_plans {
+  id                               uuid [pk, not null]
+  approved_at                      datetime
+  estimated_cost                   decimal [not null]
+  estimated_duration_minutes       int [not null]
+  hub_id                           uuid [not null]
+  input_revision                   string [not null]
+  is_estimated                     boolean [not null]
+  market_session_id                uuid [not null]
+  optimization_criteria            string [not null]
+  routing_provider                 string [not null]
+  service_date                     date [not null]
+  status                           string [not null]
+  total_distance_km                decimal [not null]
+  total_load_kg                    decimal [not null]
+  unassigned                       json [not null]
+  vehicles_used                    int [not null]
+}
+
+Table scheduled_order_items {
+  id                               uuid [pk, not null]
+  market_product_id                uuid [not null]
+  quantity                         int [not null]
+  scheduled_order_id               uuid [not null]
+}
+
+Table scheduled_orders {
+  id                               uuid [pk, not null]
+  cancelled_at                     datetime
+  delivery_address_id              uuid
+  first_run_at                     datetime [not null]
+  last_executed_at                 datetime
+  market_id                        uuid
+  notes                            string
+  recurrence_type                  string [not null]
+  restaurant_id                    uuid [not null]
+}
+
+Table tags {
+  id                               uuid [pk, not null]
+  name                             string [not null, unique]
+  pins_to_top                      boolean [not null]
+  updated_by                       uuid
+}
+
+Table units_of_measurement {
+  id                               uuid [pk, not null]
+  abbreviation                     string
+  is_active                        boolean [not null]
+  name                             string [not null, unique]
+}
+
+Table user_market_assignments {
+  id                               uuid [pk, not null]
+  assigned_by                      uuid
+  market_id                        uuid [not null]
+  user_id                          uuid [not null]
+}
+
+Table users {
+  id                               uuid [pk, not null]
+  avatar_url                       string
+  email                            string [not null, unique]
+  email_verified_at                datetime
+  failed_login_count               int [not null]
+  full_name                        string
+  is_active                        boolean [not null]
+  locked_until                     datetime
+  phone                            string [unique]
+  role_id                          uuid [not null]
+}
+
+Table vehicles {
+  id                               uuid [pk, not null]
+  capacity_kg                      decimal [not null]
+  hub_id                           uuid
+  is_available                     boolean [not null]
+  plate_number                     string [not null, unique]
+  registered_by                    uuid
+  vehicle_type                     string [not null]
+}
+
+Table verification_codes {
+  id                               uuid [pk, not null]
+  channel                          string [not null]
+  expires_at                       datetime [not null]
+  used_at                          datetime
+  user_id                          uuid [not null]
+}
+
+// Enforced relationships
+Ref: credit_statement_lines.credit_statement_id > credit_statements.id
 Ref: cross_dock_transfers.hub_id > hubs.id
-Ref: cross_dock_transfers.hub_receiving_id > hub_receivings.id
-Ref: cross_dock_transfers.outbound_route_id > delivery_routes.id
+Ref: cross_dock_transfers.inbound_event_id > hub_inbound_events.id
+Ref: deliveries.delivery_route_id > delivery_routes.id
+Ref: delivery_addresses.restaurant_id > restaurants.id
+Ref: delivery_issues.delivery_id > deliveries.id
+Ref: delivery_routes.route_plan_id > route_plans.id
+Ref: hub_discrepancies.hub_id > hubs.id
+Ref: hub_discrepancies.inbound_event_id > hub_inbound_events.id
+Ref: hub_driver_assignments.hub_id > hubs.id
+Ref: hub_handover_events.hub_id > hubs.id
+Ref: hub_handover_events.outbound_event_id > hub_outbound_events.id
+Ref: hub_inbound_events.hub_id > hubs.id
+Ref: hub_inventory.hub_id > hubs.id
+Ref: hub_outbound_events.hub_id > hubs.id
+Ref: hub_staff_assignments.hub_id > hubs.id
+Ref: invoice_lines.invoice_id > invoices.id
+Ref: market_product_tags.market_product_id > market_products.id
+Ref: market_product_tags.tag_id > tags.id
+Ref: market_session_agents.session_id > market_sessions.id
+Ref: market_session_vehicles.session_id > market_sessions.id
+Ref: order_claims.order_id > orders.id
+Ref: order_claims.refund_transaction_id > credit_transactions.id
+Ref: order_issues.order_id > orders.id
+Ref: order_issues.order_item_id > order_items.id
+Ref: order_items.order_id > orders.id
+Ref: password_reset_tokens.user_id > users.id
+Ref: price_snapshots.market_product_id > market_products.id
+Ref: procurement_batch_items.procurement_batch_id > procurement_batches.id
+Ref: procurement_batch_orders.procurement_batch_id > procurement_batches.id
+Ref: procurement_batches.market_session_id > market_sessions.id
+Ref: procurement_exceptions.procurement_batch_id > procurement_batches.id
+Ref: product_categories.parent_id > product_categories.id
+Ref: products.packing_code_id > packing_codes.id
+Ref: products.category_id > product_categories.id
+Ref: products.unit_id > units_of_measurement.id
+Ref: refresh_tokens.replaced_by_token_id > refresh_tokens.id
+Ref: refresh_tokens.user_id > users.id
+Ref: scheduled_order_items.scheduled_order_id > scheduled_orders.id
+Ref: user_market_assignments.user_id > users.id
+Ref: users.role_id > roles.id
+Ref: verification_codes.user_id > users.id
 
-Ref: vehicles.registered_by > users.id
-Ref: delivery_routes.procurement_batch_id > procurement_batches.id
-Ref: delivery_routes.order_group_id > order_groups.id
-Ref: delivery_routes.driver_user_id > users.id
-Ref: delivery_routes.vehicle_id > vehicles.id
+// Cross-module/application relationships (not database-enforced)
+Ref: assistant_conversations.user_id > users.id [color: #9e9e9e] // logical only
+Ref: assistant_conversations.market_id > markets.id [color: #9e9e9e] // logical only
+Ref: audit_logs.actor_id > users.id [color: #9e9e9e] // logical only
+Ref: credit_statement_lines.order_id > orders.id [color: #9e9e9e] // logical only
+Ref: credit_statement_lines.transaction_id > credit_transactions.id [color: #9e9e9e] // logical only
+Ref: credit_statements.restaurant_id > restaurants.id [color: #9e9e9e] // logical only
+Ref: credit_transactions.order_id > orders.id [color: #9e9e9e] // logical only
+Ref: credit_transactions.recorded_by_user_id > users.id [color: #9e9e9e] // logical only
+Ref: credit_transactions.restaurant_id > restaurants.id [color: #9e9e9e] // logical only
+Ref: cross_dock_transfers.outbound_route_id > delivery_routes.id [color: #9e9e9e] // logical only
+Ref: deliveries.order_id - orders.id [color: #9e9e9e] // logical only
+Ref: delivery_issues.reported_by > users.id [color: #9e9e9e] // logical only
 Ref: delivery_routes.created_by > users.id [color: #9e9e9e] // logical only
-Ref: route_stops.route_id > delivery_routes.id
-Ref: route_stops.restaurant_id > restaurants.id
-Ref: route_stops.order_id > orders.id
-Ref: deliveries.route_stop_id - route_stops.id
-Ref: deliveries.order_id - orders.id
-Ref: deliveries.driver_user_id > users.id
+Ref: delivery_routes.driver_user_id > users.id [color: #9e9e9e] // logical only
+Ref: delivery_routes.hub_id > hubs.id [color: #9e9e9e] // logical only
+Ref: delivery_routes.market_session_id > market_sessions.id [color: #9e9e9e] // logical only
+Ref: delivery_routes.suggested_vehicle_id > vehicles.id [color: #9e9e9e] // logical only
+Ref: delivery_routes.vehicle_id > vehicles.id [color: #9e9e9e] // logical only
+Ref: driver_profiles.user_id - users.id [color: #9e9e9e] // logical only
+Ref: hub_discrepancies.acknowledged_by > users.id [color: #9e9e9e] // logical only
+Ref: hub_discrepancies.order_id > orders.id [color: #9e9e9e] // logical only
+Ref: hub_discrepancies.order_item_id > order_items.id [color: #9e9e9e] // logical only
+Ref: hub_driver_assignments.user_id > users.id [color: #9e9e9e] // logical only
+Ref: hub_handover_events.delivery_route_id > delivery_routes.id [color: #9e9e9e] // logical only
+Ref: hub_handover_events.driver_user_id > users.id [color: #9e9e9e] // logical only
+Ref: hub_handover_events.handed_over_by > users.id [color: #9e9e9e] // logical only
+Ref: hub_inbound_events.delivery_route_id > delivery_routes.id [color: #9e9e9e] // logical only
+Ref: hub_inbound_events.hub_staff_user_id > users.id [color: #9e9e9e] // logical only
+Ref: hub_inbound_events.recorded_by > users.id [color: #9e9e9e] // logical only
+Ref: hub_inbound_events.source_market_id > markets.id [color: #9e9e9e] // logical only
+Ref: hub_inventory.market_product_id > market_products.id [color: #9e9e9e] // logical only
+Ref: hub_outbound_events.destination_route_id > delivery_routes.id [color: #9e9e9e] // logical only
+Ref: hub_outbound_events.recorded_by > users.id [color: #9e9e9e] // logical only
+Ref: hub_sorting_progress.hub_id > hubs.id [color: #9e9e9e] // logical only
+Ref: hub_sorting_progress.order_item_id > order_items.id [color: #9e9e9e] // logical only
+Ref: hub_sorting_progress.route_id > delivery_routes.id [color: #9e9e9e] // logical only
+Ref: hub_sorting_progress.sorted_by_user_id > users.id [color: #9e9e9e] // logical only
+Ref: hub_staff_assignments.user_id > users.id [color: #9e9e9e] // logical only
+Ref: hubs.managed_by > users.id [color: #9e9e9e] // logical only
+Ref: hubs.market_id > markets.id [color: #9e9e9e] // logical only
+Ref: invoices.order_id - orders.id [color: #9e9e9e] // logical only
+Ref: invoices.restaurant_id > restaurants.id [color: #9e9e9e] // logical only
+Ref: market_products.market_id > markets.id [color: #9e9e9e] // logical only
+Ref: market_products.product_id > products.id [color: #9e9e9e] // logical only
+Ref: market_products.updated_by > users.id [color: #9e9e9e] // logical only
+Ref: market_session_agents.assigned_by > users.id [color: #9e9e9e] // logical only
+Ref: market_session_agents.user_id > users.id [color: #9e9e9e] // logical only
+Ref: market_session_vehicles.assigned_by > users.id [color: #9e9e9e] // logical only
+Ref: market_session_vehicles.vehicle_id > vehicles.id [color: #9e9e9e] // logical only
+Ref: market_sessions.closed_by > users.id [color: #9e9e9e] // logical only
+Ref: market_sessions.hub_id > hubs.id [color: #9e9e9e] // logical only
+Ref: market_sessions.market_id > markets.id [color: #9e9e9e] // logical only
+Ref: notification_devices.user_id > users.id [color: #9e9e9e] // logical only
+Ref: notifications.user_id > users.id [color: #9e9e9e] // logical only
+Ref: order_claims.created_by > users.id [color: #9e9e9e] // logical only
+Ref: order_claims.restaurant_id > restaurants.id [color: #9e9e9e] // logical only
+Ref: order_claims.reviewed_by > users.id [color: #9e9e9e] // logical only
+Ref: order_issues.reported_by > users.id [color: #9e9e9e] // logical only
+Ref: order_items.market_product_id > market_products.id [color: #9e9e9e] // logical only
+Ref: orders.delivery_address_id > delivery_addresses.id [color: #9e9e9e] // logical only
+Ref: orders.market_id > markets.id [color: #9e9e9e] // logical only
+Ref: orders.market_session_id > market_sessions.id [color: #9e9e9e] // logical only
+Ref: orders.restaurant_id > restaurants.id [color: #9e9e9e] // logical only
+Ref: orders.scheduled_order_id > scheduled_orders.id [color: #9e9e9e] // logical only
+Ref: price_snapshots.recorded_by > users.id [color: #9e9e9e] // logical only
+Ref: procurement_batch_items.assigned_agent_user_id > users.id [color: #9e9e9e] // logical only
+Ref: procurement_batch_items.market_product_id > market_products.id [color: #9e9e9e] // logical only
+Ref: procurement_batch_orders.order_id - orders.id [color: #9e9e9e] // logical only
+Ref: procurement_batches.assigned_agent_user_id > users.id [color: #9e9e9e] // logical only
+Ref: procurement_batches.hub_id > hubs.id [color: #9e9e9e] // logical only
+Ref: procurement_batches.market_id > markets.id [color: #9e9e9e] // logical only
+Ref: procurement_exceptions.market_product_id > market_products.id [color: #9e9e9e] // logical only
+Ref: procurement_exceptions.reported_by_user_id > users.id [color: #9e9e9e] // logical only
+Ref: products.created_by > users.id [color: #9e9e9e] // logical only
+Ref: restaurant_credit.restaurant_id - restaurants.id [color: #9e9e9e] // logical only
+Ref: restaurant_favorites.market_product_id > market_products.id [color: #9e9e9e] // logical only
+Ref: restaurant_favorites.restaurant_id > restaurants.id [color: #9e9e9e] // logical only
+Ref: restaurants.user_id - users.id [color: #9e9e9e] // logical only
+Ref: route_plans.hub_id > hubs.id [color: #9e9e9e] // logical only
+Ref: route_plans.market_session_id > market_sessions.id [color: #9e9e9e] // logical only
+Ref: scheduled_order_items.market_product_id > market_products.id [color: #9e9e9e] // logical only
+Ref: scheduled_orders.delivery_address_id > delivery_addresses.id [color: #9e9e9e] // logical only
+Ref: scheduled_orders.market_id > markets.id [color: #9e9e9e] // logical only
+Ref: scheduled_orders.restaurant_id > restaurants.id [color: #9e9e9e] // logical only
+Ref: tags.updated_by > users.id [color: #9e9e9e] // logical only
+Ref: user_market_assignments.assigned_by > users.id [color: #9e9e9e] // logical only
+Ref: user_market_assignments.market_id > markets.id [color: #9e9e9e] // logical only
+Ref: vehicles.hub_id > hubs.id [color: #9e9e9e] // logical only
+Ref: vehicles.registered_by > users.id [color: #9e9e9e] // logical only
 
-Ref: notifications.user_id > users.id
-Ref: export_jobs.requested_by > users.id
-
-// ======================
-// TABLE GROUPS
-// ======================
-
-TableGroup "A1. Identity & Access (implemented)" {
-  roles
-  users
-  refresh_tokens
-  password_reset_tokens
-  verification_codes
-  user_market_assignments
-  driver_profiles
-}
-
-TableGroup "A2. Restaurant Profile (implemented)" {
-  restaurants
+TableGroup "Auth" {
   delivery_addresses
+  driver_profiles
+  password_reset_tokens
+  refresh_tokens
+  restaurants
+  roles
+  user_market_assignments
+  users
+  verification_codes
 }
-
-TableGroup "A3. Catalog & Pricing (implemented)" {
-  product_categories
-  units_of_measurement
-  products
+TableGroup "Catalog" {
   markets
+  packing_codes
+  product_categories
+  products
+  units_of_measurement
+}
+TableGroup "Hub" {
+  cross_dock_transfers
+  hub_discrepancies
+  hub_driver_assignments
+  hub_handover_events
+  hub_inbound_events
+  hub_inventory
+  hub_outbound_events
+  hub_sorting_progress
+  hub_staff_assignments
+  hubs
+}
+TableGroup "Invoicing" {
+  invoice_lines
+  invoices
+}
+TableGroup "Logistics" {
+  deliveries
+  delivery_issues
+  delivery_routes
+  route_matrix_cache
+  route_plans
+  vehicles
+}
+TableGroup "Notifications" {
+  notification_devices
+  notifications
+}
+TableGroup "Orders" {
+  credit_statement_lines
+  credit_statements
+  credit_transactions
+  operational_settings
+  order_claims
+  order_issues
+  order_items
+  orders
+  restaurant_credit
+  restaurant_favorites
+  scheduled_order_items
+  scheduled_orders
+}
+TableGroup "Platform" {
+  assistant_conversations
+  audit_logs
+}
+TableGroup "Pricing" {
+  market_product_tags
   market_products
   price_snapshots
+  tags
 }
-
-TableGroup "A4. Orders (implemented)" {
-  orders
-  order_items
-  scheduled_orders
-  order_issues
-}
-
-TableGroup "A5. Credit / Công nợ (implemented)" {
-  restaurant_credit
-  credit_transactions
-}
-
-TableGroup "A6. Assistant (implemented)" {
-  assistant_conversations
-}
-
-TableGroup "B1. Planned — Restaurant & Catalog" {
-  price_alert_subscriptions
-  system_config
-}
-
-TableGroup "B2. Planned — Orders" {
-  order_groups
-  order_status_history
-}
-
-TableGroup "B3. Planned — Procurement" {
+TableGroup "Procurement" {
+  market_session_agents
+  market_session_vehicles
+  market_sessions
+  procurement_batch_items
+  procurement_batch_orders
   procurement_batches
-  procurement_orders
-  procurement_items
-}
-
-TableGroup "B4. Planned — Hub Operations" {
-  hubs
-  hub_inventory
-  hub_receivings
-  hub_receiving_items
-  hub_outbound_events
-  cross_dock_transfers
-}
-
-TableGroup "B5. Planned — Logistics & Delivery" {
-  vehicles
-  delivery_routes
-  route_stops
-  deliveries
-}
-
-TableGroup "B6. Planned — Notifications & Analytics" {
-  notifications
-  notification_templates
-  analytics_aggregations
-  export_jobs
+  procurement_exceptions
 }

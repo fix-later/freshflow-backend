@@ -19,7 +19,7 @@ public sealed class PlanRoutesCommandHandlerTests
         var inputs = Substitute.For<IRoutePlanningInputBuilder>();
         inputs.BuildAsync(hubId, date, Arg.Any<CancellationToken>()).Returns(
             FreshFlow.SharedKernel.Application.Result<RoutePlanningInput>.Success(new RoutePlanningInput(
-                hubId, "Hub", 10m, 106m, date, [], [], "revision")));
+                hubId, "Hub", 10m, 106m, date, [], [], "revision", [])));
         var matrices = Substitute.For<IRouteMatrixProvider>();
         var sessions = Substitute.For<IMarketSessionReader>();
         sessions.FindByIdAsync(sessionId, Arg.Any<CancellationToken>())

@@ -48,9 +48,14 @@ internal sealed class PlanRoutesCommandHandler(
                     oldRoute.CancelPlanProposal();
                 await plans.TrySaveChangesAsync(ct);
             }
+            // Nothing routable — but "nothing" and "everything was excluded for bad data" are very
+            // different for the operator, and no RoutePlan row is persisted here to carry the
+            // reasons. Report input.Excluded directly, or the M7 exclusion reasons are lost and
+            // this reads as an empty day (before M7 it was at least an actionable error).
             return Result<RoutePlanDto>.Success(new RoutePlanDto(
                 null, "empty", session.HubId, session.ServiceDate, criteria.ToString().ToUpperInvariant(),
-                "NONE", false, input.InputRevision, 0, 0, 0, 0, 0, [], [], [], DateTime.UtcNow));
+                "NONE", false, input.InputRevision, 0, 0, 0, 0, 0, [],
+                input.Excluded.Select(x => x.ToDto()).ToList(), [], DateTime.UtcNow));
         }
 
         if (existing is not null && existing.InputRevision == input.InputRevision
@@ -74,9 +79,13 @@ internal sealed class PlanRoutesCommandHandler(
         var totalDuration = solution.Routes.Sum(x =>
             checked((int)Math.Ceiling((x.RoadDurationSeconds + 60d * x.Restaurants.Count * settings.ServiceTimeMinutes) / 60d)));
         var totalCost = Math.Round(totalDistance * settings.CostPerKm, 2);
+        // M7: solver-produced (didn't fit) and builder-produced (incomplete data) unassigned
+        // entries both surface on the plan; RoutePlanUnassigned.ExcludedForIncompleteData tells
+        // ApproveRoutePlanCommandHandler which kind still blocks approval.
+        var unassigned = solution.Unassigned.Concat(input.Excluded).ToList();
         var plan = RoutePlan.Create(
             request.MarketSessionId, input.HubId, input.ServiceDate, criteria, matrix.Provider, matrix.IsEstimated,
-            input.InputRevision, solution.Unassigned, solution.Routes.Count,
+            input.InputRevision, unassigned, solution.Routes.Count,
             totalLoad, totalDistance, totalDuration, totalCost);
 
         var demandPoint = input.Demands.Select((demand, index) => (demand.RestaurantId, Point: index + 1))

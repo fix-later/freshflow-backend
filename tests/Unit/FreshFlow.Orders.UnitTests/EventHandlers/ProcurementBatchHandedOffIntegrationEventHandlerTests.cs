@@ -5,6 +5,7 @@ using FreshFlow.Orders.Application.Abstractions;
 using FreshFlow.Orders.Application.EventHandlers;
 using FreshFlow.Orders.Domain.Entities;
 using FreshFlow.Orders.Domain.Enums;
+using FreshFlow.Orders.Domain.Events;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -199,6 +200,28 @@ public sealed class ProcurementBatchHandedOffIntegrationEventHandlerTests
     }
 
     [Fact]
+    public async Task Handle_RepeatedHandover_DoesNotRaiseSecondShortfallEventAsync()
+    {
+        // Arrange — C1: FinalizeAsync is called directly (bypassing IPublisher) so the returned
+        // domain events from each call can be inspected without a publisher mock.
+        var productId = Guid.NewGuid();
+        var order = CreateConfirmedBatchedOrder(productId, quantity: 4, unitPrice: 20_000m);
+        ConfigureOrders(order);
+        var notification = CreateEvent(
+            [order.Id],
+            [new ProcurementPurchaseActual(productId, 2, 20_000m)]); // shortfall of 2
+        var sut = CreateSut();
+
+        // Act
+        var firstEvents = await sut.FinalizeAsync(notification, default);
+        var secondEvents = await sut.FinalizeAsync(notification, default);
+
+        // Assert — order is AtHub after the first call, so ApplyProcurementActuals never runs again
+        firstEvents.OfType<OrderProcurementShortfallDomainEvent>().Should().ContainSingle();
+        secondEvents.OfType<OrderProcurementShortfallDomainEvent>().Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Handle_MissingCoveredOrder_DoesNotTouchStockAsync()
     {
         _orders.FindByIdsAsync(
@@ -239,6 +262,27 @@ public sealed class ProcurementBatchHandedOffIntegrationEventHandlerTests
             new DateTime(2026, 7, 15, 4, 0, 0, DateTimeKind.Utc),
             orderIds,
             PurchaseActuals: actuals);
+
+    /// <summary>
+    /// Unlike <see cref="CreateOrder"/> (which reflects the status in directly), this goes
+    /// through the real Confirm() flow so the item has a LockedUnitPrice — required for C1's
+    /// shortfall event to fire.
+    /// </summary>
+    private static Order CreateConfirmedBatchedOrder(Guid marketProductId, int quantity, decimal unitPrice)
+    {
+        var order = new Order(Guid.NewGuid(), DateTime.UtcNow, null);
+        order.AddItem(marketProductId, "Cà chua", quantity, unitPrice);
+        order.ApplyConfirmationPricing(
+            new Dictionary<Guid, FreshFlow.Orders.Domain.Entities.OrderItemTaxSnapshot>
+            {
+                [marketProductId] = new("KCT", 0m)
+            },
+            0m, 0m);
+        order.Confirm();
+        order.AdvanceStatus(OrderStatus.Batched);
+        order.ClearDomainEvents();
+        return order;
+    }
 
     private static Order CreateOrder(
         OrderStatus status,

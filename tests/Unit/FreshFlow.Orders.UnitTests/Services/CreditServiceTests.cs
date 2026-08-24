@@ -203,6 +203,24 @@ public sealed class CreditServiceTests
     }
 
     [Fact]
+    public async Task Refund_AccountAtZeroBalance_SucceedsAndGoesNegativeAsync()
+    {
+        // AUDIT-2026-08-23 C3: the account has already been settled to zero, but the order
+        // still has refundable charge — the refund must still go through, driving
+        // OutstandingBalance negative (FreshFlow owes the restaurant). The per-order cap
+        // (GetRefundableAmountForOrderAsync, stubbed to 100m in the constructor) is the only
+        // ceiling left.
+        var account = new RestaurantCredit(RestaurantId, creditLimit: 100m);
+        _creditRepository.FindAccountAsync(RestaurantId, default).Returns(account);
+
+        var result = await _sut.RefundAsync(RestaurantId, OrderId, 10m, "Post-settlement refund", default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Credit.OutstandingBalance.Should().Be(-10m);
+        _creditRepository.Received(1).AddTransaction(Arg.Is<CreditTransaction>(t => t.BalanceAfter == -10m));
+    }
+
+    [Fact]
     public async Task Refund_ExceedsRemainingOrderCharge_ReturnsValidationAsync()
     {
         var account = new RestaurantCredit(RestaurantId, creditLimit: 200m);

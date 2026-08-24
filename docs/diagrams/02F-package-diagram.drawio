@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-08-19T00:00:00.000Z" agent="Claude" version="24.7.17" type="device" pages="1">
+  <diagram id="package-diagram-00" name="package-diagram">
+    <mxGraphModel dx="1400" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="650" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="FreshFlow Backend — Package Diagram" style="text;html=1;fontSize=16;fontStyle=1;fontColor=#000000;align=left;" vertex="1" parent="1"><mxGeometry x="40" y="20" width="600" height="30" as="geometry"/></mxCell>
+        <mxCell id="subtitle" value="Mũi tên nét đứt = phụ thuộc (project reference)." style="text;html=1;fontSize=11;fontColor=#000000;align=left;" vertex="1" parent="1"><mxGeometry x="40" y="46" width="600" height="20" as="geometry"/></mxCell>
+
+        <mxCell id="api" value="FreshFlow.API&#10;(host)" style="shape=folder;tabWidth=90;tabHeight=18;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=12;verticalAlign=middle;spacingTop=10;" vertex="1" parent="1"><mxGeometry x="280" y="80" width="340" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="mods" value="Modules ×10 — Auth · Catalog · Pricing · Orders · Procurement · Logistics · Notifications · Hub · Analytics · Invoicing" style="rounded=1;arcSize=6;html=1;whiteSpace=wrap;dashed=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;align=center;verticalAlign=top;spacingTop=6;" vertex="1" parent="1"><mxGeometry x="120" y="175" width="660" height="300" as="geometry"/></mxCell>
+
+        <mxCell id="minfra" value="{Module}.Infrastructure" style="shape=folder;tabWidth=90;tabHeight=18;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=12;verticalAlign=middle;spacingTop=10;" vertex="1" parent="1"><mxGeometry x="280" y="215" width="340" height="55" as="geometry"/></mxCell>
+        <mxCell id="mapp" value="{Module}.Application" style="shape=folder;tabWidth=90;tabHeight=18;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=12;verticalAlign=middle;spacingTop=10;" vertex="1" parent="1"><mxGeometry x="280" y="305" width="340" height="55" as="geometry"/></mxCell>
+        <mxCell id="mdom" value="{Module}.Domain" style="shape=folder;tabWidth=90;tabHeight=18;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=12;verticalAlign=middle;spacingTop=10;" vertex="1" parent="1"><mxGeometry x="280" y="395" width="340" height="55" as="geometry"/></mxCell>
+
+        <mxCell id="shared" value="Shared&#10;(SharedKernel · Contracts)" style="shape=folder;tabWidth=70;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=12;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="120" y="530" width="260" height="60" as="geometry"/></mxCell>
+        <mxCell id="pers" value="Infrastructure.Persistence&#10;(AppDbContext · Migrations)" style="shape=folder;tabWidth=70;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=12;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="520" y="530" width="260" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="api" target="minfra"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="minfra" target="mapp"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="mapp" target="mdom"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="mdom" target="shared"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="365" y="500"/><mxPoint x="250" y="500"/></Array></mxGeometry></mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=1;exitY=0.5;entryX=0.5;entryY=0;" edge="1" parent="1" source="minfra" target="pers"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="830" y="242"/><mxPoint x="830" y="500"/><mxPoint x="650" y="500"/></Array></mxGeometry></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

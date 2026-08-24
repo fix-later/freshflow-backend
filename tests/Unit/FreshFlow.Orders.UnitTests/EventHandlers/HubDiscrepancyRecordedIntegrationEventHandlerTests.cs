@@ -16,7 +16,6 @@ namespace FreshFlow.Orders.UnitTests.EventHandlers;
 public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
 {
     private readonly IOrderRepository _orders = Substitute.For<IOrderRepository>();
-    private readonly ICreditRepository _credits = Substitute.For<ICreditRepository>();
     private readonly ICreditService _creditService = Substitute.For<ICreditService>();
     private readonly IPublisher _publisher = Substitute.For<IPublisher>();
 
@@ -24,18 +23,18 @@ public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
     private static readonly Guid MarketProductId = Guid.NewGuid();
 
     [Fact]
-    public async Task Handle_LockedPriceAndOutstandingBalance_RefundsClampedAmountAndPublishesEventAsync()
+    public async Task Handle_LockedPrice_RefundsFullDesiredAmountAndPublishesEventAsync()
     {
+        // AUDIT-2026-08-23 C3: no more clamping to the account's current balance — the full
+        // desired refund (quantity * locked price) is always requested; RefundAsync's
+        // per-order cap is the only ceiling now.
         var order = ConfirmedOrderWithItem(out var itemId);
-        var account = new RestaurantCredit(RestaurantId, creditLimit: 1_000_000m);
-        account.Charge(50_000m);
         var discrepancyId = Guid.NewGuid();
         _orders.FindByIdAsync(order.Id, default).Returns(order);
-        _credits.FindAccountAsync(RestaurantId, default).Returns(account);
         _creditService.RefundAsync(
                 RestaurantId,
                 order.Id,
-                50_000m,
+                60_000m,
                 Arg.Any<string?>(),
                 default)
             .Returns(Result<CreditRefundDto>.Success(new CreditRefundDto(
@@ -56,7 +55,7 @@ public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
         await _creditService.Received(1).RefundAsync(
             RestaurantId,
             order.Id,
-            50_000m,
+            60_000m,
             Arg.Is<string>(note => note.Contains(discrepancyId.ToString(), StringComparison.Ordinal)),
             default);
         await _publisher.Received(1).Publish(
@@ -65,7 +64,7 @@ public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
                 evt.OrderId == order.Id &&
                 evt.OrderItemName == "Cà chua" &&
                 evt.AffectedQuantity == 3m &&
-                evt.RefundAmount == 50_000m),
+                evt.RefundAmount == 60_000m),
             default);
     }
 
@@ -73,10 +72,7 @@ public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
     public async Task Handle_LockedPriceNull_SkipsRefundAndPublishAsync()
     {
         var order = DraftOrderWithItem(out var itemId);
-        var account = new RestaurantCredit(RestaurantId, creditLimit: 1_000_000m);
-        account.Charge(50_000m);
         _orders.FindByIdAsync(order.Id, default).Returns(order);
-        _credits.FindAccountAsync(RestaurantId, default).Returns(account);
         var sut = CreateSut();
 
         await sut.Handle(new HubDiscrepancyRecordedIntegrationEvent(
@@ -101,12 +97,21 @@ public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
     }
 
     [Fact]
-    public async Task Handle_NoOutstandingBalance_SkipsRefundAndPublishAsync()
+    public async Task Handle_NoOutstandingBalance_StillRefundsInFullAsync()
     {
+        // AUDIT-2026-08-23 C3: a zero (or already-settled) balance no longer suppresses the
+        // refund — it drives OutstandingBalance negative (FreshFlow owes the restaurant).
         var order = ConfirmedOrderWithItem(out var itemId);
         _orders.FindByIdAsync(order.Id, default).Returns(order);
-        _credits.FindAccountAsync(RestaurantId, default)
-            .Returns(new RestaurantCredit(RestaurantId, creditLimit: 1_000_000m));
+        _creditService.RefundAsync(
+                RestaurantId,
+                order.Id,
+                20_000m,
+                Arg.Any<string?>(),
+                default)
+            .Returns(Result<CreditRefundDto>.Success(new CreditRefundDto(
+                Guid.NewGuid(),
+                new RestaurantCreditDto(RestaurantId, 1_000_000m, -20_000m, 1_020_000m, DateTime.UtcNow))));
         var sut = CreateSut();
 
         await sut.Handle(new HubDiscrepancyRecordedIntegrationEvent(
@@ -119,15 +124,15 @@ public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
             "PARTIAL",
             DateTime.UtcNow), default);
 
-        await _creditService.DidNotReceive().RefundAsync(
-            Arg.Any<Guid>(),
-            Arg.Any<Guid>(),
-            Arg.Any<decimal>(),
+        await _creditService.Received(1).RefundAsync(
+            RestaurantId,
+            order.Id,
+            20_000m,
             Arg.Any<string?>(),
-            Arg.Any<CancellationToken>());
-        await _publisher.DidNotReceive().Publish(
-            Arg.Any<RestaurantRefundIssuedIntegrationEvent>(),
-            Arg.Any<CancellationToken>());
+            default);
+        await _publisher.Received(1).Publish(
+            Arg.Is<RestaurantRefundIssuedIntegrationEvent>(evt => evt.RefundAmount == 20_000m),
+            default);
     }
 
     [Fact]
@@ -147,7 +152,6 @@ public sealed class HubDiscrepancyRecordedIntegrationEventHandlerTests
     private HubDiscrepancyRecordedIntegrationEventHandler CreateSut() =>
         new(
             _orders,
-            _credits,
             _creditService,
             _publisher,
             Substitute.For<ILogger<HubDiscrepancyRecordedIntegrationEventHandler>>());

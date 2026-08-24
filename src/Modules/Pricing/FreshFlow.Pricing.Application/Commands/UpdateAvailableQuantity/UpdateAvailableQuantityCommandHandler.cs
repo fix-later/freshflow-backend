@@ -15,6 +15,7 @@ namespace FreshFlow.Pricing.Application.Commands.UpdateAvailableQuantity;
 /// 403 access denied  → agent not assigned to this market (admins bypass)
 /// 404 product missing → market_product row not found
 /// 409 concurrency    → expectedVersion mismatch
+/// 422 business-rule  → quantity below already-reserved stock
 /// 200 success        → raises PriceUpdatedDomainEvent for downstream handlers
 /// </summary>
 internal sealed class UpdateAvailableQuantityCommandHandler(
@@ -65,19 +66,25 @@ internal sealed class UpdateAvailableQuantityCommandHandler(
                     "OPTIMISTIC_CONCURRENCY_CONFLICT",
                     "The record was updated by another user. Please refresh and retry."));
 
-        // ── 6. Apply domain update (raises PriceUpdatedDomainEvent) ───────────
+        // ── 6. Reserved-stock guard (422) — cannot drop below confirmed orders' reservation ──
+        if (request.Quantity < mp.ReservedQuantity)
+            return Result<UpdateAvailableQuantityResultDto>.Failure(
+                Error.Validation("QUANTITY_BELOW_RESERVED",
+                    $"Quantity {request.Quantity} is below the {mp.ReservedQuantity} already reserved by confirmed orders."));
+
+        // ── 7. Apply domain update (raises PriceUpdatedDomainEvent) ───────────
         var previousQuantity = mp.CurrentQuantity;
         marketProductRepository.Track(mp);
         mp.UpdateAvailableQuantity(request.Quantity, request.AgentUserId);
 
-        // ── 7. Create immutable price snapshot (FR-PRI-004) ───────────────────
+        // ── 8. Create immutable price snapshot (FR-PRI-004) ───────────────────
         // Snapshot records state after every price OR quantity change so that
         // the price-history feed (UC-PRI-06) has a full audit trail.
         // PriceSnapshot.For is the single source of truth for snapshot construction.
         var snapshot = PriceSnapshot.For(mp, request.AgentUserId);
         await snapshotRepository.AddAsync(snapshot, cancellationToken);
 
-        // ── 8. Persist (single unit-of-work; same AppDbContext) ───────────────
+        // ── 9. Persist (single unit-of-work; same AppDbContext) ───────────────
         try
         {
             await marketProductRepository.SaveChangesAsync(cancellationToken);
@@ -90,7 +97,7 @@ internal sealed class UpdateAvailableQuantityCommandHandler(
                     "The record was updated by another user. Please refresh and retry."));
         }
 
-        // ── 9. Build result ───────────────────────────────────────────────────
+        // ── 10. Build result ───────────────────────────────────────────────────
         return Result<UpdateAvailableQuantityResultDto>.Success(
             new UpdateAvailableQuantityResultDto(
                 MarketProductId: mp.Id,

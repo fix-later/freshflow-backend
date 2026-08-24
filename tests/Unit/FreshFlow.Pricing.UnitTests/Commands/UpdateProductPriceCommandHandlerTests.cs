@@ -201,6 +201,51 @@ public sealed class UpdateProductPriceCommandHandlerTests
         result.IsSuccess.Should().BeTrue("no expectedVersion means no concurrency check");
     }
 
+    // ── 422 Reserved-stock guard ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Handle_QuantityBelowReserved_ReturnsQuantityBelowReservedAsync()
+    {
+        // Arrange — 100 units already reserved by confirmed orders
+        var mp = WithReserved(MakeProduct(initialQty: 500), 100);
+        _reader.HasAssignmentAsync(AgentId, MarketId, default).Returns(true);
+        _mpRepo.FindByMarketAndProductAsync(MarketId, ProductId, default).Returns(mp);
+
+        // Act
+        var result = await _sut.Handle(Cmd(price: null, quantity: 50), default);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("QUANTITY_BELOW_RESERVED");
+        await _mpRepo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_PriceOnlyUpdate_IsUnaffectedByReservedQuantityAsync()
+    {
+        // Arrange — Quantity is null (price-only update); reserved stock must not block it
+        var mp = WithReserved(MakeProduct(initialPrice: 100_000m, initialQty: 500), 400);
+        _reader.HasAssignmentAsync(AgentId, MarketId, default).Returns(true);
+        _mpRepo.FindByMarketAndProductAsync(MarketId, ProductId, default).Returns(mp);
+
+        // Act
+        var result = await _sut.Handle(Cmd(price: 110_000m, quantity: null), default);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// ReservedQuantity is only ever mutated by Orders' cross-module SQL (never through the
+    /// domain), so tests reach it via reflection on the private-set property.
+    /// </summary>
+    private static MarketProduct WithReserved(MarketProduct mp, int reserved)
+    {
+        typeof(MarketProduct).GetProperty(nameof(MarketProduct.ReservedQuantity))!
+            .SetValue(mp, reserved);
+        return mp;
+    }
+
     // ── 200 Price update ──────────────────────────────────────────────────────
 
     [Fact]

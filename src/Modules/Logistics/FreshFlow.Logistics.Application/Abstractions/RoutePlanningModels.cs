@@ -44,7 +44,10 @@ public sealed record RoutePlanningInput(
     DateOnly ServiceDate,
     IReadOnlyList<RestaurantDemand> Demands,
     IReadOnlyList<PlanningVehicle> Vehicles,
-    string InputRevision);
+    string InputRevision,
+    // M7: restaurants excluded from Demands because of incomplete order/restaurant data
+    // (missing coords, missing restaurant row, missing packing). Reported, not blocking.
+    IReadOnlyList<RoutePlanUnassigned> Excluded);
 
 public interface IRoutePlanningInputBuilder
 {

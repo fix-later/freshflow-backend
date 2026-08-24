@@ -114,6 +114,17 @@ internal sealed class CreditStatementGeneratedIntegrationEventHandler(
         // Period boundaries and due date are stored UTC — convert to Asia/Ho_Chi_Minh before
         // formatting so the month label and due date read as the intended business dates.
         var periodLocal = TimeZoneInfo.ConvertTimeFromUtc(n.PeriodStart, VietnamTimeZone);
+
+        // AUDIT-2026-08-23 C3: a negative closing balance means FreshFlow owes the restaurant
+        // (already settled to zero, then refunded past it) — the debt-collection wording is
+        // wrong for that case, so render the credit-carried-forward wording instead.
+        if (n.ClosingBalance < 0m)
+        {
+            var credit = Math.Abs(n.ClosingBalance).ToString("N0", CultureInfo.InvariantCulture);
+            return $"Sao kê kỳ {periodLocal:MM\\/yyyy} đã được lập. " +
+                   $"Số dư có: {credit} đ sẽ được trừ vào kỳ sau.";
+        }
+
         var dueLocal = TimeZoneInfo.ConvertTimeFromUtc(n.DueDate, VietnamTimeZone);
         var closing = n.ClosingBalance.ToString("N0", CultureInfo.InvariantCulture);
 

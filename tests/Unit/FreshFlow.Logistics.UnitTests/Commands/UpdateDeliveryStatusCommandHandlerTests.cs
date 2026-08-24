@@ -89,14 +89,19 @@ public sealed class UpdateDeliveryStatusCommandHandlerTests
                 evt.DeliveryId == delivery.Id &&
                 evt.Status == Delivery.StatusDelivered),
             Arg.Any<CancellationToken>());
+        // C2: a successful delivery must not also cancel the order.
+        await publisher.DidNotReceive().Publish(
+            Arg.Any<DeliveryFailedIntegrationEvent>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Handle_Failed_PendingDeliverySavesReasonWithoutPublishingCompletionAsync()
+    public async Task Handle_Failed_PendingDeliverySavesReasonAndPublishesFailureAsync()
     {
         var driverId = Guid.NewGuid();
         var route = CreateInProgressRoute(driverId);
-        var delivery = Delivery.Create(route.Id, Guid.NewGuid(), 1);
+        var orderId = Guid.NewGuid();
+        var delivery = Delivery.Create(route.Id, orderId, 1);
         var (_, deliveries, publisher, sut) = await CreateSutAsync(route, [delivery]);
 
         var result = await sut.Handle(
@@ -116,6 +121,14 @@ public sealed class UpdateDeliveryStatusCommandHandlerTests
                 evt.RouteId == route.Id &&
                 evt.DeliveryId == delivery.Id &&
                 evt.Status == Delivery.StatusFailed),
+            Arg.Any<CancellationToken>());
+        // C2: a failed delivery publishes DeliveryFailedIntegrationEvent so Orders can cancel + refund.
+        await publisher.Received(1).Publish(
+            Arg.Is<DeliveryFailedIntegrationEvent>(evt =>
+                evt.OrderId == orderId &&
+                evt.RouteId == route.Id &&
+                evt.DeliveryId == delivery.Id &&
+                evt.Reason == "customer unavailable"),
             Arg.Any<CancellationToken>());
     }
 

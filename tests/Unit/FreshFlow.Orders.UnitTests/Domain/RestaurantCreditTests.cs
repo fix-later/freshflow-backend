@@ -74,6 +74,20 @@ public sealed class RestaurantCreditTests
     }
 
     [Fact]
+    public void Refund_ExceedingOutstandingBalance_GoesNegative()
+    {
+        // AUDIT-2026-08-23 C3: refunding past zero is valid — a negative balance means
+        // FreshFlow owes the restaurant.
+        var credit = new RestaurantCredit(Guid.NewGuid(), creditLimit: 100m);
+        credit.Charge(20m);
+        credit.Settle(20m);
+
+        credit.Refund(30m);
+
+        credit.OutstandingBalance.Should().Be(-30m);
+    }
+
+    [Fact]
     public void SetCreditLimit_NonNegativeValue_UpdatesLimit()
     {
         var credit = new RestaurantCredit(Guid.NewGuid());

@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentValidation;
 using FreshFlow.Catalog.Application.Abstractions;
 using FreshFlow.Catalog.Application.Behaviors;
+using FreshFlow.Catalog.Infrastructure.CrossModule;
 using FreshFlow.Catalog.Infrastructure.Repositories;
 using FreshFlow.Infrastructure.Persistence;
 using MediatR;
@@ -36,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfMeasurementRepository, UnitOfMeasurementRepository>();
         services.AddScoped<IPackingCodeRepository, PackingCodeRepository>();
         services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<IMarketListingReader, MarketListingReader>();
 
         return services;
     }

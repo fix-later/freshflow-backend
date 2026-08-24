@@ -29,7 +29,7 @@ public sealed class OrToolsRoutePlanningSolverTests
             .ToArray();
         var input = new RoutePlanningInput(
             Guid.NewGuid(), "Hub", 10m, 106m, new DateOnly(2026, 8, 10),
-            demands, vehicles, "revision");
+            demands, vehicles, "revision", []);
 
         var result = solver.Solve(input,
             new RouteMatrixResult(new Dictionary<string, ProfileRouteMatrix>

@@ -158,14 +158,14 @@ public sealed class OrderClaimCommandHandlerTests
         _credit.RefundAsync(
                 RestaurantId, claim.OrderId, claim.Amount, Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(Result<CreditRefundDto>.Failure(
-                Error.Validation("CREDIT_REFUND_EXCEEDS_BALANCE", "Refund failed.")));
+                Error.Validation("CREDIT_REFUND_EXCEEDS_ORDER_CHARGE", "Refund failed.")));
         var sut = new ApproveClaimCommandHandler(_orders, _claims, _credit);
 
         var result = await sut.Handle(
             new ApproveClaimCommand(UserId, claim.Id, null),
             default);
 
-        result.Error.Code.Should().Be("CREDIT_REFUND_EXCEEDS_BALANCE");
+        result.Error.Code.Should().Be("CREDIT_REFUND_EXCEEDS_ORDER_CHARGE");
         claim.Status.Should().Be(OrderClaimStatus.Submitted);
         _claims.DidNotReceive().Track(claim);
     }

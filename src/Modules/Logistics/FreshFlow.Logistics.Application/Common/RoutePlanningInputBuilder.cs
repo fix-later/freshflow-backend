@@ -4,6 +4,7 @@ using System.Text;
 using FreshFlow.Logistics.Application.Abstractions;
 using FreshFlow.Logistics.Application.Dtos;
 using FreshFlow.Logistics.Domain.Enums;
+using FreshFlow.Logistics.Domain.ValueObjects;
 using FreshFlow.SharedKernel.Application;
 
 namespace FreshFlow.Logistics.Application.Common;
@@ -40,35 +41,54 @@ public sealed class RoutePlanningInputBuilder(
         {
             return Result<RoutePlanningInput>.Success(new RoutePlanningInput(
                 hubId, hub.Name, hub.Latitude.Value, hub.Longitude.Value, serviceDate,
-                [], [], Revision("empty", hubId, serviceDate)));
+                [], [], Revision("empty", hubId, serviceDate), []));
         }
 
         // Stops are located at the address captured at checkout (orders.delivery_latitude/longitude),
         // not the restaurant's default address. The restaurant record only supplies the display name.
         // ponytail: multiple checkout addresses for one restaurant in a session collapse to a single stop
         // (the earliest order's coords); split into per-address stops if chains order to several branches/day.
-        var badOrder = routableOrders.FirstOrDefault(o => !Valid(o.DeliveryLatitude, o.DeliveryLongitude));
-        if (badOrder is not null)
-            return MissingCoordinates($"Order '{badOrder.OrderId}' has no checkout delivery coordinates.");
 
+        // M7: an order with incomplete data (coords / restaurant row / packing) is excluded from
+        // planning instead of failing the whole hub's day — see BR-LOG-015. A missing restaurant
+        // row excludes every order for that restaurant; coords/packing are checked per order.
         var nameByRestaurant = new Dictionary<Guid, string>();
+        var missingRestaurantIds = new HashSet<Guid>();
         foreach (var restaurantId in routableOrders.Select(x => x.RestaurantId).Distinct().Order())
         {
             var restaurant = await restaurants.FindByRestaurantIdAsync(restaurantId, ct);
             if (restaurant is null)
-                return MissingCoordinates($"Restaurant '{restaurantId}' has no coordinates configured.");
-            nameByRestaurant[restaurantId] = restaurant.Name;
+            {
+                missingRestaurantIds.Add(restaurantId);
+                nameByRestaurant[restaurantId] = $"Restaurant {restaurantId}";
+            }
+            else
+            {
+                nameByRestaurant[restaurantId] = restaurant.Name;
+            }
         }
 
         var packingRows = await packing.GetLinesByOrdersAsync(routableOrders.Select(x => x.OrderId).ToList(), ct);
         var packingByOrder = packingRows.ToDictionary(x => x.OrderId, x => x.Lines);
-        if (routableOrders.Any(order => !packingByOrder.TryGetValue(order.OrderId, out var lines)
-                || lines.Count == 0 || lines.Any(line => line.CapacityKg is null or <= 0m)))
+
+        bool HasValidPacking(Guid orderId) =>
+            packingByOrder.TryGetValue(orderId, out var lines) && lines.Count > 0
+                && lines.All(line => line.CapacityKg is > 0m);
+
+        string? ExcludeReason(OrderStatusLookupDto order)
         {
-            return Result<RoutePlanningInput>.Failure(Error.Validation(
-                "ROUTE_WEIGHT_INCOMPLETE",
-                "Every routable order line must have a valid packing code before route planning."));
+            if (missingRestaurantIds.Contains(order.RestaurantId))
+                return "Restaurant record is unavailable.";
+            if (!Valid(order.DeliveryLatitude, order.DeliveryLongitude))
+                return "Order has no checkout delivery coordinates.";
+            if (!HasValidPacking(order.OrderId))
+                return "One or more order lines have no valid packing code.";
+            return null;
         }
+
+        var classified = routableOrders.Select(order => (Order: order, Reason: ExcludeReason(order))).ToList();
+        var includedOrders = classified.Where(x => x.Reason is null).Select(x => x.Order).ToList();
+        var excludedOrders = classified.Where(x => x.Reason is not null).ToList();
 
         decimal LineLoad(OrderPackingLine line)
         {
@@ -76,7 +96,7 @@ public sealed class RoutePlanningInputBuilder(
             return line.Quantity + Math.Ceiling(line.Quantity / capacity) * settings.BoxTareKg;
         }
 
-        var demands = routableOrders
+        var demands = includedOrders
             .GroupBy(order => order.RestaurantId)
             .OrderBy(group => group.Key)
             .Select(group =>
@@ -87,6 +107,20 @@ public sealed class RoutePlanningInputBuilder(
                     group.Key, nameByRestaurant[group.Key], orderIds,
                     anchor.DeliveryLatitude!.Value, anchor.DeliveryLongitude!.Value,
                     orderIds.Sum(orderId => packingByOrder[orderId].Sum(LineLoad)));
+            })
+            .ToList()
+            .AsReadOnly();
+
+        var excluded = excludedOrders
+            .GroupBy(x => x.Order.RestaurantId)
+            .OrderBy(group => group.Key)
+            .Select(group =>
+            {
+                var orderIds = group.Select(x => x.Order.OrderId).Order().ToList().AsReadOnly();
+                var reason = string.Join("; ", group.Select(x => x.Reason!).Distinct());
+                return new RoutePlanUnassigned(
+                    group.Key, nameByRestaurant[group.Key], orderIds, 0m, reason,
+                    ExcludedForIncompleteData: true);
             })
             .ToList()
             .AsReadOnly();
@@ -122,6 +156,11 @@ public sealed class RoutePlanningInputBuilder(
                     snapshot.Append(CultureInfo.InvariantCulture, $"{line.OrderItemId:N}:{line.Quantity}:{line.CapacityKg};");
             }
         }
+        // M7: excluded order ids must shift the revision hash — otherwise a plan built while an
+        // order was excluded stays "fresh" once that order's data is fixed, and it never re-enters
+        // planning (input.Excluded is only recomputed by re-running BuildAsync).
+        foreach (var orderId in excludedOrders.Select(x => x.Order.OrderId).Order())
+            snapshot.Append(CultureInfo.InvariantCulture, $"X:{orderId:N};");
         foreach (var vehicle in fleet
                      .Where(vehicle => assignedVehicleIds.Count == 0 || assignedVehicleIds.Contains(vehicle.Id))
                      .OrderBy(x => x.Id))
@@ -130,7 +169,7 @@ public sealed class RoutePlanningInputBuilder(
 
         return Result<RoutePlanningInput>.Success(new RoutePlanningInput(
             hubId, hub.Name, hub.Latitude.Value, hub.Longitude.Value, serviceDate,
-            demands, planningVehicles, Revision(snapshot.ToString(), hubId, serviceDate)));
+            demands, planningVehicles, Revision(snapshot.ToString(), hubId, serviceDate), excluded));
     }
 
     internal static string Profile(VehicleType type) => type switch

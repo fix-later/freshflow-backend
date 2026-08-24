@@ -167,6 +167,20 @@ public sealed class Order : AggregateRoot
         return Result.Success();
     }
 
+    /// <summary>
+    /// Updates the order-level notes while the order is still a draft (cart).
+    /// </summary>
+    public Result UpdateNotes(string? notes)
+    {
+        if (Status != OrderStatus.Draft)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_DRAFT", "Notes can only be updated while the order is in draft status."));
+
+        Notes = notes;
+
+        return Result.Success();
+    }
+
     public Result AssignMarket(Guid marketId)
     {
         if (marketId == Guid.Empty)
@@ -334,6 +348,22 @@ public sealed class Order : AggregateRoot
         return CancelInternal(reason);
     }
 
+    /// <summary>
+    /// Cancels the order because the driver marked its delivery as failed. Allowed only from
+    /// Delivering. One failure is final — no retry, no re-delivery path back to a routable status.
+    /// Deliberately NOT added to <see cref="AllowedTransitions"/>: that dictionary also gates the
+    /// restaurant-facing <see cref="Cancel"/>, and a restaurant must never be able to cancel an
+    /// order that is already on the truck. Same reasoning as <see cref="CancelWithSession"/>.
+    /// </summary>
+    public Result CancelForFailedDelivery(string? reason)
+    {
+        if (Status != OrderStatus.Delivering)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_CANCELLABLE", $"An order in status '{Status}' cannot be cancelled."));
+
+        return CancelInternal(reason);
+    }
+
     private Result CancelInternal(string? reason)
     {
         TransitionTo(OrderStatus.Cancelled);
@@ -398,6 +428,26 @@ public sealed class Order : AggregateRoot
         {
             var item = _items.Single(candidate => candidate.Id == itemId);
             item.RecordProcurementActuals(actual.Quantity, actual.UnitPrice);
+
+            // C1: the restaurant was charged at confirm time for the ordered quantity; if the
+            // agent bought less, refund the shortfall (goods + its proportional VAT) via the
+            // credit ledger. TotalAmount/SubtotalAmount/VatAmount stay the immutable confirmation
+            // snapshot the VAT invoice is issued from — do not rewrite them here.
+            if (actual.Quantity < item.Quantity && item.LockedUnitPrice.HasValue)
+            {
+                var shortfallQuantity = item.Quantity - actual.Quantity;
+                var goods = shortfallQuantity * item.LockedUnitPrice.Value;
+                var vat = decimal.Round(
+                    goods * (item.VatRatePercent ?? 0m) / 100m, 2, MidpointRounding.AwayFromZero);
+                var refundAmount = goods + vat;
+
+                if (refundAmount > 0m)
+                {
+                    RaiseDomainEvent(new OrderProcurementShortfallDomainEvent(
+                        Id, RestaurantId, item.Id, item.ProductNameSnapshot,
+                        shortfallQuantity, refundAmount, DateTime.UtcNow));
+                }
+            }
         }
 
         return Result.Success();

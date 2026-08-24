@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-08-20T00:00:00.000Z" agent="Claude" version="24.7.17" type="device" pages="1">
+  <diagram id="pkg-web" name="WEB (Angular)">
+    <mxGraphModel dx="1400" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="760" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="t" value="FreshFlow Web — Package Diagram (Angular 22 + Fuse)" style="text;html=1;fontSize=16;fontStyle=1;fontColor=#000000;align=left;" vertex="1" parent="1"><mxGeometry x="30" y="18" width="700" height="30" as="geometry"/></mxCell>
+        <mxCell id="t2" value="Mũi tên nét đứt = phụ thuộc (import)." style="text;html=1;fontSize=11;fontColor=#000000;align=left;" vertex="1" parent="1"><mxGeometry x="30" y="42" width="700" height="20" as="geometry"/></mxCell>
+
+        <mxCell id="boot" value="main.ts · app.config.ts · app.routes.ts&#10;(bootstrap + routing)" style="shape=folder;tabWidth=80;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="360" y="75" width="280" height="55" as="geometry"/></mxCell>
+        <mxCell id="lay" value="layout&#10;layouts · common (shell, sidebar, toolbar)" style="shape=folder;tabWidth=70;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="360" y="165" width="280" height="55" as="geometry"/></mxCell>
+
+        <mxCell id="mods" value="modules ×10&#10;admin · auth · cart · catalog · home · orders · pages · restaurant · wishlist · errors" style="shape=folder;tabWidth=80;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="230" y="260" width="540" height="65" as="geometry"/></mxCell>
+
+        <mxCell id="shared" value="shared&#10;product-card · carousel&#10;status-pills · tag-visual" style="shape=folder;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="60" y="380" width="230" height="75" as="geometry"/></mxCell>
+        <mxCell id="core" value="core&#10;api · auth (guard/interceptor) · navigation&#10;user · i18n/transloco · maps · market · util" style="shape=folder;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="330" y="380" width="330" height="75" as="geometry"/></mxCell>
+        <mxCell id="fuse" value="@fuse&#10;components · directives · services&#10;pipes · styles · tailwind" style="shape=folder;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="700" y="380" width="240" height="75" as="geometry"/></mxCell>
+
+        <mxCell id="env" value="environments&#10;(generate-env.mjs)" style="shape=folder;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="60" y="520" width="230" height="60" as="geometry"/></mxCell>
+        <mxCell id="ctr" value="contract&#10;client · raw · generated (OpenAPI: apis, models)" style="shape=folder;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;verticalAlign=middle;spacingTop=8;" vertex="1" parent="1"><mxGeometry x="330" y="520" width="330" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="be" value="FreshFlow.API — REST /api (+ SignalR hubs)" style="rounded=0;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;dashed=1;" vertex="1" parent="1"><mxGeometry x="330" y="650" width="330" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="w1" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="boot" target="lay"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="w2" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="lay" target="mods"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="w3" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.15;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="mods" target="shared"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="311" y="350"/><mxPoint x="175" y="350"/></Array></mxGeometry></mxCell>
+        <mxCell id="w4" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="mods" target="core"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="w5" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.85;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="mods" target="fuse"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="689" y="350"/><mxPoint x="820" y="350"/></Array></mxGeometry></mxCell>
+        <mxCell id="w6" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="core" target="ctr"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="w7" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="ctr" target="env"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="w8" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=open;endSize=8;strokeColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="ctr" target="be"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -55,7 +55,9 @@ public static class ErrorExtensions
                         or "MARKET_SESSION_CLOSED"
                         or "MARKET_SESSION_CUTOFF_PASSED"
                         or "MARKET_SESSION_CAPACITY_EXCEEDED"
-                        or "MARKET_SESSION_CONFLICT")
+                        or "MARKET_SESSION_CONFLICT"
+                        or "MARKET_PRODUCT_HAS_RESERVED_STOCK"
+                        or "PRODUCT_HAS_ACTIVE_LISTINGS")
             return new ConflictObjectResult(body);
 
         if (error.Code is "UNAUTHORIZED" or "INVALID_CREDENTIALS" or "INVALID_CURRENT_PASSWORD"
@@ -84,7 +86,7 @@ public static class ErrorExtensions
                         or "INVALID_ASSIGNMENT_TARGET" or "INVALID_UNIT" or "INVALID_CATEGORY"
                         or "INVALID_PACKING_CODE"
                         or "INVALID_CATEGORY_PARENT"
-                        or "INVALID_PRICE" or "INVALID_QUANTITY"
+                        or "INVALID_PRICE" or "INVALID_QUANTITY" or "QUANTITY_BELOW_RESERVED"
                         or "RESTAURANT_NOT_APPROVED" or "INVALID_PRODUCT" or "INSUFFICIENT_STOCK"
                         or "MINIMUM_ORDER_QUANTITY_NOT_MET" or "DELIVERY_COORDINATES_REQUIRED"
                         or "INVALID_DELIVERY_FEE" or "INVALID_DELIVERY_DISTANCE"
@@ -93,7 +95,7 @@ public static class ErrorExtensions
                         or "INVALID_SETTLEMENT_DETAILS"
                         or "INVALID_CLAIM_AMOUNT" or "INVALID_CLAIM_DECISION_NOTE"
                         or "CREDIT_REFUND_EXCEEDS_ORDER_CHARGE"
-                        or "CREDIT_SETTLEMENT_EXCEEDS_BALANCE" or "CREDIT_REFUND_EXCEEDS_BALANCE"
+                        or "CREDIT_SETTLEMENT_EXCEEDS_BALANCE"
                         or "INVALID_CREDIT_LIMIT" or "CREDIT_LIMIT_BELOW_OUTSTANDING_BALANCE"
                         or "DELIVERY_DATE_OUT_OF_WINDOW" or "INVALID_ACTUAL_QUANTITY"
                         or "SCHEDULED_ORDER_FIRST_RUN_IN_PAST" or "INVALID_ISSUE_QUANTITY"

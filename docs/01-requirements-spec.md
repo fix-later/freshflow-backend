@@ -1,5 +1,23 @@
 # FreshFlow (FFX) — Requirements Specification
 
+> ## 📜 Historical document
+>
+> This is the **v1.0 requirements specification** (2026-05-09), kept for traceability. It states
+> what the system was asked to do, not what it currently does. It has **not** been rewritten to
+> match the implementation, and several details have since been overtaken:
+>
+> - Payment is a **B2B credit / công nợ** model, not a per-order gateway (overrides FR-ORD-008).
+> - `restaurant_manager` / `restaurant_staff` do not exist — the six seeded roles are `admin`,
+>   `operations_manager`, `market_agent`, `hub_staff`, `driver`, `restaurant`.
+> - "Kiosk staff" is now **market agent** (`market_agent`); `kiosk_staff` survives only as a
+>   legacy request alias.
+> - Two modules were added after this document: **Procurement** (phiên chợ) and **Invoicing**
+>   (VAT e-invoices), neither of which has an FR section here.
+>
+> For what the system actually enforces today, read [`07-business-rules.md`](./07-business-rules.md)
+> — 119 rules read directly out of the code, with the enforcement point and error code for each.
+
+
 **Version:** 1.0  
 **Date:** 2026-05-09  
 **Project:** FreshFlow – An Intermediary Platform for Food Procurement and Logistics Optimization from Wholesale Markets for Restaurants in Ho Chi Minh City  

@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-Implemented and under active feature work. 9 modules, 52 EF migrations, unit + integration suites.
+Implemented and under active feature work. 10 modules, 97 EF migrations, 223 endpoints,
+unit + integration suites.
 Work is tracked in Jira (`SCRUM-xxx`); per-epic working docs live in `docs/features/<epic>/`.
 
 ---
@@ -57,7 +58,7 @@ MSBuild worker processes behind.
 
 ### Pattern: Microservice-Ready Modular Monolith
 
-Single deployable ASP.NET Core host (`FreshFlow.API`) that wires 9 self-contained modules. Each
+Single deployable ASP.NET Core host (`FreshFlow.API`) that wires 10 self-contained modules. Each
 module has its own `.Domain`, `.Application`, and `.Infrastructure` projects.
 
 ### Solution Layout
@@ -69,7 +70,7 @@ src/
     FreshFlow.Contracts/          ← Integration event records (cross-module DTOs only)
   Modules/
     Auth/     Catalog/   Pricing/   Orders/    Procurement/
-    Logistics/  Notifications/  Hub/   Analytics/
+    Logistics/  Notifications/  Hub/   Analytics/  Invoicing/
       Each: {Module}.Domain / {Module}.Application / {Module}.Infrastructure
   FreshFlow.Infrastructure.Persistence/   ← Shared AppDbContext + all EF Migrations
   FreshFlow.Infrastructure.Media/         ← Cloudinary signed upload (shared, not a module)
@@ -122,7 +123,7 @@ Two conventions coexist, and some tables **mix both within one table**:
 
 | Table family | Convention |
 |---|---|
-| `procurement_*`, `price_snapshots`, `hub_*`, `deliveries`, `delivery_routes`, `vehicles` | fully `snake_case` |
+| `procurement_*`, `market_session*`, `price_snapshots`, `hub_*`, `deliveries`, `delivery_routes`, `route_plans`, `vehicles` | fully `snake_case` |
 | `orders`, `order_items` | **mixed** — `"Id"`, `"RestaurantId"`, `"Status"`, `"CreatedAt"`, `"Quantity"` are quoted PascalCase, but `deleted_at` / `confirmed_receipt_at` are snake_case |
 | `market_products` | **mixed** — `"Id"`, `"ProductId"`, `"MarketId"` PascalCase but `"deleted_at"` snake_case |
 | `products`, `product_categories`, `markets` | PascalCase **including** `"DeletedAt"` |
@@ -149,11 +150,13 @@ Event** to `FreshFlow.Contracts`.
 `EventHandlers/` via MediatR `INotificationHandler<T>`:
 
 ```
-Order.Create() raises OrderCreatedDomainEvent
-  → OrderCreatedDomainEventHandler (Orders.Application) publishes OrderCreatedIntegrationEvent
-    → Logistics.Application: OrderCreatedIntegrationEventHandler creates a delivery record
-    → Notifications.Application: OrderCreatedIntegrationEventHandler persists a notification
+Order.Confirm() raises OrderConfirmedDomainEvent
+  → OrderConfirmedDomainEventHandler (Orders.Application) publishes OrderConfirmedIntegrationEvent
+    → Notifications.Application: OrderConfirmedIntegrationEventHandler persists + pushes a notification
 ```
+
+The 18 contracts currently defined live in `src/Shared/FreshFlow.Contracts/` — read that folder
+before inventing a new event; several flows already have one.
 
 ### Database
 
@@ -165,10 +168,9 @@ All PKs are `UUID` (`gen_random_uuid()`). All mutable tables have `deleted_at TI
 delete — **every seam and query must filter it**. `price_snapshots` and `refresh_tokens` are
 append-only (no `deleted_at`).
 
-`price_snapshots` is a **plain table** with ordinary indexes. It is *not* partitioned: `docs/03`,
-the comment in `PriceSnapshotConfiguration.cs`, and older docs all describe monthly range
-partitioning and a `PartitionMaintenanceJob` — **neither exists in this repo**. Do not plan around
-them.
+`price_snapshots` is a **plain table** with ordinary indexes. It is *not* partitioned: the comment
+in `PriceSnapshotConfiguration.cs` and older design drafts describe monthly range partitioning and
+a `PartitionMaintenanceJob` — **neither exists in this repo**. Do not plan around them.
 
 Timestamps are stored UTC as `timestamptz`. Business dates are **`Asia/Ho_Chi_Minh`** — convert at
 the handler boundary (`Analytics.Application/Common/VietnamTime.cs`). But note `batch_date`-style
@@ -181,6 +183,8 @@ the handler boundary (`Analytics.Application/Common/VietnamTime.cs`). But note `
 - `Orders`: `ScheduledOrderGenerationHostedService`, `MonthlyCreditStatementHostedService`
 - `Procurement`: `ProcurementBatchingHostedService`
 - `Notifications`: `NotificationRetryHostedService`
+- `Invoicing`: `InvoiceIssuanceRetryHostedService`
+- `Hub`: `HubInboundBackfillHostedService`
 
 ### Module Registration Pattern
 
@@ -192,15 +196,15 @@ public static IServiceCollection AddAuthModule(
     this IServiceCollection services, IConfiguration config) { ... }
 ```
 
-`Program.cs` chains them all (`AddAuthModule` → … → `AddAnalyticsModule`, then `AddMediaModule`,
+`Program.cs` chains them all (`AddAuthModule` → … → `AddInvoicingModule`, then `AddMediaModule`,
 `AddAssistant`).
 
-`ValidationBehavior` is **copy-duplicated in each module** (10 copies). This is deliberate — do not
+`ValidationBehavior` is **copy-duplicated in each module** (11 copies). This is deliberate — do not
 refactor it into a shared project.
 
 ### Real-Time (SignalR)
 
-Three hubs, each living in its **owning module's** `Infrastructure/Realtime/` folder (there is no
+Four hubs, each living in its **owning module's** `Infrastructure/Realtime/` folder (there is no
 `FreshFlow.API/SignalR/`):
 
 | Hub | Location | Route |
@@ -208,12 +212,14 @@ Three hubs, each living in its **owning module's** `Infrastructure/Realtime/` fo
 | `PricingHub` | `Pricing.Infrastructure/Realtime/` | `/hubs/pricing` |
 | `OrderHub` | `Orders.Infrastructure/Realtime/` | `/hubs/orders` |
 | `DeliveryHub` | `Logistics.Infrastructure/Realtime/` | `/hubs/delivery` |
+| `NotificationHub` | `Notifications.Infrastructure/Realtime/` | `/hubs/notifications` |
 
 Registered with a plain `AddSignalR()` — **in-memory, no Redis backplane** (single-instance only;
 Redis is used for the Pricing board cache, not scale-out). Clients authenticate via JWT in the
 `access_token` query string during negotiate.
 
-Groups in use: `market:{marketId}`, `restaurant:{restaurantId}`, `admin:orders`, `admin:delivery`.
+Groups in use: `market:{marketId}`, `restaurant:{restaurantId}`, `user:{userId}`, `admin:orders`,
+`admin:delivery`.
 
 Broadcast calls originate in `{Module}.Infrastructure/Realtime/` services implementing interfaces
 declared in `{Module}.Application/Abstractions/` (e.g. `IPricingBroadcastService`).
@@ -224,10 +230,20 @@ declared in `{Module}.Application/Abstractions/` (e.g. `IPricingBroadcastService
 
 **Phiên chợ** (*market session*) — a single gather-and-buy run at **one market** on **one day**:
 the system bundles every confirmed order for that day into one shopping list, a market agent buys
-it, then hands it off to the hub. In code this is the `ProcurementBatch` aggregate (table
-`procurement_batches`), lifecycle `Built → Manifested → Purchasing → HandedOff → Completed` (or
-`Cancelled`). There is **no separate `Session` entity** — "session" in comments and "phiên chợ" in
-Vietnamese UI/docs both mean `ProcurementBatch`.
+it, then hands it off to the hub.
+
+Two aggregates, both in Procurement — do not conflate them:
+
+| Aggregate | Table | Is | Lifecycle |
+|---|---|---|---|
+| `MarketSession` | `market_sessions` (+ `market_session_agents`, `market_session_vehicles`) | The **scheduled window**: which market, which service date, when ordering closes, planned capacity, which agents and vehicles are assigned | `Draft → Open → Closed` |
+| `ProcurementBatch` | `procurement_batches` | The **actual shopping run** built from the orders in that session | `Built → Manifested → Purchasing → HandedOff → Completed` (or `Cancelled`) |
+
+Orders carry `market_session_id`; a batch is built from a closed session. Admin manages sessions
+through `/api/v1/admin/market-sessions/*` and batches through `/api/v1/admin/order-groups/*`.
+
+> Earlier revisions of this file said there is **no** `Session` entity. That was true until
+> `20260813045936_AddMarketSessions`; it is no longer.
 
 - User-facing Vietnamese = **"phiên chợ"** everywhere. "Lô chợ" is the old name — **do not use it**.
 - Code/English = **`ProcurementBatch`** / `batch`. Do **not** rename the code to match the Vietnamese
@@ -263,7 +279,7 @@ The only roles that exist (seeded in `20260606152229_AddRolesTable.cs`):
 
 `admin` · `market_agent` · `restaurant` · `hub_staff` · `driver` · `operations_manager`
 
-`docs/04-api-design.md` cites `restaurant_manager` / `restaurant_staff` — **neither exists**.
+Older design drafts cited `restaurant_manager` / `restaurant_staff` — **neither exists**.
 `[Authorize(Roles = "...")]` with an unknown name fails **silently**: green build, permanent 403.
 
 ### SQL policy
@@ -308,15 +324,18 @@ Commit format: `type(scope): SCRUM-XXX description` — **Jira key before the de
 
 | File | When to Read |
 |---|---|
-| `docs/01-requirements-spec.md` | What a feature must do; acceptance criteria |
+| `docs/01-requirements-spec.md` | Original v1.0 requirements (📜 historical — code wins) |
 | `docs/02-system-architecture.md` | Module responsibilities, SignalR design, caching strategy |
-| `docs/03-database-schema.md` | DDL and index intent (⚠️ partitioning section is stale) |
-| `docs/04-api-design.md` | Endpoint specs, request/response shapes (⚠️ RBAC role names are wrong) |
-| `docs/05-implementation-plan.md` | Original task list and folder structure |
+| `docs/03-database-schema.md` | Schema conventions, 59-table inventory, column-casing traps, SQL policy |
+| `docs/database/03-database-schema.dbml` | Column-level truth (physical DBML, reconciled with the EF snapshot) |
+| `docs/04-api-design.md` | All 223 endpoints with roles, SignalR hubs, error-code → HTTP mapping |
+| `docs/07-business-rules.md` | 119 business rules read out of the code, with enforcement point + error code |
+| `docs/enums.md` | Every enum/status string the API exposes |
+| `docs/05-implementation-plan.md` | Original 50-task build plan (📜 historical) |
 | `docs/06-context-decisions.md` | Context decisions |
 | `docs/features/<epic>/` | Per-epic working docs: plans, audits, decisions (`AUDIT-*.md`) |
 | `docs/features/README.md` | Index of feature docs |
-| `docs/REVIEW-REPORT.md` | Known gaps and open design decisions |
+| `docs/REVIEW-REPORT.md` | Pre-implementation review (📜 historical); current gaps are in `docs/00-index.md` |
 
 **The design docs predate the code.** Where a doc and the code disagree, the code wins — verify
 column names, role names, and enum values against migrations and `*Configuration.cs` before relying

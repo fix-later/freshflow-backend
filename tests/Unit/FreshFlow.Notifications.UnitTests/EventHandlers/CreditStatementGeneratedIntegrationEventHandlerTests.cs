@@ -36,13 +36,14 @@ public sealed class CreditStatementGeneratedIntegrationEventHandlerTests
     }
 
     private static CreditStatementGeneratedIntegrationEvent Event(
-        Guid restaurantId, byte[]? statementPdf = null, string? statementPdfFileName = null) =>
+        Guid restaurantId, byte[]? statementPdf = null, string? statementPdfFileName = null,
+        decimal closingBalance = 1_500_000m) =>
         new(
             restaurantId,
             Guid.NewGuid(),
             new DateTime(2026, 5, 31, 17, 0, 0, DateTimeKind.Utc),  // June VN period start
             new DateTime(2026, 6, 30, 17, 0, 0, DateTimeKind.Utc),  // July VN period end
-            1_500_000m,
+            closingBalance,
             new DateTime(2026, 7, 15, 17, 0, 0, DateTimeKind.Utc),  // due = period end + 15d
             DateTime.UtcNow,
             statementPdf,
@@ -69,6 +70,30 @@ public sealed class CreditStatementGeneratedIntegrationEventHandlerTests
             default);
         await _emailSender.Received(1).SendAsync(
             "owner@example.com", "Sao kê công nợ hàng tháng", Arg.Any<string>(), default);
+    }
+
+    [Fact]
+    public async Task Handle_NegativeClosingBalance_RendersCreditWordingAsync()
+    {
+        // AUDIT-2026-08-23 C3: a negative closing balance means FreshFlow owes the restaurant —
+        // the debt-collection wording must not be used, and no minus sign should leak through.
+        var restaurantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        _recipients.ResolveRecipientByRestaurantIdAsync(restaurantId, default)
+            .Returns(new NotificationRecipient(userId, "owner@example.com"));
+
+        await _sut.Handle(Event(restaurantId, closingBalance: -250_000m), default);
+
+        await _writer.Received(1).WriteAsync(
+            userId,
+            NotificationType.credit_statement,
+            "Sao kê công nợ hàng tháng",
+            Arg.Is<string>(body =>
+                body.Contains("250,000", StringComparison.Ordinal) &&
+                !body.Contains('-') &&
+                !body.Contains("Vui lòng thanh toán", StringComparison.Ordinal)),
+            Arg.Any<IReadOnlyDictionary<string, object?>>(),
+            default);
     }
 
     [Fact]

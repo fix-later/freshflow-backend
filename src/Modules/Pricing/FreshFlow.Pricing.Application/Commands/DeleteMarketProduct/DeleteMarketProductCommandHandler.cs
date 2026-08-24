@@ -14,6 +14,12 @@ internal sealed class DeleteMarketProductCommandHandler(IMarketProductRepository
         if (marketProduct is null)
             return Result.Failure(Error.NotFound("MARKET_PRODUCT", request.ProductId));
 
+        if (marketProduct.ReservedQuantity > 0)
+            return Result.Failure(Error.Conflict(
+                "MARKET_PRODUCT_HAS_RESERVED_STOCK",
+                $"{marketProduct.ReservedQuantity} unit(s) are reserved by confirmed orders. "
+                + "Fulfil or cancel those orders before removing the listing."));
+
         marketProduct.Delete();
         marketProducts.Track(marketProduct);
         await marketProducts.SaveChangesAsync(ct);

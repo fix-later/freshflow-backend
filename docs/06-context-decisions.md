@@ -1,8 +1,14 @@
 # FreshFlow — Context & Business Model Decisions
 
-**Version:** 1.0
-**Date:** 2026-05-31
+**Version:** 1.1
+**Date:** 2026-05-31 · **Reconciled with code:** 2026-08-22
 **Project:** FreshFlow – Intermediary Platform for Food Procurement and Logistics Optimization
+
+---
+
+> **How to read this file.** The *decisions* and their rationale are the historical record and are
+> left intact. Where the implementation later diverged, the divergence is called out inline in a
+> **⚠️ As built** note. Those notes are the current truth.
 
 ---
 
@@ -23,6 +29,10 @@
 **Impact on tech:** No change to the technical stack. The price update endpoint (`PATCH`) and SignalR broadcast work identically. The only change is WHO triggers the update — an internal employee rather than an external vendor.
 
 **Role enum:** `MARKET_AGENT` is the canonical new value. `KIOSK_STAFF` is retained as a backward-compatible alias and will be removed in a future migration.
+
+> **⚠️ As built:** roles are rows in the `roles` table, not a C# enum, and the values are
+> lowercase: `market_agent`. `kiosk_staff` survives only as a request alias accepted by
+> `POST /api/v1/admin/users`.
 
 ---
 
@@ -81,7 +91,11 @@ confirmation. Actual purchase quantity/price is internal cost data; FreshFlow ab
 - Hub Staff needs scan/QC interface + discrepancy flagging
 - Driver needs route/map interface + delivery confirmation
 
-Merging these roles would create a bloated, confusing UX and complicate RBAC. The data model already accommodates them via the `user_role` enum.
+Merging these roles would create a bloated, confusing UX and complicate RBAC.
+
+> **⚠️ As built:** there is no `user_role` enum — roles are rows in the `roles` table, referenced by
+> `users.role_id`. Hub staff and drivers are additionally scoped by `hub_staff_assignments` /
+> `hub_driver_assignments`.
 
 ---
 
@@ -91,6 +105,12 @@ Merging these roles would create a bloated, confusing UX and complicate RBAC. Th
 
 **Rationale:** At Capstone/early-startup scale, these are the same person. The ADMIN role has full system access. If the business grows and these responsibilities need to be split, RBAC sub-roles can be introduced in v2 without a schema change.
 
+> **⚠️ As built — this decision was reversed.** `operations_manager` is a real seeded role and is
+> reachable on roughly 80 endpoints (analytics, hub operations, logistics routing, claim decisions, market
+> sessions, order ops). It is a read/operate role: it can run day-to-day operations but cannot
+> provision users, approve restaurants, set credit limits, or change operational settings — those
+> stay `admin`-only. See [`04-api-design.md`](./04-api-design.md) §5.
+
 ---
 
 ### DEC-006: Order Auto-Batching at 22:00 Cutoff
@@ -99,11 +119,16 @@ Merging these roles would create a bloated, confusing UX and complicate RBAC. Th
 
 **Old behavior:** Admin manually creates `order_groups` by selecting orders.
 
-**New behavior:** A system cron job at 22:00 groups all `CONFIRMED` orders by source market, creating `OrderGroup` entities and transitioning order status to `BATCHED` automatically. (Grouping by delivery zone was specified in FR-ORD-005 but is not implemented — there is no restaurant-to-zone link.)
+**New behavior:** `ProcurementBatchingHostedService` groups all `Confirmed` orders by source market
+at the cutoff, creating `ProcurementBatch` rows (`procurement_batches` — there is no `order_groups`
+table; the API path `/admin/order-groups` kept the old name) and transitioning order status to
+`Batched` automatically. (Grouping by delivery zone was specified in FR-ORD-005 but is not implemented — there is no restaurant-to-zone link.)
 
 **Rationale:** Manual batching doesn't scale, introduces human error, and creates an operational bottleneck at a fixed time each night. System auto-batching is deterministic and auditable.
 
-**Configuration:** Cutoff time is configurable via `system_config` key `daily_order_cutoff_time` (default `22:00`, timezone `Asia/Ho_Chi_Minh`). Admin can still manually adjust batches after auto-generation. Manual trigger supports `targetDate`, `dryRun`, and `force` and must be idempotent so repeated runs do not create duplicate active batches.
+**Configuration:** Cutoff time is configurable via the `operational_settings` singleton row
+(there is no `system_config` table; `pricing_settings` was dropped in
+`20260813074950_DropPricingSettings`). Default `22:00`, timezone `Asia/Ho_Chi_Minh`. Admin can still manually adjust batches after auto-generation. Manual trigger supports `targetDate`, `dryRun`, and `force` and must be idempotent so repeated runs do not create duplicate active batches.
 
 ---
 
@@ -112,9 +137,15 @@ Merging these roles would create a bloated, confusing UX and complicate RBAC. Th
 **Decision:** `order_items.locked_unit_price` stores the price as a snapshot at `CONFIRMED` status transition time.
 
 **Why not a FK reference to `price_snapshots`?**
-Price snapshots are a high-volume append-only table (currently a plain table with ordinary indexes; monthly range partitioning is a target design, not implemented). FK references across the orders boundary would complicate cross-context queries and violate the bounded context principle. A scalar snapshot is simpler, faster to read, and immune to cascade effects.
+Price snapshots are a high-volume append-only table — a plain table with ordinary indexes.
+(Monthly range partitioning appears in older drafts; it was never built and is not planned.) FK references across the orders boundary would complicate cross-context queries and violate the bounded context principle. A scalar snapshot is simpler, faster to read, and immune to cascade effects.
 
-**Price Band Rule:** Tolerate ±10% deviation between `locked_unit_price` and actual purchase price. Wider deviation requires restaurant re-confirmation (30-min window, then auto-confirm). Configurable via `system_config` key `price_band_tolerance_percent`.
+**Price Band Rule:** Tolerate ±10% deviation between `locked_unit_price` and actual purchase price.
+
+> **⚠️ As built:** the re-confirmation window was not implemented. Per DEC-002, the buyer's charge
+> stays fixed to the terms locked at confirmation and FreshFlow absorbs the variance — so no
+> restaurant re-confirmation is needed. Tolerance lives in `operational_settings`, not
+> `system_config`.
 
 ---
 
@@ -134,7 +165,11 @@ Price snapshots are a high-volume append-only table (currently a plain table wit
 
 ### DEC-009: Microservice-Ready Monolith (Bounded Context Separation)
 
-**Decision:** Design 11 bounded contexts with clean separation in a single PostgreSQL database and single deployable unit.
+**Decision:** Design bounded contexts with clean separation in a single PostgreSQL database and single deployable unit.
+
+> **⚠️ As built:** 10 modules — Auth, Catalog, Pricing, Orders, Procurement, Logistics,
+> Notifications, Hub, Analytics, Invoicing — plus the AI Assistant and the Cloudinary media
+> helper, which live in the host rather than in a module.
 
 **Rationale:** Enables future microservice extraction without major refactoring. Key rules enforced now:
 - No FK constraints across module boundaries (cross-context references are IDs only)
@@ -143,7 +178,12 @@ Price snapshots are a high-volume append-only table (currently a plain table wit
 
 **Current state:** Modular monolith, single `AppDbContext`, single deployment.
 
-**Future state:** Each bounded context → independent service with own database. The `payment` module is already designed as a separate context (no FK from `payments` to `orders`).
+**Future state:** Each bounded context → independent service with own database.
+
+> **⚠️ As built:** there is no `payment` module and no `payments` table — per DEC-002 the model is
+> B2B credit, and it lives inside Orders (`restaurant_credit`, `credit_transactions`,
+> `credit_statements`). Cross-module reads go through keyless EF Row seams; see
+> [`02-system-architecture.md`](./02-system-architecture.md) §5.3.
 
 ---
 
@@ -171,7 +211,10 @@ These features will NOT be built in v1 under any circumstances:
 | Order Group (Admin-created) | **Procurement Batch** (auto-generated) | System creates at 22:00 cutoff, Admin can adjust. |
 | `PENDING` status | `DRAFT` | Order lifecycle starts at DRAFT. |
 | "Payment out of scope" / "per-order gateway" | **Payment via B2B credit (công nợ)** | Restaurant credit account with Admin-set limit; confirm draws down credit, settled out-of-band. Supersedes the per-order VNPay/MoMo/ZaloPay flow (see DEC-002). |
-| Logistics Operator | **Admin** | No separate Logistics Operator role; Admin handles logistics scheduling. |
+| Logistics Operator | **Admin** or **Operations Manager** | Both roles handle logistics scheduling (DEC-005 was reversed). |
+| Order Group / `order_groups` table | **`procurement_batches`** | Only the API path `/admin/order-groups` kept the old name. |
+| `system_config` | **`operational_settings`** | Singleton row owned by the Orders module. |
+| Phiên chợ (scheduling) | **`MarketSession`** | The scheduled window (market + service date + cutoff + assigned agents/vehicles); the shopping run itself is `ProcurementBatch`. Added 2026-08-13. |
 
 ---
 

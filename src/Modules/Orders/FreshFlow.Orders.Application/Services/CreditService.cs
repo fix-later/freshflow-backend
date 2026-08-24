@@ -73,6 +73,9 @@ public sealed class CreditService(
         if (accountResult.IsFailure)
             return Result<CreditRefundDto>.Failure(accountResult.Error);
 
+        // AUDIT-2026-08-23 C3: this per-order cap is the only refund ceiling now — it already
+        // prevents refunding more than was charged for the order, so OutstandingBalance is
+        // allowed to go negative (FreshFlow owes the restaurant) rather than clamping here.
         var refundableAmount = await creditRepository.GetRefundableAmountForOrderAsync(orderId, ct);
         if (amount > refundableAmount)
             return Result<CreditRefundDto>.Failure(Error.Validation(
@@ -81,13 +84,6 @@ public sealed class CreditService(
                 + $"Requested amount {amount}; refundable amount {refundableAmount}."));
 
         var account = accountResult.Value;
-        if (amount > account.OutstandingBalance)
-            return Result<CreditRefundDto>.Failure(CreditBalanceExceeded(
-                "CREDIT_REFUND_EXCEEDS_BALANCE",
-                "Refund amount cannot exceed outstanding balance.",
-                account,
-                amount));
-
         account.Refund(amount);
         await EnsureTrackedAccountAsync(account, ct);
         creditRepository.Track(account);

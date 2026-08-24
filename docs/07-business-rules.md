@@ -94,6 +94,7 @@
 | BR-CAT-003 | Không vô hiệu hóa danh mục còn **danh mục con đang active**. | `DeactivateCategoryCommandHandler` | `CATEGORY_HAS_ACTIVE_CHILDREN` |
 | BR-CAT-004 | Sản phẩm phải trỏ tới đơn vị / danh mục / packing code **tồn tại và active**. | `CreateProductCommandHandler` | `INVALID_UNIT`, `INVALID_CATEGORY`, `INVALID_PACKING_CODE` |
 | BR-CAT-005 | Packing code: mã `^[A-Z]+$` ≤ **8 ký tự**, `CapacityKg` **> 0, số nguyên, ≤ `Logistics:Box:MaxLoadKg` (25 kg)**. Độ dài: mô tả sản phẩm ≤2000, danh mục ≤1000, packing ≤500, `ImageUrl` ≤512, `Abbreviation` ≤20. `products.VatRate` là nguồn tạo **snapshot thuế** khi Orders chốt giá; Invoicing đọc snapshot này từ `order_items`. | `CreatePackingCodeCommandValidator`, các validator, `OrderPricingCalculator`, `OrderInvoiceRowConfiguration` | `VALIDATION_ERROR` |
+| BR-CAT-006 | Không vô hiệu hóa sản phẩm còn **niêm yết đang active** ở bất kỳ chợ nào (tránh mồ côi reservation ở Pricing). | `DeactivateProductCommandHandler`, `IMarketListingReader` | `PRODUCT_HAS_ACTIVE_LISTINGS` |
 
 ---
 
@@ -108,6 +109,7 @@
 | BR-PRC-005 | Mỗi lần đổi giá ghi một dòng **`price_snapshots`** — append-only, không soft-delete, **không partition**. Lịch sử theo `marketProductId` trả tối đa **100** bản ghi. | `PriceSnapshotRepository` | — |
 | BR-PRC-006 | Bảng giá cache Redis **TTL 5 phút**; đổi giá invalidate cache và broadcast SignalR tới group `market:{marketId}`. | `RedisPriceBoardCache.Ttl`, `PricingHub` | — |
 | BR-PRC-007 | Cập nhật giá/tồn dùng optimistic concurrency. Giá tham chiếu trên bảng giá được **đồng bộ từ lô mua đã xác nhận**. | `UpdateAvailableQuantityCommandHandler`, `ProcurementPurchaseConfirmedIntegrationEventHandler` | `OPTIMISTIC_CONCURRENCY_CONFLICT` |
+| BR-PRC-008 | Không thể hạ `CurrentQuantity` xuống dưới `ReservedQuantity` đã giữ cho đơn hàng đã xác nhận; không thể xóa niêm yết còn `ReservedQuantity` **> 0**. | `MarketProduct.ApplyUpdate`, `UpdateAvailableQuantityCommandHandler`, `UpdateProductPriceCommandHandler`, `DeleteMarketProductCommandHandler` | `QUANTITY_BELOW_RESERVED`, `MARKET_PRODUCT_HAS_RESERVED_STOCK` |
 
 ---
 
@@ -124,7 +126,7 @@ Draft ──► Confirmed ──► Batched ──► PickedUp ──► AtHub �
 | ID | Luật | Enforce tại | Mã lỗi |
 |---|---|---|---|
 | BR-ORD-001 | Chuyển trạng thái chỉ theo bảng `AllowedTransitions`; mọi bước nhảy khác bị chặn. | `Order.AllowedTransitions` | `ORDER_INVALID_TRANSITION` |
-| BR-ORD-002 | Hủy đơn chỉ từ `Draft` hoặc `Confirmed`. **Ngoại lệ:** khi cả phiên chợ bị hủy, đơn ở `Batched` cũng hủy theo (`CancelWithSession`) — hợp lệ vì phiên chỉ hủy được trước khi agent mua hàng. | `Order.Cancel()`, `Order.CancelWithSession()` | `ORDER_NOT_CANCELLABLE` |
+| BR-ORD-002 | Hủy đơn chỉ từ `Draft` hoặc `Confirmed`. **Ngoại lệ:** khi cả phiên chợ bị hủy, đơn ở `Batched` cũng hủy theo (`CancelWithSession`) — hợp lệ vì phiên chỉ hủy được trước khi agent mua hàng. **Ngoại lệ khác:** giao hàng thất bại (`deliveries.status = 'failed'`) hủy đơn đang `Delivering` (`CancelForFailedDelivery`) và hoàn tiền ngay — **thất bại 1 lần là hủy, không có luồng giao lại**. Cả hai ngoại lệ đều KHÔNG được thêm vào `Order.AllowedTransitions`, để nhà hàng không tự hủy được đơn đã gom lô / đang trên xe qua `Cancel()` công khai. | `Order.Cancel()`, `Order.CancelWithSession()`, `Order.CancelForFailedDelivery()`, `DeliveryFailedIntegrationEventHandler` | `ORDER_NOT_CANCELLABLE` |
 | BR-ORD-003 | Chỉ đơn `Draft` mới được thêm/sửa/xóa item và áp giá. | `Order.AddItem/UpdateItem/RemoveItem/ApplyPricing` | `ORDER_NOT_DRAFT` |
 | BR-ORD-004 | Địa chỉ giao chốt **một lần duy nhất** khi đơn còn `Draft`. | `Order.CaptureDeliveryAddress()` | `DELIVERY_ADDRESS_ALREADY_CAPTURED` |
 | BR-ORD-005 | Xác nhận đơn yêu cầu: đơn thuộc nhà hàng đang đăng nhập, nhà hàng đã duyệt, trạng thái `Draft`, và **có ít nhất 1 item**. | `ConfirmOrderCommandHandler` | `FORBIDDEN`, `RESTAURANT_NOT_ACTIVE`, `ORDER_NOT_DRAFT`, `ORDER_EMPTY` |
@@ -196,6 +198,7 @@ totalAmount = subtotal + vatAmount + deliveryFee
 |---|---|---|---|
 | BR-ORD-022 | **Sự cố** chỉ báo cho đơn **`Delivered`**; loại ∈ {`missing`, `wrong`, `damaged`}; `AffectedQuantity` > 0 và ≤ số lượng đã đặt; mô tả 1–**1000** ký tự; sự cố đã `Resolved` không xử lý lại. | `ReportOrderIssueCommandHandler`, `OrderIssue` | `ORDER_ISSUE_NOT_ALLOWED`, `VALIDATION_ERROR`, `INVALID_ISSUE_QUANTITY`, `ORDER_ISSUE_ALREADY_RESOLVED` |
 | BR-ORD-023 | **Khiếu nại** chỉ mở khi đơn ở `AtHub`/`Delivered`; số tiền > 0 và **không vượt số đã ghi nợ cho đơn**; claim đã ở trạng thái cuối không đổi được; **từ chối bắt buộc có ghi chú**, **duyệt bắt buộc có người duyệt + giao dịch hoàn tiền**. Lý do ≤500, ghi chú quyết định ≤1000, `ProofImageUrl` ≤2000. **Hoàn tiền = điều chỉnh công nợ, không qua cổng thanh toán.** | `FileClaimCommandHandler`, `OrderClaim`, `CreditService.RefundAsync` | `CLAIM_ORDER_NOT_CLAIMABLE`, `INVALID_CLAIM_AMOUNT`, `CLAIM_INVALID_TRANSITION`, `INVALID_CLAIM_DECISION_NOTE`, `VALIDATION_ERROR` |
+| BR-ORD-024 | Nếu agent mua **ít hơn số lượng đặt** cho một dòng đơn (`ActualQuantity < Quantity`), hệ thống **tự động hoàn tiền phần thiếu hụt** (đơn giá đã chốt × chênh lệch, cộng VAT tương ứng) vào công nợ nhà hàng ngay khi bàn giao lô — không chờ thao tác thủ công. `TotalAmount`/`SubtotalAmount`/`VatAmount` **giữ nguyên** snapshot lúc xác nhận (hóa đơn VAT xuất theo đó); phần chênh chỉ điều chỉnh trên sổ công nợ. Không áp dụng nếu dòng đơn chưa chốt giá (`LockedUnitPrice` null). | `Order.ApplyProcurementActuals()`, `OrderProcurementShortfallDomainEventHandler` | — (không phải lỗi, phát `RestaurantRefundIssuedIntegrationEvent`) |
 
 ---
 
@@ -280,8 +283,8 @@ totalAmount = subtotal + vatAmount + deliveryFee
 | ID | Luật | Enforce tại | Mã lỗi |
 |---|---|---|---|
 | BR-LOG-001 | `VehicleType ∈ {van, truck, motorbike}`, **biển số duy nhất**, `CapacityKg > 0`. Không có `Vehicle.HubId` cứng — **điều xe là toàn đội** (một hub / một chợ), đây là quyết định thiết kế có chủ đích. | `RegisterVehicleCommandHandler` + validator | `VALIDATION_ERROR`, `PLATE_NUMBER_DUPLICATE` |
-| BR-LOG-002 | **Mọi dòng đơn cần định tuyến phải có packing code hợp lệ** (để tính khối lượng) trước khi hoạch định. | `RoutePlanningInputBuilder` | `ROUTE_WEIGHT_INCOMPLETE` |
-| BR-LOG-003 | Hub và **mọi nhà hàng đích phải có tọa độ** cho ngày phục vụ. | `CalculateRouteCommandHandler` | `MISSING_COORDINATES` |
+| BR-LOG-002 | **Mọi dòng đơn cần định tuyến phải có packing code hợp lệ** (để tính khối lượng) mới được đưa vào bảng giá đề xuất; đơn thiếu dữ liệu bị loại riêng (BR-LOG-015), không chặn cả mẻ. | `RoutePlanningInputBuilder` | `ROUTE_WEIGHT_INCOMPLETE` (route trực tiếp — `CalculateRouteCommandHandler`) |
+| BR-LOG-003 | Hub **phải có tọa độ** cho ngày phục vụ (chặn cứng). Với hoạch định theo hub (`PlanRoutesCommandHandler`), nhà hàng/đơn thiếu tọa độ bị loại riêng (BR-LOG-015); route trực tiếp (`CalculateRouteCommandHandler`) vẫn yêu cầu mọi nhà hàng đích có tọa độ. | `RoutePlanningInputBuilder`, `CalculateRouteCommandHandler` | `MISSING_COORDINATES` |
 | BR-LOG-004 | **Tối đa 20 điểm dừng mỗi tuyến** (`Logistics:MaxStopsPerVehicle`). | `CalculateRouteCommandHandler` | `STOP_LIMIT_EXCEEDED` |
 | BR-LOG-005 | Solver OR-Tools giới hạn **3 giây**; không có lời giải → bất khả thi. Tham số hoạch định: bắt đầu **6:00**, phục vụ **10 phút/điểm**, chi phí **5.000 VND/km**, hệ số sử dụng tải **90%**. | `OrToolsRoutePlanningSolver`, `appsettings → Logistics` | `ROUTE_PLAN_INFEASIBLE` |
 | BR-LOG-006 | Ma trận khoảng cách gọi Goong theo lô **10**, cache **30 ngày**; lỗi API → fallback Haversine với tốc độ giả định **30 km/h**. | `GoongRouteMatrixProvider` | `HAVERSINE_FALLBACK` |
@@ -293,6 +296,7 @@ totalAmount = subtotal + vatAmount + deliveryFee
 | BR-LOG-012 | Khởi hành yêu cầu tuyến **đã gán**, **đã điều phối (có delivery)**, và **không còn chênh lệch hub chờ xử lý**. | `StartRouteCommandHandler` | `ROUTE_NOT_STARTABLE`, `ROUTE_HAS_NO_DELIVERIES`, `PENDING_HUB_DISCREPANCY` |
 | BR-LOG-013 | Tài xế chỉ thao tác trên **tuyến/chuyến của chính mình**. Nhận hàng yêu cầu tuyến đã gán, danh sách **khớp chính xác snapshot tuyến đã duyệt** và gồm **mọi đơn `AtHub` của tuyến+hub đó**, nhà hàng phải là **điểm dừng trên tuyến**, và **mỗi đơn chỉ một bản ghi delivery**. | `ConfirmPickupCommandHandler`, `AttachProofOfDeliveryCommandHandler`, `RoutesController` | `FORBIDDEN`, `ROUTE_NOT_ASSIGNED`, `PICKUP_ORDERS_INCOMPLETE`, `ORDER_NOT_ON_ROUTE`, `DELIVERY_ALREADY_EXISTS` |
 | BR-LOG-014 | Cập nhật trạng thái giao chỉ khi **tuyến đang chạy** và theo chuyển tiếp hợp lệ; sự cố giao ∈ {`undeliverable`, `damaged`, `customer_rejected`, `other`}, mô tả ≤1000. Manifest xếp hàng liệt kê hàng **theo từng điểm dừng, thứ tự xếp ngược với thứ tự giao**, nguồn là **đơn ở `AtHub`** (không phải bảng `deliveries` — chưa tồn tại trước pickup). Ước lượng thùng theo kg: tare **2 kg**, tải tối đa **25 kg**. `deliveries.status` lưu **lowercase**. | `UpdateDeliveryStatusCommandHandler`, `DeliveryIssue`, `GetLoadingManifestQueryHandler`, `appsettings → Logistics:Box` | `DELIVERY_ROUTE_NOT_IN_PROGRESS`, `DELIVERY_STATUS_INVALID` |
+| BR-LOG-015 | Hoạch định tuyến theo hub **không thất bại cả mẻ vì một đơn/nhà hàng lỗi dữ liệu** (thiếu tọa độ giao, không tìm thấy bản ghi nhà hàng, hoặc thiếu packing code). Đơn/nhà hàng lỗi bị **loại riêng** (`RoutePlanUnassigned.ExcludedForIncompleteData = true`) kèm lý do cụ thể, các nhà hàng còn lại vẫn được hoạch định bình thường. Loại trừ kiểu này **không chặn duyệt kế hoạch** (khác loại trừ do solver hết tải/hết điểm dừng, vẫn chặn duyệt). | `RoutePlanningInputBuilder`, `ApproveRoutePlanCommandHandler` | — (không phải lỗi, báo cáo trong `RoutePlanDto.Unassigned`) |
 
 ---
 

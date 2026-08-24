@@ -1,163 +1,123 @@
 # FreshFlow Documentation Index
 
-**Project:** FreshFlow (FFX) — B2B Food Procurement and Logistics Optimization Platform  
-**Version:** 1.0  
-**Date:** 2026-05-09  
-**Status:** Pre-implementation analysis complete — Ready for implementation
+**Project:** FreshFlow (FFX) — B2B Food Procurement and Logistics Optimization Platform
+**Status:** Implemented and under active feature work
+**Docs reconciled with code:** 2026-08-22 (branch `dev-bao`, commit `bc5f1a4`)
+
+**The code is the source of truth.** Where a document and the code disagree, the code wins.
+Docs 02, 03, 04, 07 and `enums.md` were regenerated from the repository on the date above;
+docs 01, 05 and `REVIEW-REPORT` are historical design artifacts, kept for traceability and
+labelled as such.
 
 ---
 
 ## Document Map
 
-| # | Document | Description | Lines | Status |
-|---|---|---|---|---|
-| 01 | [01-requirements-spec.md](./01-requirements-spec.md) | Functional & non-functional requirements, gaps, glossary | 283 | Complete |
-| 02 | [02-system-architecture.md](./02-system-architecture.md) | Architecture pattern, component diagrams, module breakdown, caching, deployment | 713 | Complete |
-| 02A | [02A-system-overview-diagrams.md](./diagrams/02A-system-overview-diagrams.md) | Current backend system overview diagrams, runtime wiring, flows, deployment view, Draw.io source | — | Current |
-| 02B | [02B-state-machine-diagrams.md](./diagrams/02B-state-machine-diagrams.md) | State machine cho các entity chính (Order, Restaurant, User, RefreshToken...); Draw.io source | — | Current |
-| 02C | [02C-activity-diagrams.md](./diagrams/02C-activity-diagrams.md) | Activity/flowchart các luồng nghiệp vụ chính (có Actor, swimlane); Draw.io source | — | Current |
-| 02D | [02D-package-diagram.md](./diagrams/02D-package-diagram.md) | Package/dependency diagram for current backend projects | — | Current |
-| 02E | [02E-class-diagrams.md](./diagrams/02E-class-diagrams.md) | Detailed class diagrams for implemented features | — | Current |
-| 03 | [03-database-schema.md](./03-database-schema.md) | PostgreSQL DDL, index strategy, Redis key design, migration strategy (reconciled w/ code 2026-06-29) | — | Current |
-| 03A | [03-database-schema.dbml](./database/03-database-schema.dbml) | Physical DBML for dbdiagram.io: Part A implemented + Part B planned; archives tables removed by DEC-002/003 (reconciled 2026-07-03) | — | Current |
-| 03A' | [03-database-schema.conceptual.md](./database/03-database-schema.conceptual.md) + [.conceptual.dbml](./database/03-database-schema.conceptual.dbml) | Conceptual model: business entities + relationships only (mermaid + dbdiagram) | — | Current |
-| 03A" | [03-database-schema.logical.dbml](./database/03-database-schema.logical.dbml) | Logical ERD: attributes, keys, every meaningful relationship, tech-agnostic (reconciled 2026-07-03) | — | Current |
-| 03B | [03B-database-erd.md](./database/03B-database-erd.md) | Mermaid ERD for implemented tables only, compact crow's-foot view | — | Current |
-| 03C | [03C-table-descriptions.md](./database/03C-table-descriptions.md) | Chức năng nghiệp vụ của từng bảng (Part A + Part B + danh sách đã loại bỏ theo DEC) | — | Current |
-| 04 | [04-api-design.md](./04-api-design.md) | REST endpoints, SignalR hubs, validation rules, RBAC matrix; Part A implemented surface + Part B planned (reconciled w/ code 2026-06-30) | — | Current |
-| 05 | [05-implementation-plan.md](./05-implementation-plan.md) | 50-task breakdown, critical path, MVP scope, folder structure, coding standards | 912 | Complete |
-| 06 | [06-context-decisions.md](./06-context-decisions.md) | Context decisions log | — | Current |
-| 07 | [07-business-rules.md](./07-business-rules.md) | Business rules catalogue — 119 luật nghiệp vụ rà soát trực tiếp từ code, kèm điểm enforce + mã lỗi, ma trận RBAC, máy trạng thái, tham số cấu hình, khoảng trống (2026-08-18) | — | Current |
-| — | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | Cross-reference gaps, inconsistencies, readiness assessment | — | Complete |
+### Core spec
 
-> **Feature working docs** (survey/audit/context/design/tasks per feature) sống ở [`features/`](./features/README.md) — tách khỏi bộ spec core này để dễ tracking.
->
-> **Supporting assets:** diagram docs và Draw.io sources ở [`diagrams/`](./diagrams/README.md); DBML/ERD/schema companion docs ở [`database/`](./database/README.md).
-
----
-
-## Quick Start for Developers
-
-### Reading Order
-
-1. **Start with 01** — understand what the system must do before touching any code. Pay special attention to Section 3 (Gaps & Assumptions) — these are active decisions that shape the implementation.
-
-2. **Read 02 next** — understand the overall shape of the system: Modular Monolith, 7 ASP.NET Core modules, SignalR with Redis backplane, Docker Compose deployment.
-
-3. **Skim 03** — familiarize yourself with the database schema. The most important tables for Day 1 are `users`, `refresh_tokens`, `market_products`, and `price_snapshots`.
-
-4. **Reference 04 while building** — the API design doc is a reference, not reading material. Pull it up when implementing a specific endpoint.
-
-5. **Use 05 as your task list** — the 50-task breakdown with dependencies tells you exactly what to build and in what order. Start from the critical path in Section 2.
-
-### Where to Start Implementing
-
-Begin with the critical path:
-
-```
-T001 (solution setup) → T002 (DB + EF Core) → T003 (Redis) → T004 (JWT middleware)
-→ T005 (Docker Compose) → T009 (login endpoint) → T010 (refresh token)
-→ T013 (pricing migrations) → T015 (market products list) → T016 (price update)
-→ T017 (PricingHub SignalR) → T022 (order creation) → T025 (order status + OrderHub)
-```
-
-This path delivers the MVP: **Auth + Real-time Pricing + Basic Orders**.
-
-### Repository Structure (to be created)
-
-```
-FreshFlow.sln
-├── src/
-│   ├── Shared/
-│   │   ├── FreshFlow.SharedKernel/          # BaseEntity, AggregateRoot, Result<T>, ICommand/IQuery
-│   │   └── FreshFlow.Contracts/             # Integration events (cross-module DTOs)
-│   ├── Modules/
-│   │   ├── Auth/       { .Domain / .Application / .Infrastructure }
-│   │   ├── Pricing/    { .Domain / .Application / .Infrastructure }
-│   │   ├── Orders/     { .Domain / .Application / .Infrastructure }
-│   │   ├── Logistics/  { .Domain / .Application / .Infrastructure }
-│   │   ├── Hub/        { .Domain / .Application / .Infrastructure }
-│   │   ├── Analytics/  { .Application / .Infrastructure }          # no Domain (read-only)
-│   │   └── Notifications/ { .Domain / .Application / .Infrastructure }
-│   ├── FreshFlow.Infrastructure.Persistence/ # Shared AppDbContext + all EF Migrations
-│   └── FreshFlow.API/                        # Host: controllers, SignalR hubs, Program.cs
-├── tests/
-│   ├── Unit/   FreshFlow.{Module}.UnitTests/ (one per module)
-│   └── Integration/   FreshFlow.IntegrationTests/
-├── docs/                                     # ← you are here
-└── docker-compose.yml
-```
-
----
-
-## Key Architectural Decisions
-
-These five decisions have the largest impact on implementation. Understand them before writing code.
-
-### 1. Modular Monolith (not Microservices)
-
-The system is a single deployable unit with strict module boundaries enforced at code level. Modules communicate through interfaces, not HTTP. This keeps the team moving fast without distributed systems overhead. **Trade-off accepted:** horizontal scaling requires scaling the entire API, not individual modules. This is acceptable for the capstone scope.
-
-> See: `02-system-architecture.md` Section 1 and Section 6 (Decisions Log)
-
-### 2. SignalR with Redis Pub/Sub Backplane
-
-Real-time price updates use SignalR WebSocket connections. When multiple API instances are running, Redis acts as the message backplane so a price update hitting Instance A reaches clients connected to Instance B. **Implication:** Redis must be running and healthy for SignalR to work in a multi-instance setup. In development (single instance), the backplane is optional.
-
-> See: `02-system-architecture.md` Section 4
-
-### 3. UUID Primary Keys (All Tables)
-
-Every table uses `UUID` as the primary key (`gen_random_uuid()`). This avoids sequential ID guessing in URLs, supports future data sharding, and simplifies cross-database merging. **Trade-off accepted:** slightly larger index size vs. BIGINT serial; mitigated by using UUIDv4 which PostgreSQL handles efficiently.
-
-> See: `03-database-schema.md` Section 2
-
-### 4. Soft Reservation for Stock (Redis + PostgreSQL)
-
-When a restaurant places an order, stock is soft-reserved in Redis immediately (fast, non-blocking). A background job reconciles reservations against the PostgreSQL source of truth every 5 minutes. Reservations expire after 30 minutes if the order is not confirmed. **Implication:** there is a small window where two simultaneous orders could both succeed on the Redis check but one would fail on the database constraint. The reconciliation job handles this.
-
-> See: `01-requirements-spec.md` GA-003 and `03-database-schema.md` Section 6
-
-### 5. Nearest-Neighbor + 2-opt VRP Heuristic (not OR-Tools)
-
-Route calculation uses a custom nearest-neighbor heuristic with 2-opt improvement passes. This is 5–15% from optimal but completes in well under 3 seconds for up to 20 stops, which satisfies FR-LOG-006. OR-Tools (Google) is the identified upgrade path if route quality becomes a business concern post-MVP.
-
-> See: `02-system-architecture.md` Section 6 and `05-implementation-plan.md` T030
-
----
-
-## Known Risks
-
-| # | Risk | Severity | Mitigation |
+| # | Document | What it answers | Kind |
 |---|---|---|---|
-| R-001 | Redis unavailability breaks SignalR backplane and price caching simultaneously | High | Redis AOF persistence enabled; Docker healthcheck restarts Redis on failure; API degrades gracefully (reads from PostgreSQL if Redis miss) |
-| R-002 | `price_snapshots` table grows unboundedly (high-frequency writes from kiosk staff) | High | **Target design (not implemented):** monthly range partitioning on `recorded_at` with a maintenance job creating the next partition, plus archive/drop per retention policy. Current table is a plain append-only table with ordinary indexes — no partitioning or maintenance job exists yet. |
-| R-003 | Concurrent price updates from two kiosk staff members at the same market cause lost updates | Medium | Last-write-wins with `updated_at` timestamp comparison; HTTP 409 on detected conflict; flagged in GA-004 — optimistic concurrency to be implemented in `PricingService` |
-| R-004 | Route calculation exceeds 3-second SLA as order volumes grow (more stops per route) | Medium | Hard limit of 20 stops per route (FR-LOG-006); route results cached in Redis with SHA-256 key; OR-Tools as upgrade path if heuristic becomes bottleneck |
-| R-005 | Restaurant approval flow (GA-009) not fully specified — could block restaurant onboarding | Low | Assumption: Admin manually approves restaurants via `PATCH /api/v1/admin/restaurants/{id}/approve`; default behavior is unapproved (cannot place orders) until Admin approves |
+| 01 | [01-requirements-spec.md](./01-requirements-spec.md) | What the system must do — FRs, NFRs, gaps, glossary | 📜 Historical (v1.0 requirements) |
+| 02 | [02-system-architecture.md](./02-system-architecture.md) | How the system is built — modules, pipeline, events, jobs, integrations, deployment | ✅ As-built |
+| 03 | [03-database-schema.md](./03-database-schema.md) | Schema conventions, the 59-table inventory, seam rules, SQL policy, Redis usage | ✅ As-built |
+| 04 | [04-api-design.md](./04-api-design.md) | All 223 endpoints with roles, SignalR hubs, error mapping, RBAC, rate limits | ✅ As-built |
+| 05 | [05-implementation-plan.md](./05-implementation-plan.md) | The original 50-task build plan | 📜 Historical |
+| 06 | [06-context-decisions.md](./06-context-decisions.md) | Context decision log | Reference |
+| 07 | [07-business-rules.md](./07-business-rules.md) | 119 business rules read out of the code, with enforcement point and error code | ✅ As-built |
+| — | [enums.md](./enums.md) | Every enum/status string the API exposes | ✅ As-built |
+| — | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | Pre-implementation cross-reference review | 📜 Historical |
+| — | [AUDIT-2026-08-23-business-flow-audit.md](./AUDIT-2026-08-23-business-flow-audit.md) | Whole-system business-flow audit — 6 CRITICAL / 5 HIGH / 7 MEDIUM findings, with fix order | ⚠️ Open findings |
+| — | [api-response-envelope-migration.md](./api-response-envelope-migration.md) | Envelope migration notes | Reference |
+
+### Database companions — [`database/`](./database/README.md)
+
+Reconciled with the EF model on 2026-08-16. All three DBML views cover the same 59 tables.
+
+| File | Content |
+|---|---|
+| [03-database-schema.dbml](./database/03-database-schema.dbml) | Physical: columns, types, indexes, defaults, checks, 42 enforced FKs |
+| [03-database-schema.logical.dbml](./database/03-database-schema.logical.dbml) | Logical: business attributes, enforced + application relationships |
+| [03-database-schema.conceptual.dbml](./database/03-database-schema.conceptual.dbml) · [.conceptual.md](./database/03-database-schema.conceptual.md) · [Chen ERD](./database/03A-conceptual-erd-chen-core.drawio) | Conceptual model |
+| [03B-database-erd.md](./database/03B-database-erd.md) | Mermaid crow's-foot ERD per module |
+| [03C-table-descriptions.md](./database/03C-table-descriptions.md) | Business purpose of each table |
+| [03D-entities-description.md](./database/03D-entities-description.md) · [03E-conceptual-entities-description.md](./database/03E-conceptual-entities-description.md) | Entity and attribute descriptions |
+
+### Diagrams — [`diagrams/`](./diagrams/README.md)
+
+System overview, state machines, activity flows, package and class diagrams, plus their
+Draw.io sources.
+
+### Feature working docs — [`features/`](./features/README.md)
+
+Per-epic surveys, audits, plans and task breakdowns. Status of an individual task lives in its
+own document, not in the index.
 
 ---
 
-## Requirement Coverage Summary
+## Where to look first
 
-| Domain | FRs | Must | Should | Could | Tables | Endpoints | Tasks |
-|---|---|---|---|---|---|---|---|
-| Auth | 11 | 11 | 0 | 0 | 2 | 9 | 4 |
-| Pricing | 5 | 5 | 0 | 0 | 4 | 5 | 6 |
-| Orders | 7 | 6 | 1 | 0 | 4 | 9 | 9 |
-| Logistics | 6 | 6 | 0 | 0 | 3 | 5 | 6 |
-| Hub | 5 | 4 | 1 | 1 | 4 | 5 | 5 |
-| Analytics | 4 | 1 | 2 | 1 | 1 | 5 | 4 |
-| Notifications | 3 | 3 | 0 | 0 | 1 | 2 | 2 |
-| **Total** | **41** | **36** | **4** | **2** | **19** | **40** | **36** |
-
-> Infrastructure tasks (T001–T008) and frontend tasks (T045–T050) are not counted in the domain task column above.
+| You want to… | Read |
+|---|---|
+| Understand the shape of the system | [02](./02-system-architecture.md) §1–§3 |
+| Add or change an endpoint | [04](./04-api-design.md) §1 (conventions) + §4 (error mapping), then the controller |
+| Write a query across modules | [02](./02-system-architecture.md) §5.3 + [03](./03-database-schema.md) §1.2 and §4 |
+| Write a migration | [03](./03-database-schema.md) §1 and §7 |
+| Know what a status string means | [enums.md](./enums.md) |
+| Know why the code refuses something | [07](./07-business-rules.md) — search by error code |
+| Run the project | [README](../README.md) |
 
 ---
 
-## Contact
+## Facts worth knowing before you write code
 
-**Project:** FreshFlow Capstone — Ho Chi Minh City  
-**Abbreviation:** FFX  
-**Generated by:** FreshFlow Master Architect Agent  
-**Date:** 2026-05-09
+These are the ones that most often cost an afternoon.
+
+**1. Ten modules, one process, strict boundaries.** No module's `Domain` or `Application` may
+reference another module's projects. Cross-module reads go through a keyless EF Row seam with
+`ToSqlQuery` — and a seam is only proven by an integration test against real PostgreSQL,
+because `ToSqlQuery` does not run on the InMemory provider.
+
+**2. Column casing is not consistent, and some tables mix both conventions.** `orders."Status"`
+is quoted PascalCase while `orders.deleted_at` is snake_case. A wrong identifier fails at
+runtime, not at build. Never guess — copy an existing seam or read the `*Configuration.cs`.
+
+**3. Six roles exist.** `admin`, `operations_manager`, `market_agent`, `hub_staff`, `driver`,
+`restaurant`. `[Authorize(Roles = "…")]` with any other name fails silently: green build,
+permanent 403.
+
+**4. An unregistered error code returns 500.** `ErrorExtensions.ToActionResult()` maps by
+allow-list. Reuse an existing code, or add yours to that file.
+
+**5. Route everything through `ISender`.** Bypassing MediatR skips `ValidationBehavior`, so the
+validators never run.
+
+**6. Payment is B2B credit (công nợ), not a gateway.** There are no `payments` or `refunds`
+tables; a refund is a credit adjustment.
+
+**7. "Phiên chợ" = `ProcurementBatch`.** Vietnamese UI says *phiên chợ*; code says
+`ProcurementBatch`. The two-register convention is deliberate — do not rename the code. "Lô
+chợ" is the old term and must not be used.
+
+**8. SignalR is in-memory.** Four hubs, no Redis backplane, single instance only.
+
+**9. Zero `FromSqlRaw` in this repository.** Keep it that way; see [03](./03-database-schema.md) §5.
+
+**10. `localhost:5433` is production.** Confirm the connection string before any destructive
+migration.
+
+---
+
+## Known gaps
+
+| Gap | Where it bites |
+|---|---|
+| No SignalR backplane | Cannot run more than one API instance |
+| In-process integration events | An event lost mid-handler after a crash is lost for good |
+| VAT invoicing uses a stub provider | Real NCC/HSM integration and per-category VAT are still to do |
+| `DeliveryRoute` has no concurrency token | Two concurrent route edits can silently overwrite |
+| Price-alert trigger (SCRUM-173) | Threshold config exists; nothing fires the alert |
+| Phone OTP | Not implemented — email only; `PHONE` returns `CHANNEL_NOT_SUPPORTED` |
+
+---
+
+**Project:** FreshFlow Capstone — Ho Chi Minh City · **Abbreviation:** FFX
