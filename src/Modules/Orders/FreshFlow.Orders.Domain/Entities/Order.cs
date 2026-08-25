@@ -181,6 +181,22 @@ public sealed class Order : AggregateRoot
         return Result.Success();
     }
 
+    /// <summary>
+    /// Updates the desired delivery date while the order is still a draft (cart). Unlike
+    /// <see cref="RescheduleFor"/> (which pushes a confirmed order past a missed cutoff), this
+    /// is a plain field edit and is only allowed pre-confirmation.
+    /// </summary>
+    public Result UpdateScheduledFor(DateTime? scheduledFor)
+    {
+        if (Status != OrderStatus.Draft)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_DRAFT", "The delivery date can only be updated while the order is in draft status."));
+
+        ScheduledFor = scheduledFor;
+
+        return Result.Success();
+    }
+
     public Result AssignMarket(Guid marketId)
     {
         if (marketId == Guid.Empty)
@@ -396,7 +412,12 @@ public sealed class Order : AggregateRoot
                 "INVALID_ACTUAL_QUANTITY",
                 "Actual quantity must be non-negative and cannot exceed ordered quantity."));
 
+        // AUDIT-2026-08-23 C4: baseline off the previous actual (falling back to ordered) so a
+        // hub discrepancy or admin correction applied after ApplyProcurementActuals refunds only
+        // the newly-lost quantity, not the whole line again.
+        var previousQuantity = item.ActualQuantity ?? item.Quantity;
         item.RecordActualQuantity(actualQuantity);
+        RaiseShortfallIfReduced(item, previousQuantity, actualQuantity);
 
         return Result.Success();
     }
@@ -427,30 +448,47 @@ public sealed class Order : AggregateRoot
         foreach (var (itemId, actual) in actualsByItem)
         {
             var item = _items.Single(candidate => candidate.Id == itemId);
+
+            // C1/C4: baseline off the previous actual (falling back to ordered) so re-applying
+            // procurement actuals can't double-refund a quantity already refunded once.
+            var previousQuantity = item.ActualQuantity ?? item.Quantity;
             item.RecordProcurementActuals(actual.Quantity, actual.UnitPrice);
 
-            // C1: the restaurant was charged at confirm time for the ordered quantity; if the
-            // agent bought less, refund the shortfall (goods + its proportional VAT) via the
-            // credit ledger. TotalAmount/SubtotalAmount/VatAmount stay the immutable confirmation
-            // snapshot the VAT invoice is issued from — do not rewrite them here.
-            if (actual.Quantity < item.Quantity && item.LockedUnitPrice.HasValue)
-            {
-                var shortfallQuantity = item.Quantity - actual.Quantity;
-                var goods = shortfallQuantity * item.LockedUnitPrice.Value;
-                var vat = decimal.Round(
-                    goods * (item.VatRatePercent ?? 0m) / 100m, 2, MidpointRounding.AwayFromZero);
-                var refundAmount = goods + vat;
-
-                if (refundAmount > 0m)
-                {
-                    RaiseDomainEvent(new OrderProcurementShortfallDomainEvent(
-                        Id, RestaurantId, item.Id, item.ProductNameSnapshot,
-                        shortfallQuantity, refundAmount, DateTime.UtcNow));
-                }
-            }
+            // The restaurant was charged at confirm time for the ordered quantity; if the agent
+            // bought less, refund the shortfall (goods + its proportional VAT) via the credit
+            // ledger. TotalAmount/SubtotalAmount/VatAmount stay the immutable confirmation
+            // snapshot the VAT invoice is issued from — do not rewrite them here (the invoice
+            // itself now reads delivered quantity straight off ActualQuantity, see C4).
+            RaiseShortfallIfReduced(item, previousQuantity, actual.Quantity);
         }
 
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Raises <see cref="OrderProcurementShortfallDomainEvent"/> when an item's fulfilled
+    /// quantity drops below its previous value, refunding goods + proportional VAT for the
+    /// delta. Shared by <see cref="ApplyProcurementActuals"/> (procurement handoff) and
+    /// <see cref="RecordActualQuantity"/> (hub discrepancy / admin correction) so both paths
+    /// measure the shortfall the same way and neither can double-refund the other's delta.
+    /// </summary>
+    private void RaiseShortfallIfReduced(OrderItem item, decimal previousQuantity, decimal newQuantity)
+    {
+        if (newQuantity >= previousQuantity || !item.LockedUnitPrice.HasValue)
+            return;
+
+        var shortfallQuantity = previousQuantity - newQuantity;
+        var goods = shortfallQuantity * item.LockedUnitPrice.Value;
+        var vat = decimal.Round(
+            goods * (item.VatRatePercent ?? 0m) / 100m, 2, MidpointRounding.AwayFromZero);
+        var refundAmount = goods + vat;
+
+        if (refundAmount > 0m)
+        {
+            RaiseDomainEvent(new OrderProcurementShortfallDomainEvent(
+                Id, RestaurantId, item.Id, item.ProductNameSnapshot,
+                shortfallQuantity, refundAmount, DateTime.UtcNow));
+        }
     }
 
     /// <summary>

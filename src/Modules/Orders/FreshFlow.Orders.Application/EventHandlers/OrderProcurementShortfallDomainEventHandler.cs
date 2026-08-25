@@ -12,13 +12,11 @@ namespace FreshFlow.Orders.Application.EventHandlers;
 /// carries the computed refund amount (goods + proportional VAT), so this handler is a thin
 /// ledger call, not a recomputation.
 ///
-/// Known limitations, out of scope here:
-/// - C3: <see cref="ICreditService.RefundAsync"/> caps the refund at the account's current
-///   outstanding balance, so a restaurant that already settled this month's statement gets a
-///   shrunk or impossible refund.
-/// - C4: the VAT invoice is still issued on the ordered quantity, so a refunded shortfall widens
-///   the gap between the invoice and the credit ledger.
-/// Neither is a bug in this handler.
+/// Known limitation, out of scope here:
+/// - C4: a claim approved AFTER delivery (i.e. after the VAT invoice for the order has already
+///   been issued) still cannot adjust that already-issued invoice — only the credit ledger moves.
+///   Fixing that is invoice cancel/adjust (audit option C), not covered here.
+/// Not a bug in this handler.
 /// </summary>
 internal sealed class OrderProcurementShortfallDomainEventHandler(
     ICreditService creditService,

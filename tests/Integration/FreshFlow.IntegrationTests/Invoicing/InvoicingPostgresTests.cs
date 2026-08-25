@@ -29,6 +29,7 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
     private const string UnknownVatProduct = "Unknown-VAT herbs";
     private const string DeletedProduct = "Deleted product";
     private const string DeletedMarketProduct = "Deleted market product";
+    private const string UndeliveredProduct = "Undelivered product"; // AUDIT-2026-08-23 C4
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
@@ -45,12 +46,19 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         snapshot.DeliveryFee.Should().Be(5_000m);
         snapshot.Lines.Should().HaveCount(5);
 
+        // AUDIT-2026-08-23 C4: this order's fivePercent line was short-delivered (3 ordered,
+        // 2.5 actually bought via ApplyProcurementActuals in CreateDeliveredOrder) — the invoice
+        // must bill the DELIVERED quantity, at the confirmation-locked unit price.
         var fivePercent = snapshot.Lines.Should().ContainSingle(line =>
             line.ProductName == FivePercentProduct).Which;
-        fivePercent.Quantity.Should().Be(3m);
+        fivePercent.Quantity.Should().Be(2.5m);
         fivePercent.UnitPrice.Should().Be(10_000m);
         fivePercent.VatRateCode.Should().Be("5");
         fivePercent.Unit.Should().StartWith("kg-");
+
+        // A line the agent never bought at all (actual_quantity 0) must not appear on the
+        // invoice — an NCC would reject a zero-quantity line.
+        snapshot.Lines.Should().NotContain(line => line.ProductName == UndeliveredProduct);
 
         var kct = snapshot.Lines.Should().ContainSingle(line => line.ProductName == KctProduct).Which;
         kct.Quantity.Should().Be(2m);
@@ -120,24 +128,32 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             .SingleAsync(value => value.OrderId == seed.OrderId);
         invoice.Status.Should().Be(InvoiceStatus.Issued);
         invoice.TaxAuthorityCode.Should().StartWith("DEV-MCQT-");
-        invoice.SubTotal.Should().Be(92_000m);
-        invoice.VatAmount.Should().Be(1_680m);
-        invoice.Total.Should().Be(93_680m);
-        invoice.Total.Should().Be(await db.Set<Order>()
+        // AUDIT-2026-08-23 C4: the fivePercent line bills 2.5 delivered (not 3 ordered), so these
+        // totals are lower than the order's confirmation-time TotalAmount — that snapshot stays
+        // immutable and is asserted separately below.
+        invoice.SubTotal.Should().Be(87_000m);
+        invoice.VatAmount.Should().Be(1_430m);
+        invoice.Total.Should().Be(88_430m);
+        (await db.Set<Order>()
             .Where(order => order.Id == seed.OrderId)
             .Select(order => order.TotalAmount)
-            .SingleAsync());
+            .SingleAsync())
+            // confirmation snapshot, untouched by procurement actuals — includes the fully
+            // undelivered line's ordered value (2 * 7,000 + 10% VAT = 15,400), which the invoice
+            // above correctly excludes.
+            .Should().Be(109_080m);
         invoice.Lines.Should().HaveCount(6);
+        invoice.Lines.Should().NotContain(line => line.ProductName == UndeliveredProduct);
 
         var fivePercent = invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == FivePercentProduct).Which;
-        fivePercent.Quantity.Should().Be(3m);
+        fivePercent.Quantity.Should().Be(2.5m);
         fivePercent.UnitPrice.Should().Be(10_000m);
         fivePercent.VatRateCode.Should().Be("5");
         fivePercent.Unit.Should().StartWith("kg-");
-        fivePercent.LineSubtotal.Should().Be(30_000m);
-        fivePercent.LineVatAmount.Should().Be(1_500m);
-        fivePercent.LineTotal.Should().Be(31_500m);
+        fivePercent.LineSubtotal.Should().Be(25_000m);
+        fivePercent.LineVatAmount.Should().Be(1_250m);
+        fivePercent.LineTotal.Should().Be(26_250m);
         invoice.Lines.Should().ContainSingle(line =>
             line.ProductName == KctProduct && line.VatRateCode == "KCT");
         invoice.Lines.Should().ContainSingle(line =>
@@ -167,7 +183,7 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             DateTime.UtcNow.AddDays(1),
             default);
         totals.Count.Should().Be(1);
-        totals.Total.Should().Be(93_680m);
+        totals.Total.Should().Be(88_430m);
     }
 
     [Fact]
@@ -270,13 +286,16 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         var deletedProduct = new Product(DeletedProduct, unit.Id, null, null, null, vatRate: "8");
         var deletedMarketProductSource = new Product(
             DeletedMarketProduct, unit.Id, null, null, null, vatRate: "10");
+        var undeliveredProduct = new Product(
+            UndeliveredProduct, unit.Id, null, null, null, vatRate: "10");
         deletedProduct.Delete();
         db.Set<Product>().AddRange(
             fivePercentProduct,
             kctProduct,
             unknownVatProduct,
             deletedProduct,
-            deletedMarketProductSource);
+            deletedMarketProductSource,
+            undeliveredProduct);
         await db.SaveChangesAsync();
 
         var fivePercentMarketProduct = new MarketProduct(
@@ -288,12 +307,15 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             market.Id, deletedProduct.Id, 1_000m, 100, null);
         var deletedMarketProduct = new MarketProduct(
             market.Id, deletedMarketProductSource.Id, 1_000m, 100, null);
+        var undeliveredMarketProduct = new MarketProduct(
+            market.Id, undeliveredProduct.Id, 7_000m, 100, null);
         db.Set<MarketProduct>().AddRange(
             fivePercentMarketProduct,
             kctMarketProduct,
             unknownVatMarketProduct,
             deletedProductMarketProduct,
-            deletedMarketProduct);
+            deletedMarketProduct,
+            undeliveredMarketProduct);
         db.Entry(deletedMarketProduct).Property(nameof(MarketProduct.DeletedAt)).CurrentValue = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
@@ -303,7 +325,8 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             kctMarketProduct.Id,
             unknownVatMarketProduct.Id,
             deletedProductMarketProduct.Id,
-            deletedMarketProduct.Id);
+            deletedMarketProduct.Id,
+            undeliveredMarketProduct.Id);
         var missingProfileOrder = CreateDeliveredOrder(
             missingProfileRestaurantId,
             fivePercentMarketProduct.Id,
@@ -343,7 +366,8 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
         Guid kctMarketProductId,
         Guid unknownVatMarketProductId,
         Guid deletedProductMarketProductId,
-        Guid deletedMarketProductId)
+        Guid deletedMarketProductId,
+        Guid? undeliveredMarketProductId = null)
     {
         var order = new Order(restaurantId, null, null);
         order.AddItem(fivePercentMarketProductId, FivePercentProduct, 3, 10_000m)
@@ -356,26 +380,38 @@ public sealed class InvoicingPostgresTests(AuthWebAppFactory factory)
             .IsSuccess.Should().BeTrue();
         order.AddItem(deletedMarketProductId, DeletedMarketProduct, 1, 1_000m)
             .IsSuccess.Should().BeTrue();
-        order.ApplyConfirmationPricing(
-            new Dictionary<Guid, OrderItemTaxSnapshot>
-            {
-                [fivePercentMarketProductId] = new("5", 5m),
-                [kctMarketProductId] = new("KCT", 0m),
-                [unknownVatMarketProductId] = new("KCT", 0m),
-                [deletedProductMarketProductId] = new("8", 8m),
-                [deletedMarketProductId] = new("10", 10m)
-            },
-            deliveryDistanceKm: 0m,
-            deliveryFee: 5_000m).IsSuccess.Should().BeTrue();
+        // AUDIT-2026-08-23 C4: a line the agent never bought anything for — must not reach the
+        // invoice at all (fully-undelivered line).
+        if (undeliveredMarketProductId.HasValue)
+            order.AddItem(undeliveredMarketProductId.Value, UndeliveredProduct, 2, 7_000m)
+                .IsSuccess.Should().BeTrue();
+
+        var taxes = new Dictionary<Guid, OrderItemTaxSnapshot>
+        {
+            [fivePercentMarketProductId] = new("5", 5m),
+            [kctMarketProductId] = new("KCT", 0m),
+            [unknownVatMarketProductId] = new("KCT", 0m),
+            [deletedProductMarketProductId] = new("8", 8m),
+            [deletedMarketProductId] = new("10", 10m)
+        };
+        if (undeliveredMarketProductId.HasValue)
+            taxes[undeliveredMarketProductId.Value] = new("10", 10m);
+        order.ApplyConfirmationPricing(taxes, deliveryDistanceKm: 0m, deliveryFee: 5_000m)
+            .IsSuccess.Should().BeTrue();
         order.Confirm().IsSuccess.Should().BeTrue();
 
         var fivePercentLine = order.Items.Single(item => item.ProductNameSnapshot == FivePercentProduct);
         order.AdvanceStatus(OrderStatus.Batched).IsSuccess.Should().BeTrue();
-        order.ApplyProcurementActuals(
-            new Dictionary<Guid, OrderItemProcurementActual>
-            {
-                [fivePercentLine.Id] = new(2.5m, 11_000m)
-            }).IsSuccess.Should().BeTrue();
+        var actuals = new Dictionary<Guid, OrderItemProcurementActual>
+        {
+            [fivePercentLine.Id] = new(2.5m, 11_000m) // short-delivered: 3 ordered, 2.5 bought
+        };
+        if (undeliveredMarketProductId.HasValue)
+        {
+            var undeliveredLine = order.Items.Single(item => item.ProductNameSnapshot == UndeliveredProduct);
+            actuals[undeliveredLine.Id] = new(0m, null); // fully undelivered
+        }
+        order.ApplyProcurementActuals(actuals).IsSuccess.Should().BeTrue();
         foreach (var status in new[]
                  {
                      OrderStatus.PickedUp,

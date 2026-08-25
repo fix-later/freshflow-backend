@@ -12,8 +12,8 @@ using FreshFlow.Orders.Application.Commands.RecordOrderItemActualQuantity;
 using FreshFlow.Orders.Application.Commands.RemoveOrderItem;
 using FreshFlow.Orders.Application.Commands.ReorderFromHistory;
 using FreshFlow.Orders.Application.Commands.ReportOrderIssue;
+using FreshFlow.Orders.Application.Commands.UpdateDraftOrder;
 using FreshFlow.Orders.Application.Commands.UpdateOrderItem;
-using FreshFlow.Orders.Application.Commands.UpdateOrderNotes;
 using FreshFlow.Orders.Application.Commands.UpdateScheduledOrder;
 using FreshFlow.Orders.Application.Dtos;
 using FreshFlow.Orders.Application.Queries.GetOperationalSettings;
@@ -238,19 +238,21 @@ public sealed class OrdersController(ISender sender) : ControllerBase
     }
 
     /// <summary>
-    /// PATCH /api/v1/orders/{orderId}/notes — edits the order-level notes on a draft order,
-    /// so a client can reuse the restaurant's latest draft as a shopping cart.
+    /// PATCH /api/v1/orders/{orderId}/draft — edits the notes and/or delivery date on a draft
+    /// order, so a client can reuse the restaurant's latest draft as a shopping cart.
     /// </summary>
-    [HttpPatch("{orderId:guid}/notes")]
+    [HttpPatch("{orderId:guid}/draft")]
     [Authorize(Roles = "restaurant")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> UpdateOrderNotesAsync(
-        Guid orderId, [FromBody] UpdateOrderNotesRequest body, CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> UpdateDraftAsync(
+        Guid orderId, [FromBody] UpdateDraftOrderRequest body, CancellationToken ct)
     {
-        var result = await sender.Send(new UpdateOrderNotesCommand(ResolveUserId(), orderId, body.Notes), ct);
+        var result = await sender.Send(
+            new UpdateDraftOrderCommand(ResolveUserId(), orderId, body.Notes, body.ScheduledFor), ct);
 
         return result.IsSuccess ? Ok(ApiResponse.Ok(result.Value)) : result.Error.ToActionResult();
     }
@@ -522,7 +524,7 @@ public sealed record CreateDraftOrderRequest(
 public sealed record AddOrderItemRequest(Guid MarketProductId, int Quantity);
 
 public sealed record UpdateOrderItemRequest(int Quantity);
-public sealed record UpdateOrderNotesRequest(string? Notes);
+public sealed record UpdateDraftOrderRequest(string? Notes, DateTime? ScheduledFor);
 
 public sealed record ConfirmOrderRequest(Guid DeliveryAddressId);
 
