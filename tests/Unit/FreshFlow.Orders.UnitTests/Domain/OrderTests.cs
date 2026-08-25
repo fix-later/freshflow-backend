@@ -283,6 +283,55 @@ public sealed class OrderTests
         order.Notes.Should().Be("old notes");
     }
 
+    // ── UpdateScheduledFor ──────────────────────────────────────────────────
+
+    [Fact]
+    public void UpdateScheduledFor_DraftOrder_UpdatesScheduledFor()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: new DateTime(2026, 8, 25), notes: null);
+        var newDate = new DateTime(2026, 8, 27);
+
+        // Act
+        var result = order.UpdateScheduledFor(newDate);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        order.ScheduledFor.Should().Be(newDate);
+    }
+
+    [Fact]
+    public void UpdateScheduledFor_NullDate_ClearsScheduledFor()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: new DateTime(2026, 8, 25), notes: null);
+
+        // Act
+        var result = order.UpdateScheduledFor(null);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        order.ScheduledFor.Should().BeNull();
+    }
+
+    [Fact]
+    public void UpdateScheduledFor_WhenOrderNotDraft_ReturnsFailure()
+    {
+        // Arrange
+        var order = new Order(RestaurantId, scheduledFor: new DateTime(2026, 8, 25), notes: null);
+        order.AddItem(MarketProductId, "Cà chua", quantity: 5, unitPrice: 20_000m);
+        order.Confirm();
+        var newDate = new DateTime(2026, 8, 27);
+
+        // Act
+        var result = order.UpdateScheduledFor(newDate);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ORDER_NOT_DRAFT");
+        order.ScheduledFor.Should().Be(new DateTime(2026, 8, 25));
+    }
+
     // ── RemoveItem ───────────────────────────────────────────────────────────
 
     [Fact]

@@ -181,6 +181,22 @@ public sealed class Order : AggregateRoot
         return Result.Success();
     }
 
+    /// <summary>
+    /// Updates the desired delivery date while the order is still a draft (cart). Unlike
+    /// <see cref="RescheduleFor"/> (which pushes a confirmed order past a missed cutoff), this
+    /// is a plain field edit and is only allowed pre-confirmation.
+    /// </summary>
+    public Result UpdateScheduledFor(DateTime? scheduledFor)
+    {
+        if (Status != OrderStatus.Draft)
+            return Result.Failure(Error.Conflict(
+                "ORDER_NOT_DRAFT", "The delivery date can only be updated while the order is in draft status."));
+
+        ScheduledFor = scheduledFor;
+
+        return Result.Success();
+    }
+
     public Result AssignMarket(Guid marketId)
     {
         if (marketId == Guid.Empty)
