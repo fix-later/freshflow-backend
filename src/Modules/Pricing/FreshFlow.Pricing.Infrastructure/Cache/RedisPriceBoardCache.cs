@@ -1,5 +1,6 @@
 using System.Globalization;
 using FreshFlow.Pricing.Application.Abstractions;
+using FreshFlow.SharedKernel.Caching;
 using StackExchange.Redis;
 
 namespace FreshFlow.Pricing.Infrastructure.Cache;
@@ -53,5 +54,5 @@ internal sealed class RedisPriceBoardCache(IConnectionMultiplexer redis) : IPric
     }
 
     internal static string BuildKey(Guid marketId, Guid productId) =>
-        $"price:{marketId}:{productId}";
+        RedisKeys.Price(marketId, productId);
 }

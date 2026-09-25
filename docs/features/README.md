@@ -44,6 +44,12 @@ Index này được sinh lại từ nội dung thư mục ngày **2026-08-22**.
 | [Báo cáo rà soát: Auth · Account/Profile · Catalog & Market](./auth-catalog/AUDIT-2026-06-10-auth-profile-catalog.md) | Audit / Plan |
 | [Audit / Plan — Category cha/con](./auth-catalog/AUDIT-2026-07-21-category-hierarchy-plan.md) | Audit / Plan |
 
+## caching — Redis cache layer (cross-cutting, chưa gán Jira)
+
+| Doc | Loại |
+|---|---|
+| [Plan: Redis như lớp cache (không phải như database)](./caching/PLAN-2026-09-25-redis-cache-layer.md) | Plan |
+
 ## credit — B2B Credit / Công nợ (epic SCRUM-254, nằm trong module Orders)
 
 | Doc | Loại |

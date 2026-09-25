@@ -11,7 +11,6 @@ using FreshFlow.Pricing.Infrastructure.Repositories;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using StackExchange.Redis;
 
 namespace FreshFlow.Pricing.Infrastructure;
 
@@ -62,20 +61,9 @@ public static class DependencyInjection
         // Real-time broadcast (UC-PRI-08) — IHubContext<PricingHub> is registered by AddSignalR()
         services.AddScoped<IPricingBroadcastService, PricingBroadcastService>();
 
-        // Redis price board (UC-PRI-07) — IConnectionMultiplexer is Singleton per StackExchange.Redis
-        // best practices (connection pool is thread-safe and expensive to create).
-        // AbortOnConnectFail is forced to false in code so the app survives Redis being
-        // temporarily unavailable at startup, regardless of what the connection string says.
-        services.AddSingleton<IConnectionMultiplexer>(sp =>
-        {
-            var connectionString = config.GetConnectionString("Redis")
-                ?? throw new InvalidOperationException(
-                    "Missing required connection string 'Redis'. " +
-                    "Set ConnectionStrings__Redis in environment or appsettings.json.");
-            var opts = ConfigurationOptions.Parse(connectionString);
-            opts.AbortOnConnectFail = false;
-            return ConnectionMultiplexer.Connect(opts);
-        });
+        // Redis price board (UC-PRI-07). IConnectionMultiplexer itself is registered at the
+        // host layer (FreshFlow.API.Caching.AddRedisCache) so other modules can depend on
+        // Redis without depending on Pricing — see docs/features/caching/PLAN-2026-09-25-redis-cache-layer.md.
         services.AddScoped<IPriceBoardCacheWriter, RedisPriceBoardCache>();
 
         services.AddScoped<IPriceBoardReader, RedisPriceBoardReader>();

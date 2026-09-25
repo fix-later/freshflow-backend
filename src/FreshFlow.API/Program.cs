@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 using FluentValidation;
 using FreshFlow.Analytics.Infrastructure;
 using FreshFlow.API.Assistant;
+using FreshFlow.API.Caching;
 using FreshFlow.API.Errors;
 using FreshFlow.API.Swagger;
 using FreshFlow.Auth.Infrastructure;
@@ -195,6 +196,10 @@ builder.Services.AddRateLimiter(options =>
 // Must be registered before modules so IHubContext<PricingHub> is available
 // when PricingBroadcastService is resolved.
 builder.Services.AddSignalR();
+
+// ── Redis / HybridCache — shared infra, must precede modules that resolve
+// IConnectionMultiplexer or HybridCache (currently just Pricing) ──────────
+builder.Services.AddRedisCache(builder.Configuration);
 
 // ── Module registrations ──────────────────────────────────────
 builder.Services.AddAuthModule(builder.Configuration);
