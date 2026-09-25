@@ -1,10 +1,11 @@
 using FreshFlow.Catalog.Application.Abstractions;
+using FreshFlow.Catalog.Application.Caching;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 
 namespace FreshFlow.Catalog.Application.Commands.Markets.Delete;
 
-internal sealed class DeleteMarketCommandHandler(IMarketRepository markets)
+internal sealed class DeleteMarketCommandHandler(IMarketRepository markets, CatalogCacheEvictor evictor)
     : IRequestHandler<DeleteMarketCommand, Result>
 {
     public async Task<Result> Handle(DeleteMarketCommand request, CancellationToken ct)
@@ -16,6 +17,8 @@ internal sealed class DeleteMarketCommandHandler(IMarketRepository markets)
         market.Delete();
         markets.Track(market);
         await markets.SaveChangesAsync(ct);
+
+        await evictor.EvictAsync(CatalogCache.MarketsTag, ct);
 
         return Result.Success();
     }

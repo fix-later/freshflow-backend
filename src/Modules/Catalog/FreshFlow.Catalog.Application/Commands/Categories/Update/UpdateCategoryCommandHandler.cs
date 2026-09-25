@@ -1,4 +1,5 @@
 using FreshFlow.Catalog.Application.Abstractions;
+using FreshFlow.Catalog.Application.Caching;
 using FreshFlow.Catalog.Application.Dtos;
 using FreshFlow.Catalog.Application.Mappings;
 using FreshFlow.SharedKernel.Application;
@@ -6,7 +7,7 @@ using MediatR;
 
 namespace FreshFlow.Catalog.Application.Commands.Categories.Update;
 
-internal sealed class UpdateCategoryCommandHandler(IProductCategoryRepository categories)
+internal sealed class UpdateCategoryCommandHandler(IProductCategoryRepository categories, CatalogCacheEvictor evictor)
     : IRequestHandler<UpdateCategoryCommand, Result<CategoryDto>>
 {
     public async Task<Result<CategoryDto>> Handle(UpdateCategoryCommand request, CancellationToken ct)
@@ -51,6 +52,8 @@ internal sealed class UpdateCategoryCommandHandler(IProductCategoryRepository ca
         if (!await categories.SaveChangesAsync(ct))
             return Result<CategoryDto>.Failure(
                 Error.Conflict("CATEGORY_NAME_CONFLICT", $"A category named '{name}' already exists."));
+
+        await evictor.EvictAsync(CatalogCache.CategoriesTag, ct);
 
         return Result<CategoryDto>.Success(category.ToDto());
     }

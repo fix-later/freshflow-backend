@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreshFlow.Catalog.Application.Abstractions;
 using FreshFlow.Catalog.Application.Commands.Markets.Deactivate;
 using FreshFlow.Catalog.Domain.Entities;
+using Microsoft.Extensions.Caching.Hybrid;
 using NSubstitute;
 
 namespace FreshFlow.Catalog.UnitTests.Markets;
@@ -10,11 +11,12 @@ namespace FreshFlow.Catalog.UnitTests.Markets;
 public sealed class DeactivateMarketCommandHandlerTests
 {
     private readonly IMarketRepository _markets = Substitute.For<IMarketRepository>();
+    private readonly HybridCache _cache = TestCache.Create();
     private readonly DeactivateMarketCommandHandler _sut;
 
     public DeactivateMarketCommandHandlerTests()
     {
-        _sut = new DeactivateMarketCommandHandler(_markets);
+        _sut = new DeactivateMarketCommandHandler(_markets, TestCache.Evictor(_cache));
     }
 
     [Fact]

@@ -1,7 +1,7 @@
 # Plan: Redis như lớp cache (không phải như database)
 
 > **Ngày:** 2026-09-25 · **Phạm vi:** cross-cutting (SharedKernel + API host + Catalog + Analytics)
-> **Jira:** chưa gán · **Trạng thái:** Phase 1 **xong, chưa commit** (HIGH-1 + MEDIUM-3 đã fix; MEDIUM-2 chuyển thành gate của Phase 2); Phase 2–4 chưa bắt đầu
+> **Jira:** chưa gán · **Trạng thái:** Phase 1 **xong** (commit `9629d86`) · Phase 2 **xong** · Phase 3–4 chưa bắt đầu
 
 Mục tiêu: đưa Redis vào dùng rộng hơn trong FreshFlow **với vai trò cache cho đường đọc**.
 Postgres vẫn là source of truth duy nhất — không dùng Redis như một database.
@@ -85,11 +85,25 @@ Package thêm vào `Directory.Packages.props` (pin version khớp dòng 10.0.x):
 
 Target: `Categories`, `Units`, `PackingCodes`, `Markets`, `Tags` — gần như không đổi, đọc ở mọi màn hình.
 
-- TTL 30–60 phút + **tag-evict ngay trong command handler khi admin ghi**
-  (`RemoveByTagAsync("catalog:categories")`). Không qua integration event — cùng transaction
-  boundary, đơn giản hơn, không cần contract mới.
+- TTL 30 phút + **tag-evict ngay trong command handler khi admin ghi**. Không qua integration
+  event — cùng transaction boundary, đơn giản hơn, không cần contract mới.
 - Key không chứa yếu tố người dùng → không có rủi ro rò dữ liệu.
 - **Gate:** integration test — GET → sửa qua admin API → GET lại thấy giá trị mới **ngay**, không đợi TTL.
+
+**✅ ĐÃ LÀM 2026-09-25.** Cách triển khai (khác plan gốc một điểm, xem mục 9):
+
+| Thành phần | Nơi |
+|---|---|
+| Chính sách TTL + 4 tag | `Catalog.Application/Caching/CatalogCache.cs` |
+| Evict + try/catch (một chỗ duy nhất) | `Catalog.Application/Caching/CatalogCacheEvictor.cs` |
+| Cache key | `SharedKernel/Caching/RedisKeys.cs` — đúng quyết định Phase 1: một nơi sinh key |
+| Đọc qua cache | 4 list handler: `GetCategories`, `GetMarkets`, `GetUnits`, `ListPackingCodes` |
+| Evict khi ghi | 14 command handler (Categories ×4, Markets ×4, PackingCodes ×3, Units ×3) |
+
+**Chỉ cache list query, không cache `GetXxxById`.** Query ById có thể trả `NOT_FOUND`, mà cache một
+failure thì hoặc phải bọc thêm một lớp wrapper serialize được `Error`, hoặc chịu rủi ro 404 dính lại
+hết TTL. List query trong Catalog luôn trả `Success`, nên bỏ hẳn nhóm ById gỡ được toàn bộ lớp phức
+tạp đó mà gần như không mất lợi ích — ById là tra một dòng, rẻ; list mới là thứ mọi màn hình gọi.
 
 ### Phase 3 — Analytics (nơi ăn tiền nhất)
 
@@ -149,6 +163,8 @@ Làm sau, có số đo rồi mới làm.
 | 2026-09-25 | Viết plan; khảo sát hiện trạng Redis trong repo |
 | 2026-09-25 | Phase 1 implement xong (working tree, chưa commit). Gate verify độc lập: build 0 error, `dotnet format` exit 0, `dotnet test` exit 0 — Integration 242/242 trên Postgres thật. Không test nào phải sửa. Review ra 4 finding, xem mục 8. |
 | 2026-09-25 | Fix HIGH-1 (L2 dùng lại `IConnectionMultiplexer` qua `ConnectionMultiplexerFactory`) + xoá `ICacheService.cs` (MEDIUM-3). Chốt LOW-4 theo hướng sửa plan. Gate chạy lại: build 0 error, **3198/3198 test pass**, format exit 0. Còn mở: MEDIUM-2. |
+| 2026-09-25 | Phase 1 commit `9629d86`. |
+| 2026-09-25 | MEDIUM-2 đo xong bằng probe thật → phát hiện đọc fail-open nhưng evict thì ném. Phase 2 implement: 4 list query đọc qua cache, 14 command evict theo tag, 6 unit test + 4 integration test mới. Gate: build 0 error, **246/246 integration** (chạy riêng và solution-wide), format exit 0. |
 
 ---
 
@@ -181,11 +197,22 @@ services.AddOptions<RedisCacheOptions>()
 **Đã áp dụng** 2026-09-25 vào `RedisCacheServiceCollectionExtensions.cs`. Gate chạy lại sau fix:
 build 0 error, 3198/3198 test pass (Integration 242/242 trên Postgres thật), `dotnet format` exit 0.
 
-### ⏳ MEDIUM-2 (MỞ — là gate của Phase 2) — Fail-open của `HybridCache` chưa được chứng minh
-Nguyên tắc #2 của plan (Redis chết → degrade về DB, không 500) hiện **chưa có gì bảo đảm** cho
-đường HybridCache: không rõ `HybridCache` nuốt hay ném lỗi L2, và chưa có test. Không chặn Phase 1
-(chưa call site nào dùng), nhưng **phải chốt bằng test trước khi Phase 2 ship** — nếu nó ném, mọi
-call site Phase 2/3 phải bọc try/catch như `GetMarketProductsQueryHandler` đang làm.
+### ✅ MEDIUM-2 (ĐÃ ĐO — kết quả BẤT ĐỐI XỨNG) — Fail-open của `HybridCache`
+Đo trực tiếp trên package 10.0.0 (2026-09-25) thay vì suy đoán. Kết quả **không đồng nhất giữa
+đọc và evict** — đây là điều quan trọng nhất của Phase 2:
+
+| Thao tác | Khi backing store chết |
+|---|---|
+| `GetOrCreateAsync` (đọc) | **Nuốt lỗi**, chạy factory, trả dữ liệu DB → fail-open sẵn, call site **không** cần try/catch |
+| `RemoveAsync` / `RemoveByTagAsync` (evict) | **Ném exception** |
+
+Hệ quả nếu bỏ qua: admin sửa reference data → DB đã commit → evict ném → API trả **500**. Admin
+tưởng thao tác hỏng và sửa lại, trong khi dữ liệu đã ghi. Vì vậy mọi lần evict **bắt buộc** đi qua
+`CatalogCacheEvictor`, nơi try/catch nằm đúng một chỗ. Có unit test khoá hành vi này lại.
+
+Hai giả định khác cũng đã đo, vì Phase 2 phụ thuộc hoàn toàn vào chúng:
+- Factory **ném** lỗi → entry **không** bị cache (nên một `Result.Failure` không thể dính lại hết TTL).
+- `RemoveByTagAsync` evict thật, và evict tag này **không** đụng tag khác.
 
 ### ✅ MEDIUM-3 (ĐÃ FIX) — `SharedKernel/Caching/ICacheService.cs` vẫn còn (dead code)
 Interface cache tự viết, 0 implementation, 0 consumer — đúng loại pattern mục 3 đã loại khi chọn
@@ -203,3 +230,30 @@ và `Cache:Enabled` được định nghĩa lại là *"cờ cho lớp HybridCac
 (10.0.0 → 10.1.0 → … → 10.10.0), không tồn tại patch 10.0.x nào khác. Tuy nhiên các package
 minor-versioned khác trong repo (`Microsoft.Extensions.AI`, `Http.Resilience`) đang ở **10.7.0**.
 Cân nhắc nâng cho đồng bộ — không phải lỗi.
+
+---
+
+## 9. Ghi chú triển khai Phase 2
+
+**Đã cân nhắc và loại: MediatR pipeline behavior.** Đặt `CachingBehavior<,>` vào pipeline (giống
+`ValidationBehavior`) trông gọn hơn — khỏi sửa 18 handler. Loại vì hai lý do cứng:
+
+1. Handler trả `Result<T>`, mà `Result<T>` có constructor private và không có ctor rỗng →
+   `HybridCache` **không serialize được**. Muốn cache qua behavior thì phải cache nguyên
+   `Result<T>`, tức phải thêm một lớp wrapper serialize được chỉ để phục vụ behavior.
+2. Để behavior lấy được `TValue` bên trong `Result<TValue>` thì phải khai báo
+   `IPipelineBehavior<TRequest, Result<TValue>>`, đòi MS.DI suy ngược type argument từ generic lồng
+   nhau — thứ container không làm được.
+
+Inject thẳng `HybridCache` vào 4 handler đọc thì cache đúng DTO (JSON-friendly), không cần wrapper,
+và try/catch của evict vẫn gom đúng một chỗ trong `CatalogCacheEvictor`.
+
+**Test integration phải tự chứng minh là nó có ý nghĩa.** Ba test "ghi xong đọc thấy ngay" vẫn pass
+kể cả khi cache bị tắt hoàn toàn — lúc đó chúng chỉ đọc DB hai lần. Nên có thêm
+`A_read_actually_populates_the_cache`: sau một GET, dò đúng key bằng `GetOrCreateAsync` với factory
+đánh dấu; factory không được chạy. Test này **fail ngay lần đầu viết** vì dò sai kiểu — entry
+HybridCache có kiểu, dò cùng key với shape khác đọc ra là miss. Ghi lại ở đây vì đó là cái bẫy rất
+dễ vấp khi viết test cache.
+
+**Tags chưa làm:** plan mục 4 liệt kê `Tags` trong Phase 2, nhưng `ITagRepository` nằm ở module
+**Pricing**, không phải Catalog. Để lại cho một đợt riêng cùng scope Pricing.

@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreshFlow.Catalog.Application.Abstractions;
 using FreshFlow.Catalog.Application.Commands.Units.Update;
 using FreshFlow.Catalog.Domain.Entities;
+using Microsoft.Extensions.Caching.Hybrid;
 using NSubstitute;
 
 namespace FreshFlow.Catalog.UnitTests.Units;
@@ -10,11 +11,12 @@ namespace FreshFlow.Catalog.UnitTests.Units;
 public sealed class UpdateUnitCommandHandlerTests
 {
     private readonly IUnitOfMeasurementRepository _units = Substitute.For<IUnitOfMeasurementRepository>();
+    private readonly HybridCache _cache = TestCache.Create();
     private readonly UpdateUnitCommandHandler _sut;
 
     public UpdateUnitCommandHandlerTests()
     {
-        _sut = new UpdateUnitCommandHandler(_units);
+        _sut = new UpdateUnitCommandHandler(_units, TestCache.Evictor(_cache));
     }
 
     [Fact]

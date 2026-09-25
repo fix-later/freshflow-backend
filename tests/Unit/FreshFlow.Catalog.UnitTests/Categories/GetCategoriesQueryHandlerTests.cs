@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreshFlow.Catalog.Application.Abstractions;
 using FreshFlow.Catalog.Application.Queries.Categories.GetCategories;
 using FreshFlow.Catalog.Domain.Entities;
+using Microsoft.Extensions.Caching.Hybrid;
 using NSubstitute;
 
 namespace FreshFlow.Catalog.UnitTests.Categories;
@@ -10,11 +11,12 @@ namespace FreshFlow.Catalog.UnitTests.Categories;
 public sealed class GetCategoriesQueryHandlerTests
 {
     private readonly IProductCategoryRepository _categories = Substitute.For<IProductCategoryRepository>();
+    private readonly HybridCache _cache = TestCache.Create();
     private readonly GetCategoriesQueryHandler _sut;
 
     public GetCategoriesQueryHandlerTests()
     {
-        _sut = new GetCategoriesQueryHandler(_categories);
+        _sut = new GetCategoriesQueryHandler(_categories, _cache);
     }
 
     [Fact]

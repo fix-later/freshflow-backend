@@ -1,4 +1,5 @@
 using FreshFlow.Catalog.Application.Abstractions;
+using FreshFlow.Catalog.Application.Caching;
 using FreshFlow.Catalog.Application.Dtos;
 using FreshFlow.Catalog.Application.Mappings;
 using FreshFlow.SharedKernel.Application;
@@ -6,7 +7,7 @@ using MediatR;
 
 namespace FreshFlow.Catalog.Application.Commands.Categories.Activate;
 
-internal sealed class ActivateCategoryCommandHandler(IProductCategoryRepository categories)
+internal sealed class ActivateCategoryCommandHandler(IProductCategoryRepository categories, CatalogCacheEvictor evictor)
     : IRequestHandler<ActivateCategoryCommand, Result<CategoryDto>>
 {
     public async Task<Result<CategoryDto>> Handle(ActivateCategoryCommand request, CancellationToken ct)
@@ -26,6 +27,8 @@ internal sealed class ActivateCategoryCommandHandler(IProductCategoryRepository 
 
         category.Activate();
         await categories.SaveChangesAsync(ct);
+
+        await evictor.EvictAsync(CatalogCache.CategoriesTag, ct);
 
         return Result<CategoryDto>.Success(category.ToDto());
     }

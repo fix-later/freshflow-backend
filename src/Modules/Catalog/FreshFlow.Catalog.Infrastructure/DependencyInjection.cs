@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentValidation;
 using FreshFlow.Catalog.Application.Abstractions;
 using FreshFlow.Catalog.Application.Behaviors;
+using FreshFlow.Catalog.Application.Caching;
 using FreshFlow.Catalog.Infrastructure.CrossModule;
 using FreshFlow.Catalog.Infrastructure.Repositories;
 using FreshFlow.Infrastructure.Persistence;
@@ -30,6 +31,9 @@ public static class DependencyInjection
 
         // FluentValidation — auto-register all validators from Application
         services.AddValidatorsFromAssembly(applicationAssembly, includeInternalTypes: true);
+
+        // Reference-data cache eviction (HybridCache itself is registered by the host)
+        services.AddScoped<CatalogCacheEvictor>();
 
         // Repositories
         services.AddScoped<IMarketRepository, MarketRepository>();

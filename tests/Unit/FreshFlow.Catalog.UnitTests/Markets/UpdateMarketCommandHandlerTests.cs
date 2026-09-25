@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreshFlow.Catalog.Application.Abstractions;
 using FreshFlow.Catalog.Application.Commands.Markets.Update;
 using FreshFlow.Catalog.Domain.Entities;
+using Microsoft.Extensions.Caching.Hybrid;
 using NSubstitute;
 
 namespace FreshFlow.Catalog.UnitTests.Markets;
@@ -10,11 +11,12 @@ namespace FreshFlow.Catalog.UnitTests.Markets;
 public sealed class UpdateMarketCommandHandlerTests
 {
     private readonly IMarketRepository _markets = Substitute.For<IMarketRepository>();
+    private readonly HybridCache _cache = TestCache.Create();
     private readonly UpdateMarketCommandHandler _sut;
 
     public UpdateMarketCommandHandlerTests()
     {
-        _sut = new UpdateMarketCommandHandler(_markets);
+        _sut = new UpdateMarketCommandHandler(_markets, TestCache.Evictor(_cache));
     }
 
     [Fact]

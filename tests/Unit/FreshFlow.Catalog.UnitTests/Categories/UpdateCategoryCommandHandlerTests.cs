@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreshFlow.Catalog.Application.Abstractions;
 using FreshFlow.Catalog.Application.Commands.Categories.Update;
 using FreshFlow.Catalog.Domain.Entities;
+using Microsoft.Extensions.Caching.Hybrid;
 using NSubstitute;
 
 namespace FreshFlow.Catalog.UnitTests.Categories;
@@ -10,12 +11,13 @@ namespace FreshFlow.Catalog.UnitTests.Categories;
 public sealed class UpdateCategoryCommandHandlerTests
 {
     private readonly IProductCategoryRepository _categories = Substitute.For<IProductCategoryRepository>();
+    private readonly HybridCache _cache = TestCache.Create();
     private readonly UpdateCategoryCommandHandler _sut;
 
     public UpdateCategoryCommandHandlerTests()
     {
         _categories.SaveChangesAsync(default).Returns(true);
-        _sut = new UpdateCategoryCommandHandler(_categories);
+        _sut = new UpdateCategoryCommandHandler(_categories, TestCache.Evictor(_cache));
     }
 
     [Fact]

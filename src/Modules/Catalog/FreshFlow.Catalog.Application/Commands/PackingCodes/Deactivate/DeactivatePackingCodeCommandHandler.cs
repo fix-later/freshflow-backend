@@ -1,4 +1,5 @@
 using FreshFlow.Catalog.Application.Abstractions;
+using FreshFlow.Catalog.Application.Caching;
 using FreshFlow.Catalog.Application.Dtos;
 using FreshFlow.Catalog.Application.Mappings;
 using FreshFlow.SharedKernel.Application;
@@ -6,7 +7,7 @@ using MediatR;
 
 namespace FreshFlow.Catalog.Application.Commands.PackingCodes.Deactivate;
 
-internal sealed class DeactivatePackingCodeCommandHandler(IPackingCodeRepository packingCodes)
+internal sealed class DeactivatePackingCodeCommandHandler(IPackingCodeRepository packingCodes, CatalogCacheEvictor evictor)
     : IRequestHandler<DeactivatePackingCodeCommand, Result<PackingCodeDto>>
 {
     public async Task<Result<PackingCodeDto>> Handle(
@@ -18,6 +19,8 @@ internal sealed class DeactivatePackingCodeCommandHandler(IPackingCodeRepository
 
         packingCode.Deactivate();
         await packingCodes.SaveChangesAsync(ct);
+
+        await evictor.EvictAsync(CatalogCache.PackingCodesTag, ct);
 
         return Result<PackingCodeDto>.Success(packingCode.ToDto());
     }

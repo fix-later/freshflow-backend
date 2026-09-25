@@ -1,4 +1,5 @@
 using FreshFlow.Catalog.Application.Abstractions;
+using FreshFlow.Catalog.Application.Caching;
 using FreshFlow.Catalog.Application.Dtos;
 using FreshFlow.Catalog.Application.Mappings;
 using FreshFlow.SharedKernel.Application;
@@ -6,7 +7,7 @@ using MediatR;
 
 namespace FreshFlow.Catalog.Application.Commands.Units.Deactivate;
 
-internal sealed class DeactivateUnitCommandHandler(IUnitOfMeasurementRepository units)
+internal sealed class DeactivateUnitCommandHandler(IUnitOfMeasurementRepository units, CatalogCacheEvictor evictor)
     : IRequestHandler<DeactivateUnitCommand, Result<UnitDto>>
 {
     public async Task<Result<UnitDto>> Handle(DeactivateUnitCommand request, CancellationToken ct)
@@ -17,6 +18,8 @@ internal sealed class DeactivateUnitCommandHandler(IUnitOfMeasurementRepository 
 
         unit.Deactivate();
         await units.SaveChangesAsync(ct);
+
+        await evictor.EvictAsync(CatalogCache.UnitsTag, ct);
 
         return Result<UnitDto>.Success(unit.ToDto());
     }

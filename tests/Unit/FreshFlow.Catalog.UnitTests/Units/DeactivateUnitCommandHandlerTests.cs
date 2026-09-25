@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreshFlow.Catalog.Application.Abstractions;
 using FreshFlow.Catalog.Application.Commands.Units.Deactivate;
 using FreshFlow.Catalog.Domain.Entities;
+using Microsoft.Extensions.Caching.Hybrid;
 using NSubstitute;
 
 namespace FreshFlow.Catalog.UnitTests.Units;
@@ -10,11 +11,12 @@ namespace FreshFlow.Catalog.UnitTests.Units;
 public sealed class DeactivateUnitCommandHandlerTests
 {
     private readonly IUnitOfMeasurementRepository _units = Substitute.For<IUnitOfMeasurementRepository>();
+    private readonly HybridCache _cache = TestCache.Create();
     private readonly DeactivateUnitCommandHandler _sut;
 
     public DeactivateUnitCommandHandlerTests()
     {
-        _sut = new DeactivateUnitCommandHandler(_units);
+        _sut = new DeactivateUnitCommandHandler(_units, TestCache.Evictor(_cache));
     }
 
     [Fact]

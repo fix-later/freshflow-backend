@@ -1,4 +1,5 @@
 using FreshFlow.Catalog.Application.Abstractions;
+using FreshFlow.Catalog.Application.Caching;
 using FreshFlow.Catalog.Application.Commands.Markets.Create;
 using FreshFlow.Catalog.Application.Dtos;
 using FreshFlow.SharedKernel.Application;
@@ -6,7 +7,7 @@ using MediatR;
 
 namespace FreshFlow.Catalog.Application.Commands.Markets.Update;
 
-internal sealed class UpdateMarketCommandHandler(IMarketRepository markets)
+internal sealed class UpdateMarketCommandHandler(IMarketRepository markets, CatalogCacheEvictor evictor)
     : IRequestHandler<UpdateMarketCommand, Result<MarketDto>>
 {
     public async Task<Result<MarketDto>> Handle(UpdateMarketCommand request, CancellationToken ct)
@@ -26,6 +27,8 @@ internal sealed class UpdateMarketCommandHandler(IMarketRepository markets)
             request.Code);
         markets.Track(market);
         await markets.SaveChangesAsync(ct);
+
+        await evictor.EvictAsync(CatalogCache.MarketsTag, ct);
 
         return Result<MarketDto>.Success(CreateMarketCommandHandler.ToDto(market));
     }

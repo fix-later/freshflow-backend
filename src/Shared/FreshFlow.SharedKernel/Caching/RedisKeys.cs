@@ -9,4 +9,16 @@ public static class RedisKeys
 {
     public static string Price(Guid marketId, Guid productId) =>
         $"price:{marketId}:{productId}";
+
+    public static string CatalogCategories(bool activeOnly) =>
+        $"catalog:categories:{activeOnly}";
+
+    public static string CatalogMarkets(bool activeOnly) =>
+        $"catalog:markets:{activeOnly}";
+
+    public static string CatalogUnits(bool activeOnly) =>
+        $"catalog:units:{activeOnly}";
+
+    public static string CatalogPackingCodes(bool activeOnly, int page, int pageSize) =>
+        $"catalog:packing-codes:{activeOnly}:{page}:{pageSize}";
 }

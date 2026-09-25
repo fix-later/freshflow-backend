@@ -1,4 +1,5 @@
 using FreshFlow.Catalog.Application.Abstractions;
+using FreshFlow.Catalog.Application.Caching;
 using FreshFlow.Catalog.Application.Dtos;
 using FreshFlow.Catalog.Application.Mappings;
 using FreshFlow.SharedKernel.Application;
@@ -6,7 +7,7 @@ using MediatR;
 
 namespace FreshFlow.Catalog.Application.Commands.PackingCodes.Update;
 
-internal sealed class UpdatePackingCodeCommandHandler(IPackingCodeRepository packingCodes)
+internal sealed class UpdatePackingCodeCommandHandler(IPackingCodeRepository packingCodes, CatalogCacheEvictor evictor)
     : IRequestHandler<UpdatePackingCodeCommand, Result<PackingCodeDto>>
 {
     public async Task<Result<PackingCodeDto>> Handle(
@@ -23,6 +24,8 @@ internal sealed class UpdatePackingCodeCommandHandler(IPackingCodeRepository pac
 
         packingCode.Update(code, request.Description, request.CapacityKg);
         await packingCodes.SaveChangesAsync(ct);
+
+        await evictor.EvictAsync(CatalogCache.PackingCodesTag, ct);
 
         return Result<PackingCodeDto>.Success(packingCode.ToDto());
     }

@@ -1,4 +1,5 @@
 using FreshFlow.Catalog.Application.Abstractions;
+using FreshFlow.Catalog.Application.Caching;
 using FreshFlow.Catalog.Application.Dtos;
 using FreshFlow.Catalog.Application.Mappings;
 using FreshFlow.SharedKernel.Application;
@@ -6,7 +7,7 @@ using MediatR;
 
 namespace FreshFlow.Catalog.Application.Commands.Units.Update;
 
-internal sealed class UpdateUnitCommandHandler(IUnitOfMeasurementRepository units)
+internal sealed class UpdateUnitCommandHandler(IUnitOfMeasurementRepository units, CatalogCacheEvictor evictor)
     : IRequestHandler<UpdateUnitCommand, Result<UnitDto>>
 {
     public async Task<Result<UnitDto>> Handle(UpdateUnitCommand request, CancellationToken ct)
@@ -23,6 +24,8 @@ internal sealed class UpdateUnitCommandHandler(IUnitOfMeasurementRepository unit
 
         unit.Update(request.Name, request.Abbreviation);
         await units.SaveChangesAsync(ct);
+
+        await evictor.EvictAsync(CatalogCache.UnitsTag, ct);
 
         return Result<UnitDto>.Success(unit.ToDto());
     }
