@@ -1,7 +1,7 @@
 # Plan: Redis như lớp cache (không phải như database)
 
 > **Ngày:** 2026-09-25 · **Phạm vi:** cross-cutting (SharedKernel + API host + Catalog + Analytics)
-> **Jira:** chưa gán · **Trạng thái:** Phase 1 **xong** (commit `9629d86`) · Phase 2 **xong** · Phase 3–4 chưa bắt đầu
+> **Jira:** chưa gán · **Trạng thái:** Phase 1 **xong** (`9629d86`) · Phase 2 **xong** (`fa10199`) · Phase 3 **xong** · Phase 4 chưa bắt đầu
 
 Mục tiêu: đưa Redis vào dùng rộng hơn trong FreshFlow **với vai trò cache cho đường đọc**.
 Postgres vẫn là source of truth duy nhất — không dùng Redis như một database.
@@ -111,10 +111,32 @@ tạp đó mà gần như không mất lợi ích — ById là tra một dòng, 
 `GetDeliveryPerformance`, `GetHubThroughput`, `GetDemandHeatmap`, `GetDemandTimeDistribution`,
 `GetPriceTrends`, `ExportAnalytics`.
 
-- TTL 2 tầng: khoảng ngày **đã đóng** (hoàn toàn trong quá khứ) → 6–24h;
-  khoảng có chứa hôm nay → 3–5 phút.
+- TTL 2 tầng: khoảng ngày **đã đóng** (hoàn toàn trong quá khứ) → 6h;
+  khoảng có chứa hôm nay → 5 phút.
 - Không cần invalidation chủ động — analytics stale vài phút là chấp nhận được, TTL là đủ.
-- **Gate:** đo thời gian dashboard trước/sau trên DB thật.
+
+**✅ ĐÃ LÀM 2026-09-25.** 8/9 query cache qua `AnalyticsCache`
+(`Analytics.Application/Caching/AnalyticsCache.cs`), key trong `RedisKeys`.
+
+**Bẫy #1 (scope quyền) KHÔNG áp dụng — đã kiểm chứng bằng code.** Grep toàn module Analytics:
+không handler nào đọc `ICurrentUser` / `HttpContext` / claim. Mọi filter (`RestaurantId`,
+`MarketId`, `HubId`) đến từ **query string**, không suy ra từ JWT, nên kết quả chỉ phụ thuộc tham
+số và cache key chỉ cần chứa tham số. Nếu sau này có handler nào đọc danh tính người gọi thì kết
+luận này hỏng — phải thêm scope vào key ngay lúc đó.
+
+**Bẫy #2 (ngày VN) áp dụng đúng một chỗ:** `GetDashboardOverviewQuery.Date` nullable. Handler nay
+resolve `request.Date ?? cache.Today` **trước** khi dựng key. Có test dịch đồng hồ từ 23:30 sang
+00:30 giờ VN chứng minh entry không dính lại sang ngày mới.
+
+**Cache ở mức DTO cuối, không phải ở mức reader** — các handler này còn nhiều post-processing
+(gộp bucket, tính tỉ lệ, clamp) sau khi đọc DB; cache DTO cuối bỏ qua được cả hai.
+
+**Không cache `ExportAnalytics`** (lệch plan có chủ đích): export hiếm khi lặp lại đúng tham số,
+payload là `byte[]` CSV, nên cache tốn RAM mà gần như không bao giờ hit — trái nguyên tắc #4.
+Nó vẫn hưởng lợi gián tiếp vì handler của nó gọi các query khác qua `ISender`, mà những query đó
+nay đã có cache.
+
+- **Gate:** đo thời gian dashboard trước/sau trên DB thật — **chưa làm**, xem mục 10.
 
 ### Phase 4 — Chọn lọc thêm (chỉ khi đo thấy chậm)
 
@@ -257,3 +279,21 @@ dễ vấp khi viết test cache.
 
 **Tags chưa làm:** plan mục 4 liệt kê `Tags` trong Phase 2, nhưng `ITagRepository` nằm ở module
 **Pricing**, không phải Catalog. Để lại cho một đợt riêng cùng scope Pricing.
+
+| 2026-09-25 | Phase 3 (Analytics): 8/9 query cache theo TTL 2 tầng, key gồm ngày VN đã resolve. 6 unit test mới. Gate: build 0 error, **3214 test pass** (246 integration), format exit 0. |
+
+---
+
+## 10. Việc còn mở
+
+| # | Việc | Ghi chú |
+|---|---|---|
+| 1 | **Đo hiệu năng dashboard trước/sau** | Gate của Phase 3 trong plan, **chưa chạy**. Các test hiện có chứng minh cache *đúng*, không chứng minh cache *đáng*. Cần đo trên DB có dữ liệu thật. |
+| 2 | `Tags` (module Pricing) | Plan xếp vào Phase 2 nhưng `ITagRepository` nằm ở Pricing, không phải Catalog. |
+| 3 | Phase 4 | Route suggestions, loading manifest, product list — chỉ làm khi mục 1 cho thấy chỗ nào thật sự chậm. |
+| 4 | Version `Microsoft.Extensions.Caching.Hybrid` | Đang ghim 10.0.0; các package minor-versioned khác trong repo ở 10.7.0. Không phải lỗi. |
+
+**Cảnh báo cho người làm tiếp:** `AddAnalyticsModule` và `AddCatalogModule` giờ **không còn tự đủ** —
+chúng cần `HybridCache` do host đăng ký. Unit test của Analytics resolve handler qua DI container
+thật nên phải gọi thêm `services.AddHybridCache()`; nếu một module mới copy pattern này mà quên,
+lỗi sẽ là `Unable to resolve service for type 'HybridCache'` lúc chạy, không phải lúc build.

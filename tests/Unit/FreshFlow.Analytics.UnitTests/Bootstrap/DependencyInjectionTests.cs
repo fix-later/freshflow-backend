@@ -16,6 +16,7 @@ using FreshFlow.Infrastructure.Persistence.Audit;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -32,6 +33,7 @@ public sealed class DependencyInjectionTests
         services.AddDbContext<AppDbContext>(options =>
             options.UseInMemoryDatabase(Guid.NewGuid().ToString()));
         services.AddAnalyticsModule(new ConfigurationBuilder().Build());
+        services.AddHybridCache();
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();

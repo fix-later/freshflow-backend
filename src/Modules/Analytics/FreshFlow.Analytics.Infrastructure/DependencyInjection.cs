@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentValidation;
 using FreshFlow.Analytics.Application.Abstractions;
 using FreshFlow.Analytics.Application.Behaviors;
+using FreshFlow.Analytics.Application.Caching;
 using FreshFlow.Analytics.Infrastructure.CrossModule;
 using FreshFlow.Infrastructure.Persistence;
 using MediatR;
@@ -29,6 +30,9 @@ public static class DependencyInjection
         });
 
         services.AddValidatorsFromAssembly(applicationAssembly, includeInternalTypes: true);
+        // Analytics read cache (HybridCache itself is registered by the host)
+        services.AddScoped<AnalyticsCache>();
+
         services.AddScoped<IDashboardOverviewReader, DashboardOverviewReader>();
         services.AddScoped<IPriceTrendReader, PriceTrendReader>();
         services.AddScoped<IOrderMetricsReader, OrderMetricsReader>();

@@ -11,6 +11,7 @@ using FreshFlow.Analytics.Application.Queries.GetPriceTrends;
 using FreshFlow.Analytics.Infrastructure;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -207,6 +208,7 @@ public sealed class ExportAnalyticsQueryHandlerTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddAnalyticsModule(new ConfigurationBuilder().Build());
+        services.AddHybridCache();
         services.AddSingleton<IRequestHandler<GetPriceTrendsQuery, Result<PriceTrendsDto>>>(
             new StubHandler<GetPriceTrendsQuery, PriceTrendsDto>(priceResult));
         services.AddSingleton<IRequestHandler<GetOrderMetricsQuery, Result<OrderMetricsDto>>>(

@@ -5,6 +5,7 @@ using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.Analytics.Application.Queries.GetOrderMetrics;
 using FreshFlow.Analytics.Infrastructure;
 using MediatR;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -150,6 +151,7 @@ public sealed class GetOrderMetricsQueryHandlerTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddAnalyticsModule(new ConfigurationBuilder().Build());
+        services.AddHybridCache();
         services.AddSingleton(reader);
         return services.BuildServiceProvider().GetRequiredService<ISender>();
     }

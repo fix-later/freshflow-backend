@@ -1,12 +1,14 @@
 using FreshFlow.Analytics.Application.Abstractions;
+using FreshFlow.Analytics.Application.Caching;
 using FreshFlow.Analytics.Application.Common;
 using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.SharedKernel.Application;
+using FreshFlow.SharedKernel.Caching;
 using MediatR;
 
 namespace FreshFlow.Analytics.Application.Queries.GetPriceTrends;
 
-internal sealed class GetPriceTrendsQueryHandler(IPriceTrendReader reader)
+internal sealed class GetPriceTrendsQueryHandler(IPriceTrendReader reader, AnalyticsCache cache)
     : IRequestHandler<GetPriceTrendsQuery, Result<PriceTrendsDto>>
 {
     private const string DailyInterval = "daily";
@@ -18,60 +20,71 @@ internal sealed class GetPriceTrendsQueryHandler(IPriceTrendReader reader)
         GetPriceTrendsQuery request,
         CancellationToken ct)
     {
-        var spansMoreThanTwelveMonths =
-            request.From <= LatestDateWith12MonthsRemaining &&
-            request.To > request.From.AddMonths(12);
-        var interval = spansMoreThanTwelveMonths
-            ? DailyInterval
-            : request.Interval?.ToLowerInvariant() ?? DailyInterval;
-        var (startUtc, endUtc) = VietnamTime.GetUtcBounds(request.From, request.To);
-        var requestedIds = request.MarketProductIds.Distinct().ToArray();
-        var data = await reader.ReadAsync(requestedIds, startUtc, endUtc, ct);
-        var detailsById = data.MarketProducts.ToDictionary(detail => detail.MarketProductId);
-        var bucketsById = data.HourlyBuckets.ToLookup(bucket => bucket.MarketProductId);
-        var series = new List<PriceTrendSeriesDto>(requestedIds.Length);
+        var value = await cache.GetOrCreateAsync(
+            RedisKeys.AnalyticsPriceTrends(request.MarketProductIds, request.From, request.To, request.Interval),
+            request.To,
+            BuildAsync,
+            ct);
 
-        foreach (var marketProductId in requestedIds)
+        return Result<PriceTrendsDto>.Success(value);
+
+        async ValueTask<PriceTrendsDto> BuildAsync(CancellationToken factoryCt)
         {
-            var hourlyBuckets = bucketsById[marketProductId]
-                .OrderBy(bucket => bucket.BucketStartUtc)
-                .ToArray();
-            if (hourlyBuckets.Length == 0 ||
-                !detailsById.TryGetValue(marketProductId, out var detail))
+            var spansMoreThanTwelveMonths =
+                request.From <= LatestDateWith12MonthsRemaining &&
+                request.To > request.From.AddMonths(12);
+            var interval = spansMoreThanTwelveMonths
+                ? DailyInterval
+                : request.Interval?.ToLowerInvariant() ?? DailyInterval;
+            var (startUtc, endUtc) = VietnamTime.GetUtcBounds(request.From, request.To);
+            var requestedIds = request.MarketProductIds.Distinct().ToArray();
+            var data = await reader.ReadAsync(requestedIds, startUtc, endUtc, factoryCt);
+            var detailsById = data.MarketProducts.ToDictionary(detail => detail.MarketProductId);
+            var bucketsById = data.HourlyBuckets.ToLookup(bucket => bucket.MarketProductId);
+            var series = new List<PriceTrendSeriesDto>(requestedIds.Length);
+
+            foreach (var marketProductId in requestedIds)
             {
-                continue;
+                var hourlyBuckets = bucketsById[marketProductId]
+                    .OrderBy(bucket => bucket.BucketStartUtc)
+                    .ToArray();
+                if (hourlyBuckets.Length == 0 ||
+                    !detailsById.TryGetValue(marketProductId, out var detail))
+                {
+                    continue;
+                }
+
+                var summary = Aggregate(hourlyBuckets);
+                var points = hourlyBuckets
+                    .GroupBy(bucket => ToLocalBucket(bucket.BucketStartUtc, interval))
+                    .OrderBy(group => group.Key)
+                    .Select(group =>
+                    {
+                        var aggregate = Aggregate(group);
+                        return new PriceTrendPointDto(
+                            new DateTimeOffset(group.Key, VietnamTime.Zone.GetUtcOffset(group.Key)),
+                            aggregate.AvgPrice,
+                            aggregate.MinPrice,
+                            aggregate.MaxPrice,
+                            aggregate.SnapshotCount);
+                    })
+                    .ToArray();
+
+                series.Add(new PriceTrendSeriesDto(
+                    marketProductId,
+                    detail.ProductName,
+                    detail.MarketName,
+                    interval,
+                    new PriceTrendSummaryDto(
+                        summary.MinPrice,
+                        summary.MaxPrice,
+                        summary.AvgPrice,
+                        summary.PriceVolatility),
+                    points));
             }
 
-            var summary = Aggregate(hourlyBuckets);
-            var points = hourlyBuckets
-                .GroupBy(bucket => ToLocalBucket(bucket.BucketStartUtc, interval))
-                .OrderBy(group => group.Key)
-                .Select(group =>
-                {
-                    var aggregate = Aggregate(group);
-                    return new PriceTrendPointDto(
-                        new DateTimeOffset(group.Key, VietnamTime.Zone.GetUtcOffset(group.Key)),
-                        aggregate.AvgPrice,
-                        aggregate.MinPrice,
-                        aggregate.MaxPrice,
-                        aggregate.SnapshotCount);
-                })
-                .ToArray();
-
-            series.Add(new PriceTrendSeriesDto(
-                marketProductId,
-                detail.ProductName,
-                detail.MarketName,
-                interval,
-                new PriceTrendSummaryDto(
-                    summary.MinPrice,
-                    summary.MaxPrice,
-                    summary.AvgPrice,
-                    summary.PriceVolatility),
-                points));
+            return new PriceTrendsDto(series);
         }
-
-        return Result<PriceTrendsDto>.Success(new PriceTrendsDto(series));
     }
 
     private static DateTime ToLocalBucket(DateTime bucketStartUtc, string interval)

@@ -1,11 +1,13 @@
 using FreshFlow.Analytics.Application.Abstractions;
+using FreshFlow.Analytics.Application.Caching;
 using FreshFlow.Analytics.Application.Dtos;
 using FreshFlow.SharedKernel.Application;
+using FreshFlow.SharedKernel.Caching;
 using MediatR;
 
 namespace FreshFlow.Analytics.Application.Queries.GetProcurementMetrics;
 
-internal sealed class GetProcurementMetricsQueryHandler(IProcurementMetricsReader reader)
+internal sealed class GetProcurementMetricsQueryHandler(IProcurementMetricsReader reader, AnalyticsCache cache)
     : IRequestHandler<GetProcurementMetricsQuery, Result<ProcurementMetricsDto>>
 {
     private const string HandedOffStatus = "HandedOff";
@@ -36,36 +38,47 @@ internal sealed class GetProcurementMetricsQueryHandler(IProcurementMetricsReade
         GetProcurementMetricsQuery request,
         CancellationToken ct)
     {
-        var metrics = await reader.ReadAsync(request.From, request.To, request.MarketId, ct);
-        var observedStatusCounts = metrics.StatusCounts.ToDictionary(row => row.Name, row => row.Count);
-        var statusCounts = BatchStatuses.ToDictionary(
-            status => status,
-            status => observedStatusCounts.GetValueOrDefault(status));
-        var observedExceptionCounts = metrics.ExceptionsByType.ToDictionary(
-            row => row.Name,
-            row => row.Count);
-        var exceptionsByType = ExceptionTypes.ToDictionary(
-            type => type,
-            type => observedExceptionCounts.GetValueOrDefault(type));
-        var totalBatches = metrics.StatusCounts.Sum(row => row.Count);
+        var value = await cache.GetOrCreateAsync(
+            RedisKeys.AnalyticsProcurementMetrics(request.From, request.To, request.MarketId),
+            request.To,
+            BuildAsync,
+            ct);
 
-        return Result<ProcurementMetricsDto>.Success(new ProcurementMetricsDto(
-            totalBatches,
-            statusCounts,
-            totalBatches == 0
-                ? 0m
-                : Math.Round(statusCounts[HandedOffStatus] * 100m / totalBatches, 2),
-            metrics.ItemsTotal,
-            metrics.ItemsPurchased,
-            metrics.ItemsTotal - metrics.ItemsPurchased,
-            metrics.TotalActualCostVND,
-            metrics.PriceVariancePercent is null
-                ? null
-                : Math.Round(metrics.PriceVariancePercent.Value, 2),
-            metrics.AvgLeadTimeMinutes is null
-                ? null
-                : Math.Round(metrics.AvgLeadTimeMinutes.Value, 2),
-            metrics.ExceptionsByType.Sum(row => row.Count),
-            exceptionsByType));
+        return Result<ProcurementMetricsDto>.Success(value);
+
+        async ValueTask<ProcurementMetricsDto> BuildAsync(CancellationToken factoryCt)
+        {
+            var metrics = await reader.ReadAsync(request.From, request.To, request.MarketId, factoryCt);
+            var observedStatusCounts = metrics.StatusCounts.ToDictionary(row => row.Name, row => row.Count);
+            var statusCounts = BatchStatuses.ToDictionary(
+                status => status,
+                status => observedStatusCounts.GetValueOrDefault(status));
+            var observedExceptionCounts = metrics.ExceptionsByType.ToDictionary(
+                row => row.Name,
+                row => row.Count);
+            var exceptionsByType = ExceptionTypes.ToDictionary(
+                type => type,
+                type => observedExceptionCounts.GetValueOrDefault(type));
+            var totalBatches = metrics.StatusCounts.Sum(row => row.Count);
+
+            return new ProcurementMetricsDto(
+                totalBatches,
+                statusCounts,
+                totalBatches == 0
+                    ? 0m
+                    : Math.Round(statusCounts[HandedOffStatus] * 100m / totalBatches, 2),
+                metrics.ItemsTotal,
+                metrics.ItemsPurchased,
+                metrics.ItemsTotal - metrics.ItemsPurchased,
+                metrics.TotalActualCostVND,
+                metrics.PriceVariancePercent is null
+                    ? null
+                    : Math.Round(metrics.PriceVariancePercent.Value, 2),
+                metrics.AvgLeadTimeMinutes is null
+                    ? null
+                    : Math.Round(metrics.AvgLeadTimeMinutes.Value, 2),
+                metrics.ExceptionsByType.Sum(row => row.Count),
+                exceptionsByType);
+        }
     }
 }

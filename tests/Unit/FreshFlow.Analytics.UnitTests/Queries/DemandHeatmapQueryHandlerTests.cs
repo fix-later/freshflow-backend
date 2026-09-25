@@ -5,6 +5,7 @@ using FreshFlow.Analytics.Application.Queries.GetDemandHeatmap;
 using FreshFlow.Analytics.Application.Queries.GetDemandTimeDistribution;
 using FreshFlow.Analytics.Infrastructure;
 using MediatR;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -124,6 +125,7 @@ public sealed class GetDemandHeatmapQueryHandlerTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddAnalyticsModule(new ConfigurationBuilder().Build());
+        services.AddHybridCache();
         services.AddSingleton(reader);
         return services.BuildServiceProvider().GetRequiredService<ISender>();
     }
@@ -194,6 +196,7 @@ public sealed class GetDemandTimeDistributionQueryHandlerTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddAnalyticsModule(new ConfigurationBuilder().Build());
+        services.AddHybridCache();
         services.AddSingleton(reader);
         return services.BuildServiceProvider().GetRequiredService<ISender>();
     }

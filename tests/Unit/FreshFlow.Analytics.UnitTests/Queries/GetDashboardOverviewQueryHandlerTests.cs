@@ -1,7 +1,9 @@
 using FluentAssertions;
 using FreshFlow.Analytics.Application.Abstractions;
+using FreshFlow.Analytics.Application.Caching;
 using FreshFlow.Analytics.Application.Queries.GetDashboardOverview;
 using MediatR;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FreshFlow.Analytics.UnitTests.Queries;
@@ -104,6 +106,8 @@ public sealed class GetDashboardOverviewQueryHandlerTests
         services.AddLogging();
         services.AddSingleton(reader);
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(utcNow));
+        services.AddHybridCache();
+        services.AddScoped<AnalyticsCache>();
         services.AddMediatR(config =>
             config.RegisterServicesFromAssembly(typeof(GetDashboardOverviewQuery).Assembly));
 
