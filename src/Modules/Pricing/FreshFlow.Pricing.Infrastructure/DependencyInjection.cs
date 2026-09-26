@@ -3,6 +3,7 @@ using FluentValidation;
 using FreshFlow.Infrastructure.Persistence;
 using FreshFlow.Pricing.Application.Abstractions;
 using FreshFlow.Pricing.Application.Behaviors;
+using FreshFlow.Pricing.Application.Caching;
 using FreshFlow.Pricing.Application.Options;
 using FreshFlow.Pricing.Infrastructure.Cache;
 using FreshFlow.Pricing.Infrastructure.CrossModule;
@@ -48,6 +49,9 @@ public static class DependencyInjection
 
         // FluentValidation — auto-register all validators from Application
         services.AddValidatorsFromAssembly(applicationAssembly, includeInternalTypes: true);
+
+        // Tag list cache (HybridCache itself is registered by the host)
+        services.AddScoped<PricingCache>();
 
         // Repositories
         services.AddScoped<IMarketProductRepository, MarketProductRepository>();

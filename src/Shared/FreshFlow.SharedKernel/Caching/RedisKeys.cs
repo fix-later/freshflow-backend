@@ -24,6 +24,8 @@ public static class RedisKeys
     public static string CatalogPackingCodes(bool activeOnly, int page, int pageSize) =>
         $"catalog:packing-codes:{activeOnly}:{page}:{pageSize}";
 
+    public static string PricingTags() => "pricing:tags:all";
+
     // ── Analytics ────────────────────────────────────────────────────────────
     // Dates are formatted invariantly: a key must not change with the host's culture.
     // Nullable filters collapse to "all" so an unfiltered query cannot collide with a

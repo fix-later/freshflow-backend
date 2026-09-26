@@ -1,10 +1,11 @@
 using FreshFlow.Pricing.Application.Abstractions;
+using FreshFlow.Pricing.Application.Caching;
 using FreshFlow.SharedKernel.Application;
 using MediatR;
 
 namespace FreshFlow.Pricing.Application.Commands.DeleteTag;
 
-internal sealed class DeleteTagCommandHandler(ITagRepository tags)
+internal sealed class DeleteTagCommandHandler(ITagRepository tags, PricingCache cache)
     : IRequestHandler<DeleteTagCommand, Result>
 {
     public async Task<Result> Handle(DeleteTagCommand request, CancellationToken ct)
@@ -20,6 +21,8 @@ internal sealed class DeleteTagCommandHandler(ITagRepository tags)
         tag.Delete();
         tags.Track(tag);
         await tags.SaveChangesAsync(ct);
+
+        await cache.EvictTagsAsync(ct);
 
         return Result.Success();
     }

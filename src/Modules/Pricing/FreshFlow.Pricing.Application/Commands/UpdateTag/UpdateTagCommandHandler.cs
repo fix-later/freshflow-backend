@@ -1,4 +1,5 @@
 using FreshFlow.Pricing.Application.Abstractions;
+using FreshFlow.Pricing.Application.Caching;
 using FreshFlow.Pricing.Application.Dtos;
 using FreshFlow.Pricing.Domain.Entities;
 using FreshFlow.SharedKernel.Application;
@@ -6,7 +7,7 @@ using MediatR;
 
 namespace FreshFlow.Pricing.Application.Commands.UpdateTag;
 
-internal sealed class UpdateTagCommandHandler(ITagRepository tags)
+internal sealed class UpdateTagCommandHandler(ITagRepository tags, PricingCache cache)
     : IRequestHandler<UpdateTagCommand, Result<TagDto>>
 {
     public async Task<Result<TagDto>> Handle(UpdateTagCommand request, CancellationToken ct)
@@ -25,6 +26,8 @@ internal sealed class UpdateTagCommandHandler(ITagRepository tags)
         tag.SetPinsToTop(request.PinsToTop, request.Actor);
         tags.Track(tag);
         await tags.SaveChangesAsync(ct);
+
+        await cache.EvictTagsAsync(ct);
 
         return Result<TagDto>.Success(new TagDto(tag.Id, tag.Name, tag.PinsToTop));
     }

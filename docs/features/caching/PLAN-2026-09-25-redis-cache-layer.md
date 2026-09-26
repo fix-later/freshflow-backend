@@ -1,7 +1,7 @@
 # Plan: Redis như lớp cache (không phải như database)
 
 > **Ngày:** 2026-09-25 · **Phạm vi:** cross-cutting (SharedKernel + API host + Catalog + Analytics)
-> **Jira:** chưa gán · **Trạng thái:** Phase 1 **xong** (`9629d86`) · Phase 2 **xong** (`fa10199`) · Phase 3 **xong** · Phase 4 chưa bắt đầu
+> **Jira:** chưa gán · **Trạng thái:** Phase 1 **xong** (`9629d86`) · Phase 2 **xong** (`fa10199` + tag list) · Phase 3 **xong** (`5dcc81a`) · Phase 4 **đang chờ số đo**, xem mục 10
 
 Mục tiêu: đưa Redis vào dùng rộng hơn trong FreshFlow **với vai trò cache cho đường đọc**.
 Postgres vẫn là source of truth duy nhất — không dùng Redis như một database.
@@ -277,8 +277,16 @@ kể cả khi cache bị tắt hoàn toàn — lúc đó chúng chỉ đọc DB 
 HybridCache có kiểu, dò cùng key với shape khác đọc ra là miss. Ghi lại ở đây vì đó là cái bẫy rất
 dễ vấp khi viết test cache.
 
-**Tags chưa làm:** plan mục 4 liệt kê `Tags` trong Phase 2, nhưng `ITagRepository` nằm ở module
-**Pricing**, không phải Catalog. Để lại cho một đợt riêng cùng scope Pricing.
+**Tags — ĐÃ LÀM 2026-09-26** (đợt riêng, vì `ITagRepository` nằm ở module **Pricing** chứ không
+phải Catalog như plan xếp). `PricingCache` gói gọn **một** class thay vì cặp policy + evictor như
+Catalog: Pricing chỉ có đúng một query được cache và một tag, nên key và entry options nằm luôn
+trong class, không cần generic wrapper. `SetMarketProductTags` **không** evict — nó gán tag cho
+market product, không đổi danh sách tag.
+
+Evictor bị **trùng lặp** giữa Catalog và Pricing một cách có chủ ý: nhà chung duy nhất sẽ là
+SharedKernel, mà SharedKernel không được phụ thuộc Redis (dependency rule trong CLAUDE.md) — đúng
+lý do Phase 1 đặt `AddRedisCache` ở host. Cùng tinh thần với `ValidationBehavior` (11 bản copy,
+CLAUDE.md ghi rõ đừng gom lại).
 
 | 2026-09-25 | Phase 3 (Analytics): 8/9 query cache theo TTL 2 tầng, key gồm ngày VN đã resolve. 6 unit test mới. Gate: build 0 error, **3214 test pass** (246 integration), format exit 0. |
 
@@ -288,12 +296,14 @@ dễ vấp khi viết test cache.
 
 | # | Việc | Ghi chú |
 |---|---|---|
-| 1 | **Đo hiệu năng dashboard trước/sau** | Gate của Phase 3 trong plan, **chưa chạy**. Các test hiện có chứng minh cache *đúng*, không chứng minh cache *đáng*. Cần đo trên DB có dữ liệu thật. |
-| 2 | `Tags` (module Pricing) | Plan xếp vào Phase 2 nhưng `ITagRepository` nằm ở Pricing, không phải Catalog. |
-| 3 | Phase 4 | Route suggestions, loading manifest, product list — chỉ làm khi mục 1 cho thấy chỗ nào thật sự chậm. |
+| 1 | **Đo hiệu năng dashboard trước/sau** | Gate của Phase 3, **chưa chạy** — và đây là thứ chặn Phase 4. Test hiện có chứng minh cache *đúng*, không chứng minh cache *đáng*. ⚠️ `appsettings.json` trỏ `localhost:5433` = **DB PRODUCTION**; không benchmark ở đó. Hai lựa chọn an toàn: (a) seed dữ liệu tổng hợp vào Postgres Testcontainers rồi đo cold/warm — an toàn nhưng số liệu phụ thuộc lượng seed; (b) đo trên bản sao dữ liệu thật ở DB riêng. |
+| 2 | ~~`Tags` (module Pricing)~~ | ✅ xong 2026-09-26. |
+| 3 | Phase 4 | Route suggestions, loading manifest, product list theo market. **Chặn bởi mục 1** — plan quy định "có số đo rồi mới làm". Cache thêm mà không có số đo là đoán, và mỗi chỗ cache thêm là một chỗ có thể stale. |
 | 4 | Version `Microsoft.Extensions.Caching.Hybrid` | Đang ghim 10.0.0; các package minor-versioned khác trong repo ở 10.7.0. Không phải lỗi. |
 
-**Cảnh báo cho người làm tiếp:** `AddAnalyticsModule` và `AddCatalogModule` giờ **không còn tự đủ** —
+**Cảnh báo cho người làm tiếp:** `AddAnalyticsModule`, `AddCatalogModule` và `AddPricingModule` giờ **không còn tự đủ** —
 chúng cần `HybridCache` do host đăng ký. Unit test của Analytics resolve handler qua DI container
 thật nên phải gọi thêm `services.AddHybridCache()`; nếu một module mới copy pattern này mà quên,
 lỗi sẽ là `Unable to resolve service for type 'HybridCache'` lúc chạy, không phải lúc build.
+
+| 2026-09-26 | Tag list (Pricing) cache 30' + evict khi create/update/delete tag; 3 unit test mới. Gate: build 0 error, **3217 test pass** (246 integration), format exit 0. Phase 4 **không** làm tiếp vì thiếu số đo — xem mục 10. |

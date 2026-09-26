@@ -1,4 +1,5 @@
 using FreshFlow.Pricing.Application.Abstractions;
+using FreshFlow.Pricing.Application.Caching;
 using FreshFlow.Pricing.Application.Dtos;
 using FreshFlow.Pricing.Domain.Entities;
 using FreshFlow.SharedKernel.Application;
@@ -6,7 +7,7 @@ using MediatR;
 
 namespace FreshFlow.Pricing.Application.Commands.CreateTag;
 
-internal sealed class CreateTagCommandHandler(ITagRepository tags)
+internal sealed class CreateTagCommandHandler(ITagRepository tags, PricingCache cache)
     : IRequestHandler<CreateTagCommand, Result<TagDto>>
 {
     public async Task<Result<TagDto>> Handle(CreateTagCommand request, CancellationToken ct)
@@ -20,6 +21,8 @@ internal sealed class CreateTagCommandHandler(ITagRepository tags)
         var tag = Tag.Create(request.Name, request.PinsToTop, request.Actor);
         await tags.AddAsync(tag, ct);
         await tags.SaveChangesAsync(ct);
+
+        await cache.EvictTagsAsync(ct);
 
         return Result<TagDto>.Success(new TagDto(tag.Id, tag.Name, tag.PinsToTop));
     }
