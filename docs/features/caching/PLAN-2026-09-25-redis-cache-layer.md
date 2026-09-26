@@ -1,7 +1,7 @@
 # Plan: Redis như lớp cache (không phải như database)
 
 > **Ngày:** 2026-09-25 · **Phạm vi:** cross-cutting (SharedKernel + API host + Catalog + Analytics)
-> **Jira:** chưa gán · **Trạng thái:** Phase 1 **xong** (`9629d86`) · Phase 2 **xong** (`fa10199` + tag list) · Phase 3 **xong** (`5dcc81a`) · Phase 4 **đang chờ số đo**, xem mục 10
+> **Jira:** chưa gán · **Trạng thái:** Phase 1 **xong** (`9629d86`) · Phase 2 **xong** (`fa10199` + `70f4786`) · Phase 3 **xong** (`5dcc81a`) · Phase 4 **đã đo và khuyến nghị KHÔNG làm bây giờ**, xem mục 11
 
 Mục tiêu: đưa Redis vào dùng rộng hơn trong FreshFlow **với vai trò cache cho đường đọc**.
 Postgres vẫn là source of truth duy nhất — không dùng Redis như một database.
@@ -296,9 +296,9 @@ CLAUDE.md ghi rõ đừng gom lại).
 
 | # | Việc | Ghi chú |
 |---|---|---|
-| 1 | **Đo hiệu năng dashboard trước/sau** | Gate của Phase 3, **chưa chạy** — và đây là thứ chặn Phase 4. Test hiện có chứng minh cache *đúng*, không chứng minh cache *đáng*. ⚠️ `appsettings.json` trỏ `localhost:5433` = **DB PRODUCTION**; không benchmark ở đó. Hai lựa chọn an toàn: (a) seed dữ liệu tổng hợp vào Postgres Testcontainers rồi đo cold/warm — an toàn nhưng số liệu phụ thuộc lượng seed; (b) đo trên bản sao dữ liệu thật ở DB riêng. |
+| 1 | ~~Đo hiệu năng dashboard~~ | ✅ đo xong 2026-09-26, xem mục 11. |
 | 2 | ~~`Tags` (module Pricing)~~ | ✅ xong 2026-09-26. |
-| 3 | Phase 4 | Route suggestions, loading manifest, product list theo market. **Chặn bởi mục 1** — plan quy định "có số đo rồi mới làm". Cache thêm mà không có số đo là đoán, và mỗi chỗ cache thêm là một chỗ có thể stale. |
+| 3 | Phase 4 | **Khuyến nghị hoãn** dựa trên số đo — mục 11. |
 | 4 | Version `Microsoft.Extensions.Caching.Hybrid` | Đang ghim 10.0.0; các package minor-versioned khác trong repo ở 10.7.0. Không phải lỗi. |
 
 **Cảnh báo cho người làm tiếp:** `AddAnalyticsModule`, `AddCatalogModule` và `AddPricingModule` giờ **không còn tự đủ** —
@@ -307,3 +307,50 @@ thật nên phải gọi thêm `services.AddHybridCache()`; nếu một module m
 lỗi sẽ là `Unable to resolve service for type 'HybridCache'` lúc chạy, không phải lúc build.
 
 | 2026-09-26 | Tag list (Pricing) cache 30' + evict khi create/update/delete tag; 3 unit test mới. Gate: build 0 error, **3217 test pass** (246 integration), format exit 0. Phase 4 **không** làm tiếp vì thiếu số đo — xem mục 10. |
+
+| 2026-09-26 | Đo hiệu năng cache Analytics trên Postgres thật (Testcontainers), 2 mức dữ liệu. Kết luận: Phase 4 nên hoãn. Benchmark giữ lại dạng `Skip` để đo lại. Xem mục 11. |
+
+---
+
+## 11. Số đo (2026-09-26) và quyết định về Phase 4
+
+Đo bằng `tests/Integration/FreshFlow.IntegrationTests/Benchmarks/AnalyticsCacheBenchmark.cs`
+(đánh `Skip`, chạy tay). Postgres 16 trong Testcontainers, một nhà hàng, đơn rải trên 90 ngày,
+`GET /api/v1/analytics/order-metrics?groupBy=day`. Median của 5 mẫu; uncached dùng khoảng ngày khác
+nhau mỗi lần nên luôn miss, cached lặp một khoảng và bỏ lần miss đầu. Có pass warm-up để loại JIT
+và EF model building.
+
+| Số đơn | Uncached | Cached | Tỉ lệ |
+|---|---|---|---|
+| 20.000 | 19,7 ms | 0,9 ms | 22,8× |
+| 100.000 | 85,8 ms | 0,9 ms | 100,8× |
+
+**Hình dạng quan trọng hơn con số:** chi phí không cache tăng **gần tuyến tính** theo số dòng
+(5× dữ liệu → 4,4× thời gian), còn chi phí có cache **phẳng ~1 ms** bất kể dữ liệu bao nhiêu.
+Nghĩa là Phase 3 càng có giá trị theo thời gian: ở 100k đơn dashboard đã mất 86 ms, ngoại suy
+tuyến tính thì ~500k đơn sẽ là ~400 ms.
+
+### ⛔ Khuyến nghị: KHÔNG làm Phase 4 bây giờ
+
+Số đo chỉ ra cache **đáng ở nơi chi phí tăng theo tổng số dòng** — tức aggregate quét cả bảng, đúng
+loại query của Analytics. Ba mục tiêu Phase 4 đều **không** thuộc loại đó:
+
+| Mục tiêu Phase 4 | Vì sao payoff nhỏ |
+|---|---|
+| Route suggestions | Giới hạn theo *một ngày* và *một market*; tập dữ liệu không lớn theo tổng số đơn |
+| Loading manifest | Giới hạn theo *một route*; số stop mỗi route là hằng số thực tế |
+| Product list theo market | Giới hạn bởi page size |
+
+Cache thêm những chỗ này là đổi một khoản tiết kiệm nhỏ lấy thêm mặt có thể stale và thêm chỗ phải
+nhớ evict. Nên hoãn cho tới khi có bằng chứng ngược lại từ production.
+
+**Điều kiện mở lại Phase 4:** một endpoint cụ thể chậm thấy được ngoài production, *hoặc* một trong
+ba đường trên hoá ra có quét cả bảng (kiểm bằng `EXPLAIN`, đừng đoán).
+
+### Giới hạn của số đo này — đọc trước khi trích dẫn
+
+- Dữ liệu **tổng hợp**: một nhà hàng, đơn phân bố đều, `order_items` trống. Production có nhiều nhà
+  hàng, phân bố lệch, và bảng phụ có dữ liệu → hằng số có thể khác.
+- Chỉ đo **`order-metrics`**. `dashboard-overview` join nhiều bảng hơn, chi phí thật có thể cao hơn.
+- DB chạy **cùng máy**, không có network hop. Production có latency mạng tới DB, nên phần tiết kiệm
+  thực tế có xu hướng **lớn hơn** con số ở đây, không nhỏ hơn.
